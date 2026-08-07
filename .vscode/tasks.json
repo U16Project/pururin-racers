@@ -1,0 +1,73 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "サーバーを起動",
+      "type": "shell",
+      "command": "${workspaceFolder}/server/.venv/bin/python",
+      "args": ["main.py"],
+      "options": {
+        "cwd": "${workspaceFolder}/server"
+      },
+      "presentation": {
+        "echo": false,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "pururin-server",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "サーバー起動しました"
+        }
+      }
+    },
+    {
+      "label": "クライアントを起動（Godot）",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "GODOT=\"${workspaceFolder}/tools/godot/Godot_v4.7-stable_linux.x86_64\"; if [[ ! -x \"$GODOT\" ]]; then GODOT=\"/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64\"; fi; if [[ ! -x \"$GODOT\" ]]; then echo \"Godot 4.7 が見つかりません（tools/godot/ を確認）\" >&2; exit 1; fi; exec \"$GODOT\" --path \"${workspaceFolder}/client\""
+      ],
+      "presentation": {
+        "echo": false,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "pururin-client",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Godot Engine|いま起動したよ"
+        }
+      }
+    },
+    {
+      "label": "サーバーとクライアントを起動",
+      "dependsOn": [
+        "サーバーを起動",
+        "クライアントを起動（Godot）"
+      ],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "echo": false
+      }
+    }
+  ]
+}

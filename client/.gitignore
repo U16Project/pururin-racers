@@ -1,0 +1,12 @@
+# Godot / client
+.godot/
+.import/
+*.translation
+export_presets.cfg
+# ローカルエクスポート成果物
+*.apk
+*.aab
+*.exe
+*.x86_64
+*.zip
+*.pck

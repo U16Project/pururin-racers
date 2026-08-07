@@ -1,0 +1,4 @@
+# Godot editor binaries (do not commit)
+*
+!.gitignore
+!README.md

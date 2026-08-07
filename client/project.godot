@@ -1,0 +1,18 @@
+; Engine configuration file.
+; Minimal stub for Godot 4.7 — editor will normalize on open.
+
+config_version=5
+
+[application]
+
+config/name="ぷるりんレーサーズ"
+config/features=PackedStringArray("4.7")
+run/main_scene="res://main.tscn"
+
+[gui]
+
+theme/custom_font="res://fonts/NotoSansCJK-Regular.ttc"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/gut/plugin.cfg")
