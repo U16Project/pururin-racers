@@ -66,5 +66,12 @@ Pururin Racing Game は、
 
 ---
 
+## 🛠️ 開発用 Cursor 設定（`.cursor`）
+
+**開発中は `.cursor/` を GitHub に置いて共有する**（ルール・エージェント・スキル）。  
+リポジトリを広く公開する段階では、`.cursor/` を削除または外す想定。詳細は [`.cursor/README.md`](.cursor/README.md)。
+
+---
+
 **開発中**  
 [https://github.com/U16Project/pururin-racers](https://github.com/U16Project/pururin-racers)
