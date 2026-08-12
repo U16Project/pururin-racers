@@ -24,7 +24,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": ".",
-          "endsPattern": "サーバー起動しました"
+          "endsPattern": "サーバー待機中"
         }
       }
     },
@@ -51,7 +51,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": ".",
-          "endsPattern": "Godot Engine|いま起動したよ"
+          "endsPattern": "Godot Engine|M1 コースを走ります"
         }
       }
     },
