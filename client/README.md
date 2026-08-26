@@ -13,6 +13,8 @@ API・メソッド・ノードは **4.7 の公式ドキュメントで確認し�
 
 ## M1 起動確認
 
+（疎通確認用。現行の main_scene は M2。）
+
 先にサーバーを起動してから（`server/README.md`、待ち受け `127.0.0.1:18765`）。
 
 リポジトリルートから:
@@ -28,9 +30,32 @@ API・メソッド・ノードは **4.7 の公式ドキュメントで確認し�
 - 上部ラベル／コンソールに `pong を受け取ったよ` が出る
 - コンソールに `ぷるりんレーサーズ — M1 コースを走ります` も出る
 
-M0 の空シーンは `main.tscn` / `main.gd` に残してある（main_scene は M1 の `scenes/m1_run.tscn`）。
+M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn` に残してある（main_scene は M2 の `scenes/m2_run.tscn`）。
 
-通信契約: [`shared/protocol_m1.md`](../shared/protocol_m1.md)
+## M2 起動確認（内外＋控室）
+
+先にサーバーを起動してから（`server/README.md`、待ち受け `127.0.0.1:18765`）。
+
+- main_scene: `scenes/m2_run.tscn`
+- 競馬場形の仮コース（直線＋半円、幅 15m、機体 φ1.5m 想定）
+- ←→ / ゲームパッド十字左右で内外（左＝内）
+- C でカメラ切替（**後方追従**／**真上＋正射影**）
+- 橙＝操作、青＝最内／黄＝中心／紫＝最外のダミー（同対地速）
+- カーブでは距離倍率（幾何＋`GEOMETRIC_BLEND`）で内側が中心線を進みやすい。直線は内外同速
+- 上部ラベルに控室入室（例: `控室に入りました（waiting_room・いま N 人）`）
+
+通信契約:
+
+- M1 ping／pong: [`shared/protocol_m1.md`](../shared/protocol_m1.md)
+- M2 控室: [`shared/protocol_m2.md`](../shared/protocol_m2.md)
+
+Windows 起動例（エディタパスは環境に合わせる）:
+
+```powershell
+& "C:\Users\user\Documents\Godot_v4.7.2-stable_win64.exe\Godot_v4.7.2-stable_win64.exe" --path client
+```
+
+または `tools/windows/start-godot-client.ps1` / VS Code タスク。
 
 ## テスト（GUT）
 
@@ -51,7 +76,7 @@ HOME=/tmp/pururin-godot-home \
 
 （`HOME` を書き込み可能な場所に向けると、サンドボックスや初回起動で落ちにくい。）
 
-M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd` でカバーする。
+M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd` でカバーする。
 
 ## フォント
 

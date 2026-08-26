@@ -2,12 +2,49 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "サーバー仮想環境を用意",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/windows/ensure-server-venv.ps1"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "cd \"${workspaceFolder}/server\" && if [[ ! -x .venv/bin/python ]]; then python3 -m venv .venv && .venv/bin/pip install -U pip && .venv/bin/pip install -r requirements.txt; fi && echo 'server/.venv の準備OK'"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "サーバーを起動",
       "type": "shell",
-      "command": "${workspaceFolder}/server/.venv/bin/python",
-      "args": ["main.py"],
+      "dependsOn": ["サーバー仮想環境を用意"],
       "options": {
         "cwd": "${workspaceFolder}/server"
+      },
+      "windows": {
+        "command": "${workspaceFolder}/server/.venv/Scripts/python.exe",
+        "args": ["main.py"]
+      },
+      "linux": {
+        "command": "${workspaceFolder}/server/.venv/bin/python",
+        "args": ["main.py"]
       },
       "presentation": {
         "echo": false,
@@ -31,13 +68,25 @@
     {
       "label": "クライアントを起動（Godot）",
       "type": "shell",
-      "command": "bash",
-      "args": [
-        "-lc",
-        "GODOT=\"${workspaceFolder}/tools/godot/Godot_v4.7-stable_linux.x86_64\"; if [[ ! -x \"$GODOT\" ]]; then GODOT=\"/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64\"; fi; if [[ ! -x \"$GODOT\" ]]; then echo \"Godot 4.7 が見つかりません（tools/godot/ を確認）\" >&2; exit 1; fi; exec \"$GODOT\" --path \"${workspaceFolder}/client\""
-      ],
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/windows/start-godot-client.ps1"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "-lc",
+          "GODOT=\"${workspaceFolder}/tools/godot/Godot_v4.7-stable_linux.x86_64\"; if [[ ! -x \"$GODOT\" ]]; then GODOT=\"/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64\"; fi; if [[ ! -x \"$GODOT\" ]]; then echo \"Godot 4.7 が見つかりません（tools/godot/ を確認）\" >&2; exit 1; fi; exec \"$GODOT\" --path \"${workspaceFolder}/client\""
+        ]
+      },
       "presentation": {
-        "echo": false,
+        "echo": true,
         "reveal": "always",
         "focus": false,
         "panel": "dedicated",

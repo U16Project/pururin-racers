@@ -13,6 +13,7 @@
 | ファイル | 内容 |
 |----------|------|
 | [`protocol_m1.md`](protocol_m1.md) | M1: WebSocket + JSON の ping／pong（`127.0.0.1:18765`） |
+| [`protocol_m2.md`](protocol_m2.md) | M2: 同ポートの控室 `join_room`／`room_welcome`／`room_full`（定員 8） |
 
 ## 置かない
 
