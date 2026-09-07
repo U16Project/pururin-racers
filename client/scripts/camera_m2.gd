@@ -23,6 +23,10 @@ func _ready() -> void:
 	current = true
 
 
+func set_follow_target(node: Node3D) -> void:
+	_target = node
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_C:

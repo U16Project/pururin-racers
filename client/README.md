@@ -32,15 +32,25 @@ API・メソッド・ノードは **4.7 の公式ドキュメントで確認し�
 
 M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2 は `scenes/m2_run.tscn` に残してある（main_scene は M3 の `scenes/m3_intro.tscn`）。
 
-## M3 起動確認（導入＋控室接続）
+## M3 起動確認（導入＋控室接続／ローカルレース）
 
-導入画面はオフラインで表示されます。画面の3項目を確認し、「控室へ進む」または決定操作で M2 控室へ進みます。
+導入画面はオフラインで表示されます。「レース開始」でローカル簡易レース、「控室へ進む」で M2 控室へ進みます。
 
 - main_scene: `scenes/m3_intro.tscn`
-- 導入画面: `←→` で走る位置を調整、`C` でカメラ切替、控室でサーバー接続
-- サーバー起動時: `接続しています…` → `接続できました` → 控室入室結果
-- サーバー停止時: `接続できませんでした。サーバーを起動してください`
-- 通信契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)
+- 導入: `←→` ライン、`↑↓` 目標スピード（レース）、`C` カメラ、`Esc` メニュー（レース中）
+- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8 頭・2000 m・東京風 1:1）
+- **控室へ進む**: サーバー起動時 `接続しています…` → `接続できました` → 控室入室結果
+- サーバー停止時（控室）: `接続できませんでした。サーバーを起動してください`
+- 契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)、ローカルレース [`shared/protocol_local_race.md`](../shared/protocol_local_race.md)
+
+## ローカル簡易レース確認
+
+サーバー不要。導入から「レース開始」。
+
+- 緑ライン＝スタート、白ライン＝ゴール（ホームストレート終端）。HUD に経過タイム、結果画面にゴールタイムを競馬風（`1:23.4`）で表示
+- 橙（最内）が操作キャラ。左右＝ライン、上下＝目標スピード（プレイヤー上限 25m/s）
+- Esc で一時停止→タイトルへ戻る。全員ゴール後に着順→タイトルへ戻る
+- 詳細ルールは検討事項 #23 / `protocol_local_race.md`
 
 ## M2 起動確認（内外＋控室）
 
@@ -86,7 +96,7 @@ HOME=/tmp/pururin-godot-home \
 
 （`HOME` を書き込み可能な場所に向けると、サンドボックスや初回起動で落ちにくい。）
 
-M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd` でカバーする。
+M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd` でカバーする。
 
 ## フォント
 

@@ -1,11 +1,12 @@
 extends Control
-## M3: オフライン導入から M2 控室へ進む入口。
+## M3: オフライン導入から控室またはローカル簡易レースへ進む入口。
 
-const NEXT_SCENE_PATH := "res://scenes/m2_run.tscn"
+const ROOM_SCENE_PATH := "res://scenes/m2_run.tscn"
+const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const INTRO_ITEMS := [
-	"←→：ぷるりんの走る位置を調整",
-	"C：カメラを切り替え",
-	"控室：サーバーに接続して入室",
+	"←→：走る位置　↑↓：目標スピード",
+	"C：カメラ切替　Esc：メニュー（レース中）",
+	"レース開始＝ローカル　控室へ進む＝接続",
 ]
 
 enum ConnectionStage {
@@ -21,17 +22,20 @@ const CONNECTION_STATUS := {
 }
 
 @onready var _proceed_button: Button = %ProceedButton
+@onready var _race_button: Button = %RaceButton
 
 
 func _ready() -> void:
 	print("ぷるりんレーサーズ — M3 導入を表示します")
+	_race_button.pressed.connect(_on_race_pressed)
 	_proceed_button.pressed.connect(_on_proceed_pressed)
-	_proceed_button.grab_focus()
+	_race_button.grab_focus()
+	_refresh_guide_label()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_accept"):
-		go_to_m2()
+		go_to_local_race()
 
 
 func get_intro_items() -> PackedStringArray:
@@ -43,12 +47,30 @@ func get_connection_status(stage: ConnectionStage) -> String:
 
 
 func next_scene_path() -> String:
-	return NEXT_SCENE_PATH
+	return ROOM_SCENE_PATH
+
+
+func race_scene_path() -> String:
+	return RACE_SCENE_PATH
 
 
 func go_to_m2() -> void:
 	get_tree().change_scene_to_file(next_scene_path())
 
 
+func go_to_local_race() -> void:
+	get_tree().change_scene_to_file(race_scene_path())
+
+
 func _on_proceed_pressed() -> void:
 	go_to_m2()
+
+
+func _on_race_pressed() -> void:
+	go_to_local_race()
+
+
+func _refresh_guide_label() -> void:
+	var guide := get_node_or_null("Content/Guide") as Label
+	if guide:
+		guide.text = "\n".join(INTRO_ITEMS)

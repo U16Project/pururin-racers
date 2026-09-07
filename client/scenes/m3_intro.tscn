@@ -41,9 +41,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -300.0
-offset_top = -220.0
+offset_top = -260.0
 offset_right = 300.0
-offset_bottom = 220.0
+offset_bottom = 260.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 22
@@ -69,7 +69,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.15, 0.22, 0.3, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 21
-text = "←→：ぷるりんの走る位置を調整\nC：カメラを切り替え\n控室：サーバーに接続して入室"
+text = "←→：走る位置　↑↓：目標スピード\nC：カメラ切替　Esc：メニュー（レース中）\nレース開始＝ローカル　控室へ進む＝接続"
 horizontal_alignment = 1
 
 [node name="OfflineNote" type="Label" parent="Content"]
@@ -77,10 +77,10 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.37, 0.42, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 17
-text = "ここはオフラインの導入です。控室へ進むと接続します。"
+text = "レース開始はオフライン。控室へ進むとサーバーに接続します。"
 horizontal_alignment = 1
 
-[node name="ProceedButton" type="Button" parent="Content"]
+[node name="RaceButton" type="Button" parent="Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(0, 64)
 layout_mode = 2
@@ -88,6 +88,19 @@ theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBox_button")
+theme_override_styles/hover = SubResource("StyleBox_button")
+theme_override_styles/pressed = SubResource("StyleBox_button")
+text = "レース開始"
+
+[node name="ProceedButton" type="Button" parent="Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_hover_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("2_font")
+theme_override_font_sizes/font_size = 22
 theme_override_styles/normal = SubResource("StyleBox_button")
 theme_override_styles/hover = SubResource("StyleBox_button")
 theme_override_styles/pressed = SubResource("StyleBox_button")

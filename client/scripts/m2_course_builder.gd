@@ -9,10 +9,12 @@ const QUARTER_CIRCLE_KAPPA := 0.5522847498
 
 
 ## straight_len: 直線部の長さ(m)。turn_radius: 中心線のターン半径(m)。
+## bake_interval: Curve3D のサンプリング間隔(m)。長いコースでは 0.5〜1.0 を推奨。
 static func make_racecourse_curve(
 	straight_len: float = 28.0,
 	turn_radius: float = 18.0,
-	_arc_segments: int = 20
+	_arc_segments: int = 20,
+	bake_interval: float = 0.25
 ) -> Curve3D:
 	var curve := Curve3D.new()
 	var half_s := straight_len * 0.5
@@ -51,7 +53,7 @@ static func make_racecourse_curve(
 	curve.add_point(rm, -t_rm * kappa, t_rm * kappa)
 
 	curve.closed = true
-	curve.bake_interval = 0.25
+	curve.bake_interval = bake_interval
 	return curve
 
 

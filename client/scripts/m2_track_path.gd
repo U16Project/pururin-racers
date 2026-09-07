@@ -7,12 +7,15 @@ const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 
 @export var straight_len: float = 28.0
 @export var turn_radius: float = 18.0
+@export var bake_interval: float = 0.25
 @export var ribbon_path: NodePath = ^"TrackRibbon"
 
 
 func _enter_tree() -> void:
 	# 子 CSGPolygon の _ready より先に curve が必要（ノード入場順）。
-	curve = M2CourseBuilder.make_racecourse_curve(straight_len, turn_radius)
+	curve = M2CourseBuilder.make_racecourse_curve(
+		straight_len, turn_radius, 20, bake_interval
+	)
 
 
 func _ready() -> void:

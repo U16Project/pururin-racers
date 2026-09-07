@@ -8,9 +8,9 @@ func test_intro_items_match_m3_guide() -> void:
 	assert_eq(
 		intro.get_intro_items(),
 		PackedStringArray([
-			"←→：ぷるりんの走る位置を調整",
-			"C：カメラを切り替え",
-			"控室：サーバーに接続して入室",
+			"←→：走る位置　↑↓：目標スピード",
+			"C：カメラ切替　Esc：メニュー（レース中）",
+			"レース開始＝ローカル　控室へ進む＝接続",
 		])
 	)
 	intro.free()
@@ -31,4 +31,11 @@ func test_next_scene_is_existing_m2_room_scene() -> void:
 	var intro := M3Intro.new()
 	assert_eq(intro.next_scene_path(), "res://scenes/m2_run.tscn")
 	assert_true(ResourceLoader.exists(intro.next_scene_path()))
+	intro.free()
+
+
+func test_race_scene_exists() -> void:
+	var intro := M3Intro.new()
+	assert_eq(intro.race_scene_path(), "res://scenes/local_race.tscn")
+	assert_true(ResourceLoader.exists(intro.race_scene_path()))
 	intro.free()
