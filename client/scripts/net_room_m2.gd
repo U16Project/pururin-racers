@@ -13,11 +13,11 @@ var _join_sent: bool = false
 
 func _ready() -> void:
 	_label = get_node_or_null(status_label_path) as Label
-	_set_status("サーバーに接続しています…")
+	_set_status("接続しています…")
 	print("ぷるりんレーサーズ — M2 控室へ向かいます")
 	var err := _socket.connect_to_url(WS_URL)
 	if err != OK:
-		_set_status("接続を始められませんでした")
+		_set_status("接続できませんでした。サーバーを起動してください")
 		push_error("net_room_m2: connect_to_url failed: %s" % error_string(err))
 		set_process(false)
 
@@ -37,7 +37,7 @@ func _process(_delta: float) -> void:
 			pass
 		WebSocketPeer.STATE_CLOSED:
 			if not _join_sent:
-				_set_status("サーバーに届きませんでした（:18765）")
+				_set_status("接続できませんでした。サーバーを起動してください")
 			set_process(false)
 
 
@@ -45,11 +45,11 @@ func _send_join() -> void:
 	var payload := {"v": PROTOCOL_VERSION, "t": "join_room"}
 	var err := _socket.send_text(JSON.stringify(payload))
 	if err != OK:
-		_set_status("控室への入室依頼を送れませんでした")
+		_set_status("接続できませんでした。サーバーを起動してください")
 		push_error("net_room_m2: send_text failed: %s" % error_string(err))
 		return
 	_join_sent = true
-	_set_status("控室への入室を待っています…")
+	_set_status("接続しています…")
 
 
 func _handle_text(text: String) -> void:
@@ -63,7 +63,7 @@ func _handle_text(text: String) -> void:
 	if msg_t == "room_welcome":
 		var room_id := str(msg.get("room_id", ""))
 		var member_count := int(msg.get("member_count", 0))
-		var line := "控室に入りました（%s・いま %d 人）" % [room_id, member_count]
+		var line := "接続できました — 控室に入りました（%s・いま %d 人）" % [room_id, member_count]
 		_set_status(line)
 		print("ぷるりんレーサーズ — %s" % line)
 	elif msg_t == "error":

@@ -30,7 +30,17 @@ API・メソッド・ノードは **4.7 の公式ドキュメントで確認し�
 - 上部ラベル／コンソールに `pong を受け取ったよ` が出る
 - コンソールに `ぷるりんレーサーズ — M1 コースを走ります` も出る
 
-M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn` に残してある（main_scene は M2 の `scenes/m2_run.tscn`）。
+M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2 は `scenes/m2_run.tscn` に残してある（main_scene は M3 の `scenes/m3_intro.tscn`）。
+
+## M3 起動確認（導入＋控室接続）
+
+導入画面はオフラインで表示されます。画面の3項目を確認し、「控室へ進む」または決定操作で M2 控室へ進みます。
+
+- main_scene: `scenes/m3_intro.tscn`
+- 導入画面: `←→` で走る位置を調整、`C` でカメラ切替、控室でサーバー接続
+- サーバー起動時: `接続しています…` → `接続できました` → 控室入室結果
+- サーバー停止時: `接続できませんでした。サーバーを起動してください`
+- 通信契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)
 
 ## M2 起動確認（内外＋控室）
 

@@ -7,7 +7,7 @@ config_version=5
 
 config/name="ぷるりんレーサーズ"
 config/features=PackedStringArray("4.7")
-run/main_scene="res://scenes/m2_run.tscn"
+run/main_scene="res://scenes/m3_intro.tscn"
 
 [gui]
 

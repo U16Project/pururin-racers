@@ -100,7 +100,7 @@
         "background": {
           "activeOnStart": true,
           "beginsPattern": ".",
-          "endsPattern": "Godot Engine|M1 コースを走ります"
+          "endsPattern": "Godot Engine|M3 導入を表示します"
         }
       }
     },
