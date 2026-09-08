@@ -1,5 +1,6 @@
 extends RefCounted
-## ローカル簡易レース用の定数・進捗・前方ブロック（検討事項 #23）。
+## ローカル簡易レース用の定数・進捗・前方ブロック（検討事項 #23／速度は #24）。
+## 速度の単位は km/h。Path（メートル）を進めるときだけ ÷3.6 する。
 
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
@@ -17,11 +18,18 @@ const START_PATH_DISTANCE_M := fposmod(
 	TOKYO_LAP_M
 )
 
-const SPEED_TIERS := [14.0, 15.0, 16.0]
-const PLAYER_MAX_SPEED := 25.0
-const TARGET_SPEED_STEP := 1.0
-const TARGET_SPEED_MIN := 8.0
-const ACCEL_MPS2 := 6.0
+## CPU 最高速ティア（km/h）。旧 14/15/16 m/s 相当を丸めた値。
+const SPEED_TIERS_KMH := [50.0, 54.0, 58.0]
+## プレイヤー通常上限（#24・ブーストなし）。
+const PLAYER_MAX_SPEED_KMH := 75.0
+## プレイヤー開始時の現在／目標（#24 巡航帯）。
+const PLAYER_INITIAL_SPEED_KMH := 58.0
+## 世界の絶対上限（#24）。ローカル簡易ではブースト未実装のため通常は PLAYER_MAX まで。
+const HARD_SPEED_CAP_KMH := 90.0
+const TARGET_SPEED_STEP_KMH := 1.0
+const TARGET_SPEED_MIN_KMH := 48.0
+## 旧 6 m/s² 相当。
+const ACCEL_KMH_PER_S := 21.6
 
 ## 接触箱（設計案の例に近い簡易値）。
 const BLOCK_LATERAL_M := 1.5
@@ -40,23 +48,36 @@ static func expected_stadium_length_m(
 	return 2.0 * straight_len + TAU * turn_radius
 
 
-static func clamp_target_speed(target: float, max_speed: float) -> float:
-	return clampf(target, TARGET_SPEED_MIN, max_speed)
+static func kmh_to_mps(speed_kmh: float) -> float:
+	return speed_kmh / 3.6
 
 
-static func step_target_speed(target: float, direction: float, max_speed: float) -> float:
-	var next := target + direction * TARGET_SPEED_STEP
-	return clamp_target_speed(next, max_speed)
+static func mps_to_kmh(speed_mps: float) -> float:
+	return speed_mps * 3.6
 
 
-static func follow_speed(current: float, target: float, delta: float) -> float:
+static func clamp_target_speed_kmh(target_kmh: float, max_speed_kmh: float) -> float:
+	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
+	return clampf(target_kmh, TARGET_SPEED_MIN_KMH, ceiling)
+
+
+static func step_target_speed_kmh(
+	target_kmh: float,
+	direction: float,
+	max_speed_kmh: float
+) -> float:
+	var next := target_kmh + direction * TARGET_SPEED_STEP_KMH
+	return clamp_target_speed_kmh(next, max_speed_kmh)
+
+
+static func follow_speed_kmh(current_kmh: float, target_kmh: float, delta: float) -> float:
 	if delta <= 0.0:
-		return current
-	var diff := target - current
-	var max_step := ACCEL_MPS2 * delta
+		return current_kmh
+	var diff := target_kmh - current_kmh
+	var max_step := ACCEL_KMH_PER_S * delta
 	if absf(diff) <= max_step:
-		return target
-	return current + signf(diff) * max_step
+		return target_kmh
+	return current_kmh + signf(diff) * max_step
 
 
 ## other が self の前方にいる中心線距離（0 超〜 path_length）。真後ろは path_length に近い。
@@ -70,8 +91,8 @@ static func is_laterally_blocking(self_offset: float, other_offset: float) -> bo
 	return absf(self_offset - other_offset) <= BLOCK_LATERAL_M
 
 
-## 直前にいるブロッカーの対地速度。いなければ -1。
-static func blocking_speed(
+## 直前にいるブロッカーの対地速度（km/h）。いなければ -1。
+static func blocking_speed_kmh(
 	self_distance: float,
 	self_offset: float,
 	others: Array,
@@ -96,10 +117,10 @@ static func blocking_speed(
 	return blocker_speed if found else -1.0
 
 
-static func apply_block_cap(desired_speed: float, blocker_speed: float) -> float:
-	if blocker_speed < 0.0:
-		return desired_speed
-	return minf(desired_speed, blocker_speed * BLOCK_SPEED_FACTOR)
+static func apply_block_cap_kmh(desired_kmh: float, blocker_kmh: float) -> float:
+	if blocker_kmh < 0.0:
+		return desired_kmh
+	return minf(desired_kmh, blocker_kmh * BLOCK_SPEED_FACTOR)
 
 
 static func contact_overlaps(
@@ -114,10 +135,16 @@ static func contact_overlaps(
 	)
 
 
-## 対地速度で進んだときの中心線増分（ラップしない）。
-static func centerline_delta(speed: float, delta: float, offset: float, curvature: float) -> float:
+## 対地速度（km/h）で進んだときの中心線増分（m。ラップしない）。
+static func centerline_delta_from_kmh(
+	speed_kmh: float,
+	delta: float,
+	offset: float,
+	curvature: float
+) -> float:
 	var mult := M2TrackMath.distance_multiplier(offset, curvature)
-	return speed * delta / mult
+	# コースはメートルなので、進む量だけ km/h → m/s 相当にする。
+	return (speed_kmh / 3.6) * delta / mult
 
 
 static func add_race_progress(progress: float, delta_centerline: float) -> float:
@@ -146,5 +173,5 @@ static func starting_offset_for_gate(gate_index: int, field_size: int = FIELD_SI
 	return lerpf(-max_abs, max_abs, t)
 
 
-static func tier_speed_for_index(index: int) -> float:
-	return SPEED_TIERS[index % SPEED_TIERS.size()]
+static func tier_speed_kmh_for_index(index: int) -> float:
+	return SPEED_TIERS_KMH[index % SPEED_TIERS_KMH.size()]

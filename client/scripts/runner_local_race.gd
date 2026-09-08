@@ -1,12 +1,13 @@
 extends Node3D
 ## ローカル簡易レース用ランナー。目標スピード追従・左右・前方ブロック対応。
+## 速度は km/h（検討事項 #24）。
 
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 @export var path_path: NodePath = ^"../TrackPath"
-@export var max_speed: float = 15.0
+@export var max_speed_kmh: float = 58.0
 @export var steer_speed: float = 4.0
 @export var player_controlled: bool = false
 @export var display_name: String = "ぷるりん"
@@ -17,8 +18,8 @@ var _path: Path3D
 var _distance: float = LocalRaceMath.START_PATH_DISTANCE_M
 var _offset: float = 0.0
 var _target_offset: float = 0.0
-var _current_speed: float = 0.0
-var _target_speed: float = 15.0
+var _current_speed_kmh: float = 0.0
+var _target_speed_kmh: float = 58.0
 var _race_progress: float = 0.0
 var _finished: bool = false
 var _finish_order: int = -1
@@ -31,10 +32,16 @@ var _paused: bool = false
 var _others_snapshot: Array = []
 
 
-func setup_for_race(path: Path3D, gate: int, tier_speed: float, is_player: bool, label: String) -> void:
+func setup_for_race(
+	path: Path3D,
+	gate: int,
+	tier_speed_kmh: float,
+	is_player: bool,
+	label: String
+) -> void:
 	_path = path
 	gate_index = gate
-	max_speed = tier_speed
+	max_speed_kmh = tier_speed_kmh
 	player_controlled = is_player
 	display_name = label
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
@@ -44,8 +51,12 @@ func setup_for_race(path: Path3D, gate: int, tier_speed: float, is_player: bool,
 	_finished = false
 	_finish_order = -1
 	_finish_time = -1.0
-	_current_speed = tier_speed * 0.85
-	_target_speed = tier_speed
+	if is_player:
+		_current_speed_kmh = LocalRaceMath.PLAYER_INITIAL_SPEED_KMH
+		_target_speed_kmh = LocalRaceMath.PLAYER_INITIAL_SPEED_KMH
+	else:
+		_current_speed_kmh = tier_speed_kmh * 0.85
+		_target_speed_kmh = tier_speed_kmh
 	if _path != null:
 		if _path.has_method("get_straight_len"):
 			_straight_len = _path.get_straight_len()
@@ -71,11 +82,11 @@ func get_distance() -> float:
 
 
 func get_current_speed() -> float:
-	return _current_speed
+	return _current_speed_kmh
 
 
 func get_target_speed() -> float:
-	return _target_speed
+	return _target_speed_kmh
 
 
 func get_race_progress() -> float:
@@ -83,7 +94,7 @@ func get_race_progress() -> float:
 
 
 func get_max_speed() -> float:
-	return max_speed
+	return max_speed_kmh
 
 
 func is_finished() -> bool:
@@ -119,7 +130,7 @@ func get_snapshot() -> Dictionary:
 	return {
 		"distance": _distance,
 		"offset": _offset,
-		"speed": _current_speed,
+		"speed": _current_speed_kmh,
 		"progress": _race_progress,
 		"name": display_name,
 		"player": player_controlled,
@@ -145,18 +156,19 @@ func _process(delta: float) -> void:
 		return
 	_update_inputs(delta)
 	var path_len := _path.curve.get_baked_length()
-	var blocker := LocalRaceMath.blocking_speed(
+	var blocker := LocalRaceMath.blocking_speed_kmh(
 		_distance, _offset, _others_snapshot, path_len
 	)
-	var effective_target := LocalRaceMath.apply_block_cap(_target_speed, blocker)
-	_current_speed = LocalRaceMath.follow_speed(
-		_current_speed,
+	var effective_target := LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker)
+	_current_speed_kmh = LocalRaceMath.follow_speed_kmh(
+		_current_speed_kmh,
 		effective_target,
 		delta
 	)
-	var ground_speed := _current_speed
 	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
-	var d_center := LocalRaceMath.centerline_delta(ground_speed, delta, _offset, curvature)
+	var d_center := LocalRaceMath.centerline_delta_from_kmh(
+		_current_speed_kmh, delta, _offset, curvature
+	)
 	_race_progress = LocalRaceMath.add_race_progress(_race_progress, d_center)
 	_distance = fposmod(_distance + d_center, path_len)
 	_apply_pose()
@@ -174,7 +186,7 @@ func _update_inputs(delta: float) -> void:
 			_target_offset = M2TrackMath.clamp_offset(randf_range(-M2TrackMath.MAX_ABS_OFFSET_M, 2.0))
 		_offset = move_toward(_offset, _target_offset, steer_speed * 0.55 * delta)
 		_offset = M2TrackMath.clamp_offset(_offset)
-		_target_speed = max_speed
+		_target_speed_kmh = max_speed_kmh
 
 
 func _read_steer_axis() -> float:
@@ -195,10 +207,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_UP:
-			_target_speed = LocalRaceMath.step_target_speed(_target_speed, 1.0, max_speed)
+			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
+				_target_speed_kmh, 1.0, max_speed_kmh
+			)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_DOWN:
-			_target_speed = LocalRaceMath.step_target_speed(_target_speed, -1.0, max_speed)
+			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
+				_target_speed_kmh, -1.0, max_speed_kmh
+			)
 			get_viewport().set_input_as_handled()
 
 

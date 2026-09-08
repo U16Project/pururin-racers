@@ -98,7 +98,11 @@ func _spawn_field() -> void:
 		_runners_root.add_child(runner)
 		var is_player := i == 0
 		var label := "あなた" if is_player else "CPU%d" % (i + 1)
-		var tier := LocalRaceMath.PLAYER_MAX_SPEED if is_player else LocalRaceMath.tier_speed_for_index(i + 1)
+		var tier := (
+			LocalRaceMath.PLAYER_MAX_SPEED_KMH
+			if is_player
+			else LocalRaceMath.tier_speed_kmh_for_index(i + 1)
+		)
 		runner.call(
 			"setup_for_race",
 			_track,
@@ -229,7 +233,7 @@ func _update_hud() -> void:
 	var prog: float = _player.call("get_race_progress")
 	var tgt: float = _player.call("get_target_speed")
 	var cur: float = _player.call("get_current_speed")
-	_hud_label.text = "順位 %d／8　残り %.0fm　目標 %.0f　現在 %.1f　タイム %s　Esc＝メニュー" % [
+	_hud_label.text = "順位 %d／8　残り %.0fm　目標 %.0fkm/h　現在 %.0fkm/h　タイム %s　Esc＝メニュー" % [
 		order,
 		maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
 		tgt,

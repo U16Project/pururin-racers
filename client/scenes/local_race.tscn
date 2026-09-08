@@ -112,7 +112,7 @@ grow_vertical = 0
 theme_override_colors/font_color = Color(0.15, 0.2, 0.28, 1)
 theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 16
-text = "←→：ライン　↑↓：目標スピード　C：カメラ　Esc：メニュー　緑＝スタート／白＝ゴール"
+text = "←→：ライン　↑↓：目標スピード（km/h）　C：カメラ　Esc：メニュー　緑＝スタート／白＝ゴール"
 horizontal_alignment = 1
 
 [node name="PausePanel" type="PanelContainer" parent="UI"]
