@@ -1,4 +1,4 @@
-"""ぷるりんレーサーズ — M2 サーバー（WebSocket ping＋控室 join）。"""
+"""ぷるりんレーサーズ — M2 控室を維持した M5 サーバー。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from websockets.asyncio.server import serve
+from race_m5 import M5Race, TICK_RATE
 
 HOST = "127.0.0.1"
 PORT = 18765
@@ -72,6 +73,19 @@ class WaitingRoom:
 
 def make_handler(room: WaitingRoom):
     async def handle_connection(websocket) -> None:
+        race: M5Race | None = None
+        player_id: str | None = None
+        race_task: asyncio.Task | None = None
+
+        async def race_loop() -> None:
+            while race is not None and not race.finished:
+                await asyncio.sleep(1.0 / TICK_RATE)
+                if race is None:
+                    return
+                await websocket.send(json.dumps(race.tick()))
+            if race is not None:
+                await websocket.send(json.dumps(race.result_payload()))
+
         try:
             async for raw in websocket:
                 try:
@@ -96,8 +110,27 @@ def make_handler(room: WaitingRoom):
                 elif msg_t == "join_room":
                     _ok, payload = room.join(websocket, data.get("display_name"))
                     await websocket.send(json.dumps(payload))
+                elif msg_t == "race_join":
+                    if race is not None:
+                        await websocket.send(json.dumps(race.start_payload(player_id or "player-1")))
+                        continue
+                    player_id = "player-1"
+                    race = M5Race(race_id=str(uuid.uuid4()))
+                    await websocket.send(json.dumps(race.start(player_id)))
+                    race_task = asyncio.create_task(race_loop())
+                elif msg_t == "race_input":
+                    if race is None or player_id is None:
+                        await websocket.send(json.dumps({
+                            "v": PROTOCOL_VERSION, "t": "error",
+                            "code": "race_not_started", "message": "レースが開始されていません",
+                        }))
+                    else:
+                        race.receive_input(player_id, data)
                 # 未知の t は無視（接続維持）
         finally:
+            if race_task is not None:
+                race_task.cancel()
+                await asyncio.gather(race_task, return_exceptions=True)
             room.leave(websocket)
 
     return handle_connection
