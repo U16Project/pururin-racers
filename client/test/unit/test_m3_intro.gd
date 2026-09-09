@@ -10,7 +10,7 @@ func test_intro_items_match_m3_guide() -> void:
 		PackedStringArray([
 			"←→：走る位置　↑↓：目標スピード",
 			"C：カメラ切替　Esc：メニュー（レース中）",
-			"レース開始＝ローカル　控室へ進む＝接続",
+			"レース開始＝ローカル　集団プロトタイプ＝M4　控室へ進む＝接続",
 		])
 	)
 	intro.free()
@@ -38,4 +38,11 @@ func test_race_scene_exists() -> void:
 	var intro := M3Intro.new()
 	assert_eq(intro.race_scene_path(), "res://scenes/local_race.tscn")
 	assert_true(ResourceLoader.exists(intro.race_scene_path()))
+	intro.free()
+
+
+func test_m4_scene_exists() -> void:
+	var intro := M3Intro.new()
+	assert_eq(intro.m4_scene_path(), "res://scenes/m4_group_race.tscn")
+	assert_true(ResourceLoader.exists(intro.m4_scene_path()))
 	intro.free()

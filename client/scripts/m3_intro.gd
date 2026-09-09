@@ -3,10 +3,11 @@ extends Control
 
 const ROOM_SCENE_PATH := "res://scenes/m2_run.tscn"
 const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
+const M4_SCENE_PATH := "res://scenes/m4_group_race.tscn"
 const INTRO_ITEMS := [
 	"←→：走る位置　↑↓：目標スピード",
 	"C：カメラ切替　Esc：メニュー（レース中）",
-	"レース開始＝ローカル　控室へ進む＝接続",
+	"レース開始＝ローカル　集団プロトタイプ＝M4　控室へ進む＝接続",
 ]
 
 enum ConnectionStage {
@@ -23,11 +24,13 @@ const CONNECTION_STATUS := {
 
 @onready var _proceed_button: Button = %ProceedButton
 @onready var _race_button: Button = %RaceButton
+@onready var _m4_button: Button = %M4Button
 
 
 func _ready() -> void:
 	print("ぷるりんレーサーズ — M3 導入を表示します")
 	_race_button.pressed.connect(_on_race_pressed)
+	_m4_button.pressed.connect(_on_m4_pressed)
 	_proceed_button.pressed.connect(_on_proceed_pressed)
 	_race_button.grab_focus()
 	_refresh_guide_label()
@@ -54,6 +57,10 @@ func race_scene_path() -> String:
 	return RACE_SCENE_PATH
 
 
+func m4_scene_path() -> String:
+	return M4_SCENE_PATH
+
+
 func go_to_m2() -> void:
 	get_tree().change_scene_to_file(next_scene_path())
 
@@ -68,6 +75,10 @@ func _on_proceed_pressed() -> void:
 
 func _on_race_pressed() -> void:
 	go_to_local_race()
+
+
+func _on_m4_pressed() -> void:
+	get_tree().change_scene_to_file(m4_scene_path())
 
 
 func _refresh_guide_label() -> void:
