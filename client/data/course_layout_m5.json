@@ -1,0 +1,52 @@
+{
+  "course_id": "m5_standard_oval",
+  "track_length_m": 2083.1,
+  "straight_length_m": 680.0,
+  "turn_radius_m": 115.085,
+  "turn_angle_rad": 3.141592653589793,
+  "goal_path_m": 400.0,
+  "goal_semantics": "home_straight_path_400m",
+  "routes": [
+    {
+      "route_id": "m5_1200",
+      "distance_m": 1200.0,
+      "start_mainline_m": 1283.1,
+      "segments": [
+        {"type": "mainline", "distance_m": 1200.0}
+      ]
+    },
+    {
+      "route_id": "m5_1600",
+      "distance_m": 1600.0,
+      "start_mainline_m": 1043.1,
+      "segments": [
+        {"type": "straight", "distance_m": 160.0},
+        {"type": "mainline", "distance_m": 1440.0}
+      ]
+    },
+    {
+      "route_id": "m5_2000",
+      "distance_m": 2000.0,
+      "start_mainline_m": 483.1,
+      "segments": [
+        {"type": "mainline", "distance_m": 2000.0}
+      ]
+    },
+    {
+      "route_id": "m5_2400",
+      "distance_m": 2400.0,
+      "start_mainline_m": 83.1,
+      "segments": [
+        {"type": "mainline", "distance_m": 2400.0}
+      ]
+    },
+    {
+      "route_id": "m5_3000",
+      "distance_m": 3000.0,
+      "start_mainline_m": 1566.2,
+      "segments": [
+        {"type": "mainline", "distance_m": 3000.0}
+      ]
+    }
+  ]
+}

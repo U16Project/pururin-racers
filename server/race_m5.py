@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
 
 RACERS = 8
 TICK_RATE = 20
+COURSE_LAYOUT_PATH = Path(__file__).resolve().parents[1] / "shared" / "course_layout_m5.json"
+with COURSE_LAYOUT_PATH.open(encoding="utf-8") as layout_file:
+    COURSE_LAYOUT = json.load(layout_file)
+COURSE_ID = str(COURSE_LAYOUT["course_id"])
+TRACK_LENGTH_M = float(COURSE_LAYOUT["track_length_m"])
+STRAIGHT_LEN_M = float(COURSE_LAYOUT["straight_length_m"])
+TURN_RADIUS_M = float(COURSE_LAYOUT["turn_radius_m"])
+GOAL_PATH_M = float(COURSE_LAYOUT["goal_path_m"])
 RACE_DISTANCE_M = 2000.0
-TRACK_LENGTH_M = 2083.0
+ROUTES = {
+    float(route["distance_m"]): route for route in COURSE_LAYOUT["routes"]
+}
+GEOMETRIC_BLEND = 0.85
+MIN_DISTANCE_MULT = 0.05
 LANE_MIN = -6.0
 LANE_MAX = 6.0
 CONTACT_LONGITUDINAL_M = 1.5
@@ -22,6 +36,58 @@ CHAIN_DRAFT_ATTENUATION = 0.25
 MAX_CHAIN_DRAFT_P = MAX_DRAFT_RECEIVED_P * 0.25
 
 
+def route_for_distance(distance_m: float) -> dict[str, Any]:
+    return ROUTES[float(distance_m)]
+
+
+def route_mainline_distance(route: dict[str, Any], route_distance: float) -> float:
+    start = float(route["start_mainline_m"])
+    remaining = max(0.0, route_distance)
+    for segment in route["segments"]:
+        length = float(segment["distance_m"])
+        consumed = min(remaining, length)
+        if segment["type"] == "mainline":
+            return (start + consumed) % TRACK_LENGTH_M
+        # The 160 m launch segment is a dedicated straight before mainline 0.
+        remaining -= consumed
+        if remaining <= 0.0:
+            return (start - (length - consumed)) % TRACK_LENGTH_M
+    return (start + route_distance) % TRACK_LENGTH_M
+
+
+def curvature_at(distance: float, route: dict[str, Any] | None = None) -> float:
+    """中心線の曲率(1/m)。スタジアムの直線は0、半円ターンは1/R。"""
+    if route is not None:
+        if route["segments"][0]["type"] == "straight" and distance < float(
+            route["segments"][0]["distance_m"]
+        ):
+            return 0.0
+        distance = route_mainline_distance(route, distance)
+    arc_length = (TRACK_LENGTH_M - 2.0 * STRAIGHT_LEN_M) / 2.0
+    position = distance % TRACK_LENGTH_M
+    if position < STRAIGHT_LEN_M:
+        return 0.0
+    if position < STRAIGHT_LEN_M + arc_length:
+        return 1.0 / TURN_RADIUS_M
+    if position < STRAIGHT_LEN_M + arc_length + STRAIGHT_LEN_M:
+        return 0.0
+    return 1.0 / TURN_RADIUS_M
+
+
+def distance_multiplier(offset: float, curvature: float = 0.0) -> float:
+    """必要中心線距離の倍率。offsetは負が内側、正が外側。"""
+    geometric = 1.0 + offset * curvature
+    blended = 1.0 + (geometric - 1.0) * GEOMETRIC_BLEND
+    return max(MIN_DISTANCE_MULT, blended)
+
+
+def centerline_delta_from_kmh(
+    speed_kmh: float, delta: float, offset: float, curvature: float
+) -> float:
+    """対地速度(km/h)から確定中心線進行(m)を求める。"""
+    return max(0.0, speed_kmh / 3.6 * delta / distance_multiplier(offset, curvature))
+
+
 def _own_wake_from_speed(speed: float) -> float:
     return min(0.18, 0.06 + max(0.0, speed) / 75.0 * 0.12)
 
@@ -33,10 +99,13 @@ class RacerState:
     cpu: bool
     max_speed: float
     acceleration: float
-    distance: float = 609.0
+    distance: float = 0.0
     race_progress: float = 0.0
     offset: float = 0.0
+    # speed は接触解決前の計画／追従速度。確定進行の実測値ではない。
     speed: float = 52.0
+    # actual_speed_kmh は接触解決後に確定した進行量から算出する実測速度。
+    actual_speed_kmh: float = 0.0
     target_speed: float = 58.0
     target_offset: float = 0.0
     cpu_base_speed: float = 0.0
@@ -52,6 +121,7 @@ class RacerState:
     primary_line_gap_m: float = 0.0
     draft_distance_m: float = 0.0
     draft_line_gap_m: float = 0.0
+    direct_source_details: list[dict[str, Any]] = field(default_factory=list)
     contact: bool = False
     finished: bool = False
     finish_order: int = 0
@@ -66,6 +136,7 @@ class RacerState:
             "race_progress": round(self.race_progress, 4),
             "offset": round(self.offset, 4),
             "speed": round(self.speed, 4),
+            "actual_speed_kmh": round(self.actual_speed_kmh, 4),
             "target_speed": round(self.target_speed, 4),
             "own_wake_p": round(self.own_wake_p, 6),
             "direct_draft_p": round(self.direct_draft_p, 6),
@@ -79,6 +150,15 @@ class RacerState:
             "primary_line_gap_m": round(self.primary_line_gap_m, 4),
             "draft_distance_m": round(self.draft_distance_m, 4),
             "draft_line_gap_m": round(self.draft_line_gap_m, 4),
+            "direct_source_details": [
+                {
+                    "id": detail["id"],
+                    "gap": round(detail["gap"], 4),
+                    "line": round(detail["line"], 4),
+                    "contribution_p": round(detail["contribution_p"], 6),
+                }
+                for detail in self.direct_source_details
+            ],
             "contact": self.contact,
             "finished": self.finished,
             "finish_order": self.finish_order,
@@ -97,7 +177,7 @@ def _calculate_draft_details(
     float,
     float,
     float,
-    list[tuple[str, float, float]],
+    list[dict[str, float | str]],
     list[str],
 ]:
     """前tickの連鎖値を使い、同tickの更新値は参照しない。"""
@@ -138,7 +218,18 @@ def _calculate_draft_details(
     selected = [source for source in sources if source[2] > 0.0][:MAX_DRAFT_SOURCES]
     if not selected:
         return own_wake, 0.0, 0.0, [], []
-    direct = min(MAX_DRAFT_RECEIVED_P, sum(item[2] for item in selected))
+    direct_raw = sum(item[2] for item in selected)
+    direct = min(MAX_DRAFT_RECEIVED_P, direct_raw)
+    direct_scale = direct / direct_raw if direct_raw > 0.0 else 0.0
+    source_details = [
+        {
+            "id": source_id,
+            "gap": gap,
+            "line": line_gap,
+            "contribution_p": strength * direct_scale,
+        }
+        for gap, line_gap, strength, source_id, _source_index in selected
+    ]
     chain_sources: list[str] = []
     chain_strengths: list[float] = []
     for gap, line_gap, _direct_strength, source_id, source_index in selected:
@@ -161,10 +252,7 @@ def _calculate_draft_details(
             chain_sources.append(source_id)
             chain_strengths.append(chain_strength)
     chain = min(MAX_CHAIN_DRAFT_P, sum(chain_strengths))
-    return own_wake, direct, chain, [
-        (source_id, gap, line_gap)
-        for gap, line_gap, _strength, source_id, _source_index in selected
-    ], chain_sources
+    return own_wake, direct, chain, source_details, chain_sources
 
 
 def calculate_draft(snapshot: list[dict[str, Any]], index: int) -> tuple[float, float]:
@@ -183,15 +271,13 @@ def _apply_draft_details(
     racer.direct_draft_p = direct
     racer.chain_draft_p = chain
     racer.received_draft_p = direct + chain
-    racer.direct_source_ids = [source_id for source_id, _gap, _line_gap in sources]
+    racer.direct_source_ids = [str(detail["id"]) for detail in sources]
     racer.chain_source_ids = chain_sources
-    racer.draft_source_ids = [source_id for source_id, _gap, _line_gap in sources]
+    racer.draft_source_ids = [str(detail["id"]) for detail in sources]
     if sources:
-        (
-            racer.primary_source_id,
-            racer.primary_gap_m,
-            racer.primary_line_gap_m,
-        ) = sources[0]
+        racer.primary_source_id = str(sources[0]["id"])
+        racer.primary_gap_m = float(sources[0]["gap"])
+        racer.primary_line_gap_m = float(sources[0]["line"])
         racer.draft_distance_m = racer.primary_gap_m
         racer.draft_line_gap_m = racer.primary_line_gap_m
     else:
@@ -200,14 +286,23 @@ def _apply_draft_details(
         racer.primary_line_gap_m = 0.0
         racer.draft_distance_m = 0.0
         racer.draft_line_gap_m = 0.0
+    racer.direct_source_details = sources
 
 
 class M5Race:
     """入力を受け、8頭の状態を決定し、配信用 tick を返す。"""
 
-    def __init__(self, race_id: str = "m5-local", seed: int = 0) -> None:
+    def __init__(
+        self,
+        race_id: str = "m5-local",
+        seed: int = 0,
+        distance_m: float = RACE_DISTANCE_M,
+    ) -> None:
         self.race_id = race_id
         self.seed = seed
+        self.route = route_for_distance(distance_m)
+        self.route_id = str(self.route["route_id"])
+        self.distance_m = float(self.route["distance_m"])
         self.started = False
         self.finished = False
         self.tick_number = 0
@@ -230,9 +325,11 @@ class M5Race:
             ("cpu-6", "CPU・追込型", True, 78.0, 12.0, 57.0, 3.0, 57.0),
             ("cpu-7", "CPU・安定型", True, 71.0, 10.0, 61.0, -0.5, 61.0),
         ]
+        start_mainline = float(self.route["start_mainline_m"])
         self.racers = [
             RacerState(
-                rid, name, cpu, cap, accel, target_speed=target,
+                rid, name, cpu, cap, accel, distance=start_mainline,
+                target_speed=target,
                 offset=offset, target_offset=offset, speed=target - 6.0,
                 cpu_base_speed=cpu_base_speed,
             )
@@ -243,7 +340,8 @@ class M5Race:
     def start_payload(self, player_id: str) -> dict[str, Any]:
         return {
             "v": 1, "t": "race_start", "race_id": self.race_id,
-            "player_id": player_id, "distance_m": RACE_DISTANCE_M,
+            "course_id": COURSE_ID, "route_id": self.route_id,
+            "goal_path_m": GOAL_PATH_M, "distance_m": self.distance_m,
             "tick_rate": TICK_RATE, "elapsed_seconds": 0.0,
             "racers": [r.snapshot() for r in self.racers],
         }
@@ -260,6 +358,8 @@ class M5Race:
         if not self.started:
             raise RuntimeError("race has not started")
         if self.finished:
+            for racer in self.racers:
+                racer.actual_speed_kmh = 0.0
             return self.tick_payload()
         # Phase 1: tick 開始時点だけを読む。ドラフト補助は前 tick に確定した
         # received 値であり、同 tick の更新順には依存させない。
@@ -305,7 +405,10 @@ class M5Race:
                 -3.0 * delta,
                 min(3.0 * delta, racer.target_offset - racer.offset),
             )
-            advance = max(0.0, speed / 3.6 * delta)
+            curvature = curvature_at(racer.race_progress, self.route)
+            advance = centerline_delta_from_kmh(
+                speed, delta, offset, curvature
+            )
             plans.append({
                 "speed": speed,
                 "target_speed": racer.target_speed,
@@ -323,10 +426,16 @@ class M5Race:
             racer.target_speed = plan["target_speed"]
             racer.offset = plan["offset"]
             racer.race_progress = resolved_progress[index]
-            racer.distance = (
-                tick_start_distances[racer.racer_id]
-                + racer.race_progress - self._tick_start_progress[racer.racer_id]
-            ) % TRACK_LENGTH_M
+            progress_delta = max(
+                0.0,
+                racer.race_progress - self._tick_start_progress[racer.racer_id],
+            )
+            racer.actual_speed_kmh = (
+                progress_delta / delta * 3.6 if delta > 0.0 else 0.0
+            )
+            racer.distance = route_mainline_distance(
+                self.route, racer.race_progress
+            )
         self.tick_number += 1
         self._mark_finishes()
 
@@ -387,7 +496,7 @@ class M5Race:
     def _mark_finishes(self) -> None:
         crossing = [
             racer for racer in self.racers
-            if not racer.finished and racer.race_progress >= RACE_DISTANCE_M
+            if not racer.finished and racer.race_progress >= self.distance_m
         ]
         crossing_times = []
         tick_start = (self.tick_number - 1) / TICK_RATE
@@ -415,11 +524,22 @@ class M5Race:
             racer.direct_draft_p = 0.0
             racer.chain_draft_p = 0.0
             racer.received_draft_p = 0.0
+            racer.direct_source_ids = []
+            racer.chain_source_ids = []
+            racer.draft_source_ids = []
+            racer.direct_source_details = []
+            racer.primary_source_id = ""
+            racer.primary_gap_m = 0.0
+            racer.primary_line_gap_m = 0.0
+            racer.draft_distance_m = 0.0
+            racer.draft_line_gap_m = 0.0
         self.finished = self.finish_count == len(self.racers)
 
     def tick_payload(self) -> dict[str, Any]:
         return {
             "v": 1, "t": "race_tick", "race_id": self.race_id,
+            "course_id": COURSE_ID, "route_id": self.route_id,
+            "distance_m": self.distance_m,
             "tick": self.tick_number,
             "elapsed_seconds": self.tick_number / TICK_RATE,
             "racers": [r.snapshot() for r in self.racers],
@@ -432,6 +552,8 @@ class M5Race:
         )
         return {
             "v": 1, "t": "race_result", "race_id": self.race_id,
+            "course_id": COURSE_ID, "route_id": self.route_id,
+            "distance_m": self.distance_m,
             "elapsed_seconds": self.tick_number / TICK_RATE,
             "results": [{
                             "id": r.racer_id,

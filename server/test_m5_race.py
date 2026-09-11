@@ -1,5 +1,8 @@
 """M5 レース処理の決定性と二層ドラフト境界のテスト。"""
 
+import json
+from pathlib import Path
+
 from race_m5 import (
     DRAFT_ASSIST_MAX_KMH,
     MAX_CHAIN_DRAFT_P,
@@ -7,7 +10,17 @@ from race_m5 import (
     M5Race,
     _calculate_draft_details,
     calculate_draft,
+    centerline_delta_from_kmh,
+    curvature_at,
+    distance_multiplier,
+    ROUTES,
+    TRACK_LENGTH_M,
+    STRAIGHT_LEN_M,
+    TURN_RADIUS_M,
+    route_mainline_distance,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_start_creates_one_player_and_seven_cpu() -> None:
@@ -15,6 +28,37 @@ def test_start_creates_one_player_and_seven_cpu() -> None:
     message = race.start("player")
     assert len(message["racers"]) == 8
     assert sum(1 for racer in message["racers"] if racer["cpu"]) == 7
+    assert all("actual_speed_kmh" in racer for racer in message["racers"])
+    assert message["course_id"] == "m5_standard_oval"
+    assert message["route_id"] == "m5_2000"
+    assert message["distance_m"] == 2000.0
+
+
+def test_shared_routes_have_exact_distance_and_1600_launch_breakdown() -> None:
+    assert TRACK_LENGTH_M == 2083.1
+    assert STRAIGHT_LEN_M == 680.0
+    assert TURN_RADIUS_M == 115.085
+    assert [route["distance_m"] for route in ROUTES.values()] == [
+        1200.0, 1600.0, 2000.0, 2400.0, 3000.0
+    ]
+    route = ROUTES[1600.0]
+    assert [segment["distance_m"] for segment in route["segments"]] == [160.0, 1440.0]
+    assert sum(segment["distance_m"] for segment in route["segments"]) == route["distance_m"]
+    assert route_mainline_distance(route, 160.0) == route["start_mainline_m"]
+    assert route_mainline_distance(route, 1600.0) == 400.0
+
+
+def test_client_course_copy_matches_shared_wire_definition() -> None:
+    with (REPO_ROOT / "shared" / "course_layout_m5.json").open(encoding="utf-8") as shared_file:
+        shared_layout = json.load(shared_file)
+    with (REPO_ROOT / "client" / "data" / "course_layout_m5.json").open(encoding="utf-8") as client_file:
+        client_layout = json.load(client_file)
+    assert client_layout == shared_layout
+
+
+def test_route_goal_is_home_straight_path_400_for_all_distances() -> None:
+    for route in ROUTES.values():
+        assert route_mainline_distance(route, route["distance_m"]) == 400.0
 
 
 def test_direct_draft_uses_progress_and_caps_received_value() -> None:
@@ -87,6 +131,12 @@ def test_draft_source_metadata_matches_primary_front_distance_and_line() -> None
     assert player.primary_line_gap_m == 1.0
     assert player.draft_distance_m == player.primary_gap_m
     assert player.draft_line_gap_m == player.primary_line_gap_m
+    assert player.direct_source_details[0]["id"] == source.racer_id
+    assert player.direct_source_details[0]["gap"] == player.primary_gap_m
+    assert player.direct_source_details[0]["line"] == player.primary_line_gap_m
+    assert sum(
+        detail["contribution_p"] for detail in player.direct_source_details
+    ) == player.direct_draft_p
 
 
 def test_finished_racer_cannot_provide_or_receive_draft() -> None:
@@ -176,7 +226,7 @@ def test_direct_and_chain_draft_are_separate_and_use_previous_tick_values() -> N
     assert direct > 0.0
     assert chain > 0.0
     assert chain <= MAX_CHAIN_DRAFT_P
-    assert direct_sources[0][0] == "b"
+    assert direct_sources[0]["id"] == "b"
     assert chain_sources == ["b"]
     snapshot[1]["direct_draft_p"] = 0.0
     snapshot[1]["chain_draft_p"] = 0.0
@@ -241,6 +291,140 @@ def test_contact_caps_a_catching_follower_without_regressing_progress() -> None:
     assert follower.race_progress >= before
     assert leader.contact and follower.contact
     assert follower.race_progress <= leader.race_progress - 1.5 or follower.race_progress == before
+    assert follower.actual_speed_kmh <= follower.speed
+
+
+def test_actual_speed_uses_resolved_progress_delta() -> None:
+    race = M5Race("actual-speed")
+    race.start()
+    player = race.racers[0]
+    for racer in race.racers[1:]:
+        racer.finished = True
+    before = player.race_progress
+
+    race.tick()
+
+    progress_delta = player.race_progress - before
+    assert progress_delta > 0.0
+    assert player.actual_speed_kmh == progress_delta / (1.0 / 20.0) * 3.6
+    assert player.actual_speed_kmh >= 0.0
+
+
+def test_distance_multiplier_is_one_on_straights_for_inner_center_outer() -> None:
+    for offset in (-6.0, 0.0, 6.0):
+        assert distance_multiplier(offset, 0.0) == 1.0
+    deltas = [
+        centerline_delta_from_kmh(60.0, 1.0, offset, 0.0)
+        for offset in (-6.0, 0.0, 6.0)
+    ]
+    assert deltas == [deltas[0], deltas[0], deltas[0]]
+
+
+def test_curve_inner_line_is_shorter_and_outer_line_is_longer() -> None:
+    curvature = curvature_at(700.0)
+    assert curvature > 0.0
+    assert distance_multiplier(-6.0, curvature) < 1.0
+    assert distance_multiplier(0.0, curvature) == 1.0
+    assert distance_multiplier(6.0, curvature) > 1.0
+
+
+def test_same_speed_and_time_have_inner_center_outer_progress_difference() -> None:
+    curvature = curvature_at(700.0)
+    inner = centerline_delta_from_kmh(60.0, 1.0, -6.0, curvature)
+    center = centerline_delta_from_kmh(60.0, 1.0, 0.0, curvature)
+    outer = centerline_delta_from_kmh(60.0, 1.0, 6.0, curvature)
+    assert inner > center > outer
+
+
+def test_actual_speed_matches_confirmed_progress_delta_on_curve() -> None:
+    race = M5Race("curve-actual-speed")
+    race.start()
+    player = race.racers[0]
+    for racer in race.racers[1:]:
+        racer.finished = True
+    player.distance = 700.0
+    player.race_progress = 700.0
+    player.offset = -6.0
+    player.target_offset = -6.0
+    player.speed = player.target_speed = 60.0
+    before = player.race_progress
+    race.tick(1.0)
+    progress_delta = player.race_progress - before
+    expected = centerline_delta_from_kmh(60.0, 1.0, -6.0, curvature_at(700.0, race.route))
+    assert abs(progress_delta - expected) < 1e-12
+    assert abs(player.actual_speed_kmh - expected * 3.6) < 1e-12
+
+
+def test_draft_source_details_follow_post_move_snapshot_and_zero_outside_range() -> None:
+    snapshot = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {"id": "near", "race_progress": 104.0, "offset": 1.0, "speed": 60.0},
+        {"id": "behind", "race_progress": 99.0, "offset": 3.0, "speed": 60.0},
+        {"id": "far", "race_progress": 109.0, "offset": 0.0, "speed": 60.0},
+    ]
+    _own, direct, chain, details, _chain_sources = _calculate_draft_details(snapshot, 0)
+    assert direct > 0.0
+    assert chain == 0.0
+    assert details[0]["id"] == "near"
+    assert details[0]["gap"] == 4.0
+    assert details[0]["line"] == 1.0
+    assert sum(item["contribution_p"] for item in details) == direct
+    assert _calculate_draft_details(snapshot, 2)[1] == 0.0
+    assert _calculate_draft_details(snapshot, 3)[1] == 0.0
+
+
+def test_direct_source_details_are_capped_and_sum_to_direct_total() -> None:
+    race = M5Race("source-contributions")
+    race.start()
+    player = race.racers[0]
+    for racer in race.racers[4:]:
+        racer.finished = True
+    player.race_progress = 100.0
+    player.offset = 0.0
+    for index, source in enumerate(race.racers[1:4], start=1):
+        source.race_progress = 100.1 + index
+        source.offset = 0.0
+        source.own_wake_p = 0.18
+    race.tick()
+    assert sum(
+        detail["contribution_p"] for detail in player.direct_source_details
+    ) == player.direct_draft_p
+    assert player.direct_draft_p <= MAX_DRAFT_RECEIVED_P
+
+
+def test_full_eight_racer_result_is_reproducible() -> None:
+    results = []
+    for race_id in ("repeat-a", "repeat-b"):
+        race = M5Race(race_id, seed=11)
+        race.start()
+        for _ in range(20_000):
+            race.tick()
+            if race.finished:
+                break
+        results.append(race.result_payload()["results"])
+    assert results[0] == results[1]
+
+
+def test_finish_tick_reports_actual_progress_then_zero_afterwards() -> None:
+    race = M5Race("actual-speed-finish")
+    race.start()
+    player = race.racers[0]
+    for index, racer in enumerate(race.racers[1:], start=2):
+        racer.finished = True
+        racer.finish_order = index
+        racer.finish_time = float(index)
+    player.race_progress = 1999.0
+
+    for _ in range(10):
+        race.tick()
+        if player.finished:
+            break
+
+    assert player.finished
+    assert player.actual_speed_kmh > 0.0
+    assert player.speed == 0.0
+    race.tick()
+    assert player.actual_speed_kmh == 0.0
 
 
 def test_tick_reports_deterministic_elapsed_seconds() -> None:
@@ -290,6 +474,8 @@ def test_all_eight_racers_finish_and_result_is_available() -> None:
     assert finish_times == sorted(finish_times)
     assert max(finish_times) - min(finish_times) > 0.1
     assert len({round(finish_time, 1) for finish_time in finish_times}) > 1
+    race.tick()
+    assert all(racer.actual_speed_kmh == 0.0 for racer in race.racers)
 
 
 def test_finish_time_interpolates_crossing_and_orders_by_time() -> None:
