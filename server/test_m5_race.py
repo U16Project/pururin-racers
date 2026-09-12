@@ -488,7 +488,7 @@ def test_finish_time_interpolates_crossing_and_orders_by_time() -> None:
         racer.finish_time = float(index)
     race._tick_start_progress = {
         first.racer_id: 1990.0,
-        second.racer_id: 1999.9,
+        second.racer_id: 1999.2,
     }
     first.race_progress = 2010.0
     second.race_progress = 2001.0
@@ -496,8 +496,8 @@ def test_finish_time_interpolates_crossing_and_orders_by_time() -> None:
 
     race._mark_finishes()
 
-    assert abs(second.finish_time - (0.1 / 1.1) / 20.0) < 1e-9
-    assert first.finish_time == 0.025
+    assert abs(second.finish_time - (0.05 / 1.8) / 20.0) < 1e-9
+    assert first.finish_time == 0.023125
     assert second.finish_order == 1
     assert first.finish_order == 2
     result = race.result_payload()["results"]

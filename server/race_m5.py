@@ -34,6 +34,7 @@ MAX_DRAFT_FORWARD_M = 8.0
 MAX_DRAFT_LINE_M = 1.8
 CHAIN_DRAFT_ATTENUATION = 0.25
 MAX_CHAIN_DRAFT_P = MAX_DRAFT_RECEIVED_P * 0.25
+RACER_FRONT_OFFSET_M = 0.75
 
 
 def route_for_distance(distance_m: float) -> dict[str, Any]:
@@ -494,9 +495,12 @@ class M5Race:
         return resolved
 
     def _mark_finishes(self) -> None:
+        # race_progress tracks the runner centre.  The finish line is crossed
+        # when the front edge of the 1.5m runner reaches the line.
+        finish_progress = self.distance_m - RACER_FRONT_OFFSET_M
         crossing = [
             racer for racer in self.racers
-            if not racer.finished and racer.race_progress >= self.distance_m
+            if not racer.finished and racer.race_progress >= finish_progress
         ]
         crossing_times = []
         tick_start = (self.tick_number - 1) / TICK_RATE
@@ -506,7 +510,7 @@ class M5Race:
             )
             progress_delta = racer.race_progress - start_progress
             fraction = (
-                (RACE_DISTANCE_M - start_progress) / progress_delta
+                (finish_progress - start_progress) / progress_delta
                 if progress_delta > 0.0
                 else 1.0
             )

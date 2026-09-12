@@ -34,7 +34,7 @@ static func make_racecourse_curve(
 	var tl := Vector3(-half_s, 0.0, r)
 	var tr := Vector3(half_s, 0.0, r)
 	var rm := Vector3(half_s + r, 0.0, 0.0)
-	curve.add_point(br, _arc_travel(-PI * 0.5) * kappa, Vector3(-third_s, 0.0, 0.0))
+	curve.add_point(br, -_arc_travel(-PI * 0.5) * kappa, Vector3(-third_s, 0.0, 0.0))
 	curve.add_point(bl, Vector3(third_s, 0.0, 0.0), _arc_travel(-PI * 0.5) * kappa)
 	curve.add_point(lm, -_arc_travel(-PI) * kappa, _arc_travel(-PI) * kappa)
 	curve.add_point(tl, -_arc_travel(-PI * 1.5) * kappa, Vector3(third_s, 0.0, 0.0))
