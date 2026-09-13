@@ -57,10 +57,13 @@ func _apply_chase() -> void:
 	var forward := -_target.global_transform.basis.z
 	forward.y = 0.0
 	forward = forward.normalized() if forward.length_squared() > 0.0001 else Vector3.FORWARD
-	forward = Basis(Vector3.UP, _follow_yaw) * forward
 	var right := forward.cross(Vector3.UP).normalized()
 	global_position = _target.global_position - forward * follow_distance + right * _follow_lateral + Vector3.UP * follow_height
-	look_at(_target.global_position + Vector3.UP * 0.6, Vector3.UP)
+	var view_target := _target.global_position + Vector3.UP * 0.6
+	var view_direction := (view_target - global_position).normalized()
+	if absf(_follow_yaw) > 0.0001:
+		view_direction = (Basis(Vector3.UP, _follow_yaw) * view_direction).normalized()
+	look_at(global_position + view_direction, Vector3.UP)
 
 func _process_chase_adjustment(delta: float) -> void:
 	var speed := chase_adjust_speed * (2.5 if Input.is_key_pressed(KEY_SHIFT) else 1.0)

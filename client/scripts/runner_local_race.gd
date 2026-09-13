@@ -1,5 +1,5 @@
 extends Node3D
-## ローカル簡易レース用ランナー。目標スピード追従・左右・前方ブロック対応。
+## ローカル簡易レース用ランナー。目標スピード追従・出力操作・左右・前方ブロック対応。
 ## 速度は km/h（検討事項 #24）。
 
 
@@ -20,6 +20,14 @@ var _offset: float = 0.0
 var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
 var _target_speed_kmh: float = 58.0
+var _drive_mode: bool = false
+var _drive_level: float = 0.0
+var _drive_hold_direction: float = 0.0
+var _drive_repeat_remaining: float = 0.0
+var _drafting: bool = false
+var _draft_bonus_kmh: float = 0.0
+var _heart_rate_bpm: float = 118.0
+var _stamina: float = 100.0
 var _race_progress: float = 0.0
 var _finished: bool = false
 var _finish_order: int = -1
@@ -52,11 +60,20 @@ func setup_for_race(
 	_finish_order = -1
 	_finish_time = -1.0
 	if is_player:
-		_current_speed_kmh = LocalRaceMath.PLAYER_INITIAL_SPEED_KMH
-		_target_speed_kmh = LocalRaceMath.PLAYER_INITIAL_SPEED_KMH
+		# M5.1 は出力方式を標準とし、レース開始時は最低速度から発進する。
+		_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
+		_target_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
 	else:
 		_current_speed_kmh = tier_speed_kmh * 0.85
 		_target_speed_kmh = tier_speed_kmh
+	_drive_mode = is_player
+	_drive_level = 0.0
+	_drive_hold_direction = 0.0
+	_drive_repeat_remaining = 0.0
+	_drafting = false
+	_draft_bonus_kmh = 0.0
+	_heart_rate_bpm = 118.0
+	_stamina = 100.0
 	if _path != null:
 		if _path.has_method("get_straight_len"):
 			_straight_len = _path.get_straight_len()
@@ -87,6 +104,50 @@ func get_current_speed() -> float:
 
 func get_target_speed() -> float:
 	return _target_speed_kmh
+
+
+func set_drive_mode(enabled: bool) -> void:
+	if not player_controlled:
+		return
+	_drive_mode = enabled
+	_drive_hold_direction = 0.0
+	_drive_repeat_remaining = 0.0
+	if not _drive_mode:
+		# 方式を切り替えても現在速度は維持し、目標速度方式の追従先だけ同期する。
+		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_current_speed_kmh, max_speed_kmh)
+
+
+func toggle_drive_mode() -> bool:
+	set_drive_mode(not _drive_mode)
+	return _drive_mode
+
+
+func is_drive_mode() -> bool:
+	return _drive_mode
+
+
+func get_drive_level() -> float:
+	return _drive_level
+
+
+func is_drafting() -> bool:
+	return _drafting
+
+
+func get_draft_bonus_kmh() -> float:
+	return _draft_bonus_kmh
+
+
+func set_drive_level(level: float) -> void:
+	_drive_level = LocalRaceMath.clamp_drive_level(level)
+
+
+func get_heart_rate_bpm() -> float:
+	return _heart_rate_bpm
+
+
+func get_stamina() -> float:
+	return _stamina
 
 
 func get_race_progress() -> float:
@@ -159,12 +220,31 @@ func _process(delta: float) -> void:
 	var blocker := LocalRaceMath.blocking_speed_kmh(
 		_distance, _offset, _others_snapshot, path_len
 	)
-	var effective_target := LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker)
-	_current_speed_kmh = LocalRaceMath.follow_speed_kmh(
-		_current_speed_kmh,
-		effective_target,
-		delta
-	)
+	_drafting = false
+	_draft_bonus_kmh = 0.0
+	if _drive_mode and player_controlled:
+		_update_drive_level_input(delta)
+		var draft_leader := LocalRaceMath.draft_leader(
+			_distance, _offset, _others_snapshot, path_len
+		)
+		var draft_factor := LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR if not draft_leader.is_empty() else 0.0
+		_drafting = not draft_leader.is_empty()
+		_draft_bonus_kmh = LocalRaceMath.draft_speed_bonus_kmh(draft_factor)
+		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
+			_current_speed_kmh,
+			_drive_level,
+			max_speed_kmh,
+			delta,
+			draft_factor
+		)
+		_update_condition(delta)
+	else:
+		var effective_target := LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker)
+		_current_speed_kmh = LocalRaceMath.follow_speed_kmh(
+			_current_speed_kmh,
+			effective_target,
+			delta
+		)
 	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
 		_current_speed_kmh, delta, _offset, curvature
@@ -189,6 +269,42 @@ func _update_inputs(delta: float) -> void:
 		_target_speed_kmh = max_speed_kmh
 
 
+func _update_drive_level_input(delta: float) -> void:
+	var direction := _read_drive_axis()
+	if is_zero_approx(direction):
+		_drive_hold_direction = 0.0
+		_drive_repeat_remaining = 0.0
+		return
+	if not is_equal_approx(direction, _drive_hold_direction):
+		_drive_hold_direction = direction
+		_drive_repeat_remaining = LocalRaceMath.DRIVE_REPEAT_INITIAL_S
+		_drive_level = LocalRaceMath.step_drive_level(_drive_level, direction)
+		return
+	_drive_repeat_remaining -= delta
+	while _drive_repeat_remaining <= 0.0:
+		_drive_level = LocalRaceMath.step_drive_level(_drive_level, direction)
+		_drive_repeat_remaining += LocalRaceMath.DRIVE_REPEAT_INTERVAL_S
+
+
+func _read_drive_axis() -> float:
+	var v := 0.0
+	if Input.is_physical_key_pressed(KEY_UP):
+		v += 1.0
+	if Input.is_physical_key_pressed(KEY_DOWN):
+		v -= 1.0
+	return clampf(v, -1.0, 1.0)
+
+
+func _update_condition(delta: float) -> void:
+	var target_heart := LocalRaceMath.heart_rate_target_bpm(_drive_level)
+	_heart_rate_bpm = move_toward(_heart_rate_bpm, target_heart, 18.0 * delta)
+	_stamina = clampf(
+		_stamina + LocalRaceMath.stamina_delta_per_s(_drive_level) * delta,
+		0.0,
+		100.0
+	)
+
+
 func _read_steer_axis() -> float:
 	var v := 0.0
 	if Input.is_physical_key_pressed(KEY_LEFT):
@@ -204,6 +320,8 @@ func _read_steer_axis() -> float:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not player_controlled or _paused or _finished:
+		return
+	if _drive_mode:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_UP:

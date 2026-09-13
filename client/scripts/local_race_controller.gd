@@ -20,6 +20,7 @@ const RUNNER_COLORS := [
 @onready var _track: Path3D = $TrackPath
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
+@onready var _guide_label: Label = $UI/GuideLabel
 @onready var _pause_panel: Control = %PausePanel
 @onready var _result_panel: Control = %ResultPanel
 @onready var _result_label: Label = %ResultLabel
@@ -29,6 +30,11 @@ const RUNNER_COLORS := [
 @onready var _camera: Camera3D = $Camera3D
 @onready var _start_marker: MeshInstance3D = $StartMarker
 @onready var _goal_marker: MeshInstance3D = $GoalMarker
+
+var _goal_sign: Label3D
+var _goal_glow_line: MeshInstance3D
+var _goal_panel: MeshInstance3D
+var _goal_panel_frame: Node3D
 
 var _runners: Array[Node3D] = []
 var _paused: bool = false
@@ -49,6 +55,7 @@ func _ready() -> void:
 	_resume_button.pressed.connect(_set_paused.bind(false))
 	_place_markers()
 	_spawn_field()
+	_guide_label.text = "←→：ライン　↑↓：出力ノッチ　V：目標速度方式へ切替　C：視点切替　CHASE中 WASD：追従調整　QE：向き　R：リセット　Esc：メニュー　緑＝スタート／発光＝ゴール"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -57,6 +64,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			_set_paused(not _paused)
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_V and _player != null:
+			_player.call("toggle_drive_mode")
 			get_viewport().set_input_as_handled()
 
 
@@ -129,6 +139,8 @@ func _place_markers() -> void:
 		LocalRaceMath.GOAL_PATH_DISTANCE_M,
 		Color(0.95, 0.95, 0.95)
 	)
+	_place_goal_glow_line()
+	_place_goal_fx()
 	_place_line_marker(_start_marker, LocalRaceMath.START_PATH_DISTANCE_M, Color(0.2, 0.85, 0.45))
 
 
@@ -142,18 +154,128 @@ func _place_line_marker(node: MeshInstance3D, path_d: float, color: Color) -> vo
 		travel = travel.normalized()
 	var box := BoxMesh.new()
 	# X = コース横断、Z = 進行方向の幅を持つ、地面より上の帯。
-	box.size = Vector3(15.0, 0.025, 1.5)
+	box.size = Vector3(15.0, 0.035, 0.12)
 	node.mesh = box
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
 	mat.emission_enabled = true
-	mat.emission = color * 0.35
+	mat.emission = color * 1.2
+	mat.emission_energy_multiplier = 2.0
 	node.material_override = mat
 	var basis := Basis.looking_at(travel, Vector3.UP)
 	node.global_transform = _track.global_transform * Transform3D(
 		basis,
 		xf.origin + Vector3.UP * 0.14
 	)
+
+
+func _place_goal_fx() -> void:
+	if _track == null or _track.curve == null:
+		return
+	var curve_xf := _track.curve.sample_baked_with_rotation(LocalRaceMath.GOAL_PATH_DISTANCE_M)
+	var travel := -curve_xf.basis.z
+	travel.y = 0.0
+	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
+	if _goal_panel == null:
+		_goal_panel = MeshInstance3D.new()
+		_goal_panel.name = "GoalPanel"
+		_track.add_child(_goal_panel)
+	var panel_mesh := BoxMesh.new()
+	panel_mesh.size = Vector3(19.0, 4.0, 0.08)
+	_goal_panel.mesh = panel_mesh
+	var panel_material := StandardMaterial3D.new()
+	panel_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	panel_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	panel_material.albedo_color = Color(0.08, 0.68, 0.34, 0.055)
+	panel_material.emission_enabled = true
+	panel_material.emission = Color(0.04, 0.92, 0.34)
+	panel_material.emission_energy_multiplier = 5.5
+	_goal_panel.material_override = panel_material
+	var goal_transform := _track.global_transform * Transform3D(
+		Basis.looking_at(travel, Vector3.UP),
+		curve_xf.origin + Vector3.UP * 2.0
+	)
+	_goal_panel.global_transform = goal_transform
+	if _goal_panel_frame == null:
+		_goal_panel_frame = Node3D.new()
+		_goal_panel_frame.name = "GoalPanelFrame"
+		_track.add_child(_goal_panel_frame)
+		var frame_material := StandardMaterial3D.new()
+		frame_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		frame_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		frame_material.albedo_color = Color(0.03, 0.58, 0.24, 0.9)
+		frame_material.emission_enabled = true
+		frame_material.emission = Color(0.02, 1.0, 0.32)
+		frame_material.emission_energy_multiplier = 7.0
+		_make_goal_panel_frame_bar(
+			"Top", Vector3(19.4, 0.1, 0.12), Vector3(0.0, 2.05, 0.0), frame_material
+		)
+		_make_goal_panel_frame_bar(
+			"Bottom", Vector3(19.4, 0.1, 0.12), Vector3(0.0, -2.05, 0.0), frame_material
+		)
+		_make_goal_panel_frame_bar(
+			"Left", Vector3(0.1, 4.0, 0.12), Vector3(-9.65, 0.0, 0.0), frame_material
+		)
+		_make_goal_panel_frame_bar(
+			"Right", Vector3(0.1, 4.0, 0.12), Vector3(9.65, 0.0, 0.0), frame_material
+		)
+	_goal_panel_frame.global_transform = goal_transform * Transform3D(
+		Basis.IDENTITY, Vector3(0.0, 0.0, 0.06)
+	)
+	if _goal_sign == null:
+		_goal_sign = Label3D.new()
+		_goal_sign.name = "GoalSign"
+		_goal_sign.text = "GOAL"
+		_goal_sign.font_size = 720
+		_goal_sign.pixel_size = 0.008
+		_goal_sign.modulate = Color(0.92, 1.0, 0.86, 1.0)
+		_goal_sign.outline_size = 160
+		_goal_sign.outline_modulate = Color(0.01, 0.08, 0.16, 1.0)
+		_goal_sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+		_track.add_child(_goal_sign)
+	_goal_sign.global_transform = goal_transform * Transform3D(
+		Basis.IDENTITY, Vector3(0.0, 6.4, 0.05)
+	)
+
+
+func _place_goal_glow_line() -> void:
+	if _track == null or _track.curve == null:
+		return
+	if _goal_glow_line == null:
+		_goal_glow_line = MeshInstance3D.new()
+		_goal_glow_line.name = "GoalGlowLine"
+		_track.add_child(_goal_glow_line)
+	var curve_xf := _track.curve.sample_baked_with_rotation(LocalRaceMath.GOAL_PATH_DISTANCE_M)
+	var travel := -curve_xf.basis.z
+	travel.y = 0.0
+	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
+	var glow_box := BoxMesh.new()
+	glow_box.size = Vector3(15.0, 0.08, 0.7)
+	_goal_glow_line.mesh = glow_box
+	var glow_material := StandardMaterial3D.new()
+	glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_material.albedo_color = Color(0.08, 0.78, 0.62, 0.66)
+	glow_material.emission_enabled = true
+	glow_material.emission = Color(0.04, 1.0, 0.68)
+	glow_material.emission_energy_multiplier = 14.0
+	_goal_glow_line.material_override = glow_material
+	_goal_glow_line.global_transform = _track.global_transform * Transform3D(
+		Basis.looking_at(travel, Vector3.UP),
+		curve_xf.origin + Vector3.UP * 0.22
+	)
+
+
+func _make_goal_panel_frame_bar(
+	bar_name: String, size: Vector3, local_position: Vector3, material: StandardMaterial3D
+) -> void:
+	var bar := MeshInstance3D.new()
+	bar.name = bar_name
+	var bar_mesh := BoxMesh.new()
+	bar_mesh.size = size
+	bar.mesh = bar_mesh
+	bar.material_override = material
+	bar.position = local_position
+	_goal_panel_frame.add_child(bar)
 
 
 func _resolve_contacts() -> void:
@@ -233,10 +355,17 @@ func _update_hud() -> void:
 	var prog: float = _player.call("get_race_progress")
 	var tgt: float = _player.call("get_target_speed")
 	var cur: float = _player.call("get_current_speed")
-	_hud_label.text = "順位 %d／8　残り %.0fm　目標 %.0fkm/h　現在 %.0fkm/h　タイム %s　Esc＝メニュー" % [
+	var mode_text := "出力 %+d　心拍(仮) %.0f　スタミナ(仮) %.0f%%" % [
+		int(roundi(_player.call("get_drive_level"))),
+		_player.call("get_heart_rate_bpm"),
+		_player.call("get_stamina"),
+	] if _player.call("is_drive_mode") else "目標 %.0fkm/h" % tgt
+	var draft_text := "ドラフト中 +%.1fkm/h" % _player.call("get_draft_bonus_kmh") if _player.call("is_drafting") else "単独走"
+	_hud_label.text = "順位 %d／8　残り %.0fm　%s　%s　現在 %.0fkm/h　タイム %s　Esc＝メニュー" % [
 		order,
 		maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
-		tgt,
+		mode_text,
+		draft_text,
 		cur,
 		LocalRaceMath.format_race_time(_race_elapsed),
 	]
@@ -244,11 +373,19 @@ func _update_hud() -> void:
 
 func _live_place(runner: Node3D) -> int:
 	var my_prog: float = runner.call("get_race_progress")
+	var my_finished: bool = runner.call("is_finished")
+	var my_finish_order: int = runner.call("get_finish_order")
 	var better := 0
 	for r in _runners:
 		if r == runner:
 			continue
-		if r.call("is_finished"):
+		var other_finished: bool = r.call("is_finished")
+		if my_finished:
+			# ゴール済み同士は、進捗ではなく確定した着順だけで比較する。
+			if other_finished and r.call("get_finish_order") < my_finish_order:
+				better += 1
+			continue
+		if other_finished:
 			better += 1
 			continue
 		if r.call("get_race_progress") > my_prog + 0.001:

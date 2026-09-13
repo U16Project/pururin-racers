@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/local_race_controller.gd" id="1_ctrl"]
 [ext_resource type="Script" path="res://scripts/m2_track_path.gd" id="2_track"]
-[ext_resource type="Script" path="res://scripts/camera_m2.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/m5_camera.gd" id="3_cam"]
 [ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="4_font"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_track"]
@@ -112,7 +112,7 @@ grow_vertical = 0
 theme_override_colors/font_color = Color(0.15, 0.2, 0.28, 1)
 theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 16
-text = "←→：ライン　↑↓：目標スピード（km/h）　C：カメラ　Esc：メニュー　緑＝スタート／白＝ゴール"
+text = "←→：ライン　↑↓：出力ノッチ　C：視点切替　CHASE中 WASD：追従調整　QE：向き　R：リセット　Esc：メニュー　緑＝スタート／発光＝ゴール"
 horizontal_alignment = 1
 
 [node name="PausePanel" type="PanelContainer" parent="UI"]

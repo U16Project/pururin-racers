@@ -5,6 +5,9 @@ const NetRace := preload("res://scripts/net_race_m5.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
 const MAX_DRAFT_RECEIVED_P := 0.24
+const RESULT_VISUAL_HOLD_SECONDS := 10.0
+const INPUT_OFFSET_RATE := 4.0
+const INPUT_SPEED_RATE := 12.0
 const COLORS := [
 	Color(1.0, 0.45, 0.2), Color(0.25, 0.75, 1.0), Color(0.95, 0.92, 0.35),
 	Color(0.75, 0.35, 0.95), Color(0.35, 0.9, 0.55), Color(0.95, 0.55, 0.7),
@@ -48,6 +51,8 @@ var _race_distance := 2000.0
 var _goal_path := 400.0
 var _paused := false
 var _race_result_received := false
+var _visual_hold_remaining := 0.0
+var _visuals_stopped := false
 
 func _ready() -> void:
 	_layout = M5CourseBuilder.load_layout()
@@ -84,21 +89,45 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		elif _paused:
 			return
-		elif event.physical_keycode == KEY_LEFT:
-			_target_offset = maxf(-6.0, _target_offset - 0.5)
-		elif event.physical_keycode == KEY_RIGHT:
-			_target_offset = minf(6.0, _target_offset + 0.5)
-		elif event.physical_keycode == KEY_UP:
-			_target_speed = minf(75.0, _target_speed + 1.0)
-		elif event.physical_keycode == KEY_DOWN:
-			_target_speed = maxf(45.0, _target_speed - 1.0)
 		else:
 			return
+
+func _process_player_input(delta: float) -> void:
+	if _race_result_received or _paused:
+		return
+	if _apply_held_input(
+		delta,
+		Input.is_physical_key_pressed(KEY_LEFT),
+		Input.is_physical_key_pressed(KEY_RIGHT),
+		Input.is_physical_key_pressed(KEY_UP),
+		Input.is_physical_key_pressed(KEY_DOWN)
+	) and _net != null:
 		_net.send_input(_target_speed, _target_offset)
-		get_viewport().set_input_as_handled()
+
+func _apply_held_input(
+	delta: float, left_pressed: bool, right_pressed: bool, up_pressed: bool, down_pressed: bool
+) -> bool:
+	var previous_speed := _target_speed
+	var previous_offset := _target_offset
+	if left_pressed:
+		_target_offset = maxf(-6.0, _target_offset - INPUT_OFFSET_RATE * delta)
+	if right_pressed:
+		_target_offset = minf(6.0, _target_offset + INPUT_OFFSET_RATE * delta)
+	if up_pressed:
+		_target_speed = minf(75.0, _target_speed + INPUT_SPEED_RATE * delta)
+	if down_pressed:
+		_target_speed = maxf(45.0, _target_speed - INPUT_SPEED_RATE * delta)
+	return not is_equal_approx(previous_speed, _target_speed) or not is_equal_approx(previous_offset, _target_offset)
 
 func _process(delta: float) -> void:
+	_process_player_input(delta)
+	if _race_result_received and not _visuals_stopped:
+		_visual_hold_remaining = maxf(_visual_hold_remaining - maxf(delta, 0.0), 0.0)
+		if is_zero_approx(_visual_hold_remaining):
+			_visuals_stopped = true
 	if _track == null or _track.curve == null:
+		return
+	if _visuals_stopped:
 		return
 	var path_length := _track.curve.get_baked_length()
 	if path_length <= 0.0:
@@ -110,9 +139,7 @@ func _process(delta: float) -> void:
 		var target: Vector2 = _visual_targets[racer_id]
 		var current_distance := float(_visual_distances.get(racer_id, target.x))
 		var current_offset := float(_visual_offsets.get(racer_id, target.y))
-		if _paused:
-			continue
-		if _visual_finished.get(racer_id, false) and not _race_result_received:
+		if _visual_finished.get(racer_id, false) or _race_result_received:
 			current_distance = fposmod(current_distance + 58.0 / 3.6 * delta, path_length)
 			_visual_distances[racer_id] = current_distance
 			_apply_visual_pose(_visuals[racer_id], current_distance, current_offset)
@@ -198,7 +225,9 @@ func _draft_target_text(racer: Dictionary) -> String:
 
 func _on_race_result(payload: Dictionary) -> void:
 	_race_result_received = true
-	_paused = true
+	_visual_hold_remaining = RESULT_VISUAL_HOLD_SECONDS
+	_visuals_stopped = false
+	_paused = false
 	_pause_panel.visible = false
 	var lines := PackedStringArray()
 	for result in payload.get("results", []):

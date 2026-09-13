@@ -31,6 +31,26 @@ const TARGET_SPEED_MIN_KMH := 48.0
 ## 旧 6 m/s² 相当。
 const ACCEL_KMH_PER_S := 21.6
 
+## M5.1 出力操作実験。出力は整数ノッチだが、入力は長押しでリピートする。
+const DRIVE_LEVEL_MIN := -3
+const DRIVE_LEVEL_MAX := 5
+const DRIVE_LEVEL_STEP := 1
+const MIN_SPEED_KMH := 40.0
+const ROLLING_RESISTANCE_KMH_PER_S := 0.55
+const AIR_RESISTANCE_COEFFICIENT := 0.024
+## ノッチごとの駆動力。速度帯を持たず、抵抗との差分だけで加減速する。
+## 低ノッチは低速域でわずかに加速しつつ、高速域では抵抗に負ける。
+## 値は「ノッチ × 一律係数」よりも、操作感を調整しやすい小さなカーブとして管理する。
+const DRIVE_FORCE_BY_LEVEL_KMH_PER_S := [0.0, 1.8, 1.9, 2.2, 2.6, 3.0]
+const BRAKE_DECELERATION_PER_LEVEL := 4.0
+const DRAFT_SPEED_BONUS_MAX_KMH := 4.0
+const DRAFT_AIR_RESISTANCE_FACTOR := 0.55
+const DRAFT_FORWARD_MIN_M := 0.5
+const DRAFT_FORWARD_MAX_M := 8.0
+const DRAFT_LATERAL_RANGE_M := 1.8
+const DRIVE_REPEAT_INITIAL_S := 0.24
+const DRIVE_REPEAT_INTERVAL_S := 0.10
+
 ## 接触箱（設計案の例に近い簡易値）。
 const BLOCK_LATERAL_M := 1.5
 const BLOCK_FORWARD_M := 3.0
@@ -78,6 +98,101 @@ static func follow_speed_kmh(current_kmh: float, target_kmh: float, delta: float
 	if absf(diff) <= max_step:
 		return target_kmh
 	return current_kmh + signf(diff) * max_step
+
+
+static func clamp_drive_level(level: float) -> float:
+	return clampf(level, float(DRIVE_LEVEL_MIN), float(DRIVE_LEVEL_MAX))
+
+
+static func step_drive_level(level: float, direction: float) -> float:
+	var sign_direction := signf(direction)
+	if is_zero_approx(sign_direction):
+		return clamp_drive_level(level)
+	return clamp_drive_level(level + sign_direction * DRIVE_LEVEL_STEP)
+
+
+static func drive_force_kmh_per_s(drive_level: float) -> float:
+	var level_index := int(round(clamp_drive_level(drive_level)))
+	return float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index])
+
+
+static func drive_resistance_kmh_per_s(speed_kmh: float, draft_factor: float = 0.0) -> float:
+	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
+	var air_resistance := AIR_RESISTANCE_COEFFICIENT * safe_speed
+	return ROLLING_RESISTANCE_KMH_PER_S + air_resistance * (1.0 - clampf(draft_factor, 0.0, 1.0))
+
+
+static func draft_speed_bonus_kmh(draft_factor: float) -> float:
+	var draft_presence := clampf(
+		draft_factor / maxf(DRAFT_AIR_RESISTANCE_FACTOR, 0.0001),
+		0.0,
+		1.0
+	)
+	return DRAFT_SPEED_BONUS_MAX_KMH * draft_presence
+
+
+static func advance_drive_speed_kmh(
+	current_kmh: float,
+	drive_level: float,
+	max_speed_kmh: float,
+	delta: float,
+	draft_factor: float = 0.0
+) -> float:
+	if delta <= 0.0:
+		return maxf(current_kmh, MIN_SPEED_KMH)
+	var level := clamp_drive_level(drive_level)
+	var next_speed := current_kmh
+	if level < 0.0:
+		# 負ノッチは従来どおり明確な制動として扱う。
+		var braking := -level * BRAKE_DECELERATION_PER_LEVEL
+		var acceleration := -braking - drive_resistance_kmh_per_s(current_kmh, draft_factor)
+		next_speed += acceleration * delta
+	elif level > 0.0:
+		# 正ノッチは速度帯ではなく、駆動力と抵抗の差分を積み上げる。
+		var drive_force := drive_force_kmh_per_s(level)
+		var acceleration := drive_force - drive_resistance_kmh_per_s(current_kmh, draft_factor)
+		next_speed += acceleration * delta
+	else:
+		# 0 は惰性。抵抗だけで最低速度へ自然に戻る。
+		next_speed -= drive_resistance_kmh_per_s(current_kmh, draft_factor) * delta
+	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
+	if level > 0.0 and draft_factor > 0.0:
+		# ドラフト成立時だけ、個体上限に最大4km/hを加えられる。
+		var draft_bonus := draft_speed_bonus_kmh(draft_factor)
+		ceiling = minf(max_speed_kmh + draft_bonus, HARD_SPEED_CAP_KMH)
+	return clampf(next_speed, MIN_SPEED_KMH, ceiling)
+
+
+static func draft_leader(
+	self_distance: float,
+	self_offset: float,
+	others: Array,
+	path_length: float
+) -> Dictionary:
+	var best_gap := DRAFT_FORWARD_MAX_M
+	var leader: Dictionary = {}
+	for entry in others:
+		var gap := forward_gap(self_distance, entry.get("distance", 0.0), path_length)
+		if gap < DRAFT_FORWARD_MIN_M or gap > DRAFT_FORWARD_MAX_M:
+			continue
+		if absf(self_offset - float(entry.get("offset", 0.0))) > DRAFT_LATERAL_RANGE_M:
+			continue
+		if gap < best_gap:
+			best_gap = gap
+			leader = entry
+	return leader
+
+
+static func heart_rate_target_bpm(drive_level: float) -> float:
+	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
+	return lerpf(118.0, 185.0, effort)
+
+
+static func stamina_delta_per_s(drive_level: float) -> float:
+	if is_zero_approx(clamp_drive_level(drive_level)):
+		return 0.0
+	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
+	return lerpf(2.5, -7.0, effort)
 
 
 ## other が self の前方にいる中心線距離（0 超〜 path_length）。真後ろは path_length に近い。

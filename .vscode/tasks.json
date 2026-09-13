@@ -2,6 +2,35 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "開発プロセスを停止",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/windows/stop-pururin-dev.ps1"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "${workspaceFolder}/tools/stop-pururin-dev.sh"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "サーバー仮想環境を用意",
       "type": "shell",
       "windows": {
@@ -32,9 +61,17 @@
       "problemMatcher": []
     },
     {
+      "label": "開発環境を再起動準備",
+      "dependsOn": [
+        "開発プロセスを停止",
+        "サーバー仮想環境を用意"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": []
+    },
+    {
       "label": "サーバーを起動",
       "type": "shell",
-      "dependsOn": ["サーバー仮想環境を用意"],
       "options": {
         "cwd": "${workspaceFolder}/server"
       },
@@ -107,10 +144,11 @@
     {
       "label": "サーバーとクライアントを起動",
       "dependsOn": [
+        "開発環境を再起動準備",
         "サーバーを起動",
         "クライアントを起動（Godot）"
       ],
-      "dependsOrder": "parallel",
+      "dependsOrder": "sequence",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",

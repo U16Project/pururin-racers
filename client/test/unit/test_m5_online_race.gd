@@ -32,6 +32,22 @@ func test_chase_camera_defaults_keep_target_centered_and_have_no_free_mode() -> 
 	assert_eq(camera.get("follow_distance"), 12.0)
 	race.free()
 
+func test_chase_qe_rotates_view_without_moving_camera_position() -> void:
+	var race := M5Scene.instantiate()
+	add_child(race)
+	race.call("_create_visual", "player-1", 0)
+	var camera: Camera3D = race.get_node("Camera3D")
+	camera.call("_process", 0.0)
+	var initial_position := camera.global_position
+	var initial_forward := -camera.global_transform.basis.z
+	camera.set("_follow_yaw", PI * 0.5)
+	camera.call("_process", 0.0)
+	assert_almost_eq(camera.global_position.x, initial_position.x, 0.001)
+	assert_almost_eq(camera.global_position.y, initial_position.y, 0.001)
+	assert_almost_eq(camera.global_position.z, initial_position.z, 0.001)
+	assert_ne(camera.global_transform.basis.z, -initial_forward)
+	race.free()
+
 func test_visual_is_placed_on_track_curve_with_ground_clearance() -> void:
 	var race := M5Scene.instantiate()
 	add_child(race)
@@ -234,6 +250,30 @@ func test_escape_toggles_pause_panel_and_resume() -> void:
 	assert_false(race.get("_paused"))
 	race.free()
 
+func test_held_controls_adjust_speed_and_line_smoothly() -> void:
+	var race := M5Scene.instantiate()
+	add_child(race)
+	assert_true(race.call("_apply_held_input", 0.5, true, false, true, false))
+	assert_almost_eq(float(race.get("_target_offset")), -5.0, 0.001)
+	assert_almost_eq(float(race.get("_target_speed")), 64.0, 0.001)
+	race.free()
+
+func test_pause_keeps_visuals_rendering_latest_server_state() -> void:
+	var race := M5Scene.instantiate()
+	add_child(race)
+	race.call("_on_race_tick", {
+		"racers": [{"id": "player-1", "race_progress": 0.0, "offset": 0.0}],
+	})
+	var visual: Node3D = race.get_node("Runners/player-1")
+	var before := visual.global_position
+	race.call("_set_paused", true)
+	race.call("_on_race_tick", {
+		"racers": [{"id": "player-1", "race_progress": 100.0, "offset": 0.0}],
+	})
+	race.call("_process", 1.0 / 60.0)
+	assert_ne(visual.global_position, before)
+	race.free()
+
 func test_finished_visual_runs_until_result_arrives() -> void:
 	var race := M5Scene.instantiate()
 	add_child(race)
@@ -245,9 +285,14 @@ func test_finished_visual_runs_until_result_arrives() -> void:
 	race.call("_process", 1.0)
 	assert_ne(visual.global_position, before)
 	race.call("_on_race_result", {"results": []})
+	assert_true(race.get_node("%ResultPanel").visible)
+	assert_false(race.get("_paused"))
 	var after_result := visual.global_position
 	race.call("_process", 1.0)
-	assert_eq(visual.global_position, after_result)
+	assert_ne(visual.global_position, after_result)
+	var during_hold := visual.global_position
+	race.call("_process", 9.0)
+	assert_eq(visual.global_position, during_hold)
 	race.free()
 
 func test_intro_exposes_m5_entry() -> void:
