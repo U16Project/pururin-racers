@@ -1,10 +1,13 @@
 extends Node3D
+
+const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
+const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 ## M5: サーバーの race_tick を描画し、目標値だけを送る。
 
 const NetRace := preload("res://scripts/net_race_m5.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
-const MAX_DRAFT_RECEIVED_P := 0.24
 const RESULT_VISUAL_HOLD_SECONDS := 10.0
 const INPUT_OFFSET_RATE := 4.0
 const INPUT_SPEED_RATE := 12.0
@@ -28,10 +31,7 @@ const COLORS := [
 @onready var _start_marker: MeshInstance3D = $StartMarker
 @onready var _goal_marker: MeshInstance3D = $GoalMarker
 
-var _goal_sign: Label3D
-var _goal_glow_line: MeshInstance3D
-var _goal_panel: MeshInstance3D
-var _goal_panel_frame: Node3D
+var _goal_visual := GoalVisual.new()
 
 var _net: Node
 var _visuals: Dictionary = {}
@@ -42,8 +42,8 @@ var _visual_finished: Dictionary = {}
 var _latest: Dictionary = {}
 var _target_speed := 58.0
 var _target_offset := -3.0
-var _straight_len := 526.0
-var _turn_radius := 164.0
+var _straight_len := 680.0
+var _turn_radius := 115.085
 var _layout: Dictionary = {}
 var _route: Dictionary = {}
 var _track_length := 2083.1
@@ -55,8 +55,21 @@ var _visual_hold_remaining := 0.0
 var _visuals_stopped := false
 
 func _ready() -> void:
-	_layout = M5CourseBuilder.load_layout()
+	var course_result := M5CourseBuilder.load_layout_result()
+	if course_result.has("error"):
+		_hud_label.text = "コース設定を確認してください：" + str(course_result.error)
+		set_process(false)
+		return
+	if DraftRules.values().is_empty():
+		_hud_label.text = "ドラフト設定を確認してください：" + DraftRules.last_error
+		set_process(false)
+		return
+	_layout = course_result.layout
 	_route = M5CourseBuilder.route_for_distance(_layout, _race_distance)
+	if _route.is_empty():
+		_hud_label.text = "コース設定を確認してください：m5_2000 のルートがありません"
+		set_process(false)
+		return
 	_straight_len = float(_layout.get("straight_length_m", 680.0))
 	_turn_radius = float(_layout.get("turn_radius_m", 115.085))
 	_track_length = float(_layout.get("track_length_m", 2083.1))
@@ -175,53 +188,18 @@ func _on_race_tick(payload: Dictionary) -> void:
 			_visual_offsets[racer_id] = target_offset
 			_apply_visual_pose(_visuals[racer_id], target_distance, target_offset)
 		if racer_id == "player-1":
-			var draft_text := _draft_status_text(racer)
 			var actual_speed := float(racer.get("actual_speed_kmh", racer.get("speed", 0.0)))
-			_hud_label.text = "M5 オンライン　残り %.0fm　目標 %.1fkm/h　実測 %.1fkm/h" % [
-				maxf(_race_distance - float(racer.get("race_progress", 0.0)), 0.0),
-				float(racer.get("target_speed", 0.0)),
-				actual_speed,
-			]
-			_hud_label.text += "\nタイム %s　%s" % [
-				_format_race_time(float(payload.get("elapsed_seconds", 0.0))),
-				draft_text,
-			]
-
-func _draft_status_text(racer: Dictionary) -> String:
-	var direct_source_ids: Array = racer.get("direct_source_ids", [])
-	if direct_source_ids.is_empty():
-		return "単独走（直接 0% ＋ 連鎖 0%　総合 0%）"
-	var direct_percent := maxf(0.0, float(racer.get("direct_draft_p", 0.0))) / MAX_DRAFT_RECEIVED_P * 100.0
-	var chain_percent := maxf(0.0, float(racer.get("chain_draft_p", 0.0))) / MAX_DRAFT_RECEIVED_P * 100.0
-	var total_percent := maxf(
-		0.0,
-		float(racer.get("direct_draft_p", 0.0))
-			+ float(racer.get("chain_draft_p", 0.0))
-	) / MAX_DRAFT_RECEIVED_P * 100.0
-	var target_text := _draft_target_text(racer)
-	return "ドラフト 直接 %.0f%% ＋ 連鎖 %.0f%%　総合 %.0f%%　対象 %s" % [
-		direct_percent,
-		chain_percent,
-		total_percent,
-		target_text,
-	]
-
-func _draft_target_text(racer: Dictionary) -> String:
-	var details: Array = racer.get("direct_source_details", [])
-	if details.is_empty():
-		return "%s　前方 %.1fm　横 %.1fm" % [
-			str(racer.get("primary_source_id", "")),
-			float(racer.get("primary_gap_m", 0.0)),
-			float(racer.get("primary_line_gap_m", 0.0)),
-		]
-	var targets := PackedStringArray()
-	for detail in details:
-		targets.append("%s（前方 %.1fm／横 %.1fm）" % [
-			str(detail.get("id", "")),
-			float(detail.get("gap", 0.0)),
-			float(detail.get("line", 0.0)),
-		])
-	return "、".join(targets)
+			var lines := PackedStringArray([
+				"M5 オンライン",
+				"残り %.0fm" % maxf(_race_distance - float(racer.get("race_progress", 0.0)), 0.0),
+				"目標 %.1fkm/h" % float(racer.get("target_speed", 0.0)),
+				"実測 %.1fkm/h" % actual_speed,
+			])
+			lines.append_array(DraftHudFormatter.status_lines(
+				racer, DraftRules.number("max_received_p"), true
+			))
+			lines.append("タイム %s" % _format_race_time(float(payload.get("elapsed_seconds", 0.0))))
+			_hud_label.text = "\n".join(lines)
 
 func _on_race_result(payload: Dictionary) -> void:
 	_race_result_received = true
@@ -268,8 +246,7 @@ func _create_visual(racer_id: String, index: int) -> void:
 
 func _place_markers() -> void:
 	_place_line_marker(_goal_marker, _goal_path, Color(0.98, 0.98, 1.0))
-	_place_goal_glow_line()
-	_place_goal_fx()
+	_goal_visual.place(_track, _goal_path, 15.0)
 	_place_line_marker(
 		_start_marker, float(_route.get("start_mainline_m", 0.0)), Color(0.2, 0.85, 0.45)
 	)
@@ -302,112 +279,6 @@ func _place_line_marker(node: MeshInstance3D, path_distance: float, color: Color
 		Basis.looking_at(travel, Vector3.UP),
 		curve_xf.origin + Vector3.UP * 0.14
 	)
-
-func _place_goal_fx() -> void:
-	if _track == null or _track.curve == null:
-		return
-	var curve_xf := _track.curve.sample_baked_with_rotation(_goal_path)
-	var travel := -curve_xf.basis.z
-	travel.y = 0.0
-	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
-	if _goal_panel == null:
-		_goal_panel = MeshInstance3D.new()
-		_goal_panel.name = "GoalPanel"
-		_track.add_child(_goal_panel)
-	var panel_mesh := BoxMesh.new()
-	panel_mesh.size = Vector3(19.0, 4.0, 0.08)
-	_goal_panel.mesh = panel_mesh
-	var panel_material := StandardMaterial3D.new()
-	panel_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	panel_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	panel_material.albedo_color = Color(0.08, 0.68, 0.34, 0.055)
-	panel_material.emission_enabled = true
-	panel_material.emission = Color(0.04, 0.92, 0.34)
-	panel_material.emission_energy_multiplier = 5.5
-	_goal_panel.material_override = panel_material
-	var goal_transform := _track.global_transform * Transform3D(
-		Basis.looking_at(travel, Vector3.UP),
-		curve_xf.origin + Vector3.UP * 2.0
-	)
-	_goal_panel.global_transform = goal_transform
-	if _goal_panel_frame == null:
-		_goal_panel_frame = Node3D.new()
-		_goal_panel_frame.name = "GoalPanelFrame"
-		_track.add_child(_goal_panel_frame)
-		var frame_material := StandardMaterial3D.new()
-		frame_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		frame_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		frame_material.albedo_color = Color(0.03, 0.58, 0.24, 0.9)
-		frame_material.emission_enabled = true
-		frame_material.emission = Color(0.02, 1.0, 0.32)
-		frame_material.emission_energy_multiplier = 7.0
-		_make_goal_panel_frame_bar(
-			"Top", Vector3(19.4, 0.1, 0.12), Vector3(0.0, 2.05, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Bottom", Vector3(19.4, 0.1, 0.12), Vector3(0.0, -2.05, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Left", Vector3(0.1, 4.0, 0.12), Vector3(-9.65, 0.0, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Right", Vector3(0.1, 4.0, 0.12), Vector3(9.65, 0.0, 0.0), frame_material
-		)
-	_goal_panel_frame.global_transform = goal_transform * Transform3D(
-		Basis.IDENTITY, Vector3(0.0, 0.0, 0.06)
-	)
-	if _goal_sign == null:
-		_goal_sign = Label3D.new()
-		_goal_sign.name = "GoalSign"
-		_goal_sign.text = "GOAL"
-		_goal_sign.font_size = 720
-		_goal_sign.pixel_size = 0.008
-		_goal_sign.modulate = Color(0.92, 1.0, 0.86, 1.0)
-		_goal_sign.outline_size = 160
-		_goal_sign.outline_modulate = Color(0.01, 0.08, 0.16, 1.0)
-		_goal_sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		_track.add_child(_goal_sign)
-	_goal_sign.global_transform = goal_transform * Transform3D(
-		Basis.IDENTITY, Vector3(0.0, 6.4, 0.05)
-	)
-
-func _place_goal_glow_line() -> void:
-	if _track == null or _track.curve == null:
-		return
-	if _goal_glow_line == null:
-		_goal_glow_line = MeshInstance3D.new()
-		_goal_glow_line.name = "GoalGlowLine"
-		_track.add_child(_goal_glow_line)
-	var curve_xf := _track.curve.sample_baked_with_rotation(_goal_path)
-	var travel := -curve_xf.basis.z
-	travel.y = 0.0
-	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
-	var glow_box := BoxMesh.new()
-	glow_box.size = Vector3(15.0, 0.08, 0.7)
-	_goal_glow_line.mesh = glow_box
-	var glow_material := StandardMaterial3D.new()
-	glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glow_material.albedo_color = Color(0.08, 0.78, 0.62, 0.66)
-	glow_material.emission_enabled = true
-	glow_material.emission = Color(0.04, 1.0, 0.68)
-	glow_material.emission_energy_multiplier = 14.0
-	_goal_glow_line.material_override = glow_material
-	_goal_glow_line.global_transform = _track.global_transform * Transform3D(
-		Basis.looking_at(travel, Vector3.UP),
-		curve_xf.origin + Vector3.UP * 0.22
-	)
-
-func _make_goal_panel_frame_bar(
-	bar_name: String, size: Vector3, local_position: Vector3, material: StandardMaterial3D
-) -> void:
-	var bar := MeshInstance3D.new()
-	bar.name = bar_name
-	var bar_mesh := BoxMesh.new()
-	bar_mesh.size = size
-	bar.mesh = bar_mesh
-	bar.material_override = material
-	bar.position = local_position
-	_goal_panel_frame.add_child(bar)
 
 func _apply_visual_pose(visual: Node3D, distance: float, offset: float) -> void:
 	if _track == null or _track.curve == null:

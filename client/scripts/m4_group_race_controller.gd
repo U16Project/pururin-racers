@@ -147,13 +147,15 @@ func _update_hud() -> void:
 	if _player == null:
 		return
 	var drafting := "ドラフト中" if _player.call("is_drafting") else "単独走"
-	_hud_label.text = "M4 集団レース　残り %.0fm　目標 %.0fkm/h　現在 %.0fkm/h　タイム %s　%s　Esc＝メニュー" % [
-		maxf(M4GroupRaceMath.RACE_DISTANCE_M - _player.call("get_race_progress"), 0.0),
-		_player.call("get_target_speed"),
-		_player.call("get_current_speed"),
-		M4GroupRaceMath.format_race_time(_race_elapsed),
+	_hud_label.text = "\n".join(PackedStringArray([
+		"M4 集団レース",
+		"残り %.0fm" % maxf(M4GroupRaceMath.RACE_DISTANCE_M - _player.call("get_race_progress"), 0.0),
+		"目標 %.0fkm/h" % _player.call("get_target_speed"),
+		"現在 %.0fkm/h" % _player.call("get_current_speed"),
+		"タイム %s" % M4GroupRaceMath.format_race_time(_race_elapsed),
 		drafting,
-	]
+		"Esc＝メニュー",
+	]))
 
 func _show_results() -> void:
 	_race_over = true

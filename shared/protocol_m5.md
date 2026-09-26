@@ -5,7 +5,9 @@
 
 ## コース wire 定義
 
-M5 のコース正本は [`course_layout_m5.json`](course_layout_m5.json)。
+コース正本は [`course_layout_m5.json`](course_layout_m5.json)。
+ローカル 2000 m も同じ定義を使う。クライアント写しは
+`client/data/course_layout_m5.json` で、中身は正本と同一にする。
 `course_id` は `"m5_standard_oval"`、`route_id` は距離別に
 `m5_1200` / `m5_1600` / `m5_2000` / `m5_2400` / `m5_3000` を使う。
 `distance_m` はレースの route distance であり、ゴール判定は
@@ -16,6 +18,8 @@ mainline distance で、レース進行の代用にはしない。
 `goal_path_m: 400.0` はホーム直線上のゴール意味位置であり、1600m の
 `straight(160m) + mainline(1440m)` を含む専用 route も一つの連続 route
 として扱う。`start_mainline_m` は route 開始時の描画用基準位置である。
+
+ドラフト規則の正本は [`m5_draft_rules.json`](m5_draft_rules.json)。サーバーは正本を直接読み、クライアントは `client/data/config/m5_draft_rules.json` の同一写しを読む。受取上限・速度補助上限・前方最小／最大距離・横方向範囲・横ずれ減衰・連鎖減衰をここで揃える。M5 の前方条件は `forward_min_m <= gap <= forward_max_m` であり、横方向範囲も満たす全走者を直接寄与に使う。横ずれは規則の指数で直接・連鎖ともに減衰する。現行の横方向範囲は3.0m、横ずれ減衰指数は0.35。
 
 ## race_join
 

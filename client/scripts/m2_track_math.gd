@@ -6,7 +6,7 @@ extends RefCounted
 
 const BODY_DIAMETER_M := 1.5
 const BODY_RADIUS_M := BODY_DIAMETER_M * 0.5
-## 10 頭分のコース全幅。
+## 現行プロトタイプのコース全幅。
 const TRACK_WIDTH_M := 15.0
 const HALF_WIDTH_M := TRACK_WIDTH_M * 0.5
 ## 機体がはみ出さないよう、中心寄せの可動半幅。

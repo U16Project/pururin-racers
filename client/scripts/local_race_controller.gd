@@ -1,4 +1,8 @@
 extends Node3D
+
+const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
+const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
+const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 ## ローカル簡易レースの進行・UI・8 頭生成。
 
 
@@ -31,10 +35,7 @@ const RUNNER_COLORS := [
 @onready var _start_marker: MeshInstance3D = $StartMarker
 @onready var _goal_marker: MeshInstance3D = $GoalMarker
 
-var _goal_sign: Label3D
-var _goal_glow_line: MeshInstance3D
-var _goal_panel: MeshInstance3D
-var _goal_panel_frame: Node3D
+var _goal_visual := GoalVisual.new()
 
 var _runners: Array[Node3D] = []
 var _paused: bool = false
@@ -53,6 +54,20 @@ func _ready() -> void:
 	_pause_return_button.pressed.connect(_return_to_title)
 	_result_return_button.pressed.connect(_return_to_title)
 	_resume_button.pressed.connect(_set_paused.bind(false))
+	var course_result := M5CourseBuilder.load_layout_result()
+	if course_result.has("error"):
+		_hud_label.text = "コース設定を確認してください：" + str(course_result.error)
+		set_process(false)
+		return
+	LocalRaceMath.apply_course_to_path(_track)
+	if LocalRaceMath.Config.values().is_empty():
+		_hud_label.text = "レース設定を確認してください：" + LocalRaceMath.Config.last_error
+		set_process(false)
+		return
+	if LocalRaceMath.DraftRules.values().is_empty():
+		_hud_label.text = "ドラフト設定を確認してください：" + LocalRaceMath.DraftRules.last_error
+		set_process(false)
+		return
 	_place_markers()
 	_spawn_field()
 	_guide_label.text = "←→：ライン　↑↓：出力ノッチ　V：目標速度方式へ切替　C：視点切替　CHASE中 WASD：追従調整　QE：向き　R：リセット　Esc：メニュー　緑＝スタート／発光＝ゴール"
@@ -75,14 +90,30 @@ func _process(_delta: float) -> void:
 		return
 	if not _paused and not _race_over:
 		_race_elapsed += _delta
-	_resolve_contacts()
-	_share_snapshots()
-	_check_finishes()
+		# ランナーは前tickに確定したドラフト値を使って移動する。
+		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
+		_share_snapshots()
+		call_deferred("_finalize_draft_tick")
 	if _results_pending and not _race_over and not _paused:
 		_results_wait_remaining -= _delta
 		if _results_wait_remaining <= 0.0:
 			_show_results()
 	_update_hud()
+
+
+func _finalize_draft_tick() -> void:
+	if _paused or _race_over or _runners.is_empty():
+		return
+	_resolve_contacts()
+	# M5オンラインと同じく、移動後のゴール判定を先に確定する。
+	# 着順とタイムを確定した後も、結果表示までは全員が接触・ドラフトを続ける。
+	_check_finishes()
+	var snapshots: Array = []
+	for runner in _runners:
+		snapshots.append(runner.call("get_snapshot"))
+	for index in _runners.size():
+		var details: Dictionary = LocalRaceMath.calculate_draft_details(snapshots, index)
+		_runners[index].call("apply_draft_details", details)
 
 
 func _spawn_field() -> void:
@@ -136,12 +167,11 @@ func _place_markers() -> void:
 		return
 	_place_line_marker(
 		_goal_marker,
-		LocalRaceMath.GOAL_PATH_DISTANCE_M,
+		LocalRaceMath.goal_path_m(),
 		Color(0.95, 0.95, 0.95)
 	)
-	_place_goal_glow_line()
-	_place_goal_fx()
-	_place_line_marker(_start_marker, LocalRaceMath.START_PATH_DISTANCE_M, Color(0.2, 0.85, 0.45))
+	_goal_visual.place(_track, LocalRaceMath.goal_path_m(), 15.0)
+	_place_line_marker(_start_marker, LocalRaceMath.start_path_m(), Color(0.2, 0.85, 0.45))
 
 
 func _place_line_marker(node: MeshInstance3D, path_d: float, color: Color) -> void:
@@ -169,125 +199,12 @@ func _place_line_marker(node: MeshInstance3D, path_d: float, color: Color) -> vo
 	)
 
 
-func _place_goal_fx() -> void:
-	if _track == null or _track.curve == null:
-		return
-	var curve_xf := _track.curve.sample_baked_with_rotation(LocalRaceMath.GOAL_PATH_DISTANCE_M)
-	var travel := -curve_xf.basis.z
-	travel.y = 0.0
-	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
-	if _goal_panel == null:
-		_goal_panel = MeshInstance3D.new()
-		_goal_panel.name = "GoalPanel"
-		_track.add_child(_goal_panel)
-	var panel_mesh := BoxMesh.new()
-	panel_mesh.size = Vector3(19.0, 4.0, 0.08)
-	_goal_panel.mesh = panel_mesh
-	var panel_material := StandardMaterial3D.new()
-	panel_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	panel_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	panel_material.albedo_color = Color(0.08, 0.68, 0.34, 0.055)
-	panel_material.emission_enabled = true
-	panel_material.emission = Color(0.04, 0.92, 0.34)
-	panel_material.emission_energy_multiplier = 5.5
-	_goal_panel.material_override = panel_material
-	var goal_transform := _track.global_transform * Transform3D(
-		Basis.looking_at(travel, Vector3.UP),
-		curve_xf.origin + Vector3.UP * 2.0
-	)
-	_goal_panel.global_transform = goal_transform
-	if _goal_panel_frame == null:
-		_goal_panel_frame = Node3D.new()
-		_goal_panel_frame.name = "GoalPanelFrame"
-		_track.add_child(_goal_panel_frame)
-		var frame_material := StandardMaterial3D.new()
-		frame_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		frame_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-		frame_material.albedo_color = Color(0.03, 0.58, 0.24, 0.9)
-		frame_material.emission_enabled = true
-		frame_material.emission = Color(0.02, 1.0, 0.32)
-		frame_material.emission_energy_multiplier = 7.0
-		_make_goal_panel_frame_bar(
-			"Top", Vector3(19.4, 0.1, 0.12), Vector3(0.0, 2.05, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Bottom", Vector3(19.4, 0.1, 0.12), Vector3(0.0, -2.05, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Left", Vector3(0.1, 4.0, 0.12), Vector3(-9.65, 0.0, 0.0), frame_material
-		)
-		_make_goal_panel_frame_bar(
-			"Right", Vector3(0.1, 4.0, 0.12), Vector3(9.65, 0.0, 0.0), frame_material
-		)
-	_goal_panel_frame.global_transform = goal_transform * Transform3D(
-		Basis.IDENTITY, Vector3(0.0, 0.0, 0.06)
-	)
-	if _goal_sign == null:
-		_goal_sign = Label3D.new()
-		_goal_sign.name = "GoalSign"
-		_goal_sign.text = "GOAL"
-		_goal_sign.font_size = 720
-		_goal_sign.pixel_size = 0.008
-		_goal_sign.modulate = Color(0.92, 1.0, 0.86, 1.0)
-		_goal_sign.outline_size = 160
-		_goal_sign.outline_modulate = Color(0.01, 0.08, 0.16, 1.0)
-		_goal_sign.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-		_track.add_child(_goal_sign)
-	_goal_sign.global_transform = goal_transform * Transform3D(
-		Basis.IDENTITY, Vector3(0.0, 6.4, 0.05)
-	)
-
-
-func _place_goal_glow_line() -> void:
-	if _track == null or _track.curve == null:
-		return
-	if _goal_glow_line == null:
-		_goal_glow_line = MeshInstance3D.new()
-		_goal_glow_line.name = "GoalGlowLine"
-		_track.add_child(_goal_glow_line)
-	var curve_xf := _track.curve.sample_baked_with_rotation(LocalRaceMath.GOAL_PATH_DISTANCE_M)
-	var travel := -curve_xf.basis.z
-	travel.y = 0.0
-	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
-	var glow_box := BoxMesh.new()
-	glow_box.size = Vector3(15.0, 0.08, 0.7)
-	_goal_glow_line.mesh = glow_box
-	var glow_material := StandardMaterial3D.new()
-	glow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glow_material.albedo_color = Color(0.08, 0.78, 0.62, 0.66)
-	glow_material.emission_enabled = true
-	glow_material.emission = Color(0.04, 1.0, 0.68)
-	glow_material.emission_energy_multiplier = 14.0
-	_goal_glow_line.material_override = glow_material
-	_goal_glow_line.global_transform = _track.global_transform * Transform3D(
-		Basis.looking_at(travel, Vector3.UP),
-		curve_xf.origin + Vector3.UP * 0.22
-	)
-
-
-func _make_goal_panel_frame_bar(
-	bar_name: String, size: Vector3, local_position: Vector3, material: StandardMaterial3D
-) -> void:
-	var bar := MeshInstance3D.new()
-	bar.name = bar_name
-	var bar_mesh := BoxMesh.new()
-	bar_mesh.size = size
-	bar.mesh = bar_mesh
-	bar.material_override = material
-	bar.position = local_position
-	_goal_panel_frame.add_child(bar)
-
-
 func _resolve_contacts() -> void:
 	var path_length := _track.curve.get_baked_length()
 	for i in _runners.size():
 		var first: Node3D = _runners[i]
-		if first.call("is_finished"):
-			continue
 		for j in range(i + 1, _runners.size()):
 			var second: Node3D = _runners[j]
-			if second.call("is_finished"):
-				continue
 			var first_progress: float = first.call("get_race_progress")
 			var second_progress: float = second.call("get_race_progress")
 			var first_offset: float = first.call("get_offset")
@@ -355,20 +272,36 @@ func _update_hud() -> void:
 	var prog: float = _player.call("get_race_progress")
 	var tgt: float = _player.call("get_target_speed")
 	var cur: float = _player.call("get_current_speed")
-	var mode_text := "出力 %+d　心拍(仮) %.0f　スタミナ(仮) %.0f%%" % [
-		int(roundi(_player.call("get_drive_level"))),
-		_player.call("get_heart_rate_bpm"),
-		_player.call("get_stamina"),
-	] if _player.call("is_drive_mode") else "目標 %.0fkm/h" % tgt
-	var draft_text := "ドラフト中 +%.1fkm/h" % _player.call("get_draft_bonus_kmh") if _player.call("is_drafting") else "単独走"
-	_hud_label.text = "順位 %d／8　残り %.0fm　%s　%s　現在 %.0fkm/h　タイム %s　Esc＝メニュー" % [
-		order,
-		maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
-		mode_text,
-		draft_text,
-		cur,
-		LocalRaceMath.format_race_time(_race_elapsed),
-	]
+	var lines := PackedStringArray([
+		"順位 %d／8" % order,
+		"残り %.0fm" % maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
+	])
+	if _player.call("is_drive_mode"):
+		lines.append("出力 %+d" % int(roundi(_player.call("get_drive_level"))))
+		lines.append("心拍(仮) %.0f" % _player.call("get_heart_rate_bpm"))
+		lines.append("スタミナ(仮) %.0f%%" % _player.call("get_stamina"))
+		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
+	else:
+		lines.append("目標 %.0fkm/h" % tgt)
+	lines.append_array(DraftHudFormatter.status_lines(
+		_player.call("get_draft_status"), LocalRaceMath.DRAFT_MAX_RECEIVED_P, false, true, true
+	))
+	lines.append("現在 %.0fkm/h" % cur)
+	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))
+	lines.append("Esc＝メニュー")
+	_hud_label.text = "\n".join(lines)
+
+
+func _drive_diagnostic_hud_lines(diagnostics: Dictionary) -> PackedStringArray:
+	var drive_contribution := float(diagnostics.get("drive_contribution_kmh_per_s", 0.0))
+	var drive_label := "制動" if drive_contribution < 0.0 else "推進力"
+	return PackedStringArray([
+		"%s %+.2fkm/h/s" % [drive_label, drive_contribution],
+		"転がり抵抗 %+.2fkm/h/s" % -float(diagnostics.get("rolling_resistance_kmh_per_s", 0.0)),
+		"空気抵抗（二乗） %+.2fkm/h/s" % -float(diagnostics.get("air_resistance_kmh_per_s", 0.0)),
+		"ドラフト軽減 %+.2fkm/h/s" % float(diagnostics.get("draft_air_reduction_kmh_per_s", 0.0)),
+		"計算加速度 %+.2fkm/h/s" % float(diagnostics.get("total_acceleration_kmh_per_s", 0.0)),
+	])
 
 
 func _live_place(runner: Node3D) -> int:

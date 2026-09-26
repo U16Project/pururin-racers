@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Any
@@ -10,6 +11,7 @@ from typing import Any
 RACERS = 8
 TICK_RATE = 20
 COURSE_LAYOUT_PATH = Path(__file__).resolve().parents[1] / "shared" / "course_layout_m5.json"
+DRAFT_RULES_PATH = Path(__file__).resolve().parents[1] / "shared" / "m5_draft_rules.json"
 with COURSE_LAYOUT_PATH.open(encoding="utf-8") as layout_file:
     COURSE_LAYOUT = json.load(layout_file)
 COURSE_ID = str(COURSE_LAYOUT["course_id"])
@@ -27,13 +29,67 @@ LANE_MIN = -6.0
 LANE_MAX = 6.0
 CONTACT_LONGITUDINAL_M = 1.5
 CONTACT_LATERAL_M = 1.5
-MAX_DRAFT_RECEIVED_P = 0.24
-DRAFT_ASSIST_MAX_KMH = 4.0
-MAX_DRAFT_SOURCES = 3
-MAX_DRAFT_FORWARD_M = 8.0
-MAX_DRAFT_LINE_M = 1.8
-CHAIN_DRAFT_ATTENUATION = 0.25
-MAX_CHAIN_DRAFT_P = MAX_DRAFT_RECEIVED_P * 0.25
+
+
+def _load_draft_rules(path: Path = DRAFT_RULES_PATH) -> dict[str, float | int]:
+    """M5 の共有ドラフト規則を、サーバー起動時に一度だけ厳密に読む。"""
+    with path.open(encoding="utf-8") as rules_file:
+        raw = json.load(rules_file)
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: root must be an object")
+    expected_keys = {
+        "schema_version",
+        "max_received_p",
+        "assist_max_kmh",
+        "forward_min_m",
+        "forward_max_m",
+        "lateral_range_m",
+        "lateral_falloff_exponent",
+        "chain_attenuation",
+    }
+    if set(raw) != expected_keys:
+        missing = sorted(expected_keys - set(raw))
+        unknown = sorted(set(raw) - expected_keys)
+        raise ValueError(f"{path}: missing={missing}, unknown={unknown}")
+
+    def number(key: str, minimum: float, maximum: float) -> float:
+        value = raw[key]
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError(f"{path}: {key} must be a number")
+        result = float(value)
+        if not math.isfinite(result) or not minimum <= result <= maximum:
+            raise ValueError(f"{path}: {key} must be within {minimum}..{maximum}")
+        return result
+
+    schema_version = number("schema_version", 1.0, 1.0)
+    if schema_version != 1.0:
+        raise ValueError(f"{path}: schema_version must be 1")
+    forward_min_m = number("forward_min_m", 0.001, 1000.0)
+    forward_max_m = number("forward_max_m", 0.001, 1000.0)
+    if forward_min_m > forward_max_m:
+        raise ValueError(f"{path}: forward_min_m must be <= forward_max_m")
+    rules: dict[str, float | int] = {
+        "schema_version": int(schema_version),
+        "max_received_p": number("max_received_p", 0.001, 1.0),
+        "assist_max_kmh": number("assist_max_kmh", 0.0, 90.0),
+        "forward_min_m": forward_min_m,
+        "forward_max_m": forward_max_m,
+        "lateral_range_m": number("lateral_range_m", 0.001, 1000.0),
+        "lateral_falloff_exponent": number("lateral_falloff_exponent", 0.001, 10.0),
+        "chain_attenuation": number("chain_attenuation", 0.0, 1.0),
+    }
+    return rules
+
+
+DRAFT_RULES = _load_draft_rules()
+MAX_DRAFT_RECEIVED_P = float(DRAFT_RULES["max_received_p"])
+DRAFT_ASSIST_MAX_KMH = float(DRAFT_RULES["assist_max_kmh"])
+MIN_DRAFT_FORWARD_M = float(DRAFT_RULES["forward_min_m"])
+MAX_DRAFT_FORWARD_M = float(DRAFT_RULES["forward_max_m"])
+MAX_DRAFT_LINE_M = float(DRAFT_RULES["lateral_range_m"])
+DRAFT_LATERAL_FALLOFF_EXPONENT = float(DRAFT_RULES["lateral_falloff_exponent"])
+CHAIN_DRAFT_ATTENUATION = float(DRAFT_RULES["chain_attenuation"])
+MAX_CHAIN_DRAFT_P = MAX_DRAFT_RECEIVED_P * CHAIN_DRAFT_ATTENUATION
 RACER_FRONT_OFFSET_M = 0.75
 
 
@@ -194,11 +250,11 @@ def _calculate_draft_details(
         line_gap = abs(receiver["offset"] - source["offset"])
         if (
             not bool(source.get("finished", False))
-            and 0.0 < gap <= MAX_DRAFT_FORWARD_M
+            and MIN_DRAFT_FORWARD_M <= gap <= MAX_DRAFT_FORWARD_M
             and line_gap <= MAX_DRAFT_LINE_M
         ):
             distance_falloff = 1.0 - gap / MAX_DRAFT_FORWARD_M
-            line_falloff = 1.0 - line_gap / MAX_DRAFT_LINE_M
+            line_falloff = (1.0 - line_gap / MAX_DRAFT_LINE_M) ** DRAFT_LATERAL_FALLOFF_EXPONENT
             source_own_wake = float(source.get("own_wake_p", 0.0))
             if source_own_wake <= 0.0:
                 source_own_wake = _own_wake_from_speed(float(source.get("speed", 0.0)))
@@ -216,7 +272,7 @@ def _calculate_draft_details(
                 )
             )
     sources.sort(key=lambda item: (item[0], item[3]))
-    selected = [source for source in sources if source[2] > 0.0][:MAX_DRAFT_SOURCES]
+    selected = [source for source in sources if source[2] > 0.0]
     if not selected:
         return own_wake, 0.0, 0.0, [], []
     direct_raw = sum(item[2] for item in selected)
@@ -247,7 +303,7 @@ def _calculate_draft_details(
             source_previous_draft
             * CHAIN_DRAFT_ATTENUATION
             * (1.0 - gap / MAX_DRAFT_FORWARD_M)
-            * (1.0 - line_gap / MAX_DRAFT_LINE_M)
+            * (1.0 - line_gap / MAX_DRAFT_LINE_M) ** DRAFT_LATERAL_FALLOFF_EXPONENT
         )
         if chain_strength > 0.0:
             chain_sources.append(source_id)

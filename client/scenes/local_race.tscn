@@ -85,18 +85,22 @@ fov = 55.0
 
 [node name="HudLabel" type="Label" parent="UI"]
 unique_name_in_owner = true
-anchors_preset = 10
-anchor_right = 1.0
+anchors_preset = 0
+anchor_left = 0.0
+anchor_right = 0.0
 offset_left = 16.0
 offset_top = 16.0
-offset_right = -16.0
-offset_bottom = 64.0
-grow_horizontal = 2
+offset_right = 560.0
+offset_bottom = 520.0
+grow_horizontal = 1
 theme_override_colors/font_color = Color(0.12, 0.16, 0.22, 1)
 theme_override_fonts/font = ExtResource("4_font")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 18
 text = "ローカル簡易レース"
-horizontal_alignment = 1
+horizontal_alignment = 0
+vertical_alignment = 0
+autowrap_mode = 0
+clip_text = true
 
 [node name="GuideLabel" type="Label" parent="UI"]
 anchors_preset = 12

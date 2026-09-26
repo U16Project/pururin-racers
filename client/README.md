@@ -2,6 +2,8 @@
 
 Godot クライアント（プレイヤーが遊ぶアプリ）のルート。
 
+ローカル出力操作の係数は `data/config/local_race.json`、M5 共通ドラフト規則は `data/config/m5_draft_rules.json`（`shared/` の正本の写し）で管理します。編集方法・単位・適用範囲は [設定管理](../docs/設定管理.md) を参照してください。変更の反映にはクライアントの再起動が必要です。
+
 ## エンジンバージョン
 
 - **Godot 4.7**（stable）で開発する
@@ -34,11 +36,11 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 
 ## M3 起動確認（導入＋控室接続／ローカルレース）
 
-導入画面はオフラインで表示されます。「レース開始」でローカル簡易レース、「控室へ進む」で M2 控室へ進みます。
+導入画面はオフラインで表示されます。「レース開始」でローカル簡易レース、「集団プロトタイプを試す（M4）」と「オンラインレースを試す（M5）」で各レース、「控室へ進む」で M2 控室へ進みます。
 
 - main_scene: `scenes/m3_intro.tscn`
-- 導入: `←→` ライン、`↑↓` 目標スピード（レース）、`C` カメラ、`Esc` メニュー（レース中）
-- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8 頭・2000 m・東京風 1:1）
+- 導入: `←→` ライン、`C` カメラ、`Esc` メニュー（レース中）。上下はモードによる（ローカルは出力ノッチ、M4 と M5 は目標スピード）
+- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8 頭・2000 m・標準コース）
 - **控室へ進む**: サーバー起動時 `接続しています…` → `接続できました` → 控室入室結果
 - サーバー停止時（控室）: `接続できませんでした。サーバーを起動してください`
 - 契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)、ローカルレース [`shared/protocol_local_race.md`](../shared/protocol_local_race.md)
@@ -47,10 +49,11 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 
 サーバー不要。導入から「レース開始」。
 
-- 緑ライン＝スタート、白ライン＝ゴール（ホームストレート終端）。HUD に経過タイム、結果画面にゴールタイムを競馬風（`1:23.4`）で表示
-- 橙（最内）が操作キャラ。左右＝ライン、上下＝目標スピード（km/h。初期 58、上限 75）
+- 緑ライン＝スタート、発光＝ゴール。スタートはホーム直線上（最初のコーナーまで約 197 m）。ゴールは直線の中ほどで、その先にも直線が約 280 m ある
+- HUD に経過タイム、結果画面にゴールタイムを `58.4` / `1:23.4` で表示
+- 橙（最内）が操作キャラ。左右＝ライン、上下＝出力ノッチ。V で目標スピード方式へ切り替え（上限 75 km/h）
 - Esc で一時停止→タイトルへ戻る。全員ゴール後に着順→タイトルへ戻る
-- 詳細ルールは検討事項 #23 / `protocol_local_race.md`
+- コース正本は [`shared/course_layout_m5.json`](../shared/course_layout_m5.json)。詳細は検討事項 #23 / `protocol_local_race.md`
 
 ## M4 集団プロトタイプ確認
 
@@ -58,9 +61,19 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 
 - プレイヤー＋CPU内側型＋CPU外側型の3体を走らせる
 - ←→＝ライン変更、↑↓＝目標スピード、C＝カメラ切替、Esc＝メニュー
+- コースは標準コースではない。直線 526 m、半径 164 m、スタート path 609、ゴール path 526 の旧寸法
 - HUD の「ドラフト中」は、同一ライン付近の前方に入り集団適性による速度補助が発生している状態
 - 固定仮能力値は検討事項 #25 に記載。能力配分・保存・育成・属性・通信同期は未実装
-- シーン: `scenes/m4_group_race.tscn`（既存 `local_race.tscn` は変更しない）
+- シーン: `scenes/m4_group_race.tscn`（`local_race.tscn` の初期値は旧寸法のまま。ローカル側が起動時に標準コースへ差し替える）
+
+## M5 オンラインレース確認
+
+サーバーを起動してから。導入から「オンラインレースを試す（M5）」。
+
+- 標準コース。判定はサーバー、クライアントは描画と目標スピード・ラインの送信
+- ←→＝ライン、↑↓＝目標スピード、C＝カメラ切替、Esc＝メニュー
+- タイム表示は百分の一秒（`0:01.20`）
+- 契約: [`shared/protocol_m5.md`](../shared/protocol_m5.md)
 
 ## M2 起動確認（内外＋控室）
 
@@ -96,15 +109,12 @@ Windows 起動例（エディタパスは環境に合わせる）:
 
 エディタ: Project → Project Settings → Plugins で Gut が有効であることを確認し、下部の GUT パネルから Run All。
 
-コマンドライン（リポジトリの `client/` で）:
+コマンドライン（リポジトリルートで）:
 
 ```bash
-HOME=/tmp/pururin-godot-home \
-/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64 \
-  -d -s --path . addons/gut/gut_cmdln.gd -gexit
+tools/godot/Godot_v4.7-stable_linux.x86_64 \
+  --headless --path client -s addons/gut/gut_cmdln.gd -gexit
 ```
-
-（`HOME` を書き込み可能な場所に向けると、サンドボックスや初回起動で落ちにくい。）
 
 M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd` でカバーする。
 

@@ -3,23 +3,21 @@ extends RefCounted
 ## 速度の単位は km/h。Path（メートル）を進めるときだけ ÷3.6 する。
 
 
+const Config := preload("res://scripts/config/local_race_config.gd")
+const CourseLayout := preload("res://scripts/m5_course_builder.gd")
+const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 
-## 東京芝 A コース準拠のスタジアム近似（JRA 公表値に合わせた仮決め）。
-const TOKYO_STRAIGHT_M := 526.0
-const TOKYO_TURN_RADIUS_M := 164.0
-const TOKYO_LAP_M := 2083.0
+## ローカル2000mは M5 共有コース定義を正本にする。
 const RACE_DISTANCE_M := 2000.0
-## ホームストレート終端をゴールにする。ここから次の周回方向へ進む。
-const GOAL_PATH_DISTANCE_M := TOKYO_STRAIGHT_M
-## ゴールから 2000m 戻った地点をスタートにする。
-const START_PATH_DISTANCE_M := fposmod(
-	GOAL_PATH_DISTANCE_M - RACE_DISTANCE_M,
-	TOKYO_LAP_M
-)
 
-## CPU 最高速ティア（km/h）。旧 14/15/16 m/s 相当を丸めた値。
-const SPEED_TIERS_KMH := [50.0, 54.0, 58.0]
+static var _course_layout: Dictionary = {}
+
+## CPU 最高速ティア（km/h）。ローカル観察用の値は local_race.json で管理する。
+static var CPU_SPEED_TIERS_KMH: Array:
+	get:
+		return Config.values()["cpu_speed_tiers_kmh"]
 ## プレイヤー通常上限（#24・ブーストなし）。
 const PLAYER_MAX_SPEED_KMH := 75.0
 ## プレイヤー開始時の現在／目標（#24 巡航帯）。
@@ -32,24 +30,73 @@ const TARGET_SPEED_MIN_KMH := 48.0
 const ACCEL_KMH_PER_S := 21.6
 
 ## M5.1 出力操作実験。出力は整数ノッチだが、入力は長押しでリピートする。
-const DRIVE_LEVEL_MIN := -3
-const DRIVE_LEVEL_MAX := 5
-const DRIVE_LEVEL_STEP := 1
-const MIN_SPEED_KMH := 40.0
-const ROLLING_RESISTANCE_KMH_PER_S := 0.55
-const AIR_RESISTANCE_COEFFICIENT := 0.024
+static var DRIVE_LEVEL_MIN: float:
+	get:
+		return Config.number("drive_level_min")
+static var DRIVE_LEVEL_MAX: float:
+	get:
+		return Config.number("drive_level_max")
+static var DRIVE_LEVEL_STEP: float:
+	get:
+		return Config.number("drive_level_step")
+static var MIN_SPEED_KMH: float:
+	get:
+		return Config.number("min_speed_kmh")
+static var ROLLING_RESISTANCE_KMH_PER_S: float:
+	get:
+		return Config.number("rolling_resistance_kmh_per_s")
+## 速度（km/h）の二乗に掛ける空気抵抗係数。抵抗の単位は km/h/s。
+static var AIR_RESISTANCE_QUADRATIC_COEFFICIENT: float:
+	get:
+		return Config.number("air_resistance_quadratic_coefficient")
 ## ノッチごとの駆動力。速度帯を持たず、抵抗との差分だけで加減速する。
 ## 低ノッチは低速域でわずかに加速しつつ、高速域では抵抗に負ける。
 ## 値は「ノッチ × 一律係数」よりも、操作感を調整しやすい小さなカーブとして管理する。
-const DRIVE_FORCE_BY_LEVEL_KMH_PER_S := [0.0, 1.8, 1.9, 2.2, 2.6, 3.0]
-const BRAKE_DECELERATION_PER_LEVEL := 4.0
-const DRAFT_SPEED_BONUS_MAX_KMH := 4.0
-const DRAFT_AIR_RESISTANCE_FACTOR := 0.55
-const DRAFT_FORWARD_MIN_M := 0.5
-const DRAFT_FORWARD_MAX_M := 8.0
-const DRAFT_LATERAL_RANGE_M := 1.8
-const DRIVE_REPEAT_INITIAL_S := 0.24
-const DRIVE_REPEAT_INTERVAL_S := 0.10
+static var DRIVE_FORCE_BY_LEVEL_KMH_PER_S: Array:
+	get:
+		return Config.values()["drive_force_by_level_kmh_per_s"]
+static var BRAKE_DECELERATION_PER_LEVEL: float:
+	get:
+		return Config.number("brake_deceleration_per_level")
+static var DRAFT_SPEED_BONUS_MAX_KMH: float:
+	get:
+		return DraftRules.number("assist_max_kmh")
+static var DRAFT_MAX_RECEIVED_P: float:
+	get:
+		return DraftRules.number("max_received_p")
+static var DRAFT_CHAIN_ATTENUATION: float:
+	get:
+		return DraftRules.number("chain_attenuation")
+static var DRAFT_FORWARD_MIN_M: float:
+	get:
+		return DraftRules.number("forward_min_m")
+static var DRAFT_AIR_RESISTANCE_FACTOR: float:
+	get:
+		return Config.number("draft_air_resistance_factor")
+static var DRAFT_RESPONSE_EXPONENT: float:
+	get:
+		return Config.number("draft_response_exponent")
+static var DRAFT_EFFECTIVE_MAX_RATIO: float:
+	get:
+		return Config.number("draft_effective_max_ratio")
+static var DRAFT_AGGREGATION_EXPONENT: float:
+	get:
+		return Config.number("draft_aggregation_exponent")
+static var DRAFT_FORWARD_MAX_M: float:
+	get:
+		return DraftRules.number("forward_max_m")
+static var DRAFT_LATERAL_RANGE_M: float:
+	get:
+		return DraftRules.number("lateral_range_m")
+static var DRAFT_LATERAL_FALLOFF_EXPONENT: float:
+	get:
+		return DraftRules.number("lateral_falloff_exponent")
+static var DRIVE_REPEAT_INITIAL_S: float:
+	get:
+		return Config.number("drive_repeat_initial_s")
+static var DRIVE_REPEAT_INTERVAL_S: float:
+	get:
+		return Config.number("drive_repeat_interval_s")
 
 ## 接触箱（設計案の例に近い簡易値）。
 const BLOCK_LATERAL_M := 1.5
@@ -59,12 +106,54 @@ const BLOCK_SPEED_FACTOR := 1.0
 
 const FIELD_SIZE := 8
 const BAKE_INTERVAL_M := 1.0
+const CPU_PACE_BASELINE_PATTERN := [0.0, 0.45, 0.8, 0.2, 0.65, 1.0, 0.3]
+
+
+static func course_layout() -> Dictionary:
+	if _course_layout.is_empty():
+		_course_layout = CourseLayout.load_layout()
+	return _course_layout
+
+
+static func straight_length_m() -> float:
+	return float(course_layout().get("straight_length_m", 0.0))
+
+
+static func turn_radius_m() -> float:
+	return float(course_layout().get("turn_radius_m", 0.0))
+
+
+static func lap_length_m() -> float:
+	return float(course_layout().get("track_length_m", 0.0))
+
+
+static func goal_path_m() -> float:
+	return float(course_layout().get("goal_path_m", 0.0))
+
+
+static func start_path_m() -> float:
+	var route := CourseLayout.route_for_distance(course_layout(), RACE_DISTANCE_M)
+	return float(route.get("start_mainline_m", 0.0))
+
+
+static func apply_course_to_path(path: Path3D) -> void:
+	if path == null:
+		return
+	var straight := straight_length_m()
+	var radius := turn_radius_m()
+	path.set("straight_len", straight)
+	path.set("turn_radius", radius)
+	path.curve = CourseLayout.make_racecourse_curve(straight, radius, BAKE_INTERVAL_M)
 
 
 static func expected_stadium_length_m(
-	straight_len: float = TOKYO_STRAIGHT_M,
-	turn_radius: float = TOKYO_TURN_RADIUS_M
+	straight_len: float = -1.0,
+	turn_radius: float = -1.0
 ) -> float:
+	if straight_len < 0.0:
+		straight_len = straight_length_m()
+	if turn_radius < 0.0:
+		turn_radius = turn_radius_m()
 	return 2.0 * straight_len + TAU * turn_radius
 
 
@@ -116,10 +205,35 @@ static func drive_force_kmh_per_s(drive_level: float) -> float:
 	return float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index])
 
 
-static func drive_resistance_kmh_per_s(speed_kmh: float, draft_factor: float = 0.0) -> float:
+## 出力走行の内訳。HUD・ログ・速度更新が同じ計算結果を使う。
+static func drive_diagnostics_kmh_per_s(
+	speed_kmh: float,
+	drive_level: float,
+	draft_factor: float = 0.0
+) -> Dictionary:
+	var level := clamp_drive_level(drive_level)
+	var drive_contribution := 0.0
+	if level < 0.0:
+		# 負ノッチは推進力の代わりに制動寄与として負値にする。
+		drive_contribution = level * BRAKE_DECELERATION_PER_LEVEL
+	elif level > 0.0:
+		drive_contribution = drive_force_kmh_per_s(level)
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
-	var air_resistance := AIR_RESISTANCE_COEFFICIENT * safe_speed
-	return ROLLING_RESISTANCE_KMH_PER_S + air_resistance * (1.0 - clampf(draft_factor, 0.0, 1.0))
+	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
+	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed
+	var draft_reduction := air_resistance * clampf(draft_factor, 0.0, 1.0)
+	return {
+		"drive_contribution_kmh_per_s": drive_contribution,
+		"rolling_resistance_kmh_per_s": rolling_resistance,
+		"air_resistance_kmh_per_s": air_resistance,
+		"draft_air_reduction_kmh_per_s": draft_reduction,
+		"total_acceleration_kmh_per_s": drive_contribution - rolling_resistance - air_resistance + draft_reduction,
+	}
+
+
+static func drive_resistance_kmh_per_s(speed_kmh: float, draft_factor: float = 0.0) -> float:
+	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor)
+	return float(diagnostics["rolling_resistance_kmh_per_s"]) + float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
 
 
 static func draft_speed_bonus_kmh(draft_factor: float) -> float:
@@ -129,6 +243,147 @@ static func draft_speed_bonus_kmh(draft_factor: float) -> float:
 		1.0
 	)
 	return DRAFT_SPEED_BONUS_MAX_KMH * draft_presence
+
+
+## 生の受取率を正規化し、ローカル走行へ載せる実効率へ変換する共通カーブ。
+## 最大受取率でも設定上限までに留め、HUD・空気抵抗軽減・速度補助はこの値を共用する。
+static func draft_effective_ratio(received_draft_p: float) -> float:
+	var normalized := clampf(received_draft_p, 0.0, DRAFT_MAX_RECEIVED_P) / maxf(DRAFT_MAX_RECEIVED_P, 0.0001)
+	return DRAFT_EFFECTIVE_MAX_RATIO * pow(normalized, DRAFT_RESPONSE_EXPONENT)
+
+
+## 個別のドラフト寄与を p ノルムで合成する。対象数ごとの分岐は持たない。
+## 寄与は normalization_max_p を基準に正規化し、出力は同じ単位の受取率へ戻す。
+static func draft_aggregate_contributions_p(
+	contributions: Array,
+	normalization_max_p: float = -1.0
+) -> float:
+	var cap := DRAFT_MAX_RECEIVED_P if normalization_max_p <= 0.0 else normalization_max_p
+	cap = maxf(cap, 0.0001)
+	var powered_sum := 0.0
+	for contribution in contributions:
+		var normalized := clampf(float(contribution), 0.0, cap) / cap
+		powered_sum += pow(normalized, DRAFT_AGGREGATION_EXPONENT)
+	var ratio := pow(powered_sum, 1.0 / DRAFT_AGGREGATION_EXPONENT) if powered_sum > 0.0 else 0.0
+	return minf(cap, ratio * cap)
+
+
+static func draft_air_resistance_factor(received_draft_p: float) -> float:
+	return DRAFT_AIR_RESISTANCE_FACTOR * draft_effective_ratio(received_draft_p)
+
+
+static func draft_assist_speed_kmh(received_draft_p: float) -> float:
+	"""ローカル目標速度方式の受取率→速度補助。最大値は実効率上限に従う。"""
+	return DRAFT_SPEED_BONUS_MAX_KMH * draft_effective_ratio(received_draft_p)
+
+
+static func draft_wake_from_speed(speed_kmh: float) -> float:
+	return minf(0.18, 0.06 + maxf(0.0, speed_kmh) / 75.0 * 0.12)
+
+
+static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
+	"""M5 post-moveドラフト判定のローカル版。progressは単調値として扱う。"""
+	if index < 0 or index >= snapshot.size() or not snapshot[index] is Dictionary:
+		return _empty_draft_details()
+	var receiver: Dictionary = snapshot[index]
+	var own_wake := draft_wake_from_speed(float(receiver.get("speed", 0.0)))
+	var sources: Array = []
+	for source_index in snapshot.size():
+		if source_index == index or not snapshot[source_index] is Dictionary:
+			continue
+		var source: Dictionary = snapshot[source_index]
+		var gap := float(source.get("race_progress", source.get("progress", 0.0))) - float(receiver.get("race_progress", receiver.get("progress", 0.0)))
+		var line_gap := absf(float(receiver.get("offset", 0.0)) - float(source.get("offset", 0.0)))
+		if gap < DRAFT_FORWARD_MIN_M or gap > DRAFT_FORWARD_MAX_M or line_gap > DRAFT_LATERAL_RANGE_M:
+			continue
+		var source_wake := float(source.get("own_wake_p", 0.0))
+		if source_wake <= 0.0:
+			source_wake = draft_wake_from_speed(float(source.get("speed", 0.0)))
+		source_wake = clampf(source_wake, 0.0, 0.18)
+		var lateral_falloff := pow(1.0 - line_gap / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
+		var strength := maxf(0.0, source_wake * (1.0 - gap / DRAFT_FORWARD_MAX_M) * lateral_falloff)
+		if strength > 0.0:
+			sources.append({
+				"gap": gap,
+				"line": line_gap,
+				"strength": strength,
+				"id": str(source.get("id", source.get("name", source_index))),
+				"source_index": source_index,
+			})
+	sources.sort_custom(func(a: Dictionary, b: Dictionary):
+		if not is_equal_approx(float(a["gap"]), float(b["gap"])):
+			return float(a["gap"]) < float(b["gap"])
+		return str(a["id"]) < str(b["id"])
+	)
+	var selected: Array = sources
+	if selected.is_empty():
+		var none_result := _empty_draft_details()
+		none_result["own_wake_p"] = own_wake
+		return none_result
+	var direct_contributions: Array = []
+	for source in selected:
+		direct_contributions.append(float(source["strength"]))
+	var direct := draft_aggregate_contributions_p(direct_contributions)
+	var direct_raw := 0.0
+	for contribution in direct_contributions:
+		direct_raw += float(contribution)
+	var direct_scale := direct / direct_raw if direct_raw > 0.0 else 0.0
+	var direct_details: Array = []
+	for source in selected:
+		direct_details.append({
+			"id": str(source["id"]),
+			"gap": float(source["gap"]),
+			"line": float(source["line"]),
+			"contribution_p": float(source["strength"]) * direct_scale,
+		})
+	var chain_sources: Array[String] = []
+	var chain_contributions: Array = []
+	for source in selected:
+		var source_state: Dictionary = snapshot[int(source["source_index"])]
+		var source_previous := minf(DRAFT_MAX_RECEIVED_P, maxf(0.0, float(source_state.get("direct_draft_p", 0.0)) + float(source_state.get("chain_draft_p", 0.0))))
+		var chain_lateral_falloff := pow(1.0 - float(source["line"]) / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
+		var chain_strength := source_previous * DRAFT_CHAIN_ATTENUATION * (1.0 - float(source["gap"]) / DRAFT_FORWARD_MAX_M) * chain_lateral_falloff
+		if chain_strength > 0.0:
+			chain_sources.append(str(source["id"]))
+			chain_contributions.append(chain_strength)
+	var chain := draft_aggregate_contributions_p(
+		chain_contributions,
+		DRAFT_MAX_RECEIVED_P * DRAFT_CHAIN_ATTENUATION
+	)
+	var primary: Dictionary = direct_details[0]
+	return {
+		"own_wake_p": own_wake,
+		"direct_draft_p": direct,
+		"chain_draft_p": chain,
+		"received_draft_p": direct + chain,
+		"direct_source_ids": direct_details.map(func(detail: Dictionary): return str(detail["id"])),
+		"chain_source_ids": chain_sources,
+		"draft_source_ids": direct_details.map(func(detail: Dictionary): return str(detail["id"])),
+		"primary_source_id": str(primary["id"]),
+		"primary_gap_m": float(primary["gap"]),
+		"primary_line_gap_m": float(primary["line"]),
+		"draft_distance_m": float(primary["gap"]),
+		"draft_line_gap_m": float(primary["line"]),
+		"direct_source_details": direct_details,
+	}
+
+
+static func _empty_draft_details() -> Dictionary:
+	return {
+		"own_wake_p": 0.0,
+		"direct_draft_p": 0.0,
+		"chain_draft_p": 0.0,
+		"received_draft_p": 0.0,
+		"direct_source_ids": [],
+		"chain_source_ids": [],
+		"draft_source_ids": [],
+		"primary_source_id": "",
+		"primary_gap_m": 0.0,
+		"primary_line_gap_m": 0.0,
+		"draft_distance_m": 0.0,
+		"draft_line_gap_m": 0.0,
+		"direct_source_details": [],
+	}
 
 
 static func advance_drive_speed_kmh(
@@ -141,20 +396,8 @@ static func advance_drive_speed_kmh(
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
 	var level := clamp_drive_level(drive_level)
-	var next_speed := current_kmh
-	if level < 0.0:
-		# 負ノッチは従来どおり明確な制動として扱う。
-		var braking := -level * BRAKE_DECELERATION_PER_LEVEL
-		var acceleration := -braking - drive_resistance_kmh_per_s(current_kmh, draft_factor)
-		next_speed += acceleration * delta
-	elif level > 0.0:
-		# 正ノッチは速度帯ではなく、駆動力と抵抗の差分を積み上げる。
-		var drive_force := drive_force_kmh_per_s(level)
-		var acceleration := drive_force - drive_resistance_kmh_per_s(current_kmh, draft_factor)
-		next_speed += acceleration * delta
-	else:
-		# 0 は惰性。抵抗だけで最低速度へ自然に戻る。
-		next_speed -= drive_resistance_kmh_per_s(current_kmh, draft_factor) * delta
+	var diagnostics := drive_diagnostics_kmh_per_s(current_kmh, level, draft_factor)
+	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
 	if level > 0.0 and draft_factor > 0.0:
 		# ドラフト成立時だけ、個体上限に最大4km/hを加えられる。
@@ -163,36 +406,184 @@ static func advance_drive_speed_kmh(
 	return clampf(next_speed, MIN_SPEED_KMH, ceiling)
 
 
-static func draft_leader(
-	self_distance: float,
+static func cpu_steer_reselect_interval_s(random_unit: float) -> float:
+	return lerpf(
+		Config.number("cpu_steer_reselect_min_s"),
+		Config.number("cpu_steer_reselect_max_s"),
+		clampf(random_unit, 0.0, 1.0)
+	)
+
+
+static func cpu_next_target_offset_m(current_offset: float, random_unit: float) -> float:
+	var signed_unit := clampf(random_unit, 0.0, 1.0) * 2.0 - 1.0
+	var random_target := current_offset + signed_unit * Config.number("cpu_steer_target_delta_max_m")
+	var inward_target := Config.number("cpu_inward_target_offset_m")
+	var biased_target := lerpf(
+		random_target,
+		inward_target,
+		Config.number("cpu_inward_target_blend")
+	)
+	var limited_target := move_toward(
+		current_offset,
+		biased_target,
+		Config.number("cpu_steer_target_delta_max_m")
+	)
+	return M2TrackMath.clamp_offset(limited_target)
+
+
+## 前方の近い走者を一律の距離・横差スコアで選ぶ。頭数ごとの特例は持たない。
+static func cpu_follow_candidate(
+	self_race_progress: float,
 	self_offset: float,
-	others: Array,
-	path_length: float
+	others: Array
 ) -> Dictionary:
-	var best_gap := DRAFT_FORWARD_MAX_M
-	var leader: Dictionary = {}
-	for entry in others:
-		var gap := forward_gap(self_distance, entry.get("distance", 0.0), path_length)
-		if gap < DRAFT_FORWARD_MIN_M or gap > DRAFT_FORWARD_MAX_M:
+	var forward_range := Config.number("cpu_follow_forward_range_m")
+	var lateral_range := Config.number("cpu_follow_lateral_range_m")
+	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
+	var best_score := INF
+	var selected := {"found": false}
+	for other_value in others:
+		if not other_value is Dictionary:
 			continue
-		if absf(self_offset - float(entry.get("offset", 0.0))) > DRAFT_LATERAL_RANGE_M:
+		var other: Dictionary = other_value
+		var other_progress := float(other.get("race_progress", other.get("progress", 0.0)))
+		var forward_gap := other_progress - self_race_progress
+		var lateral_gap := absf(float(other.get("offset", 0.0)) - self_offset)
+		if forward_gap <= 0.0 or forward_gap > forward_range or lateral_gap > lateral_range:
 			continue
-		if gap < best_gap:
-			best_gap = gap
-			leader = entry
-	return leader
+		var score := absf(forward_gap - preferred_gap) / forward_range + lateral_gap / lateral_range
+		var candidate_id := str(other.get("id", ""))
+		if score < best_score or (is_equal_approx(score, best_score) and candidate_id < str(selected.get("id", ""))):
+			best_score = score
+			selected = {
+				"found": true,
+				"id": candidate_id,
+				"forward_gap_m": forward_gap,
+				"race_progress": other_progress,
+				"offset": float(other.get("offset", 0.0)),
+			}
+	return selected
+
+
+## 前走者の真後ろ固定ではなく、中央・内側斜め後方・外側斜め後方を同じ式で評価する。
+## 混雑は前走者の理想車間位置に対する縦横の近さで測り、IDや頭数で役割を固定しない。
+static func cpu_follow_slot(
+	self_race_progress: float,
+	self_offset: float,
+	follow_candidate: Dictionary,
+	others: Array
+) -> Dictionary:
+	if not bool(follow_candidate.get("found", false)):
+		return {"found": false}
+	var leader_offset := M2TrackMath.clamp_offset(float(follow_candidate.get("offset", 0.0)))
+	var leader_progress := float(follow_candidate.get("race_progress", self_race_progress))
+	var leader_id := str(follow_candidate.get("id", ""))
+	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
+	var slot_progress := leader_progress - preferred_gap
+	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
+	var slots := [
+		{"name": "center", "offset": leader_offset, "tie_rank": 1},
+		{"name": "inner", "offset": leader_offset - spacing, "tie_rank": 0},
+		{"name": "outer", "offset": leader_offset + spacing, "tie_rank": 2},
+	]
+	var follow_distance_score := absf(float(follow_candidate.get("forward_gap_m", 0.0)) - preferred_gap) / Config.number("cpu_follow_forward_range_m")
+	var best_score := INF
+	var selected := {"found": false}
+	for slot_value in slots:
+		var slot: Dictionary = slot_value
+		var slot_offset := M2TrackMath.clamp_offset(float(slot["offset"]))
+		var crowding := _cpu_follow_slot_crowding(slot_progress, slot_offset, leader_id, others)
+		var inner_distance := absf(slot_offset - Config.number("cpu_inward_target_offset_m")) / M2TrackMath.MAX_ABS_OFFSET_M
+		var score := follow_distance_score + crowding * Config.number("cpu_follow_slot_crowding_weight") + inner_distance * Config.number("cpu_follow_slot_inner_bias")
+		var tie_rank := int(slot["tie_rank"])
+		if score < best_score or (is_equal_approx(score, best_score) and tie_rank < int(selected.get("tie_rank", 99))):
+			best_score = score
+			selected = {
+				"found": true,
+				"name": str(slot["name"]),
+				"offset": slot_offset,
+				"score": score,
+				"tie_rank": tie_rank,
+			}
+	return selected
+
+
+static func _cpu_follow_slot_crowding(
+	slot_progress: float,
+	slot_offset: float,
+	leader_id: String,
+	others: Array
+) -> float:
+	var forward_range := Config.number("cpu_follow_slot_crowding_forward_range_m")
+	var lateral_range := Config.number("cpu_follow_slot_crowding_lateral_range_m")
+	var crowding := 0.0
+	for other_value in others:
+		if not other_value is Dictionary:
+			continue
+		var other: Dictionary = other_value
+		if str(other.get("id", "")) == leader_id:
+			continue
+		var forward_nearness := maxf(0.0, 1.0 - absf(float(other.get("race_progress", other.get("progress", 0.0))) - slot_progress) / forward_range)
+		var lateral_nearness := maxf(0.0, 1.0 - absf(float(other.get("offset", 0.0)) - slot_offset) / lateral_range)
+		crowding += forward_nearness * lateral_nearness
+	return crowding
+
+
+static func cpu_follow_target_offset_m(current_target_offset: float, slot_offset: float) -> float:
+	return M2TrackMath.clamp_offset(lerpf(
+		current_target_offset,
+		M2TrackMath.clamp_offset(slot_offset),
+		Config.number("cpu_follow_offset_blend")
+	))
+
+
+static func cpu_follow_pace_correction_kmh(forward_gap_m: float) -> float:
+	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
+	var normalized_gap_error := clampf((forward_gap_m - preferred_gap) / preferred_gap, -1.0, 1.0)
+	var maximum := Config.number("cpu_follow_max_pace_correction_kmh")
+	var saved_pace := Config.number("cpu_follow_pace_saving_kmh")
+	return clampf(normalized_gap_error * maximum - saved_pace, -maximum, maximum)
+
+
+static func cpu_pace_variation_interval_s(random_unit: float) -> float:
+	return lerpf(
+		Config.number("cpu_pace_variation_min_s"),
+		Config.number("cpu_pace_variation_max_s"),
+		clampf(random_unit, 0.0, 1.0)
+	)
+
+
+static func cpu_baseline_pace_offset_kmh(gate_index: int) -> float:
+	var pattern_index := gate_index % CPU_PACE_BASELINE_PATTERN.size()
+	if pattern_index < 0:
+		pattern_index += CPU_PACE_BASELINE_PATTERN.size()
+	return -float(CPU_PACE_BASELINE_PATTERN[pattern_index]) * Config.number("cpu_pace_baseline_max_offset_kmh")
+
+
+static func cpu_temporary_pace_offset_kmh(random_unit: float) -> float:
+	var signed_unit := clampf(random_unit, 0.0, 1.0) * 2.0 - 1.0
+	return signed_unit * Config.number("cpu_pace_variation_max_kmh")
+
+
+static func cpu_target_speed_kmh(
+	max_speed_kmh: float,
+	gate_index: int,
+	temporary_offset_kmh: float
+) -> float:
+	var desired := max_speed_kmh + cpu_baseline_pace_offset_kmh(gate_index) + temporary_offset_kmh
+	return clampf(desired, MIN_SPEED_KMH, minf(max_speed_kmh, HARD_SPEED_CAP_KMH))
 
 
 static func heart_rate_target_bpm(drive_level: float) -> float:
 	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
-	return lerpf(118.0, 185.0, effort)
+	return lerpf(Config.number("heart_rate_rest_bpm"), Config.number("heart_rate_max_bpm"), effort)
 
 
 static func stamina_delta_per_s(drive_level: float) -> float:
 	if is_zero_approx(clamp_drive_level(drive_level)):
 		return 0.0
 	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
-	return lerpf(2.5, -7.0, effort)
+	return lerpf(Config.number("stamina_low_effort_delta_per_s"), Config.number("stamina_max_effort_delta_per_s"), effort)
 
 
 ## other が self の前方にいる中心線距離（0 超〜 path_length）。真後ろは path_length に近い。
@@ -289,4 +680,7 @@ static func starting_offset_for_gate(gate_index: int, field_size: int = FIELD_SI
 
 
 static func tier_speed_kmh_for_index(index: int) -> float:
-	return SPEED_TIERS_KMH[index % SPEED_TIERS_KMH.size()]
+	var tiers := CPU_SPEED_TIERS_KMH
+	assert(not tiers.is_empty(), "cpu_speed_tiers_kmh は1個以上必要です")
+	var tier_index := int(posmod(index, tiers.size()))
+	return float(tiers[tier_index])

@@ -24,7 +24,6 @@ Pururin を操作してレースを楽しむ、戦略性を重視した育成型
 
 - 最高速度 / 加速 / スタミナ / 瞬発力
 - 位置取り / 集団走行 / コース適性
-- 風の影響など
 
 #### レース中の戦略
 
@@ -77,7 +76,7 @@ Pururin Racing Game は、
 |------|------|
 | [`client/`](client/) | Godot アプリ（Steam / Play は同一プロジェクトから Export） |
 | [`server/`](server/) | Python ゲームサーバー |
-| [`shared/`](shared/) | 通信契約など共有定義（中身は後から） |
+| [`shared/`](shared/) | 通信契約と標準コース定義 |
 | [`build/`](build/) | エクスポート成果物（Git 除外。linux / windows / android など） |
 | [`docs/`](docs/) | 設計案・検討事項 |
 | [`tools/godot/`](tools/godot/) | エディタ本体のローカル置き場（Git 除外。開発は Godot 4.7） |

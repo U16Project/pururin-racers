@@ -1,0 +1,191 @@
+extends GutTest
+
+const Config := preload("res://scripts/config/local_race_config.gd")
+const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
+const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
+
+func test_shipped_config_is_valid_and_cached_read_only() -> void:
+	var result := Config.load_file()
+	assert_true(result.has("data"))
+	assert_true(Config.validate(result.data).is_empty())
+	assert_true(Config.values().is_read_only())
+	assert_true(Config.values().drive_force_by_level_kmh_per_s.is_read_only())
+	assert_eq(Config.number("drive_level_max"), 6.0)
+	assert_almost_eq(Config.number("air_resistance_quadratic_coefficient"), 0.00120, 0.000001)
+	assert_almost_eq(Config.number("draft_response_exponent"), 2.0, 0.001)
+	assert_almost_eq(Config.number("draft_effective_max_ratio"), 0.60, 0.001)
+	assert_almost_eq(Config.number("draft_aggregation_exponent"), 2.3, 0.001)
+	assert_eq(Config.values().drive_force_by_level_kmh_per_s, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 6.8])
+	assert_true(Config.values().cpu_speed_tiers_kmh.is_read_only())
+	assert_eq(Config.values().cpu_speed_tiers_kmh, [54.0, 55.0, 56.0])
+	assert_almost_eq(Config.number("cpu_steer_reselect_min_s"), 1.0, 0.001)
+	assert_almost_eq(Config.number("cpu_follow_preferred_gap_m"), 4.0, 0.001)
+	assert_almost_eq(Config.number("cpu_follow_slot_lateral_spacing_m"), 1.2, 0.001)
+	assert_almost_eq(Config.number("cpu_follow_slot_crowding_weight"), 1.4, 0.001)
+	assert_almost_eq(Config.number("cpu_follow_pace_saving_kmh"), 0.45, 0.001)
+	assert_almost_eq(Config.number("cpu_inward_target_offset_m"), -3.0, 0.001)
+	assert_almost_eq(Config.number("cpu_pace_variation_max_kmh"), 0.35, 0.001)
+	var draft_result := DraftRules.load_file()
+	assert_true(draft_result.has("data"))
+	assert_true(DraftRules.validate(draft_result.data).is_empty())
+	assert_eq(DraftRules.number("max_received_p"), 0.24)
+	assert_eq(DraftRules.number("chain_attenuation"), 0.7)
+	assert_eq(DraftRules.number("lateral_range_m"), 3.0)
+	assert_almost_eq(DraftRules.number("lateral_falloff_exponent"), 0.35, 0.001)
+
+
+func test_m5_course_layout_rejects_missing_and_invalid_routes() -> void:
+	var shipped := M5CourseBuilder.load_file()
+	assert_true(shipped.has("layout"))
+	assert_true(M5CourseBuilder.validate_layout(shipped.layout).is_empty())
+	assert_true(M5CourseBuilder.parse_text('{"course_id":"broken"}', "broken_course.json").error.contains("track_length_m"))
+	var invalid: Dictionary = shipped.layout.duplicate(true)
+	invalid.routes[0].segments[0].distance_m = 0.0
+	assert_true(";".join(M5CourseBuilder.validate_layout(invalid)).contains("distance_m"))
+
+
+func test_draft_hud_formatter_keeps_source_and_percent_lines() -> void:
+	var lines := DraftHudFormatter.status_lines({
+		"direct_draft_p": 0.12,
+		"chain_draft_p": 0.06,
+		"direct_source_details": [{"id": "cpu-1", "gap": 2.5, "line": 0.75}],
+		"chain_source_ids": ["cpu-2"],
+	}, 0.24)
+	assert_eq(lines, PackedStringArray([
+		"直接 50%", "連鎖 25%", "総合 75%", "対象 cpu-1（前方 2.5m／横 0.8m）、cpu-2",
+	]))
+	var hidden := DraftHudFormatter.status_lines({"direct_draft_p": 0.12}, 0.24, true)
+	assert_eq(hidden, PackedStringArray([
+		"直接 0%", "連鎖 0%", "総合 0%", "対象 なし",
+	]))
+
+
+func test_draft_rules_reject_invalid_range_and_unknown_key() -> void:
+	var data: Dictionary = DraftRules.load_file().data
+	data.forward_max_m = 0.0
+	assert_true(";".join(DraftRules.validate(data)).contains("forward_max_m"))
+	data = DraftRules.load_file().data
+	data.forward_min_m = data.forward_max_m + 0.1
+	assert_true(";".join(DraftRules.validate(data)).contains("forward_min_m"))
+	data = DraftRules.load_file().data
+	data.unexpected_rule = 1.0
+	assert_true(";".join(DraftRules.validate(data)).contains("unexpected_rule"))
+	data = DraftRules.load_file().data
+	data.max_sources = 3
+	assert_true(";".join(DraftRules.validate(data)).contains("max_sources"))
+
+func test_errors_identify_file_and_setting() -> void:
+	assert_true(Config.load_file("res://missing_race_config.json").error.contains("missing_race_config.json"))
+	assert_true(Config.parse_text("{broken", "race.json").error.contains("race.json:"))
+	assert_true(Config.parse_text("[]").has("error"))
+	var data: Dictionary = Config.load_file().data
+	data.erase("air_resistance_quadratic_coefficient")
+	assert_true(";".join(Config.validate(data)).contains("air_resistance_quadratic_coefficient"))
+
+func test_rejects_invalid_numbers_and_unknown_keys() -> void:
+	for value in ["0.5", true, -0.1, INF, NAN]:
+		var data: Dictionary = Config.load_file().data
+		data.draft_air_resistance_factor = value
+		assert_false(Config.validate(data).is_empty(), str(value))
+	for value in ["0.6", true, 0.0, 1.1, INF, NAN]:
+		var data: Dictionary = Config.load_file().data
+		data.draft_effective_max_ratio = value
+		assert_false(Config.validate(data).is_empty(), str(value))
+	var data: Dictionary = Config.load_file().data
+	data.air_resistance_coefficient = 0.024
+	assert_true(";".join(Config.validate(data)).contains("air_resistance_coefficient"))
+
+func test_rejects_inconsistent_notches_and_ranges() -> void:
+	var data: Dictionary = Config.load_file().data
+	data.drive_level_max = 7
+	assert_true(";".join(Config.validate(data)).contains("drive_force_by_level"))
+	data = Config.load_file().data
+	data.drive_level_max = 4.5
+	assert_false(Config.validate(data).is_empty())
+	data = Config.load_file().data
+	data.drive_force_by_level_kmh_per_s[0] = 1
+	assert_false(Config.validate(data).is_empty())
+	data = Config.load_file().data
+	data.heart_rate_rest_bpm = data.heart_rate_max_bpm + 1
+	assert_false(Config.validate(data).is_empty())
+	data = Config.load_file().data
+	data.cpu_steer_reselect_min_s = data.cpu_steer_reselect_max_s + 1.0
+	assert_true(";".join(Config.validate(data)).contains("cpu_steer_reselect_min_s"))
+	data = Config.load_file().data
+	data.cpu_pace_variation_min_s = data.cpu_pace_variation_max_s + 1.0
+	assert_true(";".join(Config.validate(data)).contains("cpu_pace_variation_min_s"))
+	data = Config.load_file().data
+	data.cpu_follow_preferred_gap_m = data.cpu_follow_forward_range_m + 1.0
+	assert_true(";".join(Config.validate(data)).contains("cpu_follow_preferred_gap_m"))
+	data = Config.load_file().data
+	data.cpu_follow_pace_saving_kmh = data.cpu_follow_max_pace_correction_kmh + 0.1
+	assert_true(";".join(Config.validate(data)).contains("cpu_follow_pace_saving_kmh"))
+	data = Config.load_file().data
+	data.cpu_inward_target_offset_m = 99.0
+	assert_true(";".join(Config.validate(data)).contains("cpu_inward_target_offset_m"))
+	data = Config.load_file().data
+	data.cpu_follow_slot_lateral_spacing_m = 99.0
+	assert_true(";".join(Config.validate(data)).contains("cpu_follow_slot_lateral_spacing_m"))
+	data = Config.load_file().data
+	data.cpu_speed_tiers_kmh = []
+	assert_true(";".join(Config.validate(data)).contains("cpu_speed_tiers_kmh"))
+	data = Config.load_file().data
+	data.cpu_speed_tiers_kmh = [54.0, "55"]
+	assert_true(";".join(Config.validate(data)).contains("cpu_speed_tiers_kmh[1]"))
+	data = Config.load_file().data
+	data.cpu_speed_tiers_kmh = [56.0, 55.0]
+	assert_true(";".join(Config.validate(data)).contains("cpu_speed_tiers_kmh[1]"))
+
+func test_goal_repositions_without_duplicate_nodes_and_supports_width() -> void:
+	var track := Path3D.new()
+	track.curve = Curve3D.new()
+	track.curve.add_point(Vector3.ZERO)
+	track.curve.add_point(Vector3(0, 0, -100))
+	add_child_autofree(track)
+	var visual := GoalVisual.new()
+	visual.place(track, 10.0, 15.0)
+	var sign := track.get_node("GoalSign")
+	var glow := track.get_node("GoalGlowLine") as MeshInstance3D
+	assert_eq(track.get_child_count(), 4)
+	assert_eq(glow.mesh.size.x, 15.0)
+	var first_position := glow.position
+	visual.place(track, 40.0, 20.0)
+	assert_eq(track.get_child_count(), 4)
+	assert_same(track.get_node("GoalSign"), sign)
+	assert_same(track.get_node("GoalGlowLine"), glow)
+	assert_eq(track.get_node("GoalPanelFrame").get_child_count(), 4)
+	assert_eq(glow.mesh.size.x, 20.0)
+	assert_eq(track.get_node("GoalPanel").mesh.size.x, 24.0)
+	assert_gt(first_position.distance_to(glow.position), 29.0)
+	assert_almost_eq(sign.pixel_size, 0.008 * 20.0 / 15.0, 0.00001)
+
+func test_invalid_configuration_prevents_race_start_and_displays_error() -> void:
+	var saved := Config.values()
+	var saved_error := Config.last_error
+	Config._cached = {}
+	Config.last_error = "local_race.json: drive_level_max が不正です"
+	var race: Node = load("res://scenes/local_race.tscn").instantiate()
+	add_child(race)
+	assert_eq(race.get_node("Runners").get_child_count(), 0)
+	assert_false(race.is_processing())
+	assert_true(race.get_node("UI/HudLabel").text.contains("drive_level_max"))
+	race.free()
+	Config._cached = saved
+	Config.last_error = saved_error
+
+
+func test_invalid_course_configuration_prevents_local_and_m5_start() -> void:
+	var saved_result := M5CourseBuilder._cached_result
+	var saved_attempted := M5CourseBuilder._attempted
+	M5CourseBuilder._attempted = true
+	M5CourseBuilder._cached_result = {"error": "course_layout_m5.json: track_length_m が不正です"}
+	for scene_path in ["res://scenes/local_race.tscn", "res://scenes/m5_online_race.tscn"]:
+		var race: Node = load(scene_path).instantiate()
+		add_child(race)
+		assert_false(race.is_processing())
+		assert_true(race.get_node("UI/HudLabel").text.contains("track_length_m"))
+		race.free()
+	M5CourseBuilder._cached_result = saved_result
+	M5CourseBuilder._attempted = saved_attempted

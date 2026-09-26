@@ -177,8 +177,12 @@ func test_hud_shows_single_running_when_direct_source_is_missing() -> void:
 			"chain_draft_p": 0.06, "direct_source_ids": [],
 		}],
 	})
-	assert_true(race.get_node("%HudLabel").text.contains("タイム 0:01.2"))
-	assert_true(race.get_node("%HudLabel").text.contains("単独走（直接 0% ＋ 連鎖 0%　総合 0%）"))
+	var solo_lines: PackedStringArray = race.get_node("%HudLabel").text.split("\n")
+	assert_true(solo_lines.has("タイム 0:01.20"))
+	assert_true(solo_lines.has("直接 0%"))
+	assert_true(solo_lines.has("連鎖 0%"))
+	assert_true(solo_lines.has("総合 0%"))
+	assert_true(solo_lines.has("対象 なし"))
 	race.free()
 
 func test_hud_shows_direct_chain_and_primary_source_distances() -> void:
@@ -198,12 +202,14 @@ func test_hud_shows_direct_chain_and_primary_source_distances() -> void:
 			"primary_line_gap_m": 1.0,
 		}],
 	})
-	var hud_text: String = race.get_node("%HudLabel").text
-	assert_true(hud_text.contains("目標 62.0km/h　実測 44.4km/h"))
-	assert_true(not hud_text.contains("現在 58.0km/h"))
-	assert_true(hud_text.contains("ドラフト 直接 50% ＋ 連鎖 25%"))
-	assert_true(hud_text.contains("総合 75%"))
-	assert_true(hud_text.contains("対象 cpu-1（前方 4.0m／横 1.0m）"))
+	var hud_lines: PackedStringArray = race.get_node("%HudLabel").text.split("\n")
+	assert_true(hud_lines.has("目標 62.0km/h"))
+	assert_true(hud_lines.has("実測 44.4km/h"))
+	assert_false(hud_lines.has("現在 58.0km/h"))
+	assert_true(hud_lines.has("直接 50%"))
+	assert_true(hud_lines.has("連鎖 25%"))
+	assert_true(hud_lines.has("総合 75%"))
+	assert_true(hud_lines.has("対象 cpu-1（前方 4.0m／横 1.0m）"))
 	race.call("_on_race_result", {
 		"results": [{"id": "player-1", "rank": 1, "finish_time": 34.5}],
 	})
@@ -232,9 +238,8 @@ func test_hud_shows_all_direct_draft_targets() -> void:
 			],
 		}],
 	})
-	var hud_text: String = race.get_node("%HudLabel").text
-	assert_true(hud_text.contains("cpu-1（前方 4.0m／横 1.0m）"))
-	assert_true(hud_text.contains("cpu-2（前方 7.0m／横 1.5m）"))
+	var hud_lines: PackedStringArray = race.get_node("%HudLabel").text.split("\n")
+	assert_true(hud_lines.has("対象 cpu-1（前方 4.0m／横 1.0m）、cpu-2（前方 7.0m／横 1.5m）"))
 	race.free()
 
 func test_escape_toggles_pause_panel_and_resume() -> void:

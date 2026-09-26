@@ -69,7 +69,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.15, 0.22, 0.3, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 21
-text = "←→：走る位置　↑↓：目標スピード\nC：カメラ切替　Esc：メニュー（レース中）\nレース開始＝ローカル　控室へ進む＝接続"
+text = "←→：走る位置　ローカルは出力、M4とオンラインは目標スピード\nC：カメラ切替　Esc：メニュー（レース中）\nレース開始＝ローカル　M4＝集団　M5＝オンライン　控室＝接続"
 horizontal_alignment = 1
 
 [node name="OfflineNote" type="Label" parent="Content"]
@@ -77,7 +77,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 0.37, 0.42, 1)
 theme_override_fonts/font = ExtResource("2_font")
 theme_override_font_sizes/font_size = 17
-text = "レース開始はオフライン。控室へ進むとサーバーに接続します。"
+text = "レース開始とM4はオフライン。M5と控室はサーバーに接続します。"
 horizontal_alignment = 1
 
 [node name="RaceButton" type="Button" parent="Content"]

@@ -15,7 +15,7 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 
 var _path: Path3D
-var _distance: float = LocalRaceMath.START_PATH_DISTANCE_M
+var _distance: float = 0.0
 var _offset: float = 0.0
 var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
@@ -26,15 +26,26 @@ var _drive_hold_direction: float = 0.0
 var _drive_repeat_remaining: float = 0.0
 var _drafting: bool = false
 var _draft_bonus_kmh: float = 0.0
-var _heart_rate_bpm: float = 118.0
-var _stamina: float = 100.0
+var _own_wake_p: float = 0.0
+var _direct_draft_p: float = 0.0
+var _chain_draft_p: float = 0.0
+var _received_draft_p: float = 0.0
+var _direct_source_ids: Array = []
+var _chain_source_ids: Array = []
+var _direct_source_details: Array = []
+var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_rest_bpm")
+var _stamina: float = LocalRaceMath.Config.number("stamina_capacity")
 var _race_progress: float = 0.0
 var _finished: bool = false
 var _finish_order: int = -1
 var _finish_time: float = -1.0
-var _straight_len: float = LocalRaceMath.TOKYO_STRAIGHT_M
-var _turn_radius: float = LocalRaceMath.TOKYO_TURN_RADIUS_M
+var _straight_len: float = 0.0
+var _turn_radius: float = 0.0
 var _cpu_steer_timer: float = 0.0
+var _cpu_pace_timer: float = 0.0
+var _cpu_temporary_pace_offset_kmh: float = 0.0
+var _cpu_follow_pace_correction_kmh: float = 0.0
+var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
@@ -54,7 +65,7 @@ func setup_for_race(
 	display_name = label
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
 	_target_offset = _offset
-	_distance = LocalRaceMath.START_PATH_DISTANCE_M
+	_distance = LocalRaceMath.start_path_m()
 	_race_progress = 0.0
 	_finished = false
 	_finish_order = -1
@@ -65,15 +76,23 @@ func setup_for_race(
 		_target_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
 	else:
 		_current_speed_kmh = tier_speed_kmh * 0.85
-		_target_speed_kmh = tier_speed_kmh
+		_target_speed_kmh = LocalRaceMath.cpu_target_speed_kmh(tier_speed_kmh, gate, 0.0)
 	_drive_mode = is_player
 	_drive_level = 0.0
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
+	_cpu_steer_timer = 0.0
+	_cpu_pace_timer = 0.0
+	_cpu_temporary_pace_offset_kmh = 0.0
+	_cpu_follow_pace_correction_kmh = 0.0
+	_drive_diagnostic_log_remaining = 0.0
 	_drafting = false
 	_draft_bonus_kmh = 0.0
-	_heart_rate_bpm = 118.0
-	_stamina = 100.0
+	_clear_draft_details()
+	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_rest_bpm")
+	_stamina = LocalRaceMath.Config.number("stamina_capacity")
+	_straight_len = LocalRaceMath.straight_length_m()
+	_turn_radius = LocalRaceMath.turn_radius_m()
 	if _path != null:
 		if _path.has_method("get_straight_len"):
 			_straight_len = _path.get_straight_len()
@@ -138,6 +157,47 @@ func get_draft_bonus_kmh() -> float:
 	return _draft_bonus_kmh
 
 
+func get_draft_status() -> Dictionary:
+	# HUD は生の受取率と、走行に使う応答曲線後の実効率を並べて示す。
+	# 計算式は LocalRaceMath にだけ置き、表示側で再計算しない。
+	return {
+		"own_wake_p": _own_wake_p,
+		"direct_draft_p": _direct_draft_p,
+		"chain_draft_p": _chain_draft_p,
+		"received_draft_p": _received_draft_p,
+		"effective_draft_ratio": LocalRaceMath.draft_effective_ratio(_received_draft_p),
+		"draft_speed_bonus_kmh": _draft_bonus_kmh,
+		"direct_source_ids": _direct_source_ids.duplicate(),
+		"chain_source_ids": _chain_source_ids.duplicate(),
+		"draft_source_ids": _direct_source_ids.duplicate(),
+		"primary_source_id": str(_direct_source_ids[0]) if not _direct_source_ids.is_empty() else "",
+		"primary_gap_m": float(_direct_source_details[0].get("gap", 0.0)) if not _direct_source_details.is_empty() else 0.0,
+		"primary_line_gap_m": float(_direct_source_details[0].get("line", 0.0)) if not _direct_source_details.is_empty() else 0.0,
+		"direct_source_details": _direct_source_details.duplicate(true),
+	}
+
+
+func get_drive_diagnostics() -> Dictionary:
+	return LocalRaceMath.drive_diagnostics_kmh_per_s(
+		_current_speed_kmh,
+		_drive_level,
+		_draft_air_resistance_factor()
+	)
+
+
+func apply_draft_details(details: Dictionary) -> void:
+	"""コントローラが移動後に一括確定したドラフト値を次tickへ渡す。"""
+	_own_wake_p = float(details.get("own_wake_p", 0.0))
+	_direct_draft_p = float(details.get("direct_draft_p", 0.0))
+	_chain_draft_p = float(details.get("chain_draft_p", 0.0))
+	_received_draft_p = float(details.get("received_draft_p", 0.0))
+	_direct_source_ids = details.get("direct_source_ids", []).duplicate()
+	_chain_source_ids = details.get("chain_source_ids", []).duplicate()
+	_direct_source_details = details.get("direct_source_details", []).duplicate(true)
+	_drafting = _received_draft_p > 0.0
+	_draft_bonus_kmh = LocalRaceMath.draft_assist_speed_kmh(_received_draft_p)
+
+
 func set_drive_level(level: float) -> void:
 	_drive_level = LocalRaceMath.clamp_drive_level(level)
 
@@ -189,10 +249,18 @@ func hold_behind(leader_distance: float, leader_progress: float, path_length: fl
 
 func get_snapshot() -> Dictionary:
 	return {
+		"id": "player-1" if player_controlled else "cpu-%d" % (gate_index + 1),
 		"distance": _distance,
 		"offset": _offset,
 		"speed": _current_speed_kmh,
 		"progress": _race_progress,
+		"race_progress": _race_progress,
+		"own_wake_p": _own_wake_p,
+		"direct_draft_p": _direct_draft_p,
+		"chain_draft_p": _chain_draft_p,
+		"received_draft_p": _received_draft_p,
+		"direct_source_ids": _direct_source_ids.duplicate(),
+		"chain_source_ids": _chain_source_ids.duplicate(),
 		"name": display_name,
 		"player": player_controlled,
 		"finished": _finished,
@@ -220,26 +288,20 @@ func _process(delta: float) -> void:
 	var blocker := LocalRaceMath.blocking_speed_kmh(
 		_distance, _offset, _others_snapshot, path_len
 	)
-	_drafting = false
-	_draft_bonus_kmh = 0.0
 	if _drive_mode and player_controlled:
 		_update_drive_level_input(delta)
-		var draft_leader := LocalRaceMath.draft_leader(
-			_distance, _offset, _others_snapshot, path_len
-		)
-		var draft_factor := LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR if not draft_leader.is_empty() else 0.0
-		_drafting = not draft_leader.is_empty()
-		_draft_bonus_kmh = LocalRaceMath.draft_speed_bonus_kmh(draft_factor)
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			_drive_level,
 			max_speed_kmh,
 			delta,
-			draft_factor
+			_draft_air_resistance_factor()
 		)
 		_update_condition(delta)
+		_update_drive_diagnostic_log(delta)
 	else:
 		var effective_target := LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker)
+		effective_target = minf(max_speed_kmh, effective_target + _draft_bonus_kmh)
 		_current_speed_kmh = LocalRaceMath.follow_speed_kmh(
 			_current_speed_kmh,
 			effective_target,
@@ -254,6 +316,16 @@ func _process(delta: float) -> void:
 	_apply_pose()
 
 
+func _clear_draft_details() -> void:
+	_own_wake_p = 0.0
+	_direct_draft_p = 0.0
+	_chain_draft_p = 0.0
+	_received_draft_p = 0.0
+	_direct_source_ids = []
+	_chain_source_ids = []
+	_direct_source_details = []
+
+
 func _update_inputs(delta: float) -> void:
 	if player_controlled:
 		var steer := _read_steer_axis()
@@ -261,12 +333,65 @@ func _update_inputs(delta: float) -> void:
 	else:
 		_cpu_steer_timer -= delta
 		if _cpu_steer_timer <= 0.0:
-			_cpu_steer_timer = randf_range(1.2, 3.5)
-			# 内寄りバイアスのランダム目標。
-			_target_offset = M2TrackMath.clamp_offset(randf_range(-M2TrackMath.MAX_ABS_OFFSET_M, 2.0))
-		_offset = move_toward(_offset, _target_offset, steer_speed * 0.55 * delta)
+			_cpu_steer_timer = LocalRaceMath.cpu_steer_reselect_interval_s(randf())
+			var follow_candidate := LocalRaceMath.cpu_follow_candidate(
+				_race_progress, _offset, _others_snapshot
+			)
+			if bool(follow_candidate.get("found", false)):
+				var follow_slot := LocalRaceMath.cpu_follow_slot(
+					_race_progress, _offset, follow_candidate, _others_snapshot
+				)
+				_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
+					_target_offset, float(follow_slot["offset"])
+				)
+				_cpu_follow_pace_correction_kmh = LocalRaceMath.cpu_follow_pace_correction_kmh(
+					float(follow_candidate["forward_gap_m"])
+				)
+			else:
+				# 追従候補がなければ、従来どおり現在ラインから小さく動かす。
+				_target_offset = LocalRaceMath.cpu_next_target_offset_m(_offset, randf())
+				_cpu_follow_pace_correction_kmh = 0.0
+			_update_cpu_target_speed()
+		_offset = move_toward(_offset, _target_offset, LocalRaceMath.Config.number("cpu_steer_speed_m_per_s") * delta)
 		_offset = M2TrackMath.clamp_offset(_offset)
-		_target_speed_kmh = max_speed_kmh
+		_cpu_pace_timer -= delta
+		if _cpu_pace_timer <= 0.0:
+			_cpu_pace_timer = LocalRaceMath.cpu_pace_variation_interval_s(randf())
+			_cpu_temporary_pace_offset_kmh = LocalRaceMath.cpu_temporary_pace_offset_kmh(randf())
+			_update_cpu_target_speed()
+
+
+func _update_cpu_target_speed() -> void:
+	_target_speed_kmh = LocalRaceMath.cpu_target_speed_kmh(
+		max_speed_kmh,
+		gate_index,
+		_cpu_temporary_pace_offset_kmh + _cpu_follow_pace_correction_kmh
+	)
+
+
+func _draft_air_resistance_factor() -> float:
+	return LocalRaceMath.draft_air_resistance_factor(_received_draft_p)
+
+
+func _update_drive_diagnostic_log(delta: float) -> void:
+	_drive_diagnostic_log_remaining -= delta
+	if _drive_diagnostic_log_remaining > 0.0:
+		return
+	_drive_diagnostic_log_remaining += 1.0
+	var diagnostics := get_drive_diagnostics()
+	var drive_contribution := float(diagnostics["drive_contribution_kmh_per_s"])
+	var drive_label := "制動" if drive_contribution < 0.0 else "推進力"
+	print(
+		"出力診断（%s） %s %+.2fkm/h/s　転がり抵抗 %+.2fkm/h/s　空気抵抗（二乗） %+.2fkm/h/s　ドラフト軽減 %+.2fkm/h/s　計算加速度 %+.2fkm/h/s" % [
+			display_name,
+			drive_label,
+			drive_contribution,
+			-float(diagnostics["rolling_resistance_kmh_per_s"]),
+			-float(diagnostics["air_resistance_kmh_per_s"]),
+			float(diagnostics["draft_air_reduction_kmh_per_s"]),
+			float(diagnostics["total_acceleration_kmh_per_s"]),
+		]
+	)
 
 
 func _update_drive_level_input(delta: float) -> void:
@@ -297,11 +422,11 @@ func _read_drive_axis() -> float:
 
 func _update_condition(delta: float) -> void:
 	var target_heart := LocalRaceMath.heart_rate_target_bpm(_drive_level)
-	_heart_rate_bpm = move_toward(_heart_rate_bpm, target_heart, 18.0 * delta)
+	_heart_rate_bpm = move_toward(_heart_rate_bpm, target_heart, LocalRaceMath.Config.number("heart_rate_change_bpm_per_s") * delta)
 	_stamina = clampf(
 		_stamina + LocalRaceMath.stamina_delta_per_s(_drive_level) * delta,
 		0.0,
-		100.0
+		LocalRaceMath.Config.number("stamina_capacity")
 	)
 
 
@@ -319,7 +444,7 @@ func _read_steer_axis() -> float:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not player_controlled or _paused or _finished:
+	if not player_controlled or _paused:
 		return
 	if _drive_mode:
 		return

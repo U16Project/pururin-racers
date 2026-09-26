@@ -43,6 +43,10 @@ func test_m4_scene_configures_three_runners() -> void:
 	add_child(race)
 	var runners: Node3D = race.get_node("Runners")
 	assert_eq(runners.get_child_count(), 3)
+	var track: Path3D = race.get_node("TrackPath")
+	assert_almost_eq(track.call("get_straight_len"), 526.0, 0.1)
+	assert_almost_eq(track.call("get_turn_radius"), 164.0, 0.1)
+	assert_almost_eq(runners.get_child(0).call("get_distance"), 609.0, 0.1)
 	assert_eq(
 		[
 			runners.get_child(0).call("get_snapshot")["role"],

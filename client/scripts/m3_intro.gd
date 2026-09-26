@@ -6,9 +6,9 @@ const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const M4_SCENE_PATH := "res://scenes/m4_group_race.tscn"
 const M5_SCENE_PATH := "res://scenes/m5_online_race.tscn"
 const INTRO_ITEMS := [
-	"←→：走る位置　↑↓：目標スピード",
+	"←→：走る位置　ローカルは出力、M4とオンラインは目標スピード",
 	"C：カメラ切替　Esc：メニュー（レース中）",
-	"レース開始＝ローカル　集団プロトタイプ＝M4　控室へ進む＝接続",
+	"レース開始＝ローカル　M4＝集団　M5＝オンライン　控室＝接続",
 ]
 
 enum ConnectionStage {

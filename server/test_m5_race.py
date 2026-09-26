@@ -3,11 +3,16 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from race_m5 import (
+    DRAFT_RULES,
     DRAFT_ASSIST_MAX_KMH,
     MAX_CHAIN_DRAFT_P,
     MAX_DRAFT_RECEIVED_P,
+    MIN_DRAFT_FORWARD_M,
     M5Race,
+    _load_draft_rules,
     _calculate_draft_details,
     calculate_draft,
     centerline_delta_from_kmh,
@@ -56,6 +61,35 @@ def test_client_course_copy_matches_shared_wire_definition() -> None:
     assert client_layout == shared_layout
 
 
+def test_client_draft_rules_copy_matches_shared_definition() -> None:
+    with (REPO_ROOT / "shared" / "m5_draft_rules.json").open(encoding="utf-8") as shared_file:
+        shared_rules = json.load(shared_file)
+    with (REPO_ROOT / "client" / "data" / "config" / "m5_draft_rules.json").open(
+        encoding="utf-8"
+    ) as client_file:
+        client_rules = json.load(client_file)
+    assert client_rules == shared_rules
+    assert DRAFT_RULES["max_received_p"] == MAX_DRAFT_RECEIVED_P
+    assert DRAFT_RULES["assist_max_kmh"] == DRAFT_ASSIST_MAX_KMH
+    assert DRAFT_RULES["chain_attenuation"] == 0.7
+    assert DRAFT_RULES["lateral_range_m"] == 3.0
+    assert DRAFT_RULES["lateral_falloff_exponent"] == 0.35
+
+
+def test_draft_rules_loader_rejects_unknown_or_invalid_rules(tmp_path: Path) -> None:
+    path = tmp_path / "m5_draft_rules.json"
+    path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing"):
+        _load_draft_rules(path)
+
+    with (REPO_ROOT / "shared" / "m5_draft_rules.json").open(encoding="utf-8") as source:
+        invalid = json.load(source)
+    invalid["max_sources"] = 3
+    path.write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(ValueError, match="unknown"):
+        _load_draft_rules(path)
+
+
 def test_route_goal_is_home_straight_path_400_for_all_distances() -> None:
     for route in ROUTES.values():
         assert route_mainline_distance(route, route["distance_m"]) == 400.0
@@ -93,9 +127,12 @@ def test_draft_distance_and_line_boundaries_are_deterministic() -> None:
         ]
         return calculate_draft(snapshot, 0)[1]
 
-    assert received(0.1, 0.0) > received(4.0, 0.0) > received(8.0, 0.0)
+    assert received(0.1, 0.0) == 0.0
+    assert received(MIN_DRAFT_FORWARD_M - 0.01, 0.0) == 0.0
+    assert received(MIN_DRAFT_FORWARD_M, 0.0) > received(4.0, 0.0) > received(8.0, 0.0)
     assert received(4.0, 0.0) > 0.0
-    assert received(4.0, 1.8) == 0.0
+    assert received(4.0, 3.0) == 0.0
+    assert received(4.0, 3.01) == 0.0
     assert received(8.0, 0.0) == 0.0
 
 
@@ -137,6 +174,65 @@ def test_draft_source_metadata_matches_primary_front_distance_and_line() -> None
     assert sum(
         detail["contribution_p"] for detail in player.direct_source_details
     ) == player.direct_draft_p
+
+
+def test_draft_keeps_all_four_eligible_sources_and_uses_gentle_lateral_decay() -> None:
+    snapshot = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-c", "race_progress": 103.0, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-a", "race_progress": 101.5, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-b", "race_progress": 101.5, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-d", "race_progress": 104.0, "offset": 0.0, "speed": 60.0},
+    ]
+    _own, direct, _chain, details, _chain_sources = _calculate_draft_details(snapshot, 0)
+    assert [detail["id"] for detail in details] == ["cpu-a", "cpu-b", "cpu-c", "cpu-d"]
+    assert len(details) == 4
+    assert direct == MAX_DRAFT_RECEIVED_P
+
+    side_by_side = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-side", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+    ]
+    just_under_min = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {"id": "cpu-near", "race_progress": 100.0 + MIN_DRAFT_FORWARD_M - 0.01, "offset": 0.0, "speed": 60.0},
+    ]
+    diagonal = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {
+            "id": "cpu-diagonal", "race_progress": 104.0, "offset": 0.9,
+            "speed": 60.0, "direct_draft_p": 0.12,
+        },
+    ]
+    assert calculate_draft(side_by_side, 0)[1] == 0.0
+    assert calculate_draft(just_under_min, 0)[1] == 0.0
+    _own, diagonal_direct, diagonal_chain, diagonal_details, _chain_sources = _calculate_draft_details(diagonal, 0)
+    assert [detail["id"] for detail in diagonal_details] == ["cpu-diagonal"]
+    source_wake = min(0.18, 0.06 + 60.0 / 75.0 * 0.12)
+    linear_strength = source_wake * (1.0 - 4.0 / 8.0) * 0.5
+    assert diagonal_direct > linear_strength
+    linear_chain_strength = 0.12 * float(DRAFT_RULES["chain_attenuation"]) * (1.0 - 4.0 / 8.0) * 0.5
+    assert diagonal_chain > linear_chain_strength
+
+
+def test_draft_receives_both_laterally_separated_front_sources() -> None:
+    both = [
+        {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+        {
+            "id": "cpu-inner", "race_progress": 104.0, "offset": -1.2,
+            "speed": 60.0, "direct_draft_p": 0.12,
+        },
+        {
+            "id": "cpu-outer", "race_progress": 104.0, "offset": 1.2,
+            "speed": 60.0, "direct_draft_p": 0.12,
+        },
+    ]
+    single = both[:2]
+    _own, both_direct, both_chain, both_details, _chain_sources = _calculate_draft_details(both, 0)
+    _own, single_direct, single_chain, _single_details, _chain_sources = _calculate_draft_details(single, 0)
+    assert [detail["id"] for detail in both_details] == ["cpu-inner", "cpu-outer"]
+    assert both_direct > single_direct
+    assert both_chain > single_chain
 
 
 def test_finished_racer_cannot_provide_or_receive_draft() -> None:
@@ -238,25 +334,25 @@ def test_direct_and_chain_draft_are_separate_and_use_previous_tick_values() -> N
     assert chain_sources_without_chain == []
 
 
-def test_direct_sources_are_limited_and_assist_reaches_four_kmh_at_cap() -> None:
+def test_all_eligible_direct_sources_are_retained_and_assist_reaches_four_kmh_at_cap() -> None:
     race = M5Race("draft-max")
     race.start()
     player = race.racers[0]
-    for racer in race.racers[4:]:
+    for racer in race.racers[5:]:
         racer.finished = True
     player.max_speed = 100.0
     player.speed = player.target_speed = 50.0
     player.race_progress = 100.0
     player.offset = 0.0
-    for index, source in enumerate(race.racers[1:4], start=1):
-        source.race_progress = 100.1 + index
+    for index, source in enumerate(race.racers[1:5], start=1):
+        source.race_progress = 102.0 + index
         source.offset = 0.0
         source.speed = 60.0
     player.received_draft_p = MAX_DRAFT_RECEIVED_P
 
     race.tick()
 
-    assert len(player.direct_source_ids) == 3
+    assert len(player.direct_source_ids) == 4
     assert player.direct_draft_p == MAX_DRAFT_RECEIVED_P
     assert player.speed == 50.0 + DRAFT_ASSIST_MAX_KMH / 20.0
 
@@ -359,7 +455,7 @@ def test_draft_source_details_follow_post_move_snapshot_and_zero_outside_range()
     snapshot = [
         {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
         {"id": "near", "race_progress": 104.0, "offset": 1.0, "speed": 60.0},
-        {"id": "behind", "race_progress": 99.0, "offset": 3.0, "speed": 60.0},
+        {"id": "behind", "race_progress": 99.0, "offset": 4.1, "speed": 60.0},
         {"id": "far", "race_progress": 109.0, "offset": 0.0, "speed": 60.0},
     ]
     _own, direct, chain, details, _chain_sources = _calculate_draft_details(snapshot, 0)
