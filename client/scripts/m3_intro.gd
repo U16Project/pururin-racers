@@ -5,9 +5,11 @@ const ROOM_SCENE_PATH := "res://scenes/m2_run.tscn"
 const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const M4_SCENE_PATH := "res://scenes/m4_group_race.tscn"
 const M5_SCENE_PATH := "res://scenes/m5_online_race.tscn"
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const INTRO_ITEMS := [
-	"←→：走る位置　ローカルは出力、M4とオンラインは目標スピード",
-	"C：カメラ切替　Esc：メニュー（レース中）",
+	"←→／左スティック：走る位置　↑↓／十字キー：ローカルは出力、M4とオンラインは目標スピード",
+	"Y/C：カメラ切替　Start/Esc：メニュー（レース中）",
+	"A：決定　B：キャンセル　X：ブースト（実装予定）",
 	"レース開始＝ローカル　M4＝集団　M5＝オンライン　控室＝接続",
 ]
 
@@ -40,7 +42,7 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept"):
+	if event.is_action_pressed("ui_accept") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A):
 		go_to_local_race()
 
 

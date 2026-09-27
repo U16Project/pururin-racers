@@ -5,6 +5,9 @@ extends Node3D
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const CpuTrainerMath := preload("res://scripts/cpu_trainer_math.gd")
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 @export var path_path: NodePath = ^"../TrackPath"
 @export var max_speed_kmh: float = 58.0
@@ -15,6 +18,10 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 
 var _path: Path3D
+var _pururin: Dictionary = {}
+var _base_max_speed_kmh: float = 58.0
+var _effective_stats: Dictionary = {}
+var _natural_top_speed_kmh: float = 58.0
 var _distance: float = 0.0
 var _offset: float = 0.0
 var _target_offset: float = 0.0
@@ -42,11 +49,13 @@ var _finish_time: float = -1.0
 var _straight_len: float = 0.0
 var _turn_radius: float = 0.0
 var _cpu_steer_timer: float = 0.0
-var _cpu_pace_timer: float = 0.0
-var _cpu_temporary_pace_offset_kmh: float = 0.0
-var _cpu_follow_pace_correction_kmh: float = 0.0
+var _cpu_trainer_timer: float = 0.0
+var _cpu_trainer_profile: Dictionary = {}
+var _cpu_trainer_drive_level: float = 0.0
 var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
+var _race_active: bool = false
+var _cpu_start_drive_remaining: float = 0.0
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
 
@@ -56,11 +65,14 @@ func setup_for_race(
 	gate: int,
 	tier_speed_kmh: float,
 	is_player: bool,
-	label: String
+	label: String,
+	pururin: Dictionary = {}
 ) -> void:
 	_path = path
 	gate_index = gate
+	_base_max_speed_kmh = tier_speed_kmh
 	max_speed_kmh = tier_speed_kmh
+	_pururin = pururin.duplicate(true)
 	player_controlled = is_player
 	display_name = label
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
@@ -70,22 +82,20 @@ func setup_for_race(
 	_finished = false
 	_finish_order = -1
 	_finish_time = -1.0
-	if is_player:
-		# M5.1 は出力方式を標準とし、レース開始時は最低速度から発進する。
-		_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-		_target_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-	else:
-		_current_speed_kmh = tier_speed_kmh * 0.85
-		_target_speed_kmh = LocalRaceMath.cpu_target_speed_kmh(tier_speed_kmh, gate, 0.0)
+	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
+	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
+	_target_speed_kmh = tier_speed_kmh
 	_drive_mode = is_player
 	_drive_level = 0.0
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
 	_cpu_steer_timer = 0.0
-	_cpu_pace_timer = 0.0
-	_cpu_temporary_pace_offset_kmh = 0.0
-	_cpu_follow_pace_correction_kmh = 0.0
+	_cpu_trainer_timer = 0.0
+	_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile(gate) if not is_player else {}
+	_cpu_trainer_drive_level = 0.0
 	_drive_diagnostic_log_remaining = 0.0
+	_race_active = false
+	_cpu_start_drive_remaining = 0.0
 	_drafting = false
 	_draft_bonus_kmh = 0.0
 	_clear_draft_details()
@@ -98,11 +108,24 @@ func setup_for_race(
 			_straight_len = _path.get_straight_len()
 		if _path.has_method("get_turn_radius"):
 			_turn_radius = _path.get_turn_radius()
+	_apply_pururin_race_stats()
 	_apply_pose()
 
 
 func set_paused(paused: bool) -> void:
 	_paused = paused
+
+
+func set_race_active(active: bool) -> void:
+	if _race_active == active:
+		return
+	_race_active = active
+	if _race_active and not player_controlled:
+		_cpu_start_drive_remaining = LocalRaceMath.Config.number("cpu_start_drive_duration_seconds")
+
+
+func is_race_active() -> bool:
+	return _race_active
 
 
 func set_others_snapshot(others: Array) -> void:
@@ -133,7 +156,7 @@ func set_drive_mode(enabled: bool) -> void:
 	_drive_repeat_remaining = 0.0
 	if not _drive_mode:
 		# 方式を切り替えても現在速度は維持し、目標速度方式の追従先だけ同期する。
-		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_current_speed_kmh, max_speed_kmh)
+		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_current_speed_kmh, _natural_top_speed_kmh)
 
 
 func toggle_drive_mode() -> bool:
@@ -181,7 +204,9 @@ func get_drive_diagnostics() -> Dictionary:
 	return LocalRaceMath.drive_diagnostics_kmh_per_s(
 		_current_speed_kmh,
 		_drive_level,
-		_draft_air_resistance_factor()
+		_draft_air_resistance_factor(),
+		get_acceleration_force_bonus(),
+		get_top_speed_drive_adjustment()
 	)
 
 
@@ -218,6 +243,26 @@ func get_max_speed() -> float:
 	return max_speed_kmh
 
 
+func get_effective_stats() -> Dictionary:
+	return _effective_stats.duplicate()
+
+
+func get_acceleration_force_bonus() -> float:
+	return LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(int(_effective_stats.get("acceleration", 5)))
+
+
+func get_natural_top_speed() -> float:
+	return _natural_top_speed_kmh
+
+
+func get_top_speed_drive_adjustment() -> float:
+	return LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
+		_current_speed_kmh,
+		_drive_level,
+		int(_effective_stats.get("top_speed", 5))
+	)
+
+
 func is_finished() -> bool:
 	return _finished
 
@@ -234,17 +279,6 @@ func mark_finished(order: int, finish_time: float) -> void:
 	_finished = true
 	_finish_order = order
 	_finish_time = finish_time
-
-
-func hold_behind(leader_distance: float, leader_progress: float, path_length: float) -> void:
-	var allowed_progress := maxf(leader_progress - LocalRaceMath.CONTACT_LONGITUDINAL_M, 0.0)
-	if _race_progress >= allowed_progress:
-		_race_progress = allowed_progress
-		_distance = fposmod(
-			leader_distance - LocalRaceMath.CONTACT_LONGITUDINAL_M,
-			path_length
-		)
-		_apply_pose()
 
 
 func get_snapshot() -> Dictionary:
@@ -283,7 +317,16 @@ func _process(delta: float) -> void:
 		return
 	if _path == null or _path.curve == null:
 		return
+	if not _race_active:
+		# 開始前も出力だけは選べる。位置・速度・状態値は動かさない。
+		if _drive_mode and player_controlled:
+			_update_drive_level_input(delta)
+		return
+	_apply_pururin_race_stats()
+	var previous_offset := _offset
 	_update_inputs(delta)
+	if not LocalRaceMath.can_use_offset(_race_progress, _offset, _others_snapshot):
+		_offset = previous_offset
 	var path_len := _path.curve.get_baked_length()
 	var blocker := LocalRaceMath.blocking_speed_kmh(
 		_distance, _offset, _others_snapshot, path_len
@@ -295,24 +338,57 @@ func _process(delta: float) -> void:
 			_drive_level,
 			max_speed_kmh,
 			delta,
-			_draft_air_resistance_factor()
+			_draft_air_resistance_factor(),
+			get_acceleration_force_bonus(),
+			get_top_speed_drive_adjustment()
 		)
 		_update_condition(delta)
 		_update_drive_diagnostic_log(delta)
-	else:
-		var effective_target := LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker)
-		effective_target = minf(max_speed_kmh, effective_target + _draft_bonus_kmh)
-		_current_speed_kmh = LocalRaceMath.follow_speed_kmh(
+	elif _cpu_start_drive_remaining > 0.0:
+		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
-			effective_target,
-			delta
+			LocalRaceMath.Config.number("cpu_start_drive_level"),
+			max_speed_kmh,
+			delta,
+			_draft_air_resistance_factor(),
+			get_acceleration_force_bonus(),
+			LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
+				_current_speed_kmh,
+				LocalRaceMath.Config.number("cpu_start_drive_level"),
+				int(_effective_stats.get("top_speed", 5))
+			)
 		)
+		_cpu_start_drive_remaining = maxf(_cpu_start_drive_remaining - delta, 0.0)
+		_update_condition_for_drive_level(LocalRaceMath.Config.number("cpu_start_drive_level"), delta)
+	else:
+		var cpu_drive_level := _cpu_trainer_drive_level
+		if not is_zero_approx(LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker) - _target_speed_kmh):
+			cpu_drive_level = 0.0
+		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
+			_current_speed_kmh,
+			cpu_drive_level,
+			max_speed_kmh,
+			delta,
+			_draft_air_resistance_factor(),
+			get_acceleration_force_bonus(),
+			LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
+				_current_speed_kmh,
+				cpu_drive_level,
+				int(_effective_stats.get("top_speed", 5))
+			)
+		)
+		_update_condition_for_drive_level(_cpu_trainer_drive_level, delta)
 	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
 		_current_speed_kmh, delta, _offset, curvature
 	)
-	_race_progress = LocalRaceMath.add_race_progress(_race_progress, d_center)
-	_distance = fposmod(_distance + d_center, path_len)
+	var proposed_progress := LocalRaceMath.add_race_progress(_race_progress, d_center)
+	var allowed_progress := LocalRaceMath.allowed_race_progress(
+		_race_progress, proposed_progress, _offset, _others_snapshot
+	)
+	var allowed_advance := allowed_progress - _race_progress
+	_race_progress = allowed_progress
+	_distance = fposmod(_distance + allowed_advance, path_len)
 	_apply_pose()
 
 
@@ -344,29 +420,66 @@ func _update_inputs(delta: float) -> void:
 				_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
 					_target_offset, float(follow_slot["offset"])
 				)
-				_cpu_follow_pace_correction_kmh = LocalRaceMath.cpu_follow_pace_correction_kmh(
-					float(follow_candidate["forward_gap_m"])
-				)
 			else:
 				# 追従候補がなければ、従来どおり現在ラインから小さく動かす。
-				_target_offset = LocalRaceMath.cpu_next_target_offset_m(_offset, randf())
-				_cpu_follow_pace_correction_kmh = 0.0
-			_update_cpu_target_speed()
+				var free_target := LocalRaceMath.cpu_next_target_offset_m(_offset, randf())
+				var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
+				var preferred_line := lerpf(
+					M2TrackMath.MAX_ABS_OFFSET_M,
+					-M2TrackMath.MAX_ABS_OFFSET_M,
+					line_pref
+				)
+				_target_offset = lerpf(free_target, preferred_line, 0.35)
+			# ライン選択と速度方針は独立。速度はトレーナーが定期的に決める。
 		_offset = move_toward(_offset, _target_offset, LocalRaceMath.Config.number("cpu_steer_speed_m_per_s") * delta)
 		_offset = M2TrackMath.clamp_offset(_offset)
-		_cpu_pace_timer -= delta
-		if _cpu_pace_timer <= 0.0:
-			_cpu_pace_timer = LocalRaceMath.cpu_pace_variation_interval_s(randf())
-			_cpu_temporary_pace_offset_kmh = LocalRaceMath.cpu_temporary_pace_offset_kmh(randf())
+		_cpu_trainer_timer -= delta
+		if _cpu_trainer_timer <= 0.0:
+			_cpu_trainer_timer = LocalRaceMath.Config.number("cpu_trainer_reselect_seconds")
 			_update_cpu_target_speed()
 
 
 func _update_cpu_target_speed() -> void:
-	_target_speed_kmh = LocalRaceMath.cpu_target_speed_kmh(
-		max_speed_kmh,
-		gate_index,
-		_cpu_temporary_pace_offset_kmh + _cpu_follow_pace_correction_kmh
+	if _cpu_trainer_profile.is_empty():
+		return
+	var capacity := LocalRaceMath.Config.number("stamina_capacity")
+	var decision := CpuTrainerMath.decide(_cpu_trainer_profile, {
+		"progress_ratio": _race_progress / LocalRaceMath.RACE_DISTANCE_M,
+		"field_size": LocalRaceMath.FIELD_SIZE,
+		"live_place": _cpu_live_place(),
+		"max_speed_kmh": _natural_top_speed_kmh,
+		"stamina_ratio": _stamina / capacity,
+		"has_draft": _received_draft_p > 0.0,
+	}, LocalRaceMath.cpu_trainer_settings())
+	_target_speed_kmh = float(decision["target_speed_kmh"])
+	_cpu_trainer_drive_level = float(decision["drive_level"])
+
+
+func _cpu_live_place() -> int:
+	var better := 0
+	for other_value in _others_snapshot:
+		if other_value is Dictionary and float(other_value.get("race_progress", 0.0)) > _race_progress + 0.001:
+			better += 1
+	return better + 1
+
+
+func _apply_pururin_race_stats() -> void:
+	if _pururin.is_empty():
+		_effective_stats = {}
+		max_speed_kmh = _base_max_speed_kmh
+		_natural_top_speed_kmh = _base_max_speed_kmh
+		return
+	_effective_stats = PururinStatsMath.effective_stats(
+		str(_pururin["attribute"]),
+		_pururin["allocation"],
+		str(_pururin["running_style"]),
+		_cpu_live_place(),
+		_race_progress / LocalRaceMath.RACE_DISTANCE_M
 	)
+	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))
+	max_speed_kmh = LocalRaceMath.HARD_SPEED_CAP_KMH
+	if not _drive_mode:
+		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_target_speed_kmh, _natural_top_speed_kmh)
 
 
 func _draft_air_resistance_factor() -> float:
@@ -417,14 +530,19 @@ func _read_drive_axis() -> float:
 		v += 1.0
 	if Input.is_physical_key_pressed(KEY_DOWN):
 		v -= 1.0
+	v += RaceControllerInput.notch_axis()
 	return clampf(v, -1.0, 1.0)
 
 
 func _update_condition(delta: float) -> void:
-	var target_heart := LocalRaceMath.heart_rate_target_bpm(_drive_level)
+	_update_condition_for_drive_level(_drive_level, delta)
+
+
+func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
+	var target_heart := LocalRaceMath.heart_rate_target_bpm(drive_level)
 	_heart_rate_bpm = move_toward(_heart_rate_bpm, target_heart, LocalRaceMath.Config.number("heart_rate_change_bpm_per_s") * delta)
 	_stamina = clampf(
-		_stamina + LocalRaceMath.stamina_delta_per_s(_drive_level) * delta,
+		_stamina + LocalRaceMath.stamina_delta_per_s(drive_level) * delta,
 		0.0,
 		LocalRaceMath.Config.number("stamina_capacity")
 	)
@@ -436,10 +554,7 @@ func _read_steer_axis() -> float:
 		v -= 1.0
 	if Input.is_physical_key_pressed(KEY_RIGHT):
 		v += 1.0
-	if Input.is_joy_button_pressed(0, JOY_BUTTON_DPAD_LEFT):
-		v -= 1.0
-	if Input.is_joy_button_pressed(0, JOY_BUTTON_DPAD_RIGHT):
-		v += 1.0
+	v += RaceControllerInput.line_axis()
 	return clampf(v, -1.0, 1.0)
 
 
@@ -451,14 +566,20 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_UP:
 			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
-				_target_speed_kmh, 1.0, max_speed_kmh
+				_target_speed_kmh, 1.0, _natural_top_speed_kmh
 			)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_DOWN:
 			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
-				_target_speed_kmh, -1.0, max_speed_kmh
+				_target_speed_kmh, -1.0, _natural_top_speed_kmh
 			)
 			get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_UP):
+		_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(_target_speed_kmh, 1.0, _natural_top_speed_kmh)
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_DOWN):
+		_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(_target_speed_kmh, -1.0, _natural_top_speed_kmh)
+		get_viewport().set_input_as_handled()
 
 
 func _apply_pose() -> void:

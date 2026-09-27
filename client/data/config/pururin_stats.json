@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "stat_ids": [
+    "top_speed",
+    "acceleration",
+    "stamina",
+    "cardio",
+    "aero",
+    "pack",
+    "contact_resistance",
+    "handling"
+  ],
+  "allocation_total": 40,
+  "allocation_min": 1,
+  "allocation_max": 10,
+  "attribute_bonus_per_stat": 2,
+  "attribute_stat_max": 12,
+  "race_effective_min": 1,
+  "race_effective_max": 15,
+  "rank_groups": [[1, 2], [3, 4], [5, 6], [7, 8]],
+  "rank_bonus": {
+    "matching": 1,
+    "adjacent": 0,
+    "distant": -1
+  },
+  "race_phase_count": 4,
+  "attributes": {
+    "earth": {
+      "label": "地",
+      "bonus_stats": ["stamina", "contact_resistance"]
+    },
+    "water": {
+      "label": "水",
+      "bonus_stats": ["handling", "pack"]
+    },
+    "fire": {
+      "label": "火",
+      "bonus_stats": ["acceleration", "cardio"]
+    },
+    "wind": {
+      "label": "風",
+      "bonus_stats": ["top_speed", "aero"]
+    }
+  },
+  "running_styles": {
+    "escape": {
+      "label": "逃げ",
+      "rank_group_index": 0,
+      "phase_index": 0,
+      "phase_bonus": {"stat": "acceleration", "amount": 2}
+    },
+    "pace": {
+      "label": "先行",
+      "rank_group_index": 1,
+      "phase_index": 1,
+      "phase_bonus": {"stat": "aero", "amount": 2}
+    },
+    "stalk": {
+      "label": "差し",
+      "rank_group_index": 2,
+      "phase_index": 2,
+      "phase_bonus": {"stat": "pack", "amount": 2}
+    },
+    "closer": {
+      "label": "追い込み",
+      "rank_group_index": 3,
+      "phase_index": 3,
+      "phase_bonus": {"stat": "acceleration", "amount": 2}
+    }
+  }
+}

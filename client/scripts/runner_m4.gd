@@ -3,6 +3,7 @@ extends Node3D
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const M4GroupRaceMath := preload("res://scripts/m4_group_race_math.gd")
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 @export var path_path: NodePath = ^"../TrackPath"
 
@@ -158,6 +159,7 @@ func _update_inputs(delta: float) -> void:
 			steer -= 1.0
 		if Input.is_physical_key_pressed(KEY_RIGHT):
 			steer += 1.0
+		steer += RaceControllerInput.line_axis()
 		_offset = M2TrackMath.clamp_offset(_offset + steer * 4.0 * delta)
 		return
 	_cpu_steer_timer -= delta
@@ -176,6 +178,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_DOWN:
 			_target_speed_kmh = M4GroupRaceMath.step_target_speed_kmh(_target_speed_kmh, -1.0, get_max_speed())
 			get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_UP):
+		_target_speed_kmh = M4GroupRaceMath.step_target_speed_kmh(_target_speed_kmh, 1.0, get_max_speed())
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_DOWN):
+		_target_speed_kmh = M4GroupRaceMath.step_target_speed_kmh(_target_speed_kmh, -1.0, get_max_speed())
+		get_viewport().set_input_as_handled()
 
 func _starting_offset(role: String) -> float:
 	match role:

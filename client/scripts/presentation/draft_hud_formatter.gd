@@ -7,7 +7,8 @@ static func status_lines(
 	max_received_p: float,
 	require_identified_source: bool = false,
 	split_source_lines: bool = false,
-	show_effective_details: bool = false
+	show_effective_details: bool = false,
+	show_speed_cap_bonus: bool = true
 ) -> PackedStringArray:
 	var draft_scale := maxf(max_received_p, 0.0001)
 	var direct := maxf(0.0, float(racer.get("direct_draft_p", 0.0)))
@@ -30,7 +31,8 @@ static func status_lines(
 	])
 	if show_effective_details:
 		lines.append("実効 %.0f%%" % (clampf(float(racer.get("effective_draft_ratio", 0.0)), 0.0, 1.0) * 100.0))
-		lines.append("上限補正 %+.1fkm/h" % float(racer.get("draft_speed_bonus_kmh", 0.0)))
+		if show_speed_cap_bonus:
+			lines.append("上限補正 %+.1fkm/h" % float(racer.get("draft_speed_bonus_kmh", 0.0)))
 	if split_source_lines and not racer.get("direct_source_details", []).is_empty():
 		var source_index := 1
 		for detail in racer.get("direct_source_details", []):

@@ -19,14 +19,12 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_almost_eq(Config.number("draft_aggregation_exponent"), 2.3, 0.001)
 	assert_eq(Config.values().drive_force_by_level_kmh_per_s, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 6.8])
 	assert_true(Config.values().cpu_speed_tiers_kmh.is_read_only())
-	assert_eq(Config.values().cpu_speed_tiers_kmh, [54.0, 55.0, 56.0])
+	assert_eq(Config.values().cpu_speed_tiers_kmh, [59.0, 60.0, 61.0])
 	assert_almost_eq(Config.number("cpu_steer_reselect_min_s"), 1.0, 0.001)
 	assert_almost_eq(Config.number("cpu_follow_preferred_gap_m"), 4.0, 0.001)
 	assert_almost_eq(Config.number("cpu_follow_slot_lateral_spacing_m"), 1.2, 0.001)
 	assert_almost_eq(Config.number("cpu_follow_slot_crowding_weight"), 1.4, 0.001)
-	assert_almost_eq(Config.number("cpu_follow_pace_saving_kmh"), 0.45, 0.001)
 	assert_almost_eq(Config.number("cpu_inward_target_offset_m"), -3.0, 0.001)
-	assert_almost_eq(Config.number("cpu_pace_variation_max_kmh"), 0.35, 0.001)
 	var draft_result := DraftRules.load_file()
 	assert_true(draft_result.has("data"))
 	assert_true(DraftRules.validate(draft_result.data).is_empty())
@@ -114,14 +112,8 @@ func test_rejects_inconsistent_notches_and_ranges() -> void:
 	data.cpu_steer_reselect_min_s = data.cpu_steer_reselect_max_s + 1.0
 	assert_true(";".join(Config.validate(data)).contains("cpu_steer_reselect_min_s"))
 	data = Config.load_file().data
-	data.cpu_pace_variation_min_s = data.cpu_pace_variation_max_s + 1.0
-	assert_true(";".join(Config.validate(data)).contains("cpu_pace_variation_min_s"))
-	data = Config.load_file().data
 	data.cpu_follow_preferred_gap_m = data.cpu_follow_forward_range_m + 1.0
 	assert_true(";".join(Config.validate(data)).contains("cpu_follow_preferred_gap_m"))
-	data = Config.load_file().data
-	data.cpu_follow_pace_saving_kmh = data.cpu_follow_max_pace_correction_kmh + 0.1
-	assert_true(";".join(Config.validate(data)).contains("cpu_follow_pace_saving_kmh"))
 	data = Config.load_file().data
 	data.cpu_inward_target_offset_m = 99.0
 	assert_true(";".join(Config.validate(data)).contains("cpu_inward_target_offset_m"))

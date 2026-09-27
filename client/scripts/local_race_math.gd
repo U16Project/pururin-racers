@@ -97,6 +97,15 @@ static var DRIVE_REPEAT_INITIAL_S: float:
 static var DRIVE_REPEAT_INTERVAL_S: float:
 	get:
 		return Config.number("drive_repeat_interval_s")
+static var TOP_SPEED_NATURAL_MIN_KMH: float:
+	get:
+		return Config.number("top_speed_natural_min_kmh")
+static var TOP_SPEED_NATURAL_MAX_KMH: float:
+	get:
+		return Config.number("top_speed_natural_max_kmh")
+static var ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S: float:
+	get:
+		return Config.number("acceleration_drive_force_bonus_per_stat_kmh_per_s")
 
 ## 接触箱（設計案の例に近い簡易値）。
 const BLOCK_LATERAL_M := 1.5
@@ -106,9 +115,6 @@ const BLOCK_SPEED_FACTOR := 1.0
 
 const FIELD_SIZE := 8
 const BAKE_INTERVAL_M := 1.0
-const CPU_PACE_BASELINE_PATTERN := [0.0, 0.45, 0.8, 0.2, 0.65, 1.0, 0.3]
-
-
 static func course_layout() -> Dictionary:
 	if _course_layout.is_empty():
 		_course_layout = CourseLayout.load_layout()
@@ -200,16 +206,18 @@ static func step_drive_level(level: float, direction: float) -> float:
 	return clamp_drive_level(level + sign_direction * DRIVE_LEVEL_STEP)
 
 
-static func drive_force_kmh_per_s(drive_level: float) -> float:
+static func drive_force_kmh_per_s(drive_level: float, acceleration_bonus_kmh_per_s: float = 0.0) -> float:
 	var level_index := int(round(clamp_drive_level(drive_level)))
-	return float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index])
+	return maxf(float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index]) + acceleration_bonus_kmh_per_s, 0.0)
 
 
 ## 出力走行の内訳。HUD・ログ・速度更新が同じ計算結果を使う。
 static func drive_diagnostics_kmh_per_s(
 	speed_kmh: float,
 	drive_level: float,
-	draft_factor: float = 0.0
+	draft_factor: float = 0.0,
+	acceleration_bonus_kmh_per_s: float = 0.0,
+	top_speed_drive_adjustment_kmh_per_s: float = 0.0
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
@@ -217,7 +225,7 @@ static func drive_diagnostics_kmh_per_s(
 		# 負ノッチは推進力の代わりに制動寄与として負値にする。
 		drive_contribution = level * BRAKE_DECELERATION_PER_LEVEL
 	elif level > 0.0:
-		drive_contribution = drive_force_kmh_per_s(level)
+		drive_contribution = drive_force_kmh_per_s(level, acceleration_bonus_kmh_per_s) + top_speed_drive_adjustment_kmh_per_s
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
 	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
 	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed
@@ -391,19 +399,42 @@ static func advance_drive_speed_kmh(
 	drive_level: float,
 	max_speed_kmh: float,
 	delta: float,
-	draft_factor: float = 0.0
+	draft_factor: float = 0.0,
+	acceleration_bonus_kmh_per_s: float = 0.0,
+	top_speed_drive_adjustment_kmh_per_s: float = 0.0
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
 	var level := clamp_drive_level(drive_level)
-	var diagnostics := drive_diagnostics_kmh_per_s(current_kmh, level, draft_factor)
+	var diagnostics := drive_diagnostics_kmh_per_s(current_kmh, level, draft_factor, acceleration_bonus_kmh_per_s, top_speed_drive_adjustment_kmh_per_s)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
-	if level > 0.0 and draft_factor > 0.0:
-		# ドラフト成立時だけ、個体上限に最大4km/hを加えられる。
-		var draft_bonus := draft_speed_bonus_kmh(draft_factor)
-		ceiling = minf(max_speed_kmh + draft_bonus, HARD_SPEED_CAP_KMH)
 	return clampf(next_speed, MIN_SPEED_KMH, ceiling)
+
+
+static func top_speed_natural_speed_kmh(top_speed: int) -> float:
+	return lerpf(TOP_SPEED_NATURAL_MIN_KMH, TOP_SPEED_NATURAL_MAX_KMH, (clampi(top_speed, 1, 15) - 1) / 14.0)
+
+
+## 基準加速度5・ノッチ6・単独走行では、各最高速値の自然到達速度で推進力と抵抗が釣り合う。
+## 補正は速度の二乗に応じて現れるため、低速域を不自然に大きく変えない。
+static func top_speed_drive_adjustment_kmh_per_s(speed_kmh: float, drive_level: float, top_speed: int) -> float:
+	var level := clamp_drive_level(drive_level)
+	if level <= 0.0:
+		return 0.0
+	var max_drive_force := drive_force_kmh_per_s(DRIVE_LEVEL_MAX)
+	var level_force := drive_force_kmh_per_s(level)
+	var natural_speed := top_speed_natural_speed_kmh(top_speed)
+	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed
+	var level_share := level_force / maxf(max_drive_force, 0.001)
+	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
+	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio
+
+
+static func stat_acceleration_force_bonus_kmh_per_s(acceleration: int) -> float:
+	return (acceleration - 5) * ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S
+
+
 
 
 static func cpu_steer_reselect_interval_s(random_unit: float) -> float:
@@ -537,41 +568,29 @@ static func cpu_follow_target_offset_m(current_target_offset: float, slot_offset
 	))
 
 
-static func cpu_follow_pace_correction_kmh(forward_gap_m: float) -> float:
-	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
-	var normalized_gap_error := clampf((forward_gap_m - preferred_gap) / preferred_gap, -1.0, 1.0)
-	var maximum := Config.number("cpu_follow_max_pace_correction_kmh")
-	var saved_pace := Config.number("cpu_follow_pace_saving_kmh")
-	return clampf(normalized_gap_error * maximum - saved_pace, -maximum, maximum)
+static func cpu_trainer_profile(gate_index: int) -> Dictionary:
+	var values := Config.values()
+	var cycle: Array = values["cpu_trainer_profile_cycle"]
+	var profile_id := str(cycle[posmod(gate_index - 1, cycle.size())])
+	for profile_value in values["cpu_trainer_profiles"]:
+		if profile_value is Dictionary and str(profile_value.get("id", "")) == profile_id:
+			return profile_value.duplicate(true)
+	return {}
 
 
-static func cpu_pace_variation_interval_s(random_unit: float) -> float:
-	return lerpf(
-		Config.number("cpu_pace_variation_min_s"),
-		Config.number("cpu_pace_variation_max_s"),
-		clampf(random_unit, 0.0, 1.0)
-	)
-
-
-static func cpu_baseline_pace_offset_kmh(gate_index: int) -> float:
-	var pattern_index := gate_index % CPU_PACE_BASELINE_PATTERN.size()
-	if pattern_index < 0:
-		pattern_index += CPU_PACE_BASELINE_PATTERN.size()
-	return -float(CPU_PACE_BASELINE_PATTERN[pattern_index]) * Config.number("cpu_pace_baseline_max_offset_kmh")
-
-
-static func cpu_temporary_pace_offset_kmh(random_unit: float) -> float:
-	var signed_unit := clampf(random_unit, 0.0, 1.0) * 2.0 - 1.0
-	return signed_unit * Config.number("cpu_pace_variation_max_kmh")
-
-
-static func cpu_target_speed_kmh(
-	max_speed_kmh: float,
-	gate_index: int,
-	temporary_offset_kmh: float
-) -> float:
-	var desired := max_speed_kmh + cpu_baseline_pace_offset_kmh(gate_index) + temporary_offset_kmh
-	return clampf(desired, MIN_SPEED_KMH, minf(max_speed_kmh, HARD_SPEED_CAP_KMH))
+static func cpu_trainer_settings() -> Dictionary:
+	return {
+		"min_target_speed_kmh": TARGET_SPEED_MIN_KMH,
+		"min_drive_level": 1.0,
+		"max_drive_level": DRIVE_LEVEL_MAX,
+		"finish_start_progress": Config.number("cpu_trainer_finish_start_progress"),
+		"finish_full_progress": Config.number("cpu_trainer_finish_full_progress"),
+		"reserve_max_kmh": Config.number("cpu_trainer_reserve_max_kmh"),
+		"position_push_max_kmh": Config.number("cpu_trainer_position_push_max_kmh"),
+		"finish_push_max_kmh": Config.number("cpu_trainer_finish_push_max_kmh"),
+		"draft_saving_max_kmh": Config.number("cpu_trainer_draft_saving_max_kmh"),
+		"low_stamina_saving_max_kmh": Config.number("cpu_trainer_low_stamina_saving_max_kmh"),
+	}
 
 
 static func heart_rate_target_bpm(drive_level: float) -> float:
@@ -639,6 +658,42 @@ static func contact_overlaps(
 		absf(first_progress - second_progress) < CONTACT_LONGITUDINAL_M
 		and absf(first_offset - second_offset) < BLOCK_LATERAL_M
 	)
+
+
+## 他走者の現在位置を通り抜けず、次フレームで進める最大の進捗。
+## 前走者の手前で止めるだけで、接触後の強制位置補正は行わない。
+static func allowed_race_progress(
+	current_progress: float,
+	proposed_progress: float,
+	offset: float,
+	others: Array
+) -> float:
+	var allowed := maxf(proposed_progress, current_progress)
+	for other_value in others:
+		if not other_value is Dictionary:
+			continue
+		var other_offset := float(other_value.get("offset", 0.0))
+		if absf(offset - other_offset) >= BLOCK_LATERAL_M:
+			continue
+		var other_progress := float(other_value.get("race_progress", 0.0))
+		if other_progress <= current_progress:
+			continue
+		allowed = minf(allowed, other_progress - CONTACT_LONGITUDINAL_M)
+	return maxf(current_progress, allowed)
+
+
+static func can_use_offset(progress: float, offset: float, others: Array) -> bool:
+	for other_value in others:
+		if not other_value is Dictionary:
+			continue
+		if contact_overlaps(
+			progress,
+			offset,
+			float(other_value.get("race_progress", 0.0)),
+			float(other_value.get("offset", 0.0))
+		):
+			return false
+	return true
 
 
 ## 対地速度（km/h）で進んだときの中心線増分（m。ラップしない）。

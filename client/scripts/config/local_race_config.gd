@@ -10,6 +10,10 @@ const NUMBER_RANGES := {
 	"drive_level_min": [-100.0, -1.0],
 	"drive_level_max": [1.0, 100.0],
 	"drive_level_step": [1.0, 1.0],
+	"start_countdown_seconds": [0.0, 30.0],
+	"player_start_drive_level": [-100.0, 100.0],
+	"cpu_start_drive_level": [-100.0, 100.0],
+	"cpu_start_drive_duration_seconds": [0.0, 30.0],
 	"min_speed_kmh": [0.0, 75.0],
 	"rolling_resistance_kmh_per_s": [0.0, 100.0],
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
@@ -33,14 +37,20 @@ const NUMBER_RANGES := {
 	"cpu_follow_slot_crowding_lateral_range_m": [0.001, 15.0],
 	"cpu_follow_slot_crowding_weight": [0.0, 100.0],
 	"cpu_follow_slot_inner_bias": [0.0, 100.0],
-	"cpu_follow_max_pace_correction_kmh": [0.0, 25.0],
-	"cpu_follow_pace_saving_kmh": [0.0, 25.0],
 	"cpu_inward_target_offset_m": [-15.0, 15.0],
 	"cpu_inward_target_blend": [0.0, 1.0],
-	"cpu_pace_baseline_max_offset_kmh": [0.0, 25.0],
-	"cpu_pace_variation_min_s": [0.001, 60.0],
-	"cpu_pace_variation_max_s": [0.001, 60.0],
-	"cpu_pace_variation_max_kmh": [0.0, 25.0],
+	"cpu_trainer_reselect_seconds": [0.05, 60.0],
+	"cpu_target_speed_change_kmh_per_s": [0.01, 100.0],
+	"top_speed_natural_min_kmh": [0.0, 90.0],
+	"top_speed_natural_max_kmh": [0.0, 90.0],
+	"acceleration_drive_force_bonus_per_stat_kmh_per_s": [0.0, 10.0],
+	"cpu_trainer_finish_start_progress": [0.0, 1.0],
+	"cpu_trainer_finish_full_progress": [0.0, 1.0],
+	"cpu_trainer_reserve_max_kmh": [0.0, 25.0],
+	"cpu_trainer_position_push_max_kmh": [0.0, 25.0],
+	"cpu_trainer_finish_push_max_kmh": [0.0, 25.0],
+	"cpu_trainer_draft_saving_max_kmh": [0.0, 25.0],
+	"cpu_trainer_low_stamina_saving_max_kmh": [0.0, 25.0],
 	"heart_rate_rest_bpm": [1.0, 300.0],
 	"heart_rate_max_bpm": [1.0, 300.0],
 	"heart_rate_change_bpm_per_s": [0.001, 300.0],
@@ -79,27 +89,34 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "cpu_speed_tiers_kmh"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "cpu_speed_tiers_kmh", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
 	for key in ["drive_level_min", "drive_level_max", "drive_level_step"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
+	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
+		if float(data[key]) != floorf(float(data[key])):
+			errors.append("%s: 整数が必要です" % key)
 	if absf(data.drive_level_min) > data.drive_level_max:
 		errors.append("drive_level_min: 絶対値は drive_level_max 以下にしてください")
+	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
+		if float(data[key]) < float(data.drive_level_min) or float(data[key]) > float(data.drive_level_max):
+			errors.append("%s: drive_level_min〜drive_level_max の範囲にしてください" % key)
 	if data.heart_rate_rest_bpm > data.heart_rate_max_bpm:
 		errors.append("heart_rate_rest_bpm: heart_rate_max_bpm 以下にしてください")
 	for pair in [
 		["cpu_steer_reselect_min_s", "cpu_steer_reselect_max_s"],
-		["cpu_pace_variation_min_s", "cpu_pace_variation_max_s"],
 	]:
 		if float(data[pair[0]]) > float(data[pair[1]]):
 			errors.append("%s: %s 以下にしてください" % [pair[0], pair[1]])
 	if float(data.cpu_follow_preferred_gap_m) > float(data.cpu_follow_forward_range_m):
 		errors.append("cpu_follow_preferred_gap_m: cpu_follow_forward_range_m 以下にしてください")
-	if float(data.cpu_follow_pace_saving_kmh) > float(data.cpu_follow_max_pace_correction_kmh):
-		errors.append("cpu_follow_pace_saving_kmh: cpu_follow_max_pace_correction_kmh 以下にしてください")
+	if float(data.cpu_trainer_finish_start_progress) > float(data.cpu_trainer_finish_full_progress):
+		errors.append("cpu_trainer_finish_start_progress: cpu_trainer_finish_full_progress 以下にしてください")
+	if float(data.top_speed_natural_min_kmh) > float(data.top_speed_natural_max_kmh):
+		errors.append("top_speed_natural_min_kmh: top_speed_natural_max_kmh 以下にしてください")
 	if absf(float(data.cpu_inward_target_offset_m)) > M2TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_inward_target_offset_m: コースの可動範囲内にしてください")
 	if float(data.cpu_follow_slot_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
@@ -134,6 +151,32 @@ static func validate(data: Variant) -> PackedStringArray:
 				errors.append("cpu_speed_tiers_kmh[%d]: 最低速度以上の非減少値かつ90以下にしてください" % i)
 			else:
 				previous_tier = float(tier)
+	var profiles: Variant = data.get("cpu_trainer_profiles")
+	var profile_ids := {}
+	if not profiles is Array or profiles.is_empty():
+		errors.append("cpu_trainer_profiles: 1個以上の配列が必要です")
+	else:
+		for index in profiles.size():
+			var profile: Variant = profiles[index]
+			if not profile is Dictionary:
+				errors.append("cpu_trainer_profiles[%d]: オブジェクトが必要です" % index)
+				continue
+			var identifier := str(profile.get("id", ""))
+			if identifier.is_empty() or profile_ids.has(identifier):
+				errors.append("cpu_trainer_profiles[%d].id: 空または重複です" % index)
+				continue
+			profile_ids[identifier] = true
+			for key in ["aggression", "patience", "drafting_pref", "line_pref"]:
+				var value: Variant = profile.get(key)
+				if not (value is float or value is int) or not is_finite(float(value)) or value < 0.0 or value > 1.0:
+					errors.append("cpu_trainer_profiles[%d].%s: 0〜1の数値が必要です" % [index, key])
+	var cycle: Variant = data.get("cpu_trainer_profile_cycle")
+	if not cycle is Array or cycle.is_empty():
+		errors.append("cpu_trainer_profile_cycle: 1個以上の配列が必要です")
+	else:
+		for index in cycle.size():
+			if not cycle[index] is String or not profile_ids.has(str(cycle[index])):
+				errors.append("cpu_trainer_profile_cycle[%d]: 定義済みプロフィールIDが必要です" % index)
 	return errors
 
 static func values() -> Dictionary:

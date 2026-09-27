@@ -7,6 +7,7 @@ const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatt
 const NetRace := preload("res://scripts/net_race_m5.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
 const RESULT_VISUAL_HOLD_SECONDS := 10.0
 const INPUT_OFFSET_RATE := 4.0
@@ -79,7 +80,7 @@ func _ready() -> void:
 	)
 	_result_panel.visible = false
 	_pause_panel.visible = false
-	_guide_label.text = "←→：ライン　↑↓：目標スピード（km/h）　C：視点切替　CHASE中 WASD：追従調整　QE：周回　R：リセット　Esc：メニュー"
+	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：目標スピード　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
 	_result_return_button.pressed.connect(_return_to_title)
 	_pause_return_button.pressed.connect(_return_to_title)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -94,9 +95,18 @@ func _ready() -> void:
 	_hud_label.text = "M5 オンラインレース　接続しています…"
 
 func _unhandled_input(event: InputEvent) -> void:
+	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A) and RaceControllerInput.activate_focused_control(get_viewport()):
+		get_viewport().set_input_as_handled()
+		return
 	if _race_result_received:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
+	if RaceControllerInput.is_menu_pressed(event):
+		_set_paused(not _paused)
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_cancel_pressed(event) and _paused:
+		_set_paused(false)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			_set_paused(not _paused)
 			get_viewport().set_input_as_handled()
@@ -110,10 +120,10 @@ func _process_player_input(delta: float) -> void:
 		return
 	if _apply_held_input(
 		delta,
-		Input.is_physical_key_pressed(KEY_LEFT),
-		Input.is_physical_key_pressed(KEY_RIGHT),
-		Input.is_physical_key_pressed(KEY_UP),
-		Input.is_physical_key_pressed(KEY_DOWN)
+		Input.is_physical_key_pressed(KEY_LEFT) or RaceControllerInput.line_axis() < 0.0,
+		Input.is_physical_key_pressed(KEY_RIGHT) or RaceControllerInput.line_axis() > 0.0,
+		Input.is_physical_key_pressed(KEY_UP) or RaceControllerInput.notch_axis() > 0.0,
+		Input.is_physical_key_pressed(KEY_DOWN) or RaceControllerInput.notch_axis() < 0.0
 	) and _net != null:
 		_net.send_input(_target_speed, _target_offset)
 

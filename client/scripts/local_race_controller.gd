@@ -7,7 +7,9 @@ const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
 const RUNNER_COLORS := [
@@ -25,6 +27,7 @@ const RUNNER_COLORS := [
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
 @onready var _guide_label: Label = $UI/GuideLabel
+@onready var _countdown_label: Label = %CountdownLabel
 @onready var _pause_panel: Control = %PausePanel
 @onready var _result_panel: Control = %ResultPanel
 @onready var _result_label: Label = %ResultLabel
@@ -45,6 +48,9 @@ var _race_elapsed: float = 0.0
 var _results_pending: bool = false
 var _results_wait_remaining: float = 0.0
 var _player: Node3D = null
+var _race_started: bool = false
+var _start_countdown_remaining: float = 0.0
+var _start_signal_remaining: float = 0.0
 
 
 func _ready() -> void:
@@ -68,19 +74,35 @@ func _ready() -> void:
 		_hud_label.text = "ドラフト設定を確認してください：" + LocalRaceMath.DraftRules.last_error
 		set_process(false)
 		return
+	if PururinRosterConfig.values().is_empty():
+		_hud_label.text = "プルリン設定を確認してください：" + PururinRosterConfig.last_error
+		set_process(false)
+		return
 	_place_markers()
 	_spawn_field()
-	_guide_label.text = "←→：ライン　↑↓：出力ノッチ　V：目標速度方式へ切替　C：視点切替　CHASE中 WASD：追従調整　QE：向き　R：リセット　Esc：メニュー　緑＝スタート／発光＝ゴール"
+	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
+	if _player != null:
+		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
+	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A) and RaceControllerInput.activate_focused_control(get_viewport()):
+		get_viewport().set_input_as_handled()
+		return
 	if _race_over:
 		return
-	if event is InputEventKey and event.pressed and not event.echo:
+	if RaceControllerInput.is_menu_pressed(event):
+		_set_paused(not _paused)
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_cancel_pressed(event) and _paused:
+		_set_paused(false)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			_set_paused(not _paused)
 			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_V and _player != null:
+		elif event.physical_keycode == KEY_V and _race_started and _player != null:
 			_player.call("toggle_drive_mode")
 			get_viewport().set_input_as_handled()
 
@@ -88,7 +110,10 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
-	if not _paused and not _race_over:
+	if not _paused and not _race_started:
+		_update_start_countdown(_delta)
+	elif not _paused and not _race_over:
+		_update_start_signal(_delta)
 		_race_elapsed += _delta
 		# ランナーは前tickに確定したドラフト値を使って移動する。
 		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
@@ -101,10 +126,29 @@ func _process(_delta: float) -> void:
 	_update_hud()
 
 
+func _update_start_countdown(delta: float) -> void:
+	_start_countdown_remaining = maxf(_start_countdown_remaining - delta, 0.0)
+	if _start_countdown_remaining > 0.0:
+		_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
+		return
+	_race_started = true
+	_countdown_label.text = "START!"
+	_start_signal_remaining = 0.8
+	for runner in _runners:
+		runner.call("set_race_active", true)
+
+
+func _update_start_signal(delta: float) -> void:
+	if _start_signal_remaining <= 0.0:
+		return
+	_start_signal_remaining = maxf(_start_signal_remaining - delta, 0.0)
+	if _start_signal_remaining <= 0.0:
+		_countdown_label.visible = false
+
+
 func _finalize_draft_tick() -> void:
 	if _paused or _race_over or _runners.is_empty():
 		return
-	_resolve_contacts()
 	# M5オンラインと同じく、移動後のゴール判定を先に確定する。
 	# 着順とタイムを確定した後も、結果表示までは全員が接触・ドラフトを続ける。
 	_check_finishes()
@@ -124,6 +168,7 @@ func _spawn_field() -> void:
 	sphere.radius = 0.75
 	sphere.height = 1.5
 	for i in LocalRaceMath.FIELD_SIZE:
+		var pururin: Dictionary = PururinRosterConfig.values()["roster"][i]
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
@@ -137,8 +182,8 @@ func _spawn_field() -> void:
 		body.material_override = mat
 		runner.add_child(body)
 		_runners_root.add_child(runner)
-		var is_player := i == 0
-		var label := "あなた" if is_player else "CPU%d" % (i + 1)
+		var is_player: bool = pururin["control_kind"] == "player"
+		var label: String = pururin["display_name"]
 		var tier := (
 			LocalRaceMath.PLAYER_MAX_SPEED_KMH
 			if is_player
@@ -150,7 +195,8 @@ func _spawn_field() -> void:
 			i,
 			tier,
 			is_player,
-			label
+			label,
+			pururin
 		)
 		_runners.append(runner)
 		if is_player:
@@ -199,39 +245,6 @@ func _place_line_marker(node: MeshInstance3D, path_d: float, color: Color) -> vo
 	)
 
 
-func _resolve_contacts() -> void:
-	var path_length := _track.curve.get_baked_length()
-	for i in _runners.size():
-		var first: Node3D = _runners[i]
-		for j in range(i + 1, _runners.size()):
-			var second: Node3D = _runners[j]
-			var first_progress: float = first.call("get_race_progress")
-			var second_progress: float = second.call("get_race_progress")
-			var first_offset: float = first.call("get_offset")
-			var second_offset: float = second.call("get_offset")
-			if not LocalRaceMath.contact_overlaps(
-				first_progress,
-				first_offset,
-				second_progress,
-				second_offset
-			):
-				continue
-			if first_progress > second_progress:
-				second.call(
-					"hold_behind",
-					first.call("get_distance"),
-					first_progress,
-					path_length
-				)
-			elif second_progress > first_progress:
-				first.call(
-					"hold_behind",
-					second.call("get_distance"),
-					second_progress,
-					path_length
-				)
-
-
 func _share_snapshots() -> void:
 	var snaps: Array = []
 	for r in _runners:
@@ -268,6 +281,13 @@ func _check_finishes() -> void:
 func _update_hud() -> void:
 	if _player == null:
 		return
+	if not _race_started:
+		_hud_label.text = "\n".join(PackedStringArray([
+			"開始出力 %+d" % int(roundi(_player.call("get_drive_level"))),
+			"カウント中に↑↓で開始出力を選択",
+			"Esc＝メニュー",
+		]))
+		return
 	var order := _live_place(_player)
 	var prog: float = _player.call("get_race_progress")
 	var tgt: float = _player.call("get_target_speed")
@@ -277,14 +297,19 @@ func _update_hud() -> void:
 		"残り %.0fm" % maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
 	])
 	if _player.call("is_drive_mode"):
+		var effective_stats: Dictionary = _player.call("get_effective_stats")
 		lines.append("出力 %+d" % int(roundi(_player.call("get_drive_level"))))
+		if effective_stats.has("top_speed") and effective_stats.has("acceleration"):
+			lines.append("最高速 有効%d　自然到達 %.1fkm/h" % [effective_stats["top_speed"], _player.call("get_natural_top_speed")])
+			lines.append("加速 有効%d　推進補正 %+.2fkm/h/s" % [effective_stats["acceleration"], _player.call("get_acceleration_force_bonus")])
 		lines.append("心拍(仮) %.0f" % _player.call("get_heart_rate_bpm"))
 		lines.append("スタミナ(仮) %.0f%%" % _player.call("get_stamina"))
 		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
 	else:
 		lines.append("目標 %.0fkm/h" % tgt)
 	lines.append_array(DraftHudFormatter.status_lines(
-		_player.call("get_draft_status"), LocalRaceMath.DRAFT_MAX_RECEIVED_P, false, true, true
+		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
+		_player.call("get_draft_status"), LocalRaceMath.DRAFT_MAX_RECEIVED_P, false, true, true, false
 	))
 	lines.append("現在 %.0fkm/h" % cur)
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))

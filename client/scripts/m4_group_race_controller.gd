@@ -1,4 +1,6 @@
 extends Node3D
+
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 ## M4 集団プロトタイプ。プレイヤー＋内側型＋外側型の3体を生成する。
 
 const M4GroupRaceMath := preload("res://scripts/m4_group_race_math.gd")
@@ -43,9 +45,18 @@ func _ready() -> void:
 	_spawn_field()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A) and RaceControllerInput.activate_focused_control(get_viewport()):
+		get_viewport().set_input_as_handled()
+		return
 	if _race_over:
 		return
-	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+	if RaceControllerInput.is_menu_pressed(event):
+		_set_paused(not _paused)
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_cancel_pressed(event) and _paused:
+		_set_paused(false)
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
 		_set_paused(not _paused)
 		get_viewport().set_input_as_handled()
 

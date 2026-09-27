@@ -8,8 +8,9 @@ func test_intro_items_match_m3_guide() -> void:
 	assert_eq(
 		intro.get_intro_items(),
 		PackedStringArray([
-			"←→：走る位置　ローカルは出力、M4とオンラインは目標スピード",
-			"C：カメラ切替　Esc：メニュー（レース中）",
+			"←→／左スティック：走る位置　↑↓／十字キー：ローカルは出力、M4とオンラインは目標スピード",
+			"Y/C：カメラ切替　Start/Esc：メニュー（レース中）",
+			"A：決定　B：キャンセル　X：ブースト（実装予定）",
 			"レース開始＝ローカル　M4＝集団　M5＝オンライン　控室＝接続",
 		])
 	)

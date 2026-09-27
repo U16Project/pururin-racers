@@ -48,10 +48,38 @@ func test_local_race_scene_applies_shared_course_before_the_field_starts() -> vo
 	assert_almost_eq(track.curve.get_baked_length(), LocalRaceMath.lap_length_m(), 8.0)
 	var player: Node = race.get_node("Runners/Runner1")
 	assert_almost_eq(player.call("get_distance"), LocalRaceMath.start_path_m(), 0.1)
+	assert_false(player.call("is_race_active"))
+	assert_eq(player.call("get_drive_level"), 4.0)
 	var goal: MeshInstance3D = race.get_node("GoalMarker")
 	var expected_goal := track.curve.sample_baked(LocalRaceMath.goal_path_m())
 	assert_almost_eq(goal.global_position.x, expected_goal.x, 0.5)
 	assert_almost_eq(goal.global_position.z, expected_goal.z, 0.5)
+	race.free()
+
+
+func test_start_countdown_config_uses_default_notch_four_and_faster_cpu_launch() -> void:
+	var config := LocalRaceMath.Config.values()
+	assert_eq(config["start_countdown_seconds"], 3.0)
+	assert_eq(config["player_start_drive_level"], 4.0)
+	assert_eq(config["cpu_start_drive_level"], 5.0)
+	assert_eq(config["cpu_start_drive_duration_seconds"], 1.0)
+	assert_true(LocalRaceMath.Config.validate(config).is_empty())
+
+
+func test_countdown_keeps_runners_still_then_starts_everyone_together() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var player: Node = race.get_node("Runners/Runner1")
+	var cpu: Node = race.get_node("Runners/Runner2")
+	var start_distance: float = player.call("get_distance")
+	race.call("_update_start_countdown", 2.9)
+	assert_false(player.call("is_race_active"))
+	assert_false(cpu.call("is_race_active"))
+	assert_almost_eq(player.call("get_distance"), start_distance, 0.001)
+	race.call("_update_start_countdown", 0.2)
+	assert_true(player.call("is_race_active"))
+	assert_true(cpu.call("is_race_active"))
+	assert_eq(player.call("get_drive_level"), 4.0)
 	race.free()
 
 
@@ -60,6 +88,46 @@ func test_player_speeds_are_kmh() -> void:
 	assert_eq(LocalRaceMath.PLAYER_MAX_SPEED_KMH, 75.0)
 	assert_lt(LocalRaceMath.PLAYER_INITIAL_SPEED_KMH, LocalRaceMath.PLAYER_MAX_SPEED_KMH)
 	assert_eq(LocalRaceMath.HARD_SPEED_CAP_KMH, 90.0)
+
+
+func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> void:
+	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(1), 61.0)
+	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(5), 65.0)
+	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(8), 68.0)
+	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(15), 75.0)
+	assert_almost_eq(LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(5), 0.0, 0.001)
+	assert_almost_eq(LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(8), 0.36, 0.001)
+	assert_almost_eq(_natural_speed_after_sixty_seconds(1, 5), 61.0, 0.05)
+	assert_almost_eq(_natural_speed_after_sixty_seconds(15, 5), 75.0, 0.05)
+
+
+func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var player: Node = race.get_node("Runners/Runner1")
+	var stats: Dictionary = player.call("get_effective_stats")
+	assert_eq(stats["top_speed"], 8)
+	assert_eq(stats["acceleration"], 5)
+	assert_almost_eq(player.call("get_natural_top_speed"), 68.0, 0.001)
+	assert_almost_eq(player.call("get_max_speed"), LocalRaceMath.HARD_SPEED_CAP_KMH, 0.001)
+	assert_almost_eq(player.call("get_acceleration_force_bonus"), 0.0, 0.001)
+	race.free()
+
+
+func _natural_speed_after_sixty_seconds(top_speed: int, acceleration: int) -> float:
+	var speed := LocalRaceMath.MIN_SPEED_KMH
+	for _index in 6000:
+		var top_speed_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, top_speed)
+		speed = LocalRaceMath.advance_drive_speed_kmh(
+			speed,
+			6.0,
+			LocalRaceMath.HARD_SPEED_CAP_KMH,
+			0.01,
+			0.0,
+			LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(acceleration),
+			top_speed_adjustment
+		)
+	return speed
 
 
 func test_target_speed_clamped_in_kmh() -> void:
@@ -271,7 +339,7 @@ func test_high_speed_notches_change_by_force_curve_without_special_band() -> voi
 	assert_lt(float(level_six["total_acceleration_kmh_per_s"]), 0.0)
 
 
-func test_cpu_lane_and_pace_changes_stay_inside_configured_ranges() -> void:
+func test_cpu_lane_changes_stay_inside_configured_ranges() -> void:
 	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(0.0), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(1.0), 2.0, 0.001)
 	var current_offset := 0.5
@@ -281,27 +349,14 @@ func test_cpu_lane_and_pace_changes_stay_inside_configured_ranges() -> void:
 	assert_lte(absf(biased - current_offset), 1.2)
 	assert_lt(inward, current_offset)
 	assert_lt(biased, current_offset)
-	assert_almost_eq(LocalRaceMath.cpu_pace_variation_interval_s(0.0), 2.0, 0.001)
-	assert_almost_eq(LocalRaceMath.cpu_pace_variation_interval_s(1.0), 4.0, 0.001)
-	for gate_index in range(1, LocalRaceMath.FIELD_SIZE):
-		var baseline := LocalRaceMath.cpu_baseline_pace_offset_kmh(gate_index)
-		assert_lte(baseline, 0.0)
-		assert_gte(baseline, -0.5)
-	for random_unit in [0.0, 0.5, 1.0]:
-		var variation := LocalRaceMath.cpu_temporary_pace_offset_kmh(random_unit)
-		assert_gte(variation, -0.35)
-		assert_lte(variation, 0.35)
-		var target := LocalRaceMath.cpu_target_speed_kmh(58.0, 2, variation)
-		assert_gte(target, LocalRaceMath.MIN_SPEED_KMH)
-		assert_lte(target, 58.0)
 
 
 func test_cpu_speed_tiers_come_from_validated_local_config() -> void:
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(0), 54.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(1), 55.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(2), 56.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(3), 54.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(-1), 56.0, 0.001)
+	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(0), 59.0, 0.001)
+	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(1), 60.0, 0.001)
+	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(2), 61.0, 0.001)
+	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(3), 59.0, 0.001)
+	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(-1), 61.0, 0.001)
 
 
 func test_cpu_follow_selection_uses_one_score_and_falls_back_when_no_runner_is_ahead() -> void:
@@ -321,17 +376,13 @@ func test_cpu_follow_selection_uses_one_score_and_falls_back_when_no_runner_is_a
 	assert_almost_eq(LocalRaceMath.cpu_next_target_offset_m(0.5, 1.0), -0.415, 0.001)
 
 
-func test_cpu_follow_offset_and_pace_correction_are_bounded() -> void:
+func test_cpu_follow_offset_is_bounded() -> void:
 	assert_almost_eq(LocalRaceMath.cpu_follow_target_offset_m(-2.0, 2.0), 0.6, 0.001)
 	assert_almost_eq(
 		LocalRaceMath.cpu_follow_target_offset_m(M2TrackMath.MAX_ABS_OFFSET_M, 99.0),
 		M2TrackMath.MAX_ABS_OFFSET_M,
 		0.001
 	)
-	assert_almost_eq(LocalRaceMath.cpu_follow_pace_correction_kmh(0.0), -1.4, 0.001)
-	assert_almost_eq(LocalRaceMath.cpu_follow_pace_correction_kmh(4.0), -0.45, 0.001)
-	assert_almost_eq(LocalRaceMath.cpu_follow_pace_correction_kmh(8.0), 0.95, 0.001)
-	assert_almost_eq(LocalRaceMath.cpu_follow_pace_correction_kmh(99.0), 0.95, 0.001)
 
 
 func test_cpu_follow_slots_choose_open_diagonal_and_prefer_inner_on_a_tie() -> void:
@@ -367,15 +418,19 @@ func test_cpu_follow_slot_is_bounded_and_no_candidate_keeps_fallback_path() -> v
 	assert_almost_eq(LocalRaceMath.cpu_next_target_offset_m(0.5, 1.0), -0.415, 0.001)
 
 
-func test_drafting_can_exceed_personal_max_but_respects_hard_cap() -> void:
-	assert_almost_eq(LocalRaceMath.draft_speed_bonus_kmh(0.0), 0.0, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_speed_bonus_kmh(0.55), 4.0, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_speed_bonus_kmh(1.0), 4.0, 0.001)
-	var drafted_speed := LocalRaceMath.advance_drive_speed_kmh(75.0, 5.0, 75.0, 1.0, 0.55)
-	assert_almost_eq(drafted_speed, 77.2125, 0.001)
-	var open_speed := 75.0
-	open_speed = LocalRaceMath.advance_drive_speed_kmh(open_speed, 5.0, 75.0, 1.0, 0.0)
-	assert_almost_eq(open_speed, 73.5, 0.001)
+func test_drafting_reduces_resistance_without_overriding_the_safety_cap() -> void:
+	var open_speed := LocalRaceMath.advance_drive_speed_kmh(
+		75.0, 5.0, LocalRaceMath.HARD_SPEED_CAP_KMH, 1.0, 0.0
+	)
+	var drafted_speed := LocalRaceMath.advance_drive_speed_kmh(
+		75.0, 5.0, LocalRaceMath.HARD_SPEED_CAP_KMH, 1.0, 0.55
+	)
+	assert_gt(drafted_speed, open_speed)
+	assert_lte(drafted_speed, LocalRaceMath.HARD_SPEED_CAP_KMH)
+	assert_eq(
+		LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, LocalRaceMath.HARD_SPEED_CAP_KMH, 1.0, 1.0),
+		LocalRaceMath.HARD_SPEED_CAP_KMH
+	)
 
 
 func test_zero_notch_keeps_stamina_unchanged() -> void:
@@ -411,7 +466,7 @@ func test_live_place_keeps_finished_order_fixed() -> void:
 	race.free()
 
 
-func test_local_hud_shows_drafting_status_and_bonus() -> void:
+func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
 	var player := Node3D.new()
@@ -419,12 +474,12 @@ func test_local_hud_shows_drafting_status_and_bonus() -> void:
 	add_child(player)
 	player.call("setup_for_race", null, 0, 75.0, true, "あなた")
 	player.set("_drafting", true)
-	player.set("_draft_bonus_kmh", 2.4)
 	player.set("_received_draft_p", LocalRaceMath.DRAFT_MAX_RECEIVED_P)
 	player.set("_direct_draft_p", LocalRaceMath.DRAFT_MAX_RECEIVED_P)
 	player.set("_direct_source_ids", ["CPU2"])
 	player.set("_direct_source_details", [{"id": "CPU2", "gap": 4.0, "line": 1.0}])
 	race.set("_player", player)
+	race.set("_race_started", true)
 	race.call("_update_hud")
 	var hud: Label = race.get_node("UI/HudLabel")
 	var lines := hud.text.split("\n")
@@ -437,7 +492,7 @@ func test_local_hud_shows_drafting_status_and_bonus() -> void:
 	assert_true(lines.has("連鎖 0%"))
 	assert_true(lines.has("総合 100%"))
 	assert_true(lines.has("実効 60%"))
-	assert_true(lines.has("上限補正 +2.4km/h"))
+	assert_false(hud.text.contains("上限補正"))
 	assert_true(lines.has("対象1 CPU2 前4.0m 横1.0m"))
 	assert_true(lines.has("推進力 +0.00km/h/s"))
 	assert_true(lines.has("転がり抵抗 -0.55km/h/s"))
@@ -477,20 +532,19 @@ func test_local_hud_shows_drafting_status_and_bonus() -> void:
 	player.set("_direct_draft_p", 0.0)
 	player.set("_direct_source_ids", [])
 	player.set("_direct_source_details", [])
-	player.set("_draft_bonus_kmh", 0.0)
 	race.call("_update_hud")
 	var solo_lines := hud.text.split("\n")
 	assert_true(solo_lines.has("直接 0%"))
 	assert_true(solo_lines.has("連鎖 0%"))
 	assert_true(solo_lines.has("総合 0%"))
 	assert_true(solo_lines.has("実効 0%"))
-	assert_true(solo_lines.has("上限補正 +0.0km/h"))
+	assert_false(hud.text.contains("上限補正"))
 	assert_true(solo_lines.has("対象 なし"))
 	player.free()
 	race.free()
 
 
-func test_local_hud_shows_effective_draft_ratio_and_speed_cap_bonus() -> void:
+func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
 	var player := Node3D.new()
@@ -515,16 +569,16 @@ func test_local_hud_shows_effective_draft_ratio_and_speed_cap_bonus() -> void:
 	assert_true(lines.has("連鎖 0%"))
 	assert_true(lines.has("総合 44%"))
 	assert_true(lines.has("実効 11%"))
-	assert_true(lines.has("上限補正 +0.5km/h"))
 	assert_true(lines.has("空気抵抗（二乗） -3.90km/h/s"))
 	assert_true(lines.has("ドラフト軽減 +0.24km/h/s"))
-	assert_true(lines.has("計算加速度 +0.09km/h/s"))
+	assert_true(hud.text.contains("計算加速度"))
 	player.free()
 	race.free()
 
 
 func runner_snapshot_for_hud(race: Node3D, player: Node3D) -> void:
 	race.set("_player", player)
+	race.set("_race_started", true)
 	race.call("_update_hud")
 
 
@@ -686,34 +740,17 @@ func test_finished_runners_continue_to_receive_and_supply_local_draft() -> void:
 	assert_gt(float(details["received_draft_p"]), 0.0)
 
 
-func test_contacts_continue_after_finish_without_changing_fixed_results() -> void:
-	var race := LocalRaceScene.instantiate()
-	add_child(race)
-	var leader: Node3D = race.get_node("Runners/Runner1")
-	var finished_follower: Node3D = race.get_node("Runners/Runner2")
-	var running_follower: Node3D = race.get_node("Runners/Runner3")
-	leader.set("_race_progress", 2005.0)
-	leader.set("_distance", 500.0)
-	leader.set("_offset", 0.0)
-	leader.call("mark_finished", 1, 100.0)
-	finished_follower.set("_race_progress", 2004.0)
-	finished_follower.set("_distance", 499.0)
-	finished_follower.set("_offset", 0.0)
-	finished_follower.call("mark_finished", 2, 101.0)
-	race.set("_runners", [leader, finished_follower])
-	race.call("_resolve_contacts")
-	assert_almost_eq(finished_follower.call("get_race_progress"), 2003.5, 0.001)
-	assert_eq(finished_follower.call("get_finish_order"), 2)
-	assert_almost_eq(finished_follower.call("get_finish_time"), 101.0, 0.001)
-	running_follower.set("_race_progress", 2004.2)
-	running_follower.set("_distance", 499.2)
-	running_follower.set("_offset", 0.0)
-	race.set("_runners", [leader, running_follower])
-	race.call("_resolve_contacts")
-	assert_almost_eq(running_follower.call("get_race_progress"), 2003.5, 0.001)
-	assert_eq(leader.call("get_finish_order"), 1)
-	assert_almost_eq(leader.call("get_finish_time"), 100.0, 0.001)
-	race.free()
+func test_contact_prevention_stops_before_ahead_runner_without_repositioning() -> void:
+	var others := [{"race_progress": 12.0, "offset": 0.0}]
+	assert_almost_eq(LocalRaceMath.allowed_race_progress(10.0, 11.0, 0.0, others), 10.5, 0.001)
+	assert_almost_eq(LocalRaceMath.allowed_race_progress(10.0, 10.25, 0.0, others), 10.25, 0.001)
+	assert_almost_eq(LocalRaceMath.allowed_race_progress(10.0, 11.0, 2.0, others), 11.0, 0.001)
+
+
+func test_contact_prevention_rejects_only_lateral_moves_into_another_runner() -> void:
+	var others := [{"race_progress": 10.0, "offset": 0.0}]
+	assert_false(LocalRaceMath.can_use_offset(10.0, 0.5, others))
+	assert_true(LocalRaceMath.can_use_offset(10.0, 1.5, others))
 
 
 func test_follow_speed_approaches_target() -> void:

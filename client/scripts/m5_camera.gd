@@ -1,6 +1,8 @@
 extends Camera3D
 ## M5 camera: adjustable chase camera and overview camera.
 
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+
 @export var follow_distance: float = 12.0
 @export var follow_height: float = 4.0
 @export var overview_height: float = 420.0
@@ -31,18 +33,30 @@ func set_follow_target(node: Node3D) -> void:
 		_apply_chase()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not event is InputEventKey or not event.pressed or event.echo:
-		return
-	if event.physical_keycode == KEY_C:
-		mode = CameraMode.OVERVIEW if mode == CameraMode.CHASE else CameraMode.CHASE
-		if mode == CameraMode.CHASE:
-			_restore_perspective()
+	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_Y):
+		_toggle_view()
 		get_viewport().set_input_as_handled()
-	elif event.physical_keycode == KEY_R:
-		mode = CameraMode.CHASE
-		_reset_chase_adjustment()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_STICK):
+		_reset_to_chase()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_C:
+		_toggle_view()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
+		_reset_to_chase()
+		get_viewport().set_input_as_handled()
+
+
+func _toggle_view() -> void:
+	mode = CameraMode.OVERVIEW if mode == CameraMode.CHASE else CameraMode.CHASE
+	if mode == CameraMode.CHASE:
 		_restore_perspective()
-		get_viewport().set_input_as_handled()
+
+
+func _reset_to_chase() -> void:
+	mode = CameraMode.CHASE
+	_reset_chase_adjustment()
+	_restore_perspective()
 
 func _process(delta: float) -> void:
 	if mode == CameraMode.CHASE:
@@ -79,6 +93,7 @@ func _process_chase_adjustment(delta: float) -> void:
 		_follow_yaw += chase_turn_speed * delta * (2.5 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
 	if Input.is_key_pressed(KEY_E):
 		_follow_yaw -= chase_turn_speed * delta * (2.5 if Input.is_key_pressed(KEY_SHIFT) else 1.0)
+	_follow_yaw -= RaceControllerInput.chase_yaw_axis() * chase_turn_speed * delta
 
 func _reset_chase_adjustment() -> void:
 	follow_distance = _follow_distance_default
