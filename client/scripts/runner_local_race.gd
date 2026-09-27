@@ -443,16 +443,65 @@ func _update_cpu_target_speed() -> void:
 	if _cpu_trainer_profile.is_empty():
 		return
 	var capacity := LocalRaceMath.Config.number("stamina_capacity")
+	var global_gap := _cpu_global_gap_summary()
+	var pace := _cpu_pace_summary()
 	var decision := CpuTrainerMath.decide(_cpu_trainer_profile, {
 		"progress_ratio": _race_progress / LocalRaceMath.RACE_DISTANCE_M,
 		"field_size": LocalRaceMath.FIELD_SIZE,
 		"live_place": _cpu_live_place(),
+		"leader_gap_m": global_gap["leader_gap_m"],
+		"pack_center_gap_m": global_gap["pack_center_gap_m"],
+		"current_speed_kmh": _current_speed_kmh,
+		"field_pace_kmh": pace["field_pace_kmh"],
+		"nearest_ahead_gap_m": pace["nearest_ahead_gap_m"],
+		"nearest_ahead_speed_kmh": pace["nearest_ahead_speed_kmh"],
+		"acceleration_stat": float(_effective_stats.get("acceleration", 5)),
 		"max_speed_kmh": _natural_top_speed_kmh,
 		"stamina_ratio": _stamina / capacity,
 		"has_draft": _received_draft_p > 0.0,
 	}, LocalRaceMath.cpu_trainer_settings())
 	_target_speed_kmh = float(decision["target_speed_kmh"])
 	_cpu_trainer_drive_level = float(decision["drive_level"])
+
+
+func _cpu_pace_summary() -> Dictionary:
+	var speed_total := _current_speed_kmh
+	var runner_count := 1
+	var nearest_ahead_gap := INF
+	var nearest_ahead_speed := _current_speed_kmh
+	for other_value in _others_snapshot:
+		if not other_value is Dictionary:
+			continue
+		speed_total += float(other_value.get("speed", _current_speed_kmh))
+		runner_count += 1
+		var gap := float(other_value.get("race_progress", _race_progress)) - _race_progress
+		if gap > 0.001 and gap < nearest_ahead_gap:
+			nearest_ahead_gap = gap
+			nearest_ahead_speed = float(other_value.get("speed", _current_speed_kmh))
+	return {
+		"field_pace_kmh": speed_total / float(runner_count),
+		"nearest_ahead_gap_m": 0.0 if is_inf(nearest_ahead_gap) else nearest_ahead_gap,
+		"nearest_ahead_speed_kmh": nearest_ahead_speed,
+	}
+
+
+func _cpu_global_gap_summary() -> Dictionary:
+	var progress_values: Array[float] = [_race_progress]
+	for other_value in _others_snapshot:
+		if other_value is Dictionary:
+			progress_values.append(float(other_value.get("race_progress", _race_progress)))
+	progress_values.sort()
+	var leader_progress: float = _race_progress
+	var pack_center_progress: float = _race_progress
+	if not progress_values.is_empty():
+		leader_progress = progress_values.back()
+		var median_index: int = int(progress_values.size() / 2)
+		pack_center_progress = progress_values[median_index]
+	return {
+		"leader_gap_m": maxf(leader_progress - _race_progress, 0.0),
+		# 符号を残す。集団より前に出たCPUは負値になり、独走の抑制へ使える。
+		"pack_center_gap_m": pack_center_progress - _race_progress,
+	}
 
 
 func _cpu_live_place() -> int:
