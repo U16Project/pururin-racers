@@ -1,0 +1,1086 @@
+{
+  "schema_version": 1,
+  "description": "ステータス配分60ケースのローカルレース比較",
+  "variants": [
+    {
+      "variant_id": "acceleration_level_1_notch4_cruise",
+      "comparison_group": "acceleration_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 1,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "acceleration_level_1_notch6_sustain",
+      "comparison_group": "acceleration_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 1,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "acceleration_level_1_notch6_to_zero_recovery",
+      "comparison_group": "acceleration_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 1,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "acceleration_level_5_notch4_cruise",
+      "comparison_group": "acceleration_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "acceleration_level_5_notch6_sustain",
+      "comparison_group": "acceleration_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "acceleration_level_5_notch6_to_zero_recovery",
+      "comparison_group": "acceleration_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "acceleration_level_9_notch4_cruise",
+      "comparison_group": "acceleration_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 9,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "acceleration_level_9_notch6_sustain",
+      "comparison_group": "acceleration_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 9,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "acceleration_level_9_notch6_to_zero_recovery",
+      "comparison_group": "acceleration_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 9,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "acceleration_level_10_notch4_cruise",
+      "comparison_group": "acceleration_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 10,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "acceleration_level_10_notch6_sustain",
+      "comparison_group": "acceleration_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 10,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "acceleration_level_10_notch6_to_zero_recovery",
+      "comparison_group": "acceleration_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 10,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "top_speed_level_1_notch4_cruise",
+      "comparison_group": "top_speed_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 1,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "top_speed_level_1_notch6_sustain",
+      "comparison_group": "top_speed_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 1,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "top_speed_level_1_notch6_to_zero_recovery",
+      "comparison_group": "top_speed_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 1,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "top_speed_level_5_notch4_cruise",
+      "comparison_group": "top_speed_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "top_speed_level_5_notch6_sustain",
+      "comparison_group": "top_speed_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "top_speed_level_5_notch6_to_zero_recovery",
+      "comparison_group": "top_speed_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "top_speed_level_9_notch4_cruise",
+      "comparison_group": "top_speed_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 9,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "top_speed_level_9_notch6_sustain",
+      "comparison_group": "top_speed_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 9,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "top_speed_level_9_notch6_to_zero_recovery",
+      "comparison_group": "top_speed_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 9,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "top_speed_level_10_notch4_cruise",
+      "comparison_group": "top_speed_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "top_speed_level_10_notch6_sustain",
+      "comparison_group": "top_speed_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "top_speed_level_10_notch6_to_zero_recovery",
+      "comparison_group": "top_speed_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "cardio_level_1_notch4_cruise",
+      "comparison_group": "cardio_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 1,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "cardio_level_1_notch6_sustain",
+      "comparison_group": "cardio_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 1,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "cardio_level_1_notch6_to_zero_recovery",
+      "comparison_group": "cardio_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 6,
+        "cardio": 1,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "cardio_level_5_notch4_cruise",
+      "comparison_group": "cardio_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "cardio_level_5_notch6_sustain",
+      "comparison_group": "cardio_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "cardio_level_5_notch6_to_zero_recovery",
+      "comparison_group": "cardio_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "cardio_level_9_notch4_cruise",
+      "comparison_group": "cardio_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 9,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "cardio_level_9_notch6_sustain",
+      "comparison_group": "cardio_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 9,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "cardio_level_9_notch6_to_zero_recovery",
+      "comparison_group": "cardio_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 9,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "cardio_level_10_notch4_cruise",
+      "comparison_group": "cardio_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "cardio_level_10_notch6_sustain",
+      "comparison_group": "cardio_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "cardio_level_10_notch6_to_zero_recovery",
+      "comparison_group": "cardio_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 4,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "stamina_level_1_notch4_cruise",
+      "comparison_group": "stamina_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 1,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "stamina_level_1_notch6_sustain",
+      "comparison_group": "stamina_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 1,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "stamina_level_1_notch6_to_zero_recovery",
+      "comparison_group": "stamina_level_1",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 1,
+      "allocation": {
+        "top_speed": 6,
+        "acceleration": 6,
+        "stamina": 1,
+        "cardio": 6,
+        "aero": 6,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "stamina_level_5_notch4_cruise",
+      "comparison_group": "stamina_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "stamina_level_5_notch6_sustain",
+      "comparison_group": "stamina_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "stamina_level_5_notch6_to_zero_recovery",
+      "comparison_group": "stamina_level_5",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 5,
+      "allocation": {
+        "top_speed": 5,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 5,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "stamina_level_9_notch4_cruise",
+      "comparison_group": "stamina_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 9,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "stamina_level_9_notch6_sustain",
+      "comparison_group": "stamina_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 9,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "stamina_level_9_notch6_to_zero_recovery",
+      "comparison_group": "stamina_level_9",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 9,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 9,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 5,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "stamina_level_10_notch4_cruise",
+      "comparison_group": "stamina_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 10,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "stamina_level_10_notch6_sustain",
+      "comparison_group": "stamina_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 10,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_sustain"
+    },
+    {
+      "variant_id": "stamina_level_10_notch6_to_zero_recovery",
+      "comparison_group": "stamina_level_10",
+      "case_kind": "stat_level",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 4,
+        "acceleration": 4,
+        "stamina": 10,
+        "cardio": 4,
+        "aero": 4,
+        "pack": 4,
+        "contact_resistance": 5,
+        "handling": 5
+      },
+      "scenario_id": "notch6_to_zero_recovery"
+    },
+    {
+      "variant_id": "profile_acceleration_focus_run_1",
+      "comparison_group": "profile_acceleration_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 10,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_acceleration_focus_run_2",
+      "comparison_group": "profile_acceleration_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 10,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_acceleration_focus_run_3",
+      "comparison_group": "profile_acceleration_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "acceleration",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 10,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_top_speed_focus_run_1",
+      "comparison_group": "profile_top_speed_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 7,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_top_speed_focus_run_2",
+      "comparison_group": "profile_top_speed_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 7,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_top_speed_focus_run_3",
+      "comparison_group": "profile_top_speed_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "top_speed",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 10,
+        "acceleration": 7,
+        "stamina": 5,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_cardio_focus_run_1",
+      "comparison_group": "profile_cardio_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_cardio_focus_run_2",
+      "comparison_group": "profile_cardio_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_cardio_focus_run_3",
+      "comparison_group": "profile_cardio_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "cardio",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 5,
+        "cardio": 10,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_stamina_focus_run_1",
+      "comparison_group": "profile_stamina_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 10,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_stamina_focus_run_2",
+      "comparison_group": "profile_stamina_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 10,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    },
+    {
+      "variant_id": "profile_stamina_focus_run_3",
+      "comparison_group": "profile_stamina_focus",
+      "case_kind": "focus_profile",
+      "target_stat": "stamina",
+      "target_value": 10,
+      "allocation": {
+        "top_speed": 7,
+        "acceleration": 5,
+        "stamina": 10,
+        "cardio": 5,
+        "aero": 4,
+        "pack": 3,
+        "contact_resistance": 3,
+        "handling": 3
+      },
+      "scenario_id": "notch4_cruise"
+    }
+  ]
+}

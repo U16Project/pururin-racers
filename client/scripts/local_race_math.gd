@@ -211,7 +211,8 @@ static func drive_diagnostics_kmh_per_s(
 	drive_level: float,
 	draft_factor: float = 0.0,
 	acceleration_bonus_kmh_per_s: float = 0.0,
-	top_speed_drive_adjustment_kmh_per_s: float = 0.0
+	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
+	propulsion_efficiency: float = 1.0
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
@@ -220,6 +221,8 @@ static func drive_diagnostics_kmh_per_s(
 		drive_contribution = level * BRAKE_DECELERATION_PER_LEVEL
 	elif level > 0.0:
 		drive_contribution = drive_force_kmh_per_s(level, acceleration_bonus_kmh_per_s) + top_speed_drive_adjustment_kmh_per_s
+	if drive_contribution > 0.0:
+		drive_contribution *= clampf(propulsion_efficiency, 0.0, 1.0)
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
 	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
 	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed
@@ -395,12 +398,20 @@ static func advance_drive_speed_kmh(
 	delta: float,
 	draft_factor: float = 0.0,
 	acceleration_bonus_kmh_per_s: float = 0.0,
-	top_speed_drive_adjustment_kmh_per_s: float = 0.0
+	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
+	propulsion_efficiency: float = 1.0
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
 	var level := clamp_drive_level(drive_level)
-	var diagnostics := drive_diagnostics_kmh_per_s(current_kmh, level, draft_factor, acceleration_bonus_kmh_per_s, top_speed_drive_adjustment_kmh_per_s)
+	var diagnostics := drive_diagnostics_kmh_per_s(
+		current_kmh,
+		level,
+		draft_factor,
+		acceleration_bonus_kmh_per_s,
+		top_speed_drive_adjustment_kmh_per_s,
+		propulsion_efficiency
+	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
 	return clampf(next_speed, MIN_SPEED_KMH, ceiling)
@@ -818,16 +829,134 @@ static func cpu_trainer_settings() -> Dictionary:
 	}
 
 
-static func heart_rate_target_bpm(drive_level: float) -> float:
-	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
-	return lerpf(Config.number("heart_rate_rest_bpm"), Config.number("heart_rate_max_bpm"), effort)
+static func heart_rate_rise_rate_for_drive_level(drive_level: float) -> float:
+	var level := clampf(maxf(drive_level, 0.0), 0.0, float(DRIVE_LEVEL_MAX))
+	var lower_index := mini(floori(level), int(DRIVE_LEVEL_MAX))
+	var upper_index := mini(lower_index + 1, int(DRIVE_LEVEL_MAX))
+	var blend := level - float(lower_index)
+	var rates: Array = Config.values()["heart_rate_rise_rate_by_drive_level_bpm_per_s"]
+	return lerpf(float(rates[lower_index]), float(rates[upper_index]), blend)
 
 
-static func stamina_delta_per_s(drive_level: float) -> float:
-	if is_zero_approx(clamp_drive_level(drive_level)):
+static func heart_rate_rise_time_s(cardio_stat: int) -> float:
+	var cardio_ratio := clampf((float(cardio_stat) - 1.0) / 14.0, 0.0, 1.0)
+	return lerpf(
+		Config.number("heart_rate_rise_time_cardio_min_s"),
+		Config.number("heart_rate_rise_time_cardio_max_s"),
+		cardio_ratio
+	)
+
+
+static func heart_rate_recovery_time_s(cardio_stat: int) -> float:
+	var cardio_ratio := clampf((float(cardio_stat) - 1.0) / 14.0, 0.0, 1.0)
+	return lerpf(
+		Config.number("heart_rate_recovery_time_cardio_min_s"),
+		Config.number("heart_rate_recovery_time_cardio_max_s"),
+		cardio_ratio
+	)
+
+
+static func heart_rate_rise_rate_bpm_per_s(drive_level: float, cardio_stat: int) -> float:
+	if drive_level <= 0.0:
 		return 0.0
-	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
-	return lerpf(Config.number("stamina_low_effort_delta_per_s"), Config.number("stamina_max_effort_delta_per_s"), effort)
+	var reference_rate := heart_rate_rise_rate_for_drive_level(drive_level)
+	return reference_rate * heart_rate_rise_time_s(5) / maxf(heart_rate_rise_time_s(cardio_stat), 0.001)
+
+
+static func heart_rate_natural_recovery_rate_bpm_per_s(current_bpm: float, cardio_stat: int) -> float:
+	var full_span := Config.number("heart_rate_overheat_max_bpm") - Config.number("heart_rate_min_bpm")
+	var normalized_heart := clampf(
+		(current_bpm - Config.number("heart_rate_min_bpm")) / maxf(full_span, 0.001),
+		0.0,
+		1.0
+	)
+	return heart_rate_recovery_rate_base_bpm_per_s(cardio_stat) * pow(
+		normalized_heart,
+		Config.number("heart_rate_recovery_exponent")
+	)
+
+
+static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float, cardio_stat: int) -> float:
+	var drive_load := heart_rate_rise_rate_bpm_per_s(drive_level, cardio_stat) * Config.number("heart_rate_drive_load_scale")
+	var net_rate := drive_load - heart_rate_natural_recovery_rate_bpm_per_s(current_bpm, cardio_stat)
+	# 回復方向だけを倍率調整する。正ノッチの定常域と上昇カーブは変えず、
+	# ノッチを下げたときは高心拍ほど速く戻り、100付近では指数的に穏やかに収束する。
+	if net_rate < 0.0:
+		net_rate *= Config.number("heart_rate_recovery_rate_scale")
+	return net_rate
+
+
+static func heart_rate_recovery_rate_base_bpm_per_s(cardio_stat: int) -> float:
+	var heart_span := Config.number("heart_rate_normal_max_bpm") - Config.number("heart_rate_min_bpm")
+	return heart_span / maxf(heart_rate_recovery_time_s(cardio_stat), 0.001)
+
+
+static func overheat_ratio(heart_rate_bpm: float) -> float:
+	return clampf(
+		(heart_rate_bpm - Config.number("heart_rate_normal_max_bpm"))
+		/ maxf(Config.number("heart_rate_overheat_max_bpm") - Config.number("heart_rate_normal_max_bpm"), 0.001),
+		0.0,
+		1.0
+	)
+
+
+static func overheat_stamina_multiplier(heart_rate_bpm: float) -> float:
+	return lerpf(1.0, Config.number("overheat_stamina_multiplier_max"), overheat_ratio(heart_rate_bpm))
+
+
+static func propulsion_efficiency(heart_rate_bpm: float) -> float:
+	return lerpf(1.0, Config.number("overheat_propulsion_efficiency_min"), overheat_ratio(heart_rate_bpm))
+
+
+static func stamina_debt_efficiency(stamina: float, stamina_stat: int) -> float:
+	var debt_limit := Config.number("stamina_debt_limit")
+	if stamina >= 0.0 or debt_limit <= 0.0:
+		return 1.0
+	var debt_ratio := clampf(-stamina / debt_limit, 0.0, 1.0)
+	var stat_ratio := clampf((float(stamina_stat) - 1.0) / 14.0, 0.0, 1.0)
+	var penalty_at_zero_stat := 1.0 - Config.number("stamina_debt_efficiency_min")
+	var penalty := penalty_at_zero_stat * (
+		1.0 - Config.number("stamina_debt_stat_mitigation_max") * stat_ratio
+	)
+	return clampf(1.0 - debt_ratio * penalty, Config.number("stamina_debt_efficiency_min"), 1.0)
+
+
+static func stamina_consumption_per_s(
+	drive_level: float,
+	heart_rate_bpm: float = -1.0,
+	stamina_stat: int = 5
+) -> float:
+	var level := clamp_drive_level(drive_level)
+	if level <= 0.0:
+		return 0.0
+	var effort := level / float(DRIVE_LEVEL_MAX)
+	var safe_heart := Config.number("heart_rate_min_bpm") if heart_rate_bpm < 0.0 else heart_rate_bpm
+	var heart_ratio := clampf(
+		(safe_heart - Config.number("heart_rate_min_bpm"))
+		/ maxf(Config.number("heart_rate_normal_max_bpm") - Config.number("heart_rate_min_bpm"), 0.001),
+		0.0,
+		1.0
+	)
+	var heart_factor := lerpf(
+		Config.number("stamina_heart_rate_factor_min"),
+		Config.number("stamina_heart_rate_factor_max"),
+		heart_ratio
+	)
+	var stamina_ratio := clampf((float(stamina_stat) - 1.0) / 14.0, 0.0, 1.0)
+	var stamina_factor := 1.0 - Config.number("stamina_stat_mitigation_max") * stamina_ratio
+	return lerpf(
+		Config.number("stamina_consumption_min_per_s"),
+		Config.number("stamina_consumption_max_per_s"),
+		effort
+	) * heart_factor * stamina_factor * overheat_stamina_multiplier(safe_heart)
+
+
+static func stamina_delta_per_s(
+	drive_level: float,
+	heart_rate_bpm: float = -1.0,
+	stamina_stat: int = 5
+) -> float:
+	return -stamina_consumption_per_s(drive_level, heart_rate_bpm, stamina_stat)
 
 
 static func contact_overlaps(

@@ -79,12 +79,27 @@ const NUMBER_RANGES := {
 	"cpu_trainer_finish_push_max_kmh": [0.0, 25.0],
 	"cpu_trainer_draft_saving_max_kmh": [0.0, 25.0],
 	"cpu_trainer_low_stamina_saving_max_kmh": [0.0, 25.0],
-	"heart_rate_rest_bpm": [1.0, 300.0],
-	"heart_rate_max_bpm": [1.0, 300.0],
-	"heart_rate_change_bpm_per_s": [0.001, 300.0],
+	"heart_rate_min_bpm": [1.0, 300.0],
+	"heart_rate_normal_max_bpm": [1.0, 300.0],
+	"heart_rate_overheat_max_bpm": [1.0, 300.0],
+	"heart_rate_rise_time_cardio_min_s": [0.1, 300.0],
+	"heart_rate_rise_time_cardio_max_s": [0.1, 300.0],
+	"heart_rate_recovery_time_cardio_min_s": [0.1, 300.0],
+	"heart_rate_recovery_time_cardio_max_s": [0.1, 300.0],
+	"heart_rate_recovery_exponent": [0.1, 6.0],
+	"heart_rate_recovery_rate_scale": [0.1, 10.0],
+	"heart_rate_drive_load_scale": [0.01, 10.0],
 	"stamina_capacity": [0.001, 10000.0],
-	"stamina_low_effort_delta_per_s": [-1000.0, 1000.0],
-	"stamina_max_effort_delta_per_s": [-1000.0, 0.0],
+	"stamina_debt_limit": [0.0, 10000.0],
+	"stamina_consumption_min_per_s": [0.0, 100.0],
+	"stamina_consumption_max_per_s": [0.0, 100.0],
+	"stamina_heart_rate_factor_min": [0.0, 10.0],
+	"stamina_heart_rate_factor_max": [0.0, 10.0],
+	"stamina_stat_mitigation_max": [0.0, 1.0],
+	"stamina_debt_efficiency_min": [0.0, 1.0],
+	"stamina_debt_stat_mitigation_max": [0.0, 1.0],
+	"overheat_stamina_multiplier_max": [1.0, 10.0],
+	"overheat_propulsion_efficiency_min": [0.0, 1.0],
 }
 static var _cached: Dictionary = {}
 static var _attempted := false
@@ -117,7 +132,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
@@ -132,8 +147,18 @@ static func validate(data: Variant) -> PackedStringArray:
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
 		if float(data[key]) < float(data.drive_level_min) or float(data[key]) > float(data.drive_level_max):
 			errors.append("%s: drive_level_min〜drive_level_max の範囲にしてください" % key)
-	if data.heart_rate_rest_bpm > data.heart_rate_max_bpm:
-		errors.append("heart_rate_rest_bpm: heart_rate_max_bpm 以下にしてください")
+	if data.heart_rate_min_bpm > data.heart_rate_normal_max_bpm:
+		errors.append("heart_rate_min_bpm: heart_rate_normal_max_bpm 以下にしてください")
+	if data.heart_rate_normal_max_bpm > data.heart_rate_overheat_max_bpm:
+		errors.append("heart_rate_normal_max_bpm: heart_rate_overheat_max_bpm 以下にしてください")
+	if data.heart_rate_rise_time_cardio_min_s > data.heart_rate_rise_time_cardio_max_s:
+		errors.append("heart_rate_rise_time_cardio_min_s: heart_rate_rise_time_cardio_max_s 以下にしてください")
+	if data.heart_rate_recovery_time_cardio_min_s < data.heart_rate_recovery_time_cardio_max_s:
+		errors.append("heart_rate_recovery_time_cardio_min_s: heart_rate_recovery_time_cardio_max_s 以上にしてください")
+	if data.stamina_consumption_min_per_s > data.stamina_consumption_max_per_s:
+		errors.append("stamina_consumption_min_per_s: stamina_consumption_max_per_s 以下にしてください")
+	if data.stamina_heart_rate_factor_min > data.stamina_heart_rate_factor_max:
+		errors.append("stamina_heart_rate_factor_min: stamina_heart_rate_factor_max 以下にしてください")
 	for pair in [
 		["cpu_steer_reselect_min_s", "cpu_steer_reselect_max_s"],
 	]:
@@ -169,6 +194,21 @@ static func validate(data: Variant) -> PackedStringArray:
 			else:
 				previous = float(force)
 	var profiles: Variant = data.get("cpu_trainer_profiles")
+	var heart_rise_rates: Variant = data.get("heart_rate_rise_rate_by_drive_level_bpm_per_s")
+	if not heart_rise_rates is Array:
+		errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s: 配列が必須です")
+	else:
+		if heart_rise_rates.size() != int(data.drive_level_max) + 1:
+			errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s: 要素数は drive_level_max + 1 が必要です")
+		var previous_rate := 0.0
+		for i in heart_rise_rates.size():
+			var rate: Variant = heart_rise_rates[i]
+			if not (rate is float or rate is int):
+				errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s[%d]: 数値が必要です" % i)
+			elif not is_finite(float(rate)) or rate < previous_rate or rate > 100.0 or (i == 0 and rate != 0):
+				errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s[%d]: 0番は0、以降は単調増加で100以下にしてください" % i)
+			else:
+				previous_rate = float(rate)
 	var profile_ids := {}
 	if not profiles is Array or profiles.is_empty():
 		errors.append("cpu_trainer_profiles: 1個以上の配列が必要です")
@@ -206,6 +246,7 @@ static func values() -> Dictionary:
 		else:
 			_cached = result.data
 			_cached.drive_force_by_level_kmh_per_s.make_read_only()
+			_cached.heart_rate_rise_rate_by_drive_level_bpm_per_s.make_read_only()
 			_cached.make_read_only()
 	return _cached
 

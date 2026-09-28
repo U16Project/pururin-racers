@@ -12,12 +12,17 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_true(Config.validate(result.data).is_empty())
 	assert_true(Config.values().is_read_only())
 	assert_true(Config.values().drive_force_by_level_kmh_per_s.is_read_only())
+	assert_true(Config.values().heart_rate_rise_rate_by_drive_level_bpm_per_s.is_read_only())
 	assert_eq(Config.number("drive_level_max"), 6.0)
 	assert_almost_eq(Config.number("air_resistance_quadratic_coefficient"), 0.00120, 0.000001)
 	assert_almost_eq(Config.number("draft_response_exponent"), 2.0, 0.001)
 	assert_almost_eq(Config.number("draft_effective_max_ratio"), 0.60, 0.001)
 	assert_almost_eq(Config.number("draft_aggregation_exponent"), 2.3, 0.001)
 	assert_eq(Config.values().drive_force_by_level_kmh_per_s, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 6.8])
+	assert_eq(Config.values().heart_rate_rise_rate_by_drive_level_bpm_per_s, [0.0, 1.8, 2.2, 2.5, 3.7, 5.4, 6.6666667])
+	assert_almost_eq(Config.number("heart_rate_drive_load_scale"), 0.58, 0.001)
+	assert_almost_eq(Config.number("heart_rate_recovery_exponent"), 1.2, 0.001)
+	assert_almost_eq(Config.number("heart_rate_recovery_rate_scale"), 2.75, 0.001)
 	assert_false(Config.values().has("cpu_speed_tiers_kmh"))
 	assert_false(Config.values().has("cpu_target_speed_change_kmh_per_s"))
 	assert_almost_eq(Config.number("cpu_steer_reselect_min_s"), 1.0, 0.001)
@@ -31,6 +36,11 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_almost_eq(Config.number("cpu_overtake_escape_lateral_spacing_m"), 4.5, 0.001)
 	assert_almost_eq(Config.number("cpu_overtake_escape_steer_speed_multiplier"), 2.5, 0.001)
 	assert_almost_eq(Config.number("cpu_inward_target_offset_m"), -3.0, 0.001)
+	assert_eq(Config.number("heart_rate_min_bpm"), 100.0)
+	assert_eq(Config.number("heart_rate_normal_max_bpm"), 200.0)
+	assert_eq(Config.number("heart_rate_overheat_max_bpm"), 230.0)
+	assert_eq(Config.number("stamina_debt_limit"), 100.0)
+	assert_almost_eq(Config.number("stamina_debt_efficiency_min"), 0.40, 0.001)
 	var draft_result := DraftRules.load_file()
 	assert_true(draft_result.has("data"))
 	assert_true(DraftRules.validate(draft_result.data).is_empty())
@@ -112,7 +122,10 @@ func test_rejects_inconsistent_notches_and_ranges() -> void:
 	data.drive_force_by_level_kmh_per_s[0] = 1
 	assert_false(Config.validate(data).is_empty())
 	data = Config.load_file().data
-	data.heart_rate_rest_bpm = data.heart_rate_max_bpm + 1
+	data.heart_rate_rise_rate_by_drive_level_bpm_per_s[0] = 0.1
+	assert_true("heart_rate_rise_rate_by_drive_level_bpm_per_s" in ";".join(Config.validate(data)))
+	data = Config.load_file().data
+	data.heart_rate_min_bpm = data.heart_rate_normal_max_bpm + 1
 	assert_false(Config.validate(data).is_empty())
 	data = Config.load_file().data
 	data.cpu_steer_reselect_min_s = data.cpu_steer_reselect_max_s + 1.0

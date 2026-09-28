@@ -203,6 +203,11 @@ func _spawn_field() -> void:
 				_camera.set("overview_height", 500.0)
 
 
+## ヘッドレス統合シミュレーションが通常レースの生成済みランナーを再利用するための参照。
+func get_runners_for_simulation() -> Array:
+	return _runners.duplicate()
+
+
 func _place_markers() -> void:
 	if _track == null or _track.curve == null:
 		return
@@ -297,8 +302,11 @@ func _update_hud() -> void:
 		if effective_stats.has("top_speed") and effective_stats.has("acceleration"):
 			lines.append("最高速 有効%d　自然到達 %.1fkm/h" % [effective_stats["top_speed"], _player.call("get_natural_top_speed")])
 			lines.append("加速 有効%d　推進補正 %+.2fkm/h/s" % [effective_stats["acceleration"], _player.call("get_acceleration_force_bonus")])
-		lines.append("心拍(仮) %.0f" % _player.call("get_heart_rate_bpm"))
-		lines.append("スタミナ(仮) %.0f%%" % _player.call("get_stamina"))
+		lines.append("心拍 %.0f/%.0f" % [
+			_player.call("get_heart_rate_bpm"),
+			LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+		])
+		lines.append("スタミナ %.0f%%" % _player.call("get_stamina"))
 		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
 	else:
 		lines.append("目標 %.0fkm/h" % tgt)

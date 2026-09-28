@@ -566,10 +566,107 @@ func test_drafting_reduces_resistance_without_overriding_the_safety_cap() -> voi
 	)
 
 
-func test_zero_notch_keeps_stamina_unchanged() -> void:
-	assert_eq(LocalRaceMath.stamina_delta_per_s(0.0), 0.0)
-	assert_gt(LocalRaceMath.stamina_delta_per_s(-1.0), 0.0)
-	assert_lt(LocalRaceMath.stamina_delta_per_s(1.0), 1.0)
+func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
+	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(0.0), 0.0)
+	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(-3.0), 0.0)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(1.0), 1.8, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(2.0), 2.2, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(3.0), 2.5, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), 3.7, 0.001)
+	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0))
+	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(6.0))
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.5), 6.033333, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5), 100.0 / 15.0, 0.001)
+	assert_gt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 1), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
+	assert_lt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 15), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
+	assert_gt(
+		LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 6.0, 5),
+		LocalRaceMath.heart_rate_net_rate_bpm_per_s(200.0, 6.0, 5)
+	)
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 4.0, 5), 0.0)
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 5.0, 5), LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 4.0, 5))
+	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(180.0, 2.0, 5), 0.0)
+	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(180.0, 3.0, 5), 0.0)
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(170.0, 4.0, 5), 0.0)
+	var settled: Dictionary = {}
+	for drive_level in [4.0, 5.0, 6.0]:
+		var heart_rate := 100.0
+		for _step in 1200:
+			heart_rate = clampf(
+				heart_rate + LocalRaceMath.heart_rate_net_rate_bpm_per_s(heart_rate, drive_level, 5) * 0.1,
+				100.0,
+				230.0
+			)
+		settled[drive_level] = heart_rate
+	assert_lte(settled[4.0], 185.0)
+	assert_gt(settled[5.0], 200.0)
+	assert_lte(settled[5.0], 215.0)
+	assert_gt(settled[6.0], settled[5.0])
+	assert_gt(settled[4.0], 175.0)
+	assert_gt(settled[6.0], 225.0)
+	assert_lte(settled[6.0], 230.0)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(1), 11.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(5), 15.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(10), 20.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(15), 25.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(1), 29.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(15), 17.0, 0.001)
+	assert_almost_eq(LocalRaceMath.Config.number("heart_rate_recovery_exponent"), 1.2, 0.001)
+	assert_almost_eq(LocalRaceMath.Config.number("heart_rate_recovery_rate_scale"), 2.75, 0.001)
+	assert_gt(
+		LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(200.0, 5),
+		(100.0 / LocalRaceMath.heart_rate_recovery_time_s(5)) * pow((200.0 - 100.0) / 130.0, 1.5)
+	)
+	assert_almost_eq(
+		LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(230.0, 5),
+		100.0 / LocalRaceMath.heart_rate_recovery_time_s(5),
+		0.001
+	)
+	assert_gt(
+		LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(230.0, 5),
+		LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(120.0, 5)
+	)
+	assert_gt(LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(120.0, 5), 0.0)
+	assert_eq(LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(100.0, 5), 0.0)
+	var recovering_heart_rate := 200.0
+	for _step in 600:
+		recovering_heart_rate += LocalRaceMath.heart_rate_net_rate_bpm_per_s(recovering_heart_rate, 0.0, 5) * 0.1
+	assert_gt(recovering_heart_rate, 100.0)
+	assert_lt(recovering_heart_rate, 125.0)
+	var recovery_after_sixty_seconds := recovering_heart_rate
+	assert_lt(recovery_after_sixty_seconds, 130.0)
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(200.0, 0.0, 5), -10.0)
+	assert_eq(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 0.0, 5), 0.0)
+
+
+func test_stamina_consumption_uses_heart_and_stamina_stat_without_neutral_recovery() -> void:
+	assert_eq(LocalRaceMath.stamina_delta_per_s(0.0, 200.0, 1), 0.0)
+	assert_eq(LocalRaceMath.stamina_delta_per_s(-1.0, 200.0, 1), 0.0)
+	assert_lt(LocalRaceMath.stamina_delta_per_s(6.0, 200.0, 1), 0.0)
+	assert_lt(
+		LocalRaceMath.stamina_consumption_per_s(6.0, 200.0, 15),
+		LocalRaceMath.stamina_consumption_per_s(6.0, 200.0, 1)
+	)
+	assert_gt(
+		LocalRaceMath.stamina_consumption_per_s(6.0, 200.0, 5),
+		LocalRaceMath.stamina_consumption_per_s(6.0, 100.0, 5)
+	)
+
+
+func test_overheat_is_continuous_and_does_not_change_normal_condition() -> void:
+	assert_almost_eq(LocalRaceMath.overheat_ratio(200.0), 0.0, 0.001)
+	assert_almost_eq(LocalRaceMath.overheat_ratio(230.0), 1.0, 0.001)
+	assert_almost_eq(LocalRaceMath.overheat_stamina_multiplier(230.0), 1.5, 0.001)
+	assert_almost_eq(LocalRaceMath.propulsion_efficiency(200.0), 1.0, 0.001)
+	assert_almost_eq(LocalRaceMath.propulsion_efficiency(230.0), 0.75, 0.001)
+	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(0.0, 1), 1.0, 0.001)
+	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-100.0, 1), 0.40, 0.001)
+	assert_gt(LocalRaceMath.stamina_debt_efficiency(-100.0, 15), 0.40)
+	assert_almost_eq(
+		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0, 0.0, 0.0, 0.0, 0.75),
+		51.55,
+		0.001
+	)
 
 
 func test_live_place_keeps_finished_order_fixed() -> void:

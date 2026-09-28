@@ -119,6 +119,29 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
 
 M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd` でカバーする。
 
+## ローカルレースのヘッドレス統合シミュレーション
+
+描画・カメラ・入力を使わず、通常のローカルレースシーンを同じ `Runner`／`LocalRaceMath`／CPU判断／ドラフト処理で進め、結果をJSONで出力できます。
+
+```bash
+tools/godot/Godot_v4.7-stable_linux.x86_64 \
+  --headless --path client \
+  --script scripts/local_race_simulation_cli.gd -- \
+  --scenario notch4_cruise
+```
+
+シナリオを省略すると `notch4_cruise`、利用可能な例は `data/config/local_race_simulation.json` にあります。
+
+- `notch4_cruise`: ノッチ4巡航
+- `notch6_sustain`: ノッチ6持続
+- `notch6_to_zero_recovery`: ノッチ6から0へ落として心拍回復を観測
+- `cpu_pack_and_draft`: CPU集団・ドラフトの観測
+
+各結果には、経過時間、完走数、各ランナーの距離・速度・順位・心拍・スタミナ・ドラフト情報、時系列サンプルが含まれます。
+時系列サンプルには、経路距離／レース進捗、座標・向き、現在／目標速度、自然最高速、ノッチ、心拍・スタミナ、オーバーヒート・推進効率、速度診断、ドラフト状態、完走状態を含みます。`test_local_race_simulator.gd` では4シナリオを実際に進行し、速度・距離・心拍・スタミナ・ノッチ・ドラフト率・順位／完走順などの範囲と整合性を検証します。
+
+各シナリオには、単なる範囲検証に加えて、設定ファイルの `goals` に定義した目標値・許容範囲・相対条件の判定結果を `goal_assessment` として出力します。`passed` と `status`（`PASS` / `FAIL`）、実測値、目標値、判定メッセージ、`summary` を確認できます。例えばノッチ4はゴール時スタミナ0%付近・心拍170〜195・オーバーヒートなし、ノッチ6は高負荷だが心拍230以下・スタミナ負債-100以内を確認します。ノッチ6とノッチ4の負荷比較のような相対条件は、両方の結果を参照して再評価できます。旧キー `goal_checks` も互換のため読み込めます。
+
 ## フォント
 
 - 日本語 UI 用に `fonts/NotoSansCJK-Regular.ttc`（Noto Sans CJK / SIL OFL）を同梱。詳細は [`fonts/README.md`](fonts/README.md)
