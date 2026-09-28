@@ -142,11 +142,48 @@
       }
     },
     {
+      "label": "サーバー待受後にGodotを起動",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tools/windows/start-pururin-dev.ps1"
+        ]
+      },
+      "linux": {
+        "command": "bash",
+        "args": [
+          "${workspaceFolder}/tools/start-pururin-dev.sh"
+        ]
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "pururin-dev",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "サーバー待受確認OK"
+        }
+      }
+    },
+    {
       "label": "サーバーとクライアントを起動",
       "dependsOn": [
         "開発環境を再起動準備",
-        "サーバーを起動",
-        "クライアントを起動（Godot）"
+        "サーバー待受後にGodotを起動"
       ],
       "dependsOrder": "sequence",
       "problemMatcher": [],

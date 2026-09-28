@@ -36,11 +36,26 @@ const NUMBER_RANGES := {
 	"cpu_follow_slot_crowding_forward_range_m": [0.001, 100.0],
 	"cpu_follow_slot_crowding_lateral_range_m": [0.001, 15.0],
 	"cpu_follow_slot_crowding_weight": [0.0, 100.0],
+	"cpu_follow_slot_field_density_forward_range_m": [0.001, 100.0],
+	"cpu_follow_slot_field_density_lateral_range_m": [0.001, 15.0],
+	"cpu_follow_slot_field_density_weight": [0.0, 100.0],
+	"cpu_follow_slot_open_forward_distance_m": [0.001, 15.0],
+	"cpu_follow_slot_open_forward_weight": [0.0, 100.0],
+	"cpu_follow_slot_open_forward_threshold": [0.0, 100.0],
 	"cpu_follow_slot_inner_bias": [0.0, 100.0],
+	"cpu_line_distance_advantage_weight": [0.0, 100.0],
+	"cpu_follow_slot_line_change_weight": [0.0, 100.0],
+	"cpu_follow_slot_side_continuity_weight": [0.0, 100.0],
+	"cpu_overtake_bias_threshold": [-1.0, 1.0],
+	"cpu_overtake_forward_distance_m": [0.001, 15.0],
+	"cpu_overtake_slot_lateral_spacing_m": [0.001, 15.0],
+	"cpu_overtake_slot_bias_weight": [0.0, 100.0],
+	"cpu_overtake_escape_lateral_spacing_m": [0.001, 15.0],
+	"cpu_overtake_escape_bias_weight": [0.0, 100.0],
+	"cpu_overtake_escape_steer_speed_multiplier": [1.0, 10.0],
 	"cpu_inward_target_offset_m": [-15.0, 15.0],
 	"cpu_inward_target_blend": [0.0, 1.0],
 	"cpu_trainer_reselect_seconds": [0.05, 60.0],
-	"cpu_target_speed_change_kmh_per_s": [0.01, 100.0],
 	"cpu_trainer_cruise_reduction_max_kmh": [0.0, 25.0],
 	"cpu_trainer_global_chase_pressure_max_kmh": [0.0, 25.0],
 	"cpu_trainer_global_gap_reference_m": [0.001, 500.0],
@@ -48,6 +63,7 @@ const NUMBER_RANGES := {
 	"cpu_trainer_field_pace_correction_max_kmh": [0.0, 25.0],
 	"cpu_trainer_field_pace_reference_kmh": [0.001, 100.0],
 	"cpu_trainer_closing_pressure_max_kmh": [0.0, 25.0],
+	"cpu_trainer_front_chase_pressure_max_kmh": [0.0, 25.0],
 	"cpu_trainer_closing_gap_reference_m": [0.001, 500.0],
 	"cpu_trainer_closing_speed_reference_kmh": [0.001, 100.0],
 	"top_speed_natural_min_kmh": [0.0, 90.0],
@@ -55,6 +71,9 @@ const NUMBER_RANGES := {
 	"acceleration_drive_force_bonus_per_stat_kmh_per_s": [0.0, 10.0],
 	"cpu_trainer_finish_start_progress": [0.0, 1.0],
 	"cpu_trainer_finish_full_progress": [0.0, 1.0],
+	"cpu_trainer_finish_chase_base_ratio": [0.0, 1.0],
+	"cpu_trainer_finish_chase_position_ratio": [0.0, 4.0],
+	"cpu_trainer_finish_chase_leader_gap_ratio": [0.0, 4.0],
 	"cpu_trainer_reserve_max_kmh": [0.0, 25.0],
 	"cpu_trainer_position_push_max_kmh": [0.0, 25.0],
 	"cpu_trainer_finish_push_max_kmh": [0.0, 25.0],
@@ -98,7 +117,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "cpu_speed_tiers_kmh", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
@@ -130,6 +149,10 @@ static func validate(data: Variant) -> PackedStringArray:
 		errors.append("cpu_inward_target_offset_m: コースの可動範囲内にしてください")
 	if float(data.cpu_follow_slot_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_follow_slot_lateral_spacing_m: コースの可動範囲内にしてください")
+	if float(data.cpu_overtake_slot_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
+		errors.append("cpu_overtake_slot_lateral_spacing_m: コースの可動範囲内にしてください")
+	if float(data.cpu_overtake_escape_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
+		errors.append("cpu_overtake_escape_lateral_spacing_m: コースの可動範囲内にしてください")
 	var forces: Variant = data.get("drive_force_by_level_kmh_per_s")
 	if not forces is Array:
 		errors.append("drive_force_by_level_kmh_per_s: 配列が必須です")
@@ -145,21 +168,6 @@ static func validate(data: Variant) -> PackedStringArray:
 				errors.append("drive_force_by_level_kmh_per_s[%d]: 0番は0、以降は単調増加で100以下にしてください" % i)
 			else:
 				previous = float(force)
-	var speed_tiers: Variant = data.get("cpu_speed_tiers_kmh")
-	if not speed_tiers is Array:
-		errors.append("cpu_speed_tiers_kmh: 1個以上の配列が必須です")
-	elif speed_tiers.is_empty():
-		errors.append("cpu_speed_tiers_kmh: 1個以上の配列が必須です")
-	else:
-		var previous_tier := float(data.min_speed_kmh)
-		for i in speed_tiers.size():
-			var tier: Variant = speed_tiers[i]
-			if not (tier is float or tier is int):
-				errors.append("cpu_speed_tiers_kmh[%d]: 数値が必要です" % i)
-			elif not is_finite(float(tier)) or tier < previous_tier or tier > 90.0:
-				errors.append("cpu_speed_tiers_kmh[%d]: 最低速度以上の非減少値かつ90以下にしてください" % i)
-			else:
-				previous_tier = float(tier)
 	var profiles: Variant = data.get("cpu_trainer_profiles")
 	var profile_ids := {}
 	if not profiles is Array or profiles.is_empty():
@@ -198,7 +206,6 @@ static func values() -> Dictionary:
 		else:
 			_cached = result.data
 			_cached.drive_force_by_level_kmh_per_s.make_read_only()
-			_cached.cpu_speed_tiers_kmh.make_read_only()
 			_cached.make_read_only()
 	return _cached
 

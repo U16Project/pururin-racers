@@ -52,6 +52,8 @@ var _cpu_steer_timer: float = 0.0
 var _cpu_trainer_timer: float = 0.0
 var _cpu_trainer_profile: Dictionary = {}
 var _cpu_trainer_drive_level: float = 0.0
+var _cpu_overtake_bias: float = 0.0
+var _cpu_line_move_speed_m_per_s: float = 0.0
 var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
 var _race_active: bool = false
@@ -63,15 +65,15 @@ var _others_snapshot: Array = []
 func setup_for_race(
 	path: Path3D,
 	gate: int,
-	tier_speed_kmh: float,
+	initial_max_speed_kmh: float,
 	is_player: bool,
 	label: String,
 	pururin: Dictionary = {}
 ) -> void:
 	_path = path
 	gate_index = gate
-	_base_max_speed_kmh = tier_speed_kmh
-	max_speed_kmh = tier_speed_kmh
+	_base_max_speed_kmh = initial_max_speed_kmh
+	max_speed_kmh = initial_max_speed_kmh
 	_pururin = pururin.duplicate(true)
 	player_controlled = is_player
 	display_name = label
@@ -84,7 +86,7 @@ func setup_for_race(
 	_finish_time = -1.0
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-	_target_speed_kmh = tier_speed_kmh
+	_target_speed_kmh = initial_max_speed_kmh
 	_drive_mode = is_player
 	_drive_level = 0.0
 	_drive_hold_direction = 0.0
@@ -93,6 +95,8 @@ func setup_for_race(
 	_cpu_trainer_timer = 0.0
 	_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile(gate) if not is_player else {}
 	_cpu_trainer_drive_level = 0.0
+	_cpu_overtake_bias = 0.0
+	_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 	_drive_diagnostic_log_remaining = 0.0
 	_race_active = false
 	_cpu_start_drive_remaining = 0.0
@@ -324,13 +328,11 @@ func _process(delta: float) -> void:
 		return
 	_apply_pururin_race_stats()
 	var previous_offset := _offset
-	_update_inputs(delta)
+	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
+	_update_inputs(delta, curvature)
 	if not LocalRaceMath.can_use_offset(_race_progress, _offset, _others_snapshot):
 		_offset = previous_offset
 	var path_len := _path.curve.get_baked_length()
-	var blocker := LocalRaceMath.blocking_speed_kmh(
-		_distance, _offset, _others_snapshot, path_len
-	)
 	if _drive_mode and player_controlled:
 		_update_drive_level_input(delta)
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
@@ -362,8 +364,8 @@ func _process(delta: float) -> void:
 		_update_condition_for_drive_level(LocalRaceMath.Config.number("cpu_start_drive_level"), delta)
 	else:
 		var cpu_drive_level := _cpu_trainer_drive_level
-		if not is_zero_approx(LocalRaceMath.apply_block_cap_kmh(_target_speed_kmh, blocker) - _target_speed_kmh):
-			cpu_drive_level = 0.0
+		# 前走者に接触しても推進を0へ戻さない。進捗は allowed_race_progress が
+		# 前走者の手前で止めるため、現在位置を維持したままラインの空きを待つ。
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			cpu_drive_level,
@@ -378,7 +380,6 @@ func _process(delta: float) -> void:
 			)
 		)
 		_update_condition_for_drive_level(_cpu_trainer_drive_level, delta)
-	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
 		_current_speed_kmh, delta, _offset, curvature
 	)
@@ -402,7 +403,7 @@ func _clear_draft_details() -> void:
 	_direct_source_details = []
 
 
-func _update_inputs(delta: float) -> void:
+func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 	if player_controlled:
 		var steer := _read_steer_axis()
 		_offset = M2TrackMath.clamp_offset(_offset + steer * steer_speed * delta)
@@ -415,23 +416,37 @@ func _update_inputs(delta: float) -> void:
 			)
 			if bool(follow_candidate.get("found", false)):
 				var follow_slot := LocalRaceMath.cpu_follow_slot(
-					_race_progress, _offset, follow_candidate, _others_snapshot
+					_race_progress, _offset, follow_candidate, _others_snapshot, _cpu_overtake_bias, curvature
+				)
+				if bool(follow_slot.get("hold_current", false)):
+					_target_offset = _offset
+					_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
+				else:
+					var escape_slot := bool(follow_slot.get("escape", false))
+					_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
+						_target_offset,
+						float(follow_slot["offset"]),
+						1.0 if escape_slot else -1.0
+					)
+					_cpu_line_move_speed_m_per_s = LocalRaceMath.cpu_line_move_speed_m_per_s(follow_slot)
+			else:
+				var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
+				var open_line := LocalRaceMath.cpu_open_line_target_offset_m(
+					_race_progress,
+					_offset,
+					_others_snapshot,
+					line_pref,
+					_cpu_overtake_bias,
+					curvature
 				)
 				_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
-					_target_offset, float(follow_slot["offset"])
+					_target_offset,
+					float(open_line["offset"]),
+					1.0
 				)
-			else:
-				# 追従候補がなければ、従来どおり現在ラインから小さく動かす。
-				var free_target := LocalRaceMath.cpu_next_target_offset_m(_offset, randf())
-				var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
-				var preferred_line := lerpf(
-					M2TrackMath.MAX_ABS_OFFSET_M,
-					-M2TrackMath.MAX_ABS_OFFSET_M,
-					line_pref
-				)
-				_target_offset = lerpf(free_target, preferred_line, 0.35)
+				_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 			# ライン選択と速度方針は独立。速度はトレーナーが定期的に決める。
-		_offset = move_toward(_offset, _target_offset, LocalRaceMath.Config.number("cpu_steer_speed_m_per_s") * delta)
+		_offset = move_toward(_offset, _target_offset, _cpu_line_move_speed_m_per_s * delta)
 		_offset = M2TrackMath.clamp_offset(_offset)
 		_cpu_trainer_timer -= delta
 		if _cpu_trainer_timer <= 0.0:
@@ -462,6 +477,7 @@ func _update_cpu_target_speed() -> void:
 	}, LocalRaceMath.cpu_trainer_settings())
 	_target_speed_kmh = float(decision["target_speed_kmh"])
 	_cpu_trainer_drive_level = float(decision["drive_level"])
+	_cpu_overtake_bias = clampf(float(decision.get("overtake_bias", 0.0)), -1.0, 1.0)
 
 
 func _cpu_pace_summary() -> Dictionary:

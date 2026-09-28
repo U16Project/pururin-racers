@@ -351,14 +351,6 @@ func test_cpu_lane_changes_stay_inside_configured_ranges() -> void:
 	assert_lt(biased, current_offset)
 
 
-func test_cpu_speed_tiers_come_from_validated_local_config() -> void:
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(0), 59.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(1), 60.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(2), 61.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(3), 59.0, 0.001)
-	assert_almost_eq(LocalRaceMath.tier_speed_kmh_for_index(-1), 61.0, 0.001)
-
-
 func test_cpu_follow_selection_uses_one_score_and_falls_back_when_no_runner_is_ahead() -> void:
 	var selected := LocalRaceMath.cpu_follow_candidate(100.0, 0.0, [
 		{"id": "far-line", "race_progress": 104.0, "offset": 3.5},
@@ -374,6 +366,32 @@ func test_cpu_follow_selection_uses_one_score_and_falls_back_when_no_runner_is_a
 	])
 	assert_false(none["found"])
 	assert_almost_eq(LocalRaceMath.cpu_next_target_offset_m(0.5, 1.0), -0.415, 0.001)
+
+
+func test_cpu_open_line_target_keeps_current_line_when_nearby_space_is_open() -> void:
+	var selected := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 2.0, [
+		{"id": "behind", "race_progress": 98.0, "offset": -4.1},
+	], 0.8)
+	assert_true(selected["found"])
+	assert_eq(str(selected["name"]), "open_line")
+	assert_almost_eq(float(selected["offset"]), 2.0, 0.001)
+
+
+func test_cpu_line_distance_advantage_is_zero_on_straight_and_favors_inner_on_curve() -> void:
+	assert_almost_eq(LocalRaceMath.cpu_line_distance_advantage_score(-2.0, 0.0), 0.0, 0.001)
+	assert_lt(
+		LocalRaceMath.cpu_line_distance_advantage_score(-2.0, 0.05),
+		LocalRaceMath.cpu_line_distance_advantage_score(2.0, 0.05)
+	)
+
+
+func test_cpu_open_line_target_uses_an_open_side_when_current_line_is_dense() -> void:
+	var selected := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 0.0, [
+		{"id": "left", "race_progress": 100.0, "offset": -0.2},
+		{"id": "right", "race_progress": 100.0, "offset": 0.2},
+	], 0.5)
+	assert_true(selected["found"])
+	assert_ne(float(selected["offset"]), 0.0)
 
 
 func test_cpu_follow_offset_is_bounded() -> void:
@@ -416,6 +434,121 @@ func test_cpu_follow_slot_is_bounded_and_no_candidate_keeps_fallback_path() -> v
 	assert_true(edge_slot["found"])
 	assert_lte(absf(float(edge_slot["offset"])), M2TrackMath.MAX_ABS_OFFSET_M)
 	assert_almost_eq(LocalRaceMath.cpu_next_target_offset_m(0.5, 1.0), -0.415, 0.001)
+
+
+func test_cpu_follow_slot_positive_bias_uses_clear_forward_diagonal() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], 1.0)
+	assert_true(selected["found"])
+	assert_true(str(selected["name"]).begins_with("overtake_"))
+	assert_gt(float(selected["progress"]), float(leader["race_progress"]))
+
+
+func test_cpu_follow_slot_probes_open_forward_lane_when_local_field_is_dense() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
+		leader,
+		{"id": "near-left", "race_progress": 100.0, "offset": -1.0},
+		{"id": "near-right", "race_progress": 100.0, "offset": 1.0},
+	], 0.0)
+	assert_true(selected["found"])
+	assert_true(str(selected["name"]).begins_with("overtake_"))
+	assert_gt(float(selected["progress"]), float(leader["race_progress"]))
+
+
+func test_cpu_follow_slot_field_density_penalizes_occupied_slot() -> void:
+	var density := LocalRaceMath._cpu_follow_slot_field_density(100.0, 0.0, "leader", [
+		{"id": "leader", "race_progress": 104.0, "offset": 0.0},
+		{"id": "occupant", "race_progress": 100.0, "offset": 0.0},
+	])
+	assert_gt(density, 0.0)
+
+
+func test_cpu_follow_slot_prefers_inner_line_when_slots_are_similarly_open() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var selected := LocalRaceMath.cpu_follow_slot(100.0, 6.0, leader, [leader])
+	assert_true(selected["found"])
+	assert_eq(str(selected["name"]), "inner")
+	assert_lt(float(selected["offset"]), 0.0)
+
+
+func test_cpu_follow_slot_zero_or_negative_bias_keeps_rear_slots() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var default_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader])
+	var patient_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], -1.0)
+	assert_false(str(default_slot["name"]).begins_with("overtake_"))
+	assert_false(str(patient_slot["name"]).begins_with("overtake_"))
+	assert_lt(float(default_slot["progress"]), float(leader["race_progress"]))
+	assert_lt(float(patient_slot["progress"]), float(leader["race_progress"]))
+
+
+func test_cpu_follow_slot_forward_choice_stays_bounded_at_track_edge() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": M2TrackMath.MAX_ABS_OFFSET_M,
+	}
+	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], 1.0)
+	assert_true(selected["found"])
+	assert_lte(absf(float(selected["offset"])), M2TrackMath.MAX_ABS_OFFSET_M)
+
+
+func test_cpu_follow_slot_holds_current_line_when_forward_slots_are_blocked() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var inner_blocker := {"id": "inner", "race_progress": 106.0, "offset": -2.0}
+	var outer_blocker := {"id": "outer", "race_progress": 106.0, "offset": 2.0}
+	var escape_blocker := {"id": "escape", "race_progress": 106.0, "offset": 4.5}
+	var selected := LocalRaceMath.cpu_follow_slot(
+		100.0, 0.5, leader, [leader, inner_blocker, outer_blocker, escape_blocker], 1.0
+	)
+	assert_true(selected["found"])
+	assert_true(selected["hold_current"])
+	assert_eq(str(selected["name"]), "hold_current")
+	assert_almost_eq(float(selected["offset"]), 0.5, 0.001)
+
+
+func test_cpu_follow_slot_uses_outer_escape_when_normal_forward_slots_are_crowded() -> void:
+	var leader := {
+		"found": true, "id": "leader", "race_progress": 104.0,
+		"forward_gap_m": 4.0, "offset": 0.0,
+	}
+	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
+		leader,
+		{"id": "inner", "race_progress": 106.0, "offset": -2.0},
+		{"id": "outer", "race_progress": 106.0, "offset": 2.0},
+	], 1.0)
+	assert_true(selected["found"])
+	assert_eq(str(selected["name"]), "overtake_escape_outer")
+	assert_true(bool(selected["escape"]))
+	assert_gt(float(selected["offset"]), 4.0)
+
+
+func test_cpu_line_move_speed_only_increases_for_escape_slots() -> void:
+	assert_almost_eq(
+		LocalRaceMath.cpu_line_move_speed_m_per_s({"escape": false}),
+		LocalRaceMath.Config.number("cpu_steer_speed_m_per_s"),
+		0.001
+	)
+	assert_almost_eq(
+		LocalRaceMath.cpu_line_move_speed_m_per_s({"escape": true}, 0.5),
+		LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
+			* LocalRaceMath.Config.number("cpu_overtake_escape_steer_speed_multiplier") * 0.5,
+		0.001
+	)
 
 
 func test_drafting_reduces_resistance_without_overriding_the_safety_cap() -> void:
@@ -758,23 +891,6 @@ func test_follow_speed_approaches_target() -> void:
 	assert_gt(s, 50.0)
 	assert_lt(s, 58.0)
 	assert_eq(LocalRaceMath.follow_speed_kmh(57.5, 58.0, 1.0), 58.0)
-
-
-func test_block_caps_speed_when_ahead() -> void:
-	var others := [
-		{"distance": 5.0, "offset": 0.0, "speed": 54.0},
-	]
-	var blocker := LocalRaceMath.blocking_speed_kmh(4.0, 0.0, others, 2083.0)
-	assert_eq(blocker, 54.0)
-	assert_almost_eq(LocalRaceMath.apply_block_cap_kmh(75.0, blocker), 54.0, 0.001)
-
-
-func test_no_block_when_laterally_clear() -> void:
-	var others := [
-		{"distance": 5.0, "offset": 3.0, "speed": 54.0},
-	]
-	var blocker := LocalRaceMath.blocking_speed_kmh(4.0, 0.0, others, 2083.0)
-	assert_eq(blocker, -1.0)
 
 
 func test_contact_overlap_is_detected() -> void:

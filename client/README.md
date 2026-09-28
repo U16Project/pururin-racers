@@ -40,7 +40,7 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 
 - main_scene: `scenes/m3_intro.tscn`
 - 導入: `←→`／左スティックでライン、`C`／`Y` でカメラ、`Esc`／Start でメニュー。上下／十字キーはモードによる（ローカルは出力ノッチ、M4 と M5 は目標スピード）。右スティック左右は追随カメラの向き、押し込みはリセット。A は決定、B はメニューを閉じる。X は将来のブースト用に予約
-- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8 頭・2000 m・標準コース）
+- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8プル・2000 m・標準コース）
 - **控室へ進む**: サーバー起動時 `接続しています…` → `接続できました` → 控室入室結果
 - サーバー停止時（控室）: `接続できませんでした。サーバーを起動してください`
 - 契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)、ローカルレース [`shared/protocol_local_race.md`](../shared/protocol_local_race.md)

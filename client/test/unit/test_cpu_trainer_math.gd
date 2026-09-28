@@ -55,6 +55,25 @@ func test_trainer_cruises_below_natural_speed_then_recovers_in_finish() -> void:
 	assert_almost_eq(float(finish["desired_rank"]), 1.0, 0.001)
 
 
+func test_finish_pressure_responds_to_position_and_leader_gap() -> void:
+	var settings := LocalRaceMath.cpu_trainer_settings()
+	var profile := {"aggression": 0.55, "patience": 0.50, "drafting_pref": 0.55}
+	var leader := CpuTrainerMath.decide(profile, {
+		"progress_ratio": 0.90, "field_size": 8, "live_place": 1,
+		"max_speed_kmh": 70.0, "stamina_ratio": 1.0,
+	}, settings)
+	var compact_second := CpuTrainerMath.decide(profile, {
+		"progress_ratio": 0.90, "field_size": 8, "live_place": 2,
+		"max_speed_kmh": 70.0, "stamina_ratio": 1.0,
+	}, settings)
+	var detached_second := CpuTrainerMath.decide(profile, {
+		"progress_ratio": 0.90, "field_size": 8, "live_place": 2,
+		"leader_gap_m": 50.0, "max_speed_kmh": 70.0, "stamina_ratio": 1.0,
+	}, settings)
+	assert_gt(float(compact_second["finish_chase_pressure_kmh"]), float(leader["finish_chase_pressure_kmh"]))
+	assert_gt(float(detached_second["finish_chase_pressure_kmh"]), float(compact_second["finish_chase_pressure_kmh"]))
+
+
 func test_global_gap_pressure_raises_target_without_nearest_runner_input() -> void:
 	var settings := LocalRaceMath.cpu_trainer_settings()
 	var profile := {"aggression": 0.45, "patience": 0.70, "drafting_pref": 0.45}
@@ -68,6 +87,24 @@ func test_global_gap_pressure_raises_target_without_nearest_runner_input() -> vo
 		"max_speed_kmh": 65.0, "stamina_ratio": 1.0, "has_draft": false,
 	}, settings)
 	assert_gt(float(delayed["target_speed_kmh"]), float(compact["target_speed_kmh"]))
+
+
+func test_overtake_bias_reflects_profile_capability_and_stamina() -> void:
+	var settings := LocalRaceMath.cpu_trainer_settings()
+	var aggressive := CpuTrainerMath.decide({"aggression": 0.82, "patience": 0.25, "drafting_pref": 0.30}, {
+		"progress_ratio": 0.55, "field_size": 8, "live_place": 5,
+		"max_speed_kmh": 75.0, "current_speed_kmh": 60.0, "nearest_ahead_gap_m": 4.0,
+		"nearest_ahead_speed_kmh": 62.0, "acceleration_stat": 12.0,
+		"stamina_ratio": 1.0, "has_draft": false,
+	}, settings)
+	var patient := CpuTrainerMath.decide({"aggression": 0.35, "patience": 0.80, "drafting_pref": 0.90}, {
+		"progress_ratio": 0.55, "field_size": 8, "live_place": 5,
+		"max_speed_kmh": 65.0, "current_speed_kmh": 60.0, "nearest_ahead_gap_m": 4.0,
+		"nearest_ahead_speed_kmh": 64.0, "acceleration_stat": 3.0,
+		"stamina_ratio": 0.45, "has_draft": true,
+	}, settings)
+	assert_gt(float(aggressive["overtake_bias"]), 0.15)
+	assert_lt(float(patient["overtake_bias"]), 0.0)
 
 
 func test_global_gap_pressure_softens_a_runner_far_ahead_of_the_pack() -> void:

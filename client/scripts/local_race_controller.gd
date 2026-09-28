@@ -3,7 +3,7 @@ extends Node3D
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
-## ローカル簡易レースの進行・UI・8 頭生成。
+## ローカル簡易レースの進行・UI・8プル生成。
 
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
@@ -75,7 +75,7 @@ func _ready() -> void:
 		set_process(false)
 		return
 	if PururinRosterConfig.values().is_empty():
-		_hud_label.text = "プルリン設定を確認してください：" + PururinRosterConfig.last_error
+		_hud_label.text = "ぷるりん設定を確認してください：" + PururinRosterConfig.last_error
 		set_process(false)
 		return
 	_place_markers()
@@ -184,16 +184,11 @@ func _spawn_field() -> void:
 		_runners_root.add_child(runner)
 		var is_player: bool = pururin["control_kind"] == "player"
 		var label: String = pururin["display_name"]
-		var tier := (
-			LocalRaceMath.PLAYER_MAX_SPEED_KMH
-			if is_player
-			else LocalRaceMath.tier_speed_kmh_for_index(i + 1)
-		)
 		runner.call(
 			"setup_for_race",
 			_track,
 			i,
-			tier,
+			LocalRaceMath.PLAYER_MAX_SPEED_KMH,
 			is_player,
 			label,
 			pururin

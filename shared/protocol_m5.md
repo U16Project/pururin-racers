@@ -24,7 +24,7 @@ mainline distance で、レース進行の代用にはしない。
 ## race_join
 
 クライアントが送信する開始要求。M5 v0.1 は最初の接続をプレイヤー1人として、
-不足分をサーバーが CPU 7頭で補充する。
+不足分をサーバーが CPU 7プルで補充する。
 
 ```json
 {"v": 1, "t": "race_join", "display_name": "あなた"}
@@ -32,7 +32,7 @@ mainline distance で、レース進行の代用にはしない。
 
 ## race_start
 
-サーバーが返す初期状態。`racers` は8頭。`elapsed_seconds` は `0.0`。
+サーバーが返す初期状態。`racers` は8プル。`elapsed_seconds` は `0.0`。
 トップレベルに `course_id`、`route_id`、`distance_m`、`goal_path_m` を含む。
 
 ## race_input
@@ -70,7 +70,7 @@ offset は負が内側、正が外側である。直線の倍率は常に `1.0`�
 
 ## race_result
 
-全8頭のゴール後にサーバーが配信する順位。トップレベルに
+全8プルのゴール後にサーバーが配信する順位。トップレベルに
 `course_id`、`route_id`、`distance_m`、`elapsed_seconds`、各結果に
 `finish_time` と互換用の `time` を含む。
 

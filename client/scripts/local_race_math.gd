@@ -14,10 +14,6 @@ const RACE_DISTANCE_M := 2000.0
 
 static var _course_layout: Dictionary = {}
 
-## CPU 最高速ティア（km/h）。ローカル観察用の値は local_race.json で管理する。
-static var CPU_SPEED_TIERS_KMH: Array:
-	get:
-		return Config.values()["cpu_speed_tiers_kmh"]
 ## プレイヤー通常上限（#24・ブーストなし）。
 const PLAYER_MAX_SPEED_KMH := 75.0
 ## プレイヤー開始時の現在／目標（#24 巡航帯）。
@@ -109,9 +105,7 @@ static var ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S: float:
 
 ## 接触箱（設計案の例に近い簡易値）。
 const BLOCK_LATERAL_M := 1.5
-const BLOCK_FORWARD_M := 3.0
 const CONTACT_LONGITUDINAL_M := 1.5
-const BLOCK_SPEED_FACTOR := 1.0
 
 const FIELD_SIZE := 8
 const BAKE_INTERVAL_M := 1.0
@@ -462,7 +456,7 @@ static func cpu_next_target_offset_m(current_offset: float, random_unit: float) 
 	return M2TrackMath.clamp_offset(limited_target)
 
 
-## 前方の近い走者を一律の距離・横差スコアで選ぶ。頭数ごとの特例は持たない。
+## 前方の近い走者を一律の距離・横差スコアで選ぶ。プル数ごとの特例は持たない。
 static func cpu_follow_candidate(
 	self_race_progress: float,
 	self_offset: float,
@@ -496,13 +490,80 @@ static func cpu_follow_candidate(
 	return selected
 
 
+## 前走者が候補範囲にいない場合も、現在位置を含む横位置を同じ評価式で選ぶ。
+## 開始直後のように全走者の進捗が同じでも、密度と空き位置を見て現在ラインを維持できる。
+static func cpu_open_line_target_offset_m(
+	self_race_progress: float,
+	self_offset: float,
+	others: Array,
+	line_pref: float,
+	overtake_bias: float = 0.0,
+	curvature: float = 0.0
+) -> Dictionary:
+	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
+	var preferred_line := lerpf(max_abs, -max_abs, clampf(line_pref, 0.0, 1.0))
+	var current := M2TrackMath.clamp_offset(self_offset)
+	var candidate_offsets := [
+		current,
+		current - spacing,
+		current + spacing,
+		preferred_line,
+		M2TrackMath.clamp_offset(lerpf(current, preferred_line, 0.5)),
+		-max_abs,
+		max_abs,
+	]
+	var best_score := INF
+	var selected_offset := current
+	for offset_value in candidate_offsets:
+		var slot_offset := M2TrackMath.clamp_offset(float(offset_value))
+		var line_change := absf(slot_offset - current) / max_abs
+		var inner_distance := absf(slot_offset - preferred_line) / max_abs
+		var field_density := _cpu_follow_slot_field_density(
+			self_race_progress, slot_offset, "", others
+		)
+		var open_forward := _cpu_follow_slot_open_forward_score(
+			self_race_progress, slot_offset, "", others
+		)
+		var side_continuity := clampf(
+			(current / max_abs) * (slot_offset / max_abs),
+			-1.0,
+			1.0
+		)
+		# 空いている現在ラインは維持し、混雑時だけ横移動を選びやすくする。
+		# 密度に対して連続的に変化させ、開始時だけの特例にはしない。
+		var line_change_factor := lerpf(
+			1.8,
+			0.7,
+			clampf(field_density, 0.0, 1.0)
+		)
+		var score := field_density * Config.number("cpu_follow_slot_field_density_weight") \
+			+ inner_distance * Config.number("cpu_follow_slot_inner_bias") \
+			+ cpu_line_distance_advantage_score(slot_offset, curvature) \
+			+ line_change * Config.number("cpu_follow_slot_line_change_weight") * line_change_factor \
+			- side_continuity * Config.number("cpu_follow_slot_side_continuity_weight") \
+			- open_forward * Config.number("cpu_follow_slot_open_forward_weight") * maxf(overtake_bias, 0.0)
+		# 同点なら現在ラインを優先する。開始枠や横位置を無意味に揺らさない。
+		if score < best_score - 0.0001:
+			best_score = score
+			selected_offset = slot_offset
+	return {
+		"found": true,
+		"name": "open_line",
+		"offset": selected_offset,
+		"score": best_score,
+	}
+
+
 ## 前走者の真後ろ固定ではなく、中央・内側斜め後方・外側斜め後方を同じ式で評価する。
-## 混雑は前走者の理想車間位置に対する縦横の近さで測り、IDや頭数で役割を固定しない。
+## 混雑は前走者の理想車間位置に対する縦横の近さで測り、IDやプル数で役割を固定しない。
 static func cpu_follow_slot(
 	self_race_progress: float,
 	self_offset: float,
 	follow_candidate: Dictionary,
-	others: Array
+	others: Array,
+	overtake_bias: float = 0.0,
+	curvature: float = 0.0
 ) -> Dictionary:
 	if not bool(follow_candidate.get("found", false)):
 		return {"found": false}
@@ -513,19 +574,92 @@ static func cpu_follow_slot(
 	var slot_progress := leader_progress - preferred_gap
 	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
 	var slots := [
-		{"name": "center", "offset": leader_offset, "tie_rank": 1},
-		{"name": "inner", "offset": leader_offset - spacing, "tie_rank": 0},
-		{"name": "outer", "offset": leader_offset + spacing, "tie_rank": 2},
+		{"name": "center", "offset": leader_offset, "progress": slot_progress, "tie_rank": 1, "forward": false},
+		{"name": "inner", "offset": leader_offset - spacing, "progress": slot_progress, "tie_rank": 0, "forward": false},
+		{"name": "outer", "offset": leader_offset + spacing, "progress": slot_progress, "tie_rank": 2, "forward": false},
 	]
+	var bias := clampf(overtake_bias, -1.0, 1.0)
+	var has_forward_slot := false
+	var has_open_forward_slot := false
+	# 前方候補は積極性だけでなく、周囲が詰まっている時にも評価する。
+	# スタート直後を距離イベントで扱わず、現在位置の密度から同じ式で判断する。
+	var local_density := _cpu_follow_slot_field_density(
+		self_race_progress, self_offset, leader_id, others
+	)
+	var should_probe_forward := (
+		bias > Config.number("cpu_overtake_bias_threshold")
+		or local_density >= Config.number("cpu_follow_slot_open_forward_threshold")
+	)
+	if should_probe_forward:
+		var overtake_progress := leader_progress + Config.number("cpu_overtake_forward_distance_m")
+		var overtake_spacing := Config.number("cpu_overtake_slot_lateral_spacing_m")
+		slots.append({
+			"name": "overtake_inner",
+			"offset": leader_offset - overtake_spacing,
+			"progress": overtake_progress,
+			"tie_rank": 3,
+			"forward": true,
+		})
+		slots.append({
+			"name": "overtake_outer",
+			"offset": leader_offset + overtake_spacing,
+			"progress": overtake_progress,
+			"tie_rank": 4,
+			"forward": true,
+		})
+		# 通常の斜め前が埋まる集団では、外側へ大きく回る空きも同じ式で比較する。
+		# 外側に限定し、内寄りとの損得は inner_distance と混雑スコアに任せる。
+		slots.append({
+			"name": "overtake_escape_outer",
+			"offset": leader_offset + Config.number("cpu_overtake_escape_lateral_spacing_m"),
+			"progress": overtake_progress,
+			"tie_rank": 5,
+			"forward": true,
+			"escape": true,
+		})
 	var follow_distance_score := absf(float(follow_candidate.get("forward_gap_m", 0.0)) - preferred_gap) / Config.number("cpu_follow_forward_range_m")
 	var best_score := INF
 	var selected := {"found": false}
 	for slot_value in slots:
 		var slot: Dictionary = slot_value
 		var slot_offset := M2TrackMath.clamp_offset(float(slot["offset"]))
-		var crowding := _cpu_follow_slot_crowding(slot_progress, slot_offset, leader_id, others)
+		var candidate_progress := float(slot.get("progress", slot_progress))
+		# 前方スロットが接触範囲に入るなら、無理に割り込まず後方候補へ戻す。
+		if bool(slot.get("forward", false)):
+			has_forward_slot = true
+			if not can_use_offset(candidate_progress, slot_offset, others):
+				continue
+			has_open_forward_slot = true
+		var crowding := _cpu_follow_slot_crowding(candidate_progress, slot_offset, leader_id, others)
+		var field_density := _cpu_follow_slot_field_density(candidate_progress, slot_offset, leader_id, others)
+		var open_forward := _cpu_follow_slot_open_forward_score(
+			candidate_progress, slot_offset, leader_id, others
+		)
 		var inner_distance := absf(slot_offset - Config.number("cpu_inward_target_offset_m")) / M2TrackMath.MAX_ABS_OFFSET_M
-		var score := follow_distance_score + crowding * Config.number("cpu_follow_slot_crowding_weight") + inner_distance * Config.number("cpu_follow_slot_inner_bias")
+		# 既に走っているラインからの移動も同じ候補評価に含める。
+		# 空きと混雑の差が小さいときは、スタート時の枠位置を維持する。
+		var line_change := absf(slot_offset - self_offset) / M2TrackMath.MAX_ABS_OFFSET_M
+		var side_continuity := clampf(
+			(self_offset / M2TrackMath.MAX_ABS_OFFSET_M) * (slot_offset / M2TrackMath.MAX_ABS_OFFSET_M),
+			-1.0,
+			1.0
+		)
+		var distance_score := follow_distance_score
+		if bool(slot.get("forward", false)):
+			distance_score = absf(float(follow_candidate.get("forward_gap_m", 0.0)) - Config.number("cpu_overtake_forward_distance_m")) / Config.number("cpu_follow_forward_range_m")
+		var score := distance_score \
+			+ crowding * Config.number("cpu_follow_slot_crowding_weight") \
+			+ field_density * Config.number("cpu_follow_slot_field_density_weight") \
+			+ inner_distance * Config.number("cpu_follow_slot_inner_bias") \
+			+ cpu_line_distance_advantage_score(slot_offset, curvature) \
+			+ line_change * Config.number("cpu_follow_slot_line_change_weight") \
+			- side_continuity * Config.number("cpu_follow_slot_side_continuity_weight")
+		if bool(slot.get("forward", false)):
+			var forward_bias_weight := Config.number("cpu_overtake_escape_bias_weight") if bool(slot.get("escape", false)) else Config.number("cpu_overtake_slot_bias_weight")
+			score -= bias * forward_bias_weight
+			score -= open_forward * Config.number("cpu_follow_slot_open_forward_weight")
+		else:
+			score += maxf(bias, 0.0) * Config.number("cpu_overtake_slot_bias_weight")
 		var tie_rank := int(slot["tie_rank"])
 		if score < best_score or (is_equal_approx(score, best_score) and tie_rank < int(selected.get("tie_rank", 99))):
 			best_score = score
@@ -535,8 +669,32 @@ static func cpu_follow_slot(
 				"offset": slot_offset,
 				"score": score,
 				"tie_rank": tie_rank,
+				"progress": candidate_progress,
+				"escape": bool(slot.get("escape", false)),
+				"field_density": field_density,
+				"open_forward": open_forward,
 			}
+	# 前方スロットが全て接触範囲内なら、後方候補へ下がらず現在位置を保持する。
+	# 空きができた次の再選択で、同じ式により前方進路を再試行する。
+	if bias > Config.number("cpu_overtake_bias_threshold") and has_forward_slot and not has_open_forward_slot:
+		return {
+			"found": true,
+			"name": "hold_current",
+			"offset": M2TrackMath.clamp_offset(self_offset),
+			"score": INF,
+			"tie_rank": 99,
+			"progress": self_race_progress,
+			"hold_current": true,
+		}
 	return selected
+
+
+## カーブ内側の短い走行距離を、CPUのライン候補スコアへ反映する。
+## 直線(curvature=0)では全候補が0になり、内外差を発生させない。
+## スタミナ・心拍・速度計算には使わず、既存の距離倍率だけを再利用する。
+static func cpu_line_distance_advantage_score(offset: float, curvature: float) -> float:
+	return (M2TrackMath.distance_multiplier(offset, curvature) - 1.0) \
+		* Config.number("cpu_line_distance_advantage_weight")
 
 
 static func _cpu_follow_slot_crowding(
@@ -560,12 +718,66 @@ static func _cpu_follow_slot_crowding(
 	return crowding
 
 
-static func cpu_follow_target_offset_m(current_target_offset: float, slot_offset: float) -> float:
+## 追従スロット周辺の広い密度。対象数で分岐せず、近い走者の重なりを連続値で合成する。
+static func _cpu_follow_slot_field_density(
+	slot_progress: float,
+	slot_offset: float,
+	leader_id: String,
+	others: Array
+) -> float:
+	var forward_range := Config.number("cpu_follow_slot_field_density_forward_range_m")
+	var lateral_range := Config.number("cpu_follow_slot_field_density_lateral_range_m")
+	var density := 0.0
+	for other_value in others:
+		if not other_value is Dictionary:
+			continue
+		var other: Dictionary = other_value
+		if str(other.get("id", "")) == leader_id:
+			continue
+		var forward_nearness := maxf(
+			0.0,
+			1.0 - absf(float(other.get("race_progress", other.get("progress", 0.0))) - slot_progress) / forward_range
+		)
+		var lateral_nearness := maxf(
+			0.0,
+			1.0 - absf(float(other.get("offset", 0.0)) - slot_offset) / lateral_range
+		)
+		density += forward_nearness * lateral_nearness
+	return density
+
+
+## 候補位置の少し前方が空いているほど、前方スロットを選びやすくする。
+static func _cpu_follow_slot_open_forward_score(
+	slot_progress: float,
+	slot_offset: float,
+	leader_id: String,
+	others: Array
+) -> float:
+	var probe_progress := slot_progress + Config.number("cpu_follow_slot_open_forward_distance_m")
+	return clampf(
+		1.0 - _cpu_follow_slot_field_density(probe_progress, slot_offset, leader_id, others),
+		0.0,
+		1.0
+	)
+
+
+static func cpu_follow_target_offset_m(
+	current_target_offset: float,
+	slot_offset: float,
+	blend: float = -1.0
+) -> float:
+	var safe_blend := Config.number("cpu_follow_offset_blend") if blend < 0.0 else clampf(blend, 0.0, 1.0)
 	return M2TrackMath.clamp_offset(lerpf(
 		current_target_offset,
 		M2TrackMath.clamp_offset(slot_offset),
-		Config.number("cpu_follow_offset_blend")
+		safe_blend
 	))
+
+
+## 大きな外回り候補だけを素早く横移動する。handling_multiplier は将来の操作性補正用。
+static func cpu_line_move_speed_m_per_s(slot: Dictionary, handling_multiplier: float = 1.0) -> float:
+	var multiplier := Config.number("cpu_overtake_escape_steer_speed_multiplier") if bool(slot.get("escape", false)) else 1.0
+	return Config.number("cpu_steer_speed_m_per_s") * multiplier * maxf(handling_multiplier, 0.0)
 
 
 static func cpu_trainer_profile(gate_index: int) -> Dictionary:
@@ -585,6 +797,9 @@ static func cpu_trainer_settings() -> Dictionary:
 		"max_drive_level": DRIVE_LEVEL_MAX,
 		"finish_start_progress": Config.number("cpu_trainer_finish_start_progress"),
 		"finish_full_progress": Config.number("cpu_trainer_finish_full_progress"),
+		"finish_chase_base_ratio": Config.number("cpu_trainer_finish_chase_base_ratio"),
+		"finish_chase_position_ratio": Config.number("cpu_trainer_finish_chase_position_ratio"),
+		"finish_chase_leader_gap_ratio": Config.number("cpu_trainer_finish_chase_leader_gap_ratio"),
 		"cruise_reduction_max_kmh": Config.number("cpu_trainer_cruise_reduction_max_kmh"),
 		"global_chase_pressure_max_kmh": Config.number("cpu_trainer_global_chase_pressure_max_kmh"),
 		"global_gap_reference_m": Config.number("cpu_trainer_global_gap_reference_m"),
@@ -592,6 +807,7 @@ static func cpu_trainer_settings() -> Dictionary:
 		"field_pace_correction_max_kmh": Config.number("cpu_trainer_field_pace_correction_max_kmh"),
 		"field_pace_reference_kmh": Config.number("cpu_trainer_field_pace_reference_kmh"),
 		"closing_pressure_max_kmh": Config.number("cpu_trainer_closing_pressure_max_kmh"),
+		"front_chase_pressure_max_kmh": Config.number("cpu_trainer_front_chase_pressure_max_kmh"),
 		"closing_gap_reference_m": Config.number("cpu_trainer_closing_gap_reference_m"),
 		"closing_speed_reference_kmh": Config.number("cpu_trainer_closing_speed_reference_kmh"),
 		"reserve_max_kmh": Config.number("cpu_trainer_reserve_max_kmh"),
@@ -612,49 +828,6 @@ static func stamina_delta_per_s(drive_level: float) -> float:
 		return 0.0
 	var effort := absf(clamp_drive_level(drive_level)) / float(DRIVE_LEVEL_MAX)
 	return lerpf(Config.number("stamina_low_effort_delta_per_s"), Config.number("stamina_max_effort_delta_per_s"), effort)
-
-
-## other が self の前方にいる中心線距離（0 超〜 path_length）。真後ろは path_length に近い。
-static func forward_gap(self_distance: float, other_distance: float, path_length: float) -> float:
-	if path_length <= 0.0:
-		return 0.0
-	return fposmod(other_distance - self_distance, path_length)
-
-
-static func is_laterally_blocking(self_offset: float, other_offset: float) -> bool:
-	return absf(self_offset - other_offset) <= BLOCK_LATERAL_M
-
-
-## 直前にいるブロッカーの対地速度（km/h）。いなければ -1。
-static func blocking_speed_kmh(
-	self_distance: float,
-	self_offset: float,
-	others: Array,
-	path_length: float
-) -> float:
-	var best_gap := BLOCK_FORWARD_M
-	var found := false
-	var blocker_speed := -1.0
-	for entry in others:
-		var other_d: float = entry.get("distance", 0.0)
-		var other_o: float = entry.get("offset", 0.0)
-		var other_s: float = entry.get("speed", 0.0)
-		if not is_laterally_blocking(self_offset, other_o):
-			continue
-		var gap := forward_gap(self_distance, other_d, path_length)
-		if gap <= 0.0001 or gap > BLOCK_FORWARD_M:
-			continue
-		if (not found) or gap < best_gap:
-			found = true
-			best_gap = gap
-			blocker_speed = other_s
-	return blocker_speed if found else -1.0
-
-
-static func apply_block_cap_kmh(desired_kmh: float, blocker_kmh: float) -> float:
-	if blocker_kmh < 0.0:
-		return desired_kmh
-	return minf(desired_kmh, blocker_kmh * BLOCK_SPEED_FACTOR)
 
 
 static func contact_overlaps(
@@ -734,17 +907,10 @@ static func format_race_time(seconds: float) -> String:
 	return "%.1f" % remaining
 
 
-## 最内＝枠1。offset は負が内側。8 頭を可動幅に等間隔。
+## 最内＝枠1。offset は負が内側。8プルを可動幅に等間隔。
 static func starting_offset_for_gate(gate_index: int, field_size: int = FIELD_SIZE) -> float:
 	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
 	if field_size <= 1:
 		return -max_abs
 	var t := float(gate_index) / float(field_size - 1)
 	return lerpf(-max_abs, max_abs, t)
-
-
-static func tier_speed_kmh_for_index(index: int) -> float:
-	var tiers := CPU_SPEED_TIERS_KMH
-	assert(not tiers.is_empty(), "cpu_speed_tiers_kmh は1個以上必要です")
-	var tier_index := int(posmod(index, tiers.size()))
-	return float(tiers[tier_index])
