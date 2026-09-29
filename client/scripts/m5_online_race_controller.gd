@@ -50,6 +50,7 @@ var _route: Dictionary = {}
 var _track_length := 2083.1
 var _race_distance := 2000.0
 var _goal_path := 400.0
+var _launch_visual: MeshInstance3D
 var _paused := false
 var _race_result_received := false
 var _visual_hold_remaining := 0.0
@@ -78,6 +79,9 @@ func _ready() -> void:
 	_track.curve = M5CourseBuilder.make_racecourse_curve(
 		_straight_len, _turn_radius, 1.0
 	)
+	_launch_visual = MeshInstance3D.new()
+	_launch_visual.name = "RouteLaunchStraight"
+	_track.add_child(_launch_visual)
 	_result_panel.visible = false
 	_pause_panel.visible = false
 	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：目標スピード　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
@@ -163,12 +167,12 @@ func _process(delta: float) -> void:
 		var current_distance := float(_visual_distances.get(racer_id, target.x))
 		var current_offset := float(_visual_offsets.get(racer_id, target.y))
 		if _visual_finished.get(racer_id, false) or _race_result_received:
-			current_distance = fposmod(current_distance + 58.0 / 3.6 * delta, path_length)
+			current_distance += 58.0 / 3.6 * delta
 			_visual_distances[racer_id] = current_distance
 			_apply_visual_pose(_visuals[racer_id], current_distance, current_offset)
 			continue
-		var distance_delta := fposmod(target.x - current_distance + path_length * 0.5, path_length) - path_length * 0.5
-		current_distance = fposmod(current_distance + distance_delta * smoothing, path_length)
+		var distance_delta := target.x - current_distance
+		current_distance = maxf(current_distance + distance_delta * smoothing, 0.0)
 		current_offset = lerpf(current_offset, target.y, smoothing)
 		_visual_distances[racer_id] = current_distance
 		_visual_offsets[racer_id] = current_offset
@@ -187,9 +191,7 @@ func _on_race_tick(payload: Dictionary) -> void:
 		var racer_id := str(racer.get("id", ""))
 		if not _visuals.has(racer_id):
 			_create_visual(racer_id, _visuals.size())
-		var target_distance := M5CourseBuilder.route_mainline_distance(
-			_route, float(racer.get("race_progress", 0.0)), _track_length
-		)
+		var target_distance := float(racer.get("race_progress", 0.0))
 		var target_offset := float(racer.get("offset", 0.0))
 		_visual_targets[racer_id] = Vector2(target_distance, target_offset)
 		_visual_finished[racer_id] = bool(racer.get("finished", false))
@@ -257,9 +259,8 @@ func _create_visual(racer_id: String, index: int) -> void:
 func _place_markers() -> void:
 	_place_line_marker(_goal_marker, _goal_path, Color(0.98, 0.98, 1.0))
 	_goal_visual.place(_track, _goal_path, 15.0)
-	_place_line_marker(
-		_start_marker, float(_route.get("start_mainline_m", 0.0)), Color(0.2, 0.85, 0.45)
-	)
+	_place_route_line_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
+	_update_launch_visual()
 
 func _set_route(distance_m: float) -> void:
 	var next_route := M5CourseBuilder.route_for_distance(_layout, distance_m)
@@ -268,6 +269,34 @@ func _set_route(distance_m: float) -> void:
 	_route = next_route
 	_race_distance = float(_route.get("distance_m", distance_m))
 	_place_markers()
+
+
+func _update_launch_visual() -> void:
+	if _launch_visual == null or _track == null or _track.curve == null:
+		return
+	var segments: Array = _route.get("segments", [])
+	if segments.is_empty() or str(segments[0].get("type", "")) != "straight":
+		_launch_visual.visible = false
+		return
+	var launch_length := float(segments[0].get("distance_m", 0.0))
+	var start_distance := fposmod(float(_route.get("start_mainline_m", 0.0)), _track_length)
+	var start_xf := _track.curve.sample_baked_with_rotation(start_distance)
+	# 1600mのスタート直線は、本線の接続点から逆向きへ延ばす。
+	var travel := start_xf.basis.z
+	travel.y = 0.0
+	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(15.0, 0.12, launch_length)
+	_launch_visual.mesh = mesh
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(0.45, 0.38, 0.32)
+	material.roughness = 0.9
+	_launch_visual.material_override = material
+	_launch_visual.visible = true
+	_launch_visual.global_transform = _track.global_transform * Transform3D(
+		Basis.looking_at(travel, Vector3.UP),
+		start_xf.origin + travel * launch_length * 0.5 + Vector3.UP * 0.06
+	)
 
 func _place_line_marker(node: MeshInstance3D, path_distance: float, color: Color) -> void:
 	if node == null or _track == null or _track.curve == null:
@@ -290,17 +319,38 @@ func _place_line_marker(node: MeshInstance3D, path_distance: float, color: Color
 		curve_xf.origin + Vector3.UP * 0.14
 	)
 
+
+func _place_route_line_marker(node: MeshInstance3D, route_distance: float, color: Color) -> void:
+	if node == null or _track == null or _track.curve == null:
+		return
+	var pose := M5CourseBuilder.route_pose(_track.curve, _route, route_distance, _track_length)
+	if pose.is_empty():
+		return
+	var travel: Vector3 = pose.get("travel", Vector3(0.0, 0.0, -1.0))
+	var box := BoxMesh.new()
+	box.size = Vector3(15.0, 0.035, 0.12)
+	node.mesh = box
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color * 1.2
+	material.emission_energy_multiplier = 2.0
+	node.material_override = material
+	node.global_transform = _track.global_transform * Transform3D(
+		Basis.looking_at(travel, Vector3.UP),
+		pose.get("position", Vector3.ZERO) + Vector3.UP * 0.14
+	)
+
 func _apply_visual_pose(visual: Node3D, distance: float, offset: float) -> void:
 	if _track == null or _track.curve == null:
 		return
-	var path_length := _track.curve.get_baked_length()
-	var path_distance := fposmod(distance, path_length)
-	var local_xf := _track.curve.sample_baked_with_rotation(path_distance)
-	var centerline_local := local_xf.origin
-	var outward := _stadium_outward(centerline_local)
+	var pose := M5CourseBuilder.route_pose(_track.curve, _route, distance, _track_length)
+	if pose.is_empty():
+		return
+	var centerline_local: Vector3 = pose.get("position", Vector3.ZERO)
+	var outward: Vector3 = pose.get("outward", _stadium_outward(centerline_local))
 	var pos_local := centerline_local + outward * offset + Vector3.UP * 0.75
-	var travel := -local_xf.basis.z
-	travel.y = 0.0
+	var travel: Vector3 = pose.get("travel", Vector3(0.0, 0.0, -1.0))
 	travel = travel.normalized() if travel.length_squared() >= 0.0001 else Vector3(0.0, 0.0, -1.0)
 	visual.global_transform = _track.global_transform * Transform3D(
 		Basis.looking_at(travel, Vector3.UP),

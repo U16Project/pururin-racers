@@ -6,6 +6,7 @@ const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const M4_SCENE_PATH := "res://scenes/m4_group_race.tscn"
 const M5_SCENE_PATH := "res://scenes/m5_online_race.tscn"
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
 const INTRO_ITEMS := [
 	"←→／左スティック：走る位置　↑↓／十字キー：ローカルは出力、M4とオンラインは目標スピード",
 	"Y/C：カメラ切替　Start/Esc：メニュー（レース中）",
@@ -27,6 +28,7 @@ const CONNECTION_STATUS := {
 
 @onready var _proceed_button: Button = %ProceedButton
 @onready var _race_button: Button = %RaceButton
+@onready var _distance_option: OptionButton = %DistanceOption
 @onready var _m4_button: Button = %M4Button
 @onready var _m5_button: Button = %M5Button
 
@@ -34,15 +36,19 @@ const CONNECTION_STATUS := {
 func _ready() -> void:
 	print("ぷるりんレーサーズ — M3 導入を表示します")
 	_race_button.pressed.connect(_on_race_pressed)
+	_distance_option.item_selected.connect(_on_distance_selected)
 	_m4_button.pressed.connect(_on_m4_pressed)
 	_m5_button.pressed.connect(_on_m5_pressed)
 	_proceed_button.pressed.connect(_on_proceed_pressed)
-	_race_button.grab_focus()
+	for distance_m in RaceSession.supported_distances_m():
+		_distance_option.add_item("%dm" % int(distance_m))
+	_distance_option.select(_distance_index(RaceSession.selected_distance_m()))
+	_distance_option.grab_focus()
 	_refresh_guide_label()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_accept") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A):
+	if (event.is_action_pressed("ui_accept") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A)) and get_viewport().gui_get_focus_owner() == _race_button:
 		go_to_local_race()
 
 
@@ -80,6 +86,20 @@ func _on_proceed_pressed() -> void:
 
 func _on_race_pressed() -> void:
 	go_to_local_race()
+
+
+func _on_distance_selected(index: int) -> void:
+	var distances := RaceSession.supported_distances_m()
+	if index >= 0 and index < distances.size():
+		RaceSession.select_distance(float(distances[index]))
+
+
+func _distance_index(distance_m: float) -> int:
+	var distances := RaceSession.supported_distances_m()
+	for index in distances.size():
+		if is_equal_approx(float(distances[index]), distance_m):
+			return index
+	return 2
 
 
 func _on_m4_pressed() -> void:

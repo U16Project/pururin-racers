@@ -469,7 +469,10 @@ func _finished_count(runners: Array) -> int:
 func _snapshot_runners(runners: Array, elapsed: float) -> Array:
 	var values: Array = []
 	for runner in runners:
-		var snapshot: Dictionary = runner.call("get_snapshot")
+		# 実レースのテレメトリと同じ経路を使う。CPU は内部の
+		# _cpu_trainer_drive_level で走るため、プレイヤー入力用の
+		# get_drive_level() をここで読むと、診断値とノッチが食い違う。
+		var snapshot: Dictionary = runner.call("get_telemetry_snapshot")
 		var finished := bool(runner.call("is_finished"))
 		snapshot["time_s"] = runner.call("get_finish_time") if finished else elapsed
 		snapshot["finish_time_s"] = runner.call("get_finish_time")
@@ -480,7 +483,6 @@ func _snapshot_runners(runners: Array, elapsed: float) -> Array:
 		snapshot["target_speed_kmh"] = float(runner.call("get_target_speed"))
 		snapshot["heart_rate_bpm"] = float(runner.call("get_heart_rate_bpm"))
 		snapshot["stamina"] = float(runner.call("get_stamina"))
-		snapshot["drive_level"] = float(runner.call("get_drive_level"))
 		snapshot["drive_mode"] = bool(runner.call("is_drive_mode"))
 		snapshot["race_active"] = bool(runner.call("is_race_active"))
 		snapshot["natural_top_speed_kmh"] = float(runner.call("get_natural_top_speed"))

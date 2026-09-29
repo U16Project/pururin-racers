@@ -171,13 +171,16 @@ static func route_mainline_distance(
 	var segments: Array = route.get("segments", [])
 	for segment in segments:
 		var length := float(segment.get("distance_m", 0.0))
-		var consumed := minf(remaining, length)
-		if str(segment.get("type", "")) == "mainline":
-			return fposmod(start + consumed, track_length_m)
-		remaining -= consumed
-		if remaining <= 0.0:
+		if remaining <= length:
+			if str(segment.get("type", "")) == "mainline":
+				return fposmod(start + remaining, track_length_m)
 			return fposmod(start, track_length_m)
-	return fposmod(start + route_distance_m, track_length_m)
+		if str(segment.get("type", "")) == "mainline":
+			start = fposmod(start + length, track_length_m)
+		remaining -= length
+	# ゴール後の表示継続では route distance が定義長を超える。
+	# その場合はルート終端から本線をそのまま進め、専用区間を再走しない。
+	return fposmod(start + remaining, track_length_m)
 
 static func route_offset_for_distance(
 	route: Dictionary, route_distance_m: float, track_length_m: float
@@ -192,3 +195,58 @@ static func route_offset_for_distance(
 		if remaining <= 0.0:
 			break
 	return route_mainline_distance(route, route_distance_m, track_length_m)
+
+
+## ルートの進行距離を描画用の位置へ変換する共通入口。
+## 専用の直線区間も本線と同じ route distance 軸で扱い、物理式は呼び出し側で共通化する。
+static func route_pose(
+	curve: Curve3D,
+	route: Dictionary,
+	route_distance_m: float,
+	track_length_m: float
+) -> Dictionary:
+	if curve == null or route.is_empty():
+		return {}
+	var progress := maxf(route_distance_m, 0.0)
+	var segments: Array = route.get("segments", [])
+	if not segments.is_empty() and str(segments[0].get("type", "")) == "straight":
+		var launch_length := float(segments[0].get("distance_m", 0.0))
+		if progress < launch_length:
+			var start_distance := fposmod(float(route.get("start_mainline_m", 0.0)), track_length_m)
+			var start_xf := curve.sample_baked_with_rotation(start_distance)
+			# 専用スタート直線は本線の接続点から外側へ延ばす。
+			# 外側方向は本線接線の逆側、進行方向は接続点へ向かう本線接線と同じにする。
+			var outward_travel := start_xf.basis.z
+			var travel := -outward_travel
+			travel.y = 0.0
+			if travel.length_squared() < 0.0001:
+				travel = Vector3(0.0, 0.0, -1.0)
+			else:
+				travel = travel.normalized()
+			var lateral := Vector3(-travel.z, 0.0, travel.x)
+			var join_outward := lateral.normalized() if lateral.length_squared() >= 0.0001 else Vector3(0.0, 0.0, 1.0)
+			return {
+				"position": start_xf.origin + outward_travel * (launch_length - progress),
+				"travel": travel,
+				"outward": join_outward,
+				"mainline_distance": start_distance,
+				"curvature": 0.0,
+				"is_straight": true,
+			}
+	var mainline_distance := route_mainline_distance(route, progress, track_length_m)
+	var mainline_xf := curve.sample_baked_with_rotation(mainline_distance)
+	var mainline_travel := -mainline_xf.basis.z
+	mainline_travel.y = 0.0
+	if mainline_travel.length_squared() < 0.0001:
+		mainline_travel = Vector3(0.0, 0.0, -1.0)
+	else:
+		mainline_travel = mainline_travel.normalized()
+	var mainline_lateral := Vector3(-mainline_travel.z, 0.0, mainline_travel.x)
+	return {
+		"position": mainline_xf.origin,
+		"travel": mainline_travel,
+		"outward": mainline_lateral.normalized() if mainline_lateral.length_squared() >= 0.0001 else Vector3(0.0, 0.0, 1.0),
+		"mainline_distance": mainline_distance,
+		"curvature": 0.0,
+		"is_straight": false,
+	}

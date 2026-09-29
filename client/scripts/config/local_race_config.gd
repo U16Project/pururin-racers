@@ -100,6 +100,8 @@ const NUMBER_RANGES := {
 	"stamina_debt_stat_mitigation_max": [0.0, 1.0],
 	"overheat_stamina_multiplier_max": [1.0, 10.0],
 	"overheat_propulsion_efficiency_min": [0.0, 1.0],
+	"overheat_exposure_efficiency_loss_per_s": [0.0001, 1.0],
+	"overheat_exposure_recovery_per_s": [0.0, 100.0],
 }
 static var _cached: Dictionary = {}
 static var _attempted := false

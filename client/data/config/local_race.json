@@ -13,7 +13,7 @@
   "draft_response_exponent": 2.0,
   "draft_effective_max_ratio": 0.60,
   "draft_aggregation_exponent": 2.3,
-  "drive_force_by_level_kmh_per_s": [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 6.8],
+  "drive_force_by_level_kmh_per_s": [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 7.2],
   "brake_deceleration_per_level": 4.0,
   "draft_air_resistance_factor": 0.55,
   "drive_repeat_initial_s": 0.24,
@@ -83,7 +83,7 @@
   "heart_rate_min_bpm": 100.0,
   "heart_rate_normal_max_bpm": 200.0,
   "heart_rate_overheat_max_bpm": 230.0,
-  "heart_rate_rise_rate_by_drive_level_bpm_per_s": [0.0, 1.8, 2.2, 2.5, 3.7, 5.4, 6.6666667],
+  "heart_rate_rise_rate_by_drive_level_bpm_per_s": [0.0, 1.8, 2.2, 2.5, 3.7, 5.4, 11.0],
   "heart_rate_drive_load_scale": 0.58,
   "heart_rate_rise_time_cardio_min_s": 11.0,
   "heart_rate_rise_time_cardio_max_s": 25.0,
@@ -101,5 +101,7 @@
   "stamina_debt_efficiency_min": 0.40,
   "stamina_debt_stat_mitigation_max": 0.50,
   "overheat_stamina_multiplier_max": 1.50,
-  "overheat_propulsion_efficiency_min": 0.75
+  "overheat_propulsion_efficiency_min": 0.35,
+  "overheat_exposure_efficiency_loss_per_s": 0.017,
+  "overheat_exposure_recovery_per_s": 2.50
 }

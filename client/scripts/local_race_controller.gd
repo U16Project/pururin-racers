@@ -3,6 +3,8 @@ extends Node3D
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
+const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd")
 ## ローカル簡易レースの進行・UI・8プル生成。
 
 
@@ -51,6 +53,10 @@ var _player: Node3D = null
 var _race_started: bool = false
 var _start_countdown_remaining: float = 0.0
 var _start_signal_remaining: float = 0.0
+var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
+var _race_route: Dictionary = {}
+var _launch_visual: MeshInstance3D
+var _telemetry_recorder := RaceTelemetryRecorder.new()
 
 
 func _ready() -> void:
@@ -66,6 +72,13 @@ func _ready() -> void:
 		set_process(false)
 		return
 	LocalRaceMath.apply_course_to_path(_track)
+	_race_distance_m = RaceSession.selected_distance_m()
+	_race_route = M5CourseBuilder.route_for_distance(
+		M5CourseBuilder.load_layout(), _race_distance_m
+	)
+	_launch_visual = MeshInstance3D.new()
+	_launch_visual.name = "RouteLaunchStraight"
+	_track.add_child(_launch_visual)
 	if LocalRaceMath.Config.values().is_empty():
 		_hud_label.text = "レース設定を確認してください：" + LocalRaceMath.Config.last_error
 		set_process(false)
@@ -119,6 +132,7 @@ func _process(_delta: float) -> void:
 		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
 		_share_snapshots()
 		call_deferred("_finalize_draft_tick")
+		_telemetry_recorder.record_sample(_race_elapsed, _runners)
 	if _results_pending and not _race_over and not _paused:
 		_results_wait_remaining -= _delta
 		if _results_wait_remaining <= 0.0:
@@ -132,6 +146,7 @@ func _update_start_countdown(delta: float) -> void:
 		_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
 		return
 	_race_started = true
+	_telemetry_recorder.start(_race_distance_m)
 	_countdown_label.text = "START!"
 	_start_signal_remaining = 0.8
 	for runner in _runners:
@@ -191,7 +206,8 @@ func _spawn_field() -> void:
 			LocalRaceMath.PLAYER_MAX_SPEED_KMH,
 			is_player,
 			label,
-			pururin
+			pururin,
+			_race_distance_m
 		)
 		_runners.append(runner)
 		if is_player:
@@ -211,13 +227,65 @@ func get_runners_for_simulation() -> Array:
 func _place_markers() -> void:
 	if _track == null or _track.curve == null:
 		return
+	var goal_pose := M5CourseBuilder.route_pose(
+		_track.curve, _race_route, _race_distance_m, LocalRaceMath.lap_length_m()
+	)
+	var goal_path := float(goal_pose.get("mainline_distance", LocalRaceMath.goal_path_m()))
 	_place_line_marker(
 		_goal_marker,
-		LocalRaceMath.goal_path_m(),
+		goal_path,
 		Color(0.95, 0.95, 0.95)
 	)
-	_goal_visual.place(_track, LocalRaceMath.goal_path_m(), 15.0)
-	_place_line_marker(_start_marker, LocalRaceMath.start_path_m(), Color(0.2, 0.85, 0.45))
+	_goal_visual.place(_track, goal_path, 15.0)
+	_place_route_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
+	_update_launch_visual()
+
+
+func _place_route_marker(node: MeshInstance3D, route_distance_m: float, color: Color) -> void:
+	var pose := M5CourseBuilder.route_pose(
+		_track.curve, _race_route, route_distance_m, LocalRaceMath.lap_length_m()
+	)
+	if pose.is_empty():
+		return
+	var box := BoxMesh.new()
+	box.size = Vector3(15.0, 0.035, 0.12)
+	node.mesh = box
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.emission_enabled = true
+	mat.emission = color * 1.2
+	mat.emission_energy_multiplier = 2.0
+	node.material_override = mat
+	var basis := Basis.looking_at(pose["travel"], Vector3.UP)
+	node.global_transform = _track.global_transform * Transform3D(
+		basis, pose["position"] + Vector3.UP * 0.14
+	)
+
+
+func _update_launch_visual() -> void:
+	if _launch_visual == null:
+		return
+	var segments: Array = _race_route.get("segments", [])
+	if segments.is_empty() or str(segments[0].get("type", "")) != "straight":
+		_launch_visual.visible = false
+		return
+	var launch_length := float(segments[0].get("distance_m", 0.0))
+	var join_pose := M5CourseBuilder.route_pose(
+		_track.curve, _race_route, launch_length, LocalRaceMath.lap_length_m()
+	)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(15.0, 0.12, launch_length)
+	_launch_visual.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.45, 0.38, 0.32, 1.0)
+	mat.roughness = 0.9
+	_launch_visual.material_override = mat
+	_launch_visual.visible = true
+	var travel: Vector3 = join_pose["travel"]
+	var center: Vector3 = join_pose["position"] - travel * (launch_length * 0.5)
+	_launch_visual.global_transform = _track.global_transform * Transform3D(
+		Basis.looking_at(travel, Vector3.UP), center + Vector3.UP * 0.02
+	)
 
 
 func _place_line_marker(node: MeshInstance3D, path_d: float, color: Color) -> void:
@@ -265,7 +333,7 @@ func _check_finishes() -> void:
 	for r in _runners:
 		if r.call("is_finished"):
 			continue
-		if LocalRaceMath.has_finished(r.call("get_race_progress")):
+		if LocalRaceMath.has_finished(r.call("get_race_progress"), _race_distance_m):
 			_finish_count += 1
 			r.call("mark_finished", _finish_count, _race_elapsed)
 	var all_done := true
@@ -294,7 +362,7 @@ func _update_hud() -> void:
 	var cur: float = _player.call("get_current_speed")
 	var lines := PackedStringArray([
 		"順位 %d／8" % order,
-		"残り %.0fm" % maxf(LocalRaceMath.RACE_DISTANCE_M - prog, 0.0),
+		"残り %.0fm" % maxf(_race_distance_m - prog, 0.0),
 	])
 	if _player.call("is_drive_mode"):
 		var effective_stats: Dictionary = _player.call("get_effective_stats")
@@ -305,6 +373,10 @@ func _update_hud() -> void:
 		lines.append("心拍 %.0f/%.0f" % [
 			_player.call("get_heart_rate_bpm"),
 			LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+		])
+		lines.append("200超過 負荷 %.1fs　推進効率 %.0f%%" % [
+			_player.call("get_heart_overage_exposure"),
+			_player.call("get_propulsion_efficiency") * 100.0,
 		])
 		lines.append("スタミナ %.0f%%" % _player.call("get_stamina"))
 		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
@@ -355,6 +427,7 @@ func _live_place(runner: Node3D) -> int:
 
 
 func _show_results() -> void:
+	_telemetry_recorder.finalize(_race_elapsed, _runners)
 	_race_over = true
 	_set_paused(true)
 	_pause_panel.visible = false

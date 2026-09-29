@@ -1,6 +1,7 @@
 extends GutTest
 
 const Simulator := preload("res://scripts/local_race_simulator.gd")
+const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 
 func test_scenario_config_has_reusable_cases() -> void:
@@ -95,3 +96,41 @@ func test_notch6_relative_goal_compares_against_notch4_load() -> void:
 			relative_status = str((check_value as Dictionary).get("status", ""))
 	assert_eq(relative_status, "PASS")
 	assert_true(bool(assessment.get("passed", false)), str(assessment.get("summary", "")))
+
+
+func test_cpu_snapshots_keep_active_drive_level_aligned_with_diagnostics() -> void:
+	var simulator := Simulator.new()
+	var scenario := Simulator.scenario_by_id("cpu_pack_and_draft")
+	# CPU のスタートノッチと、そのノッチに基づく診断値を観測するだけなので、
+	# 完走まで進める必要はない。
+	scenario["max_time_s"] = 0.1
+	scenario["sample_interval_s"] = 0.05
+	var result := simulator.run_scenario(self, scenario)
+	assert_false(result.has("error"))
+	var samples: Array = result["samples"]
+	assert_gt(samples.size(), 0)
+	var cpu_count := 0
+	for runner_value: Variant in samples[0]:
+		if not runner_value is Dictionary:
+			continue
+		var runner: Dictionary = runner_value
+		if bool(runner.get("player", false)):
+			continue
+		cpu_count += 1
+		var drive_level := float(runner["drive_level"])
+		var diagnostics: Dictionary = runner["drive_diagnostics"]
+		var expected: Dictionary = LocalRaceMath.drive_diagnostics_kmh_per_s(
+			float(runner["speed_kmh"]),
+			drive_level,
+			0.0,
+			float(runner["acceleration_force_bonus_kmh_per_s"]),
+			float(runner["top_speed_drive_adjustment_kmh_per_s"]),
+			float(runner["propulsion_efficiency"])
+		)
+		assert_eq(drive_level, 5.0)
+		assert_almost_eq(
+			float(diagnostics["drive_contribution_kmh_per_s"]),
+			float(expected["drive_contribution_kmh_per_s"]),
+			0.001
+		)
+	assert_eq(cpu_count, 7)

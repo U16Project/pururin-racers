@@ -6,6 +6,7 @@ extends RefCounted
 const Config := preload("res://scripts/config/local_race_config.gd")
 const CourseLayout := preload("res://scripts/m5_course_builder.gd")
 const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 
@@ -132,8 +133,16 @@ static func goal_path_m() -> float:
 
 
 static func start_path_m() -> float:
-	var route := CourseLayout.route_for_distance(course_layout(), RACE_DISTANCE_M)
+	return start_path_for_distance_m(RaceSession.selected_distance_m())
+
+
+static func start_path_for_distance_m(distance_m: float) -> float:
+	var route := CourseLayout.route_for_distance(course_layout(), distance_m)
 	return float(route.get("start_mainline_m", 0.0))
+
+
+static func race_distance_m() -> float:
+	return RaceSession.selected_distance_m()
 
 
 static func apply_course_to_path(path: Path3D) -> void:
@@ -795,6 +804,13 @@ static func cpu_trainer_profile(gate_index: int) -> Dictionary:
 	var values := Config.values()
 	var cycle: Array = values["cpu_trainer_profile_cycle"]
 	var profile_id := str(cycle[posmod(gate_index - 1, cycle.size())])
+	return cpu_trainer_profile_by_id(profile_id)
+
+
+## roster の trainer_profile_id から CPU 方針を引く。
+## ゲート循環は、個別指定がない旧呼び出し用のフォールバックとしてだけ残す。
+static func cpu_trainer_profile_by_id(profile_id: String) -> Dictionary:
+	var values := Config.values()
 	for profile_value in values["cpu_trainer_profiles"]:
 		if profile_value is Dictionary and str(profile_value.get("id", "")) == profile_id:
 			return profile_value.duplicate(true)
@@ -904,8 +920,44 @@ static func overheat_stamina_multiplier(heart_rate_bpm: float) -> float:
 	return lerpf(1.0, Config.number("overheat_stamina_multiplier_max"), overheat_ratio(heart_rate_bpm))
 
 
-static func propulsion_efficiency(heart_rate_bpm: float) -> float:
-	return lerpf(1.0, Config.number("overheat_propulsion_efficiency_min"), overheat_ratio(heart_rate_bpm))
+static func overheat_exposure_limit() -> float:
+	var loss_per_s := Config.number("overheat_exposure_efficiency_loss_per_s")
+	return maxf(
+		(1.0 - Config.number("overheat_propulsion_efficiency_min")) / maxf(loss_per_s, 0.0001),
+		0.0
+	)
+
+
+## 200 bpmを超えた負荷を、超過率で重み付けして蓄積する。
+## 200 bpm未満では、より低く戻すほど速く解消する。
+static func update_overheat_exposure(
+	current_exposure: float,
+	heart_rate_bpm: float,
+	delta: float
+) -> float:
+	var normal_max := Config.number("heart_rate_normal_max_bpm")
+	var next_exposure := maxf(current_exposure, 0.0)
+	if delta <= 0.0:
+		return clampf(next_exposure, 0.0, overheat_exposure_limit())
+	if heart_rate_bpm > normal_max:
+		next_exposure += overheat_ratio(heart_rate_bpm) * delta
+	elif heart_rate_bpm < normal_max:
+		var recovery_ratio := clampf(
+			(normal_max - heart_rate_bpm)
+			/ maxf(normal_max - Config.number("heart_rate_min_bpm"), 0.001),
+			0.0,
+			1.0
+		)
+		next_exposure -= Config.number("overheat_exposure_recovery_per_s") * recovery_ratio * delta
+	return clampf(next_exposure, 0.0, overheat_exposure_limit())
+
+
+static func overheat_exposure_propulsion_efficiency(exposure: float) -> float:
+	return clampf(
+		1.0 - maxf(exposure, 0.0) * Config.number("overheat_exposure_efficiency_loss_per_s"),
+		Config.number("overheat_propulsion_efficiency_min"),
+		1.0
+	)
 
 
 static func stamina_debt_efficiency(stamina: float, stamina_stat: int) -> float:

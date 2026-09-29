@@ -5,6 +5,8 @@ extends Node3D
 
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
 const CpuTrainerMath := preload("res://scripts/cpu_trainer_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
@@ -41,8 +43,11 @@ var _direct_source_ids: Array = []
 var _chain_source_ids: Array = []
 var _direct_source_details: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
+var _heart_overage_exposure: float = 0.0
 var _stamina: float = LocalRaceMath.Config.number("stamina_capacity")
 var _race_progress: float = 0.0
+var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
+var _race_route: Dictionary = {}
 var _finished: bool = false
 var _finish_order: int = -1
 var _finish_time: float = -1.0
@@ -68,18 +73,23 @@ func setup_for_race(
 	initial_max_speed_kmh: float,
 	is_player: bool,
 	label: String,
-	pururin: Dictionary = {}
+	pururin: Dictionary = {},
+	race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 ) -> void:
 	_path = path
 	gate_index = gate
 	_base_max_speed_kmh = initial_max_speed_kmh
 	max_speed_kmh = initial_max_speed_kmh
 	_pururin = pururin.duplicate(true)
+	_race_distance_m = RaceSession.select_distance(race_distance_m)
+	_race_route = M5CourseBuilder.route_for_distance(
+		LocalRaceMath.course_layout(), _race_distance_m
+	)
 	player_controlled = is_player
 	display_name = label
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
 	_target_offset = _offset
-	_distance = LocalRaceMath.start_path_m()
+	_distance = LocalRaceMath.start_path_for_distance_m(_race_distance_m)
 	_race_progress = 0.0
 	_finished = false
 	_finish_order = -1
@@ -93,7 +103,14 @@ func setup_for_race(
 	_drive_repeat_remaining = 0.0
 	_cpu_steer_timer = 0.0
 	_cpu_trainer_timer = 0.0
-	_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile(gate) if not is_player else {}
+	if not is_player:
+		var trainer_profile_id := str(_pururin.get("trainer_profile_id", ""))
+		_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(trainer_profile_id)
+		# roster 未指定時だけ、従来のゲート循環を使う。
+		if _cpu_trainer_profile.is_empty():
+			_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile(gate)
+	else:
+		_cpu_trainer_profile = {}
 	_cpu_trainer_drive_level = 0.0
 	_cpu_overtake_bias = 0.0
 	_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
@@ -104,6 +121,7 @@ func setup_for_race(
 	_draft_bonus_kmh = 0.0
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
+	_heart_overage_exposure = 0.0
 	_stamina = LocalRaceMath.Config.number("stamina_capacity")
 	_straight_len = LocalRaceMath.straight_length_m()
 	_turn_radius = LocalRaceMath.turn_radius_m()
@@ -229,12 +247,17 @@ func get_draft_status() -> Dictionary:
 
 
 func get_drive_diagnostics() -> Dictionary:
+	var active_drive_level := _active_drive_level()
 	return LocalRaceMath.drive_diagnostics_kmh_per_s(
 		_current_speed_kmh,
-		_drive_level,
+		active_drive_level,
 		_draft_air_resistance_factor(),
 		get_acceleration_force_bonus(),
-		get_top_speed_drive_adjustment(),
+		LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
+			_current_speed_kmh,
+			active_drive_level,
+			int(_effective_stats.get("top_speed", 5))
+		),
 		get_propulsion_efficiency()
 	)
 
@@ -268,8 +291,16 @@ func get_overheat_ratio() -> float:
 	return LocalRaceMath.overheat_ratio(_heart_rate_bpm)
 
 
+func get_heart_overage_exposure() -> float:
+	return _heart_overage_exposure
+
+
+func get_overheat_propulsion_efficiency() -> float:
+	return LocalRaceMath.overheat_exposure_propulsion_efficiency(_heart_overage_exposure)
+
+
 func get_propulsion_efficiency() -> float:
-	return LocalRaceMath.propulsion_efficiency(_heart_rate_bpm) * LocalRaceMath.stamina_debt_efficiency(
+	return get_overheat_propulsion_efficiency() * LocalRaceMath.stamina_debt_efficiency(
 		_stamina,
 		int(_effective_stats.get("stamina", 5))
 	)
@@ -277,6 +308,10 @@ func get_propulsion_efficiency() -> float:
 
 func get_race_progress() -> float:
 	return _race_progress
+
+
+func get_race_distance() -> float:
+	return _race_distance_m
 
 
 func get_max_speed() -> float:
@@ -298,7 +333,7 @@ func get_natural_top_speed() -> float:
 func get_top_speed_drive_adjustment() -> float:
 	return LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
 		_current_speed_kmh,
-		_drive_level,
+		_active_drive_level(),
 		int(_effective_stats.get("top_speed", 5))
 	)
 
@@ -343,6 +378,33 @@ func get_snapshot() -> Dictionary:
 	}
 
 
+func get_telemetry_snapshot() -> Dictionary:
+	var snapshot := get_snapshot()
+	snapshot["target_speed"] = _target_speed_kmh
+	snapshot["drive_level"] = _active_drive_level()
+	snapshot["heart_rate_bpm"] = _heart_rate_bpm
+	snapshot["heart_overage_exposure"] = _heart_overage_exposure
+	snapshot["stamina"] = _stamina
+	snapshot["overheat_ratio"] = get_overheat_ratio()
+	snapshot["overheat_propulsion_efficiency"] = get_overheat_propulsion_efficiency()
+	snapshot["propulsion_efficiency"] = get_propulsion_efficiency()
+	snapshot["natural_top_speed_kmh"] = _natural_top_speed_kmh
+	snapshot["effective_stats"] = _effective_stats.duplicate(true)
+	snapshot["draft"] = get_draft_status()
+	snapshot["drive_diagnostics"] = get_drive_diagnostics()
+	snapshot["position"] = [global_position.x, global_position.y, global_position.z]
+	snapshot["rotation_y"] = rotation.y
+	return snapshot
+
+
+func _active_drive_level() -> float:
+	if player_controlled:
+		return _drive_level
+	if _cpu_start_drive_remaining > 0.0:
+		return LocalRaceMath.Config.number("cpu_start_drive_level")
+	return _cpu_trainer_drive_level
+
+
 func _ready() -> void:
 	if _path == null:
 		_path = get_node_or_null(path_path) as Path3D
@@ -364,7 +426,11 @@ func _process(delta: float) -> void:
 		return
 	_apply_pururin_race_stats()
 	var previous_offset := _offset
-	var curvature := M2TrackMath.curvature_at(_path.curve, _distance)
+	var route_pose := M5CourseBuilder.route_pose(
+		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
+	)
+	var pose_distance := float(route_pose.get("mainline_distance", _distance))
+	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else M2TrackMath.curvature_at(_path.curve, pose_distance)
 	_update_inputs(delta, curvature)
 	if not LocalRaceMath.can_use_offset(_race_progress, _offset, _others_snapshot):
 		_offset = previous_offset
@@ -428,7 +494,10 @@ func _process(delta: float) -> void:
 	)
 	var allowed_advance := allowed_progress - _race_progress
 	_race_progress = allowed_progress
-	_distance = fposmod(_distance + allowed_advance, path_len)
+	var next_pose := M5CourseBuilder.route_pose(
+		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
+	)
+	_distance = fposmod(float(next_pose.get("mainline_distance", _distance)), path_len)
 	_apply_pose()
 
 
@@ -500,7 +569,7 @@ func _update_cpu_target_speed() -> void:
 	var global_gap := _cpu_global_gap_summary()
 	var pace := _cpu_pace_summary()
 	var decision := CpuTrainerMath.decide(_cpu_trainer_profile, {
-		"progress_ratio": _race_progress / LocalRaceMath.RACE_DISTANCE_M,
+		"progress_ratio": _race_progress / _race_distance_m,
 		"field_size": LocalRaceMath.FIELD_SIZE,
 		"live_place": _cpu_live_place(),
 		"leader_gap_m": global_gap["leader_gap_m"],
@@ -578,7 +647,7 @@ func _apply_pururin_race_stats() -> void:
 		_pururin["allocation"],
 		str(_pururin["running_style"]),
 		_cpu_live_place(),
-		_race_progress / LocalRaceMath.RACE_DISTANCE_M
+		_race_progress / _race_distance_m
 	)
 	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))
 	max_speed_kmh = LocalRaceMath.HARD_SPEED_CAP_KMH
@@ -650,7 +719,12 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 			_heart_rate_bpm,
 			LocalRaceMath.Config.number("heart_rate_min_bpm"),
 			LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
-		)
+	)
+	_heart_overage_exposure = LocalRaceMath.update_overheat_exposure(
+		_heart_overage_exposure,
+		_heart_rate_bpm,
+		delta
+	)
 	var stamina_delta := LocalRaceMath.stamina_delta_per_s(
 		drive_level,
 		_heart_rate_bpm,
@@ -701,15 +775,14 @@ func _unhandled_input(event: InputEvent) -> void:
 func _apply_pose() -> void:
 	if _path == null or _path.curve == null:
 		return
-	var local_xf: Transform3D = _path.curve.sample_baked_with_rotation(_distance)
-	var centerline_local := local_xf.origin
-	var outward := M2TrackMath.stadium_outward(centerline_local, _straight_len, _turn_radius)
+	var route_pose := M5CourseBuilder.route_pose(
+		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
+	)
+	if route_pose.is_empty():
+		return
+	var centerline_local: Vector3 = route_pose["position"]
+	var outward: Vector3 = route_pose["outward"]
 	var pos_local := centerline_local + outward * _offset
-	var travel := -local_xf.basis.z
-	travel.y = 0.0
-	if travel.length_squared() < 0.0001:
-		travel = Vector3(0.0, 0.0, -1.0)
-	else:
-		travel = travel.normalized()
+	var travel: Vector3 = route_pose["travel"]
 	var basis := Basis.looking_at(travel, Vector3.UP)
 	global_transform = _path.global_transform * Transform3D(basis, pos_local)

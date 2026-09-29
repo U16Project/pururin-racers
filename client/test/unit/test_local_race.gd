@@ -3,6 +3,7 @@ extends GutTest
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const M2CourseBuilder := preload("res://scripts/m2_course_builder.gd")
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const M5CameraScript := preload("res://scripts/m5_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
@@ -114,6 +115,48 @@ func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> voi
 	race.free()
 
 
+func test_cpu_runner_uses_its_roster_trainer_profile_instead_of_gate_cycle() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	# モモ（gate 5）は旧ゲート循環なら front になるが、roster 指定は balanced。
+	var momo: Dictionary = PururinRosterConfig.pururin_by_id("cpu-5")
+	runner.call("setup_for_race", null, 5, 75.0, false, str(momo["display_name"]), momo)
+	var profile: Dictionary = runner.get("_cpu_trainer_profile")
+	assert_eq(profile["id"], "balanced")
+	runner.free()
+
+
+func test_cpu_telemetry_uses_trainer_drive_level_for_drive_diagnostics() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	var momo: Dictionary = PururinRosterConfig.pururin_by_id("cpu-5")
+	runner.call("setup_for_race", null, 5, 75.0, false, str(momo["display_name"]), momo)
+	runner.set("_current_speed_kmh", 60.0)
+	runner.set("_cpu_trainer_drive_level", 4.0)
+	var telemetry: Dictionary = runner.call("get_telemetry_snapshot")
+	var diagnostics: Dictionary = telemetry["drive_diagnostics"]
+	var effective_stats: Dictionary = runner.call("get_effective_stats")
+	var expected: Dictionary = LocalRaceMath.drive_diagnostics_kmh_per_s(
+		60.0,
+		4.0,
+		0.0,
+		runner.call("get_acceleration_force_bonus"),
+		LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
+			60.0, 4.0, int(effective_stats["top_speed"])
+		),
+		1.0
+	)
+	assert_eq(telemetry["drive_level"], 4.0)
+	assert_almost_eq(
+		float(diagnostics["drive_contribution_kmh_per_s"]),
+		float(expected["drive_contribution_kmh_per_s"]),
+		0.001
+	)
+	runner.free()
+
+
 func _natural_speed_after_sixty_seconds(top_speed: int, acceleration: int) -> float:
 	var speed := LocalRaceMath.MIN_SPEED_KMH
 	for _index in 6000:
@@ -187,7 +230,7 @@ func test_drive_mode_zero_level_naturally_slows_but_respects_floor() -> void:
 
 func test_drive_mode_maximum_output_accelerates_to_cap() -> void:
 	var accelerated := LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0)
-	assert_almost_eq(accelerated, 53.25, 0.001)
+	assert_almost_eq(accelerated, 53.65, 0.001)
 	assert_lte(LocalRaceMath.advance_drive_speed_kmh(74.0, 6.0, 75.0, 1.0), 75.0)
 
 
@@ -198,11 +241,11 @@ func test_drive_mode_braking_slows_but_does_not_stop() -> void:
 
 
 func test_drive_coefficients_are_moderate_for_one_second_step() -> void:
-	assert_eq(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 6.8])
+	assert_eq(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 7.2])
 	assert_almost_eq(LocalRaceMath.BRAKE_DECELERATION_PER_LEVEL, 4.0, 0.001)
 	assert_almost_eq(
 		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0) - 50.0,
-		3.25,
+		3.65,
 		0.001
 	)
 
@@ -215,7 +258,7 @@ func test_drive_notches_use_force_minus_resistance_without_speed_bands() -> void
 	)
 	assert_almost_eq(
 		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0),
-		53.25,
+		53.65,
 		0.001
 	)
 
@@ -252,7 +295,7 @@ func test_drive_notch_three_and_zero_have_different_deceleration() -> void:
 
 func test_drive_notch_six_respects_personal_cap_without_speed_band() -> void:
 	var speed := LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0)
-	assert_almost_eq(speed, 53.25, 0.001)
+	assert_almost_eq(speed, 53.65, 0.001)
 	assert_lt(LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 75.0, 1.0), 75.0)
 
 
@@ -264,14 +307,14 @@ func test_drive_notch_three_naturally_slows_near_personal_cap() -> void:
 
 func test_drive_diagnostics_explain_force_resistance_and_draft_reduction() -> void:
 	var open := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0)
-	assert_almost_eq(float(open["drive_contribution_kmh_per_s"]), 6.8, 0.001)
+	assert_almost_eq(float(open["drive_contribution_kmh_per_s"]), 7.2, 0.001)
 	assert_almost_eq(float(open["rolling_resistance_kmh_per_s"]), 0.55, 0.001)
 	assert_almost_eq(float(open["air_resistance_kmh_per_s"]), 3.0, 0.001)
 	assert_almost_eq(float(open["draft_air_reduction_kmh_per_s"]), 0.0, 0.001)
-	assert_almost_eq(float(open["total_acceleration_kmh_per_s"]), 3.25, 0.001)
+	assert_almost_eq(float(open["total_acceleration_kmh_per_s"]), 3.65, 0.001)
 	var drafted := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.55)
 	assert_almost_eq(float(drafted["draft_air_reduction_kmh_per_s"]), 1.65, 0.001)
-	assert_almost_eq(float(drafted["total_acceleration_kmh_per_s"]), 4.9, 0.001)
+	assert_almost_eq(float(drafted["total_acceleration_kmh_per_s"]), 5.3, 0.001)
 
 
 func test_draft_response_curve_caps_local_effective_ratio() -> void:
@@ -575,8 +618,8 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), 3.7, 0.001)
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0))
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(6.0))
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.5), 6.033333, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5), 100.0 / 15.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.5), 8.2, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5), 11.0, 0.001)
 	assert_gt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 1), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 15), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
 	assert_gt(
@@ -605,6 +648,16 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_gt(settled[4.0], 175.0)
 	assert_gt(settled[6.0], 225.0)
 	assert_lte(settled[6.0], 230.0)
+	var cardio10_notch6 := 100.0
+	for _step in 1200:
+		cardio10_notch6 = clampf(
+			cardio10_notch6 + LocalRaceMath.heart_rate_net_rate_bpm_per_s(cardio10_notch6, 6.0, 10) * 0.1,
+			100.0,
+			230.0
+		)
+	# 約2000m相当の120秒ノッチ6で、心肺10でも200を超えて自然収束する。
+	assert_gte(cardio10_notch6, 210.0)
+	assert_lte(cardio10_notch6, 230.0)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(1), 11.0, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(5), 15.0, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(10), 20.0, 0.001)
@@ -653,20 +706,55 @@ func test_stamina_consumption_uses_heart_and_stamina_stat_without_neutral_recove
 	)
 
 
-func test_overheat_is_continuous_and_does_not_change_normal_condition() -> void:
+func test_overheat_exposure_continuously_reduces_propulsion_and_recovers_below_normal() -> void:
 	assert_almost_eq(LocalRaceMath.overheat_ratio(200.0), 0.0, 0.001)
 	assert_almost_eq(LocalRaceMath.overheat_ratio(230.0), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.overheat_stamina_multiplier(230.0), 1.5, 0.001)
-	assert_almost_eq(LocalRaceMath.propulsion_efficiency(200.0), 1.0, 0.001)
-	assert_almost_eq(LocalRaceMath.propulsion_efficiency(230.0), 0.75, 0.001)
+	assert_almost_eq(LocalRaceMath.overheat_exposure_propulsion_efficiency(0.0), 1.0, 0.001)
+	var exposure := 0.0
+	for _step in 600:
+		exposure = LocalRaceMath.update_overheat_exposure(exposure, 220.0, 0.05)
+	assert_almost_eq(exposure, 20.0, 0.02)
+	assert_almost_eq(LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure), 0.66, 0.002)
+	var sustained_230 := exposure
+	for _step in 200:
+		sustained_230 = LocalRaceMath.update_overheat_exposure(sustained_230, 230.0, 0.05)
+	assert_gt(sustained_230, exposure)
+	assert_lt(
+		LocalRaceMath.overheat_exposure_propulsion_efficiency(sustained_230),
+		LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure)
+	)
+	var recovered := sustained_230
+	for _step in 100:
+		recovered = LocalRaceMath.update_overheat_exposure(recovered, 180.0, 0.05)
+	assert_lt(recovered, sustained_230)
 	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(0.0, 1), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-100.0, 1), 0.40, 0.001)
 	assert_gt(LocalRaceMath.stamina_debt_efficiency(-100.0, 15), 0.40)
 	assert_almost_eq(
 		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0, 0.0, 0.0, 0.0, 0.75),
-		51.55,
+		51.85,
 		0.001
 	)
+
+
+func test_220_bpm_thirty_seconds_lowers_single_runner_to_about_59_kmh() -> void:
+	var speed := 69.0
+	var exposure := 0.0
+	for _step in 600:
+		exposure = LocalRaceMath.update_overheat_exposure(exposure, 220.0, 0.05)
+		var top_speed_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, 9)
+		speed = LocalRaceMath.advance_drive_speed_kmh(
+			speed,
+			6.0,
+			LocalRaceMath.HARD_SPEED_CAP_KMH,
+			0.05,
+			0.0,
+			0.0,
+			top_speed_adjustment,
+			LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure)
+		)
+	assert_almost_eq(speed, 59.0, 1.5)
 
 
 func test_live_place_keeps_finished_order_fixed() -> void:

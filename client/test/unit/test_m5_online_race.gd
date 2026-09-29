@@ -55,15 +55,35 @@ func test_visual_is_placed_on_track_curve_with_ground_clearance() -> void:
 	var track: Path3D = race.get_node("TrackPath")
 	var distance := 700.0
 	var offset := -3.0
-	var curve_xf := track.curve.sample_baked_with_rotation(distance)
-	var outward: Vector3 = race.call("_stadium_outward", curve_xf.origin)
+	var route: Dictionary = race.get("_route")
+	var pose: Dictionary = M5CourseBuilder.route_pose(track.curve, route, distance, 2083.1)
+	var outward: Vector3 = race.call("_stadium_outward", pose.position)
 	var expected := track.global_transform * Transform3D(
-		Basis.IDENTITY, curve_xf.origin + outward * offset + Vector3.UP * 0.75
+		Basis.IDENTITY, pose.position + outward * offset + Vector3.UP * 0.75
 	)
 	race.call("_apply_visual_pose", race.get_node("Runners/cpu-1"), distance, offset)
 	assert_almost_eq(race.get_node("Runners/cpu-1").global_position.y, expected.origin.y, 0.001)
 	assert_almost_eq(race.get_node("Runners/cpu-1").global_position.x, expected.origin.x, 0.001)
 	assert_almost_eq(race.get_node("Runners/cpu-1").global_position.z, expected.origin.z, 0.001)
+	race.free()
+
+func test_1600_launch_route_pose_stays_straight_then_joins_mainline() -> void:
+	var race := M5Scene.instantiate()
+	add_child(race)
+	race.call("_set_route", 1600.0)
+	var track: Path3D = race.get_node("TrackPath")
+	var route: Dictionary = race.get("_route")
+	var before: Dictionary = M5CourseBuilder.route_pose(track.curve, route, 0.0, 2083.1)
+	var middle: Dictionary = M5CourseBuilder.route_pose(track.curve, route, 80.0, 2083.1)
+	var join: Dictionary = M5CourseBuilder.route_pose(track.curve, route, 160.0, 2083.1)
+	assert_true(before.is_straight)
+	assert_true(middle.is_straight)
+	assert_false(join.is_straight)
+	assert_almost_eq(float(before.curvature), 0.0, 0.001)
+	assert_almost_eq(float(middle.curvature), 0.0, 0.001)
+	assert_almost_eq(before.travel.angle_to(middle.travel), 0.0, 0.001)
+	assert_almost_eq(middle.travel.angle_to(join.travel), 0.0, 0.001)
+	assert_almost_eq((join.position - middle.position).dot(middle.travel), 80.0, 0.5)
 	race.free()
 
 func test_visual_interpolates_between_server_ticks() -> void:
