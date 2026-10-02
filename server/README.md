@@ -29,6 +29,16 @@ python3 -m venv .venv
 
 Windows では `tools/windows/ensure-server-venv.ps1` も利用可。venv 内は `.venv\Scripts\` を使う。
 
+## Linux の開発環境一括再起動
+
+スクリプトは自身の場所を基準に動くため、呼び出し元のカレントディレクトリには依存しない。リポジトリルートからは、次でこのワークスペースの Python サーバーと Godot クライアントを停止してから起動できる。
+
+```bash
+./tools/restart-pururin-dev.sh
+```
+
+初回だけ `server/.venv` を作成し、pip の更新と `requirements.txt` の導入を行う。仮想環境が既にある場合は依存関係を入れ直さない。プロセスの停止・待受確認・Godot の探索は既存の開発用スクリプトを使う。Cursor / VS Code の Linux タスク「サーバーとクライアントを起動」も同じ一括再起動スクリプトを呼ぶ。
+
 ## M2 起動確認
 
 `server/` から:

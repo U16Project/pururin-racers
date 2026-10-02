@@ -107,8 +107,9 @@ func _final_results(runners: Array) -> Array:
 	for runner in runners:
 		if runner == null:
 			continue
+		var snapshot: Dictionary = runner.call("get_snapshot") if runner.has_method("get_snapshot") else {}
 		results.append({
-			"id": "player-1" if bool(runner.get("player_controlled")) else "cpu-%d" % (int(runner.get("gate_index")) + 1),
+			"id": str(snapshot.get("id", "")),
 			"name": str(runner.get("display_name")),
 			"finish_order": int(runner.call("get_finish_order")) if runner.has_method("get_finish_order") else -1,
 			"finish_time_s": float(runner.call("get_finish_time")) if runner.has_method("get_finish_time") else -1.0,

@@ -4,6 +4,9 @@ extends RefCounted
 
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const Runner := preload("res://scripts/runner_local_race.gd")
+const RosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+const StatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 
 const CONFIG_PATH := "res://data/config/local_race_simulation.json"
 
@@ -35,7 +38,245 @@ static func scenario_by_id(identifier: String, path: String = CONFIG_PATH) -> Di
 	return {}
 
 
+static func configuration_snapshot() -> Dictionary:
+	return {
+		"local_race": LocalRaceMath.Config.values().duplicate(true),
+		"draft_rules": LocalRaceMath.DraftRules.values().duplicate(true),
+		"roster": RosterConfig.values().duplicate(true),
+		"stats": StatsConfig.values().duplicate(true),
+		"course": LocalRaceMath.course_layout().duplicate(true),
+	}
+
+
+static func session_snapshot() -> Dictionary:
+	return {
+		"distance_m": LocalRaceMath.RaceSession.selected_distance_m(),
+		"player_id": LocalRaceMath.RaceSession.selected_player_pururin_id(),
+		"stamina_load_preset_id": LocalRaceMath.RaceSession.selected_stamina_load_preset_id(),
+	}
+
+
+## 条件はデータで渡す。設定は検証後に一時差し替えし、失敗時も元へ戻す。
+func run_case(parent: Node, condition: Dictionary) -> Dictionary:
+	# JSON型エラーはキャッシュ・セッションを変更する前に返す。
+	for key in ["scenario", "isolated"]:
+		if condition.has(key) and not condition[key] is Dictionary:
+			return {"error": "%s はオブジェクトが必要です" % key}
+	if condition.has("mode") and (not condition.mode is String or condition.mode not in ["race", "isolated"]):
+		return {"error": "mode は race または isolated が必要です"}
+	var scenario_errors := validate_scenario(condition.get("scenario", {}))
+	if not scenario_errors.is_empty():
+		return {"error": "scenario: %s" % "; ".join(scenario_errors)}
+	var original_config := LocalRaceMath.Config.values()
+	var candidate := original_config.duplicate(true)
+	var overrides: Variant = condition.get("config_overrides", {})
+	if not overrides is Dictionary:
+		return {"error": "config_overrides はオブジェクトが必要です"}
+	for key: Variant in overrides:
+		candidate[key] = overrides[key]
+	var errors := LocalRaceMath.Config.validate(candidate)
+	if not errors.is_empty():
+		return {"error": "config_overrides: %s" % "; ".join(errors)}
+	var previous_session := session_snapshot()
+	LocalRaceMath.Config._cached = candidate
+	# 共通シミュレータは常にconfig_overridesを正本にする。実機用の選択状態は終了後に戻す。
+	LocalRaceMath.RaceSession.reset_stamina_load_preset()
+	var scenario: Dictionary = condition.get("scenario", {}).duplicate(true)
+	if scenario.has("distance_m"):
+		LocalRaceMath.RaceSession.select_distance(float(scenario.distance_m))
+	if scenario.has("player_id"):
+		LocalRaceMath.RaceSession.select_player_pururin(str(scenario.player_id))
+	var result: Dictionary
+	match str(condition.get("mode", "race")):
+		"isolated":
+			result = run_isolated(condition.get("isolated", {}), scenario)
+		"race":
+			result = run_scenario(parent, scenario)
+		_:
+			result = {"error": "mode は race または isolated が必要です"}
+	LocalRaceMath.Config._cached = original_config
+	LocalRaceMath.RaceSession.select_distance(float(previous_session.distance_m))
+	LocalRaceMath.RaceSession.select_player_pururin(str(previous_session.player_id))
+	LocalRaceMath.RaceSession.select_stamina_load_preset(str(previous_session.stamina_load_preset_id))
+	result["case_id"] = str(condition.get("id", scenario.get("id", "unnamed")))
+	result["condition"] = condition.duplicate(true)
+	return result
+
+
+## 有効値固定の単独試験。40点配分・属性・脚質補正・CPU・コースは適用しない。
+## 速度は実走Math、身体状態は実走Runnerの更新関数をそのまま使う。
+func run_isolated(condition: Dictionary, scenario: Dictionary = {}) -> Dictionary:
+	var started_usec := Time.get_ticks_usec()
+	var number_errors := _validate_number_types(condition, ["delta_s", "duration_s", "distance_m", "sample_interval_s", "draft_received_p", "initial_speed_kmh"])
+	if not number_errors.is_empty():
+		return {"error": "isolated: %s" % "; ".join(number_errors)}
+	for key in ["body_enabled", "legacy_speed_cap"]:
+		if condition.has(key) and not condition[key] is bool:
+			return {"error": "isolated.%s はboolが必要です" % key}
+	if condition.has("drive_schedule") and not condition.drive_schedule is Array:
+		return {"error": "drive_schedule は配列が必要です"}
+	var stats := {"top_speed": 5, "acceleration": 5, "cardio": 5, "stamina": 5, "aero": 5, "pack": 5}
+	var configured_stats: Variant = condition.get("effective_stats", {})
+	if not configured_stats is Dictionary:
+		return {"error": "effective_stats はオブジェクトが必要です"}
+	for key: Variant in configured_stats:
+		var value: Variant = configured_stats[key]
+		if not stats.has(key) or not (value is int or value is float) or not is_finite(float(value)) or float(value) != floorf(float(value)) or float(value) < 1 or float(value) > 15:
+			return {"error": "effective_stats: %s は既知ステータスの整数1〜15が必要です" % str(key)}
+		stats[key] = int(value)
+	var delta := float(condition.get("delta_s", scenario.get("delta_s", 1.0 / 60.0)))
+	var duration := float(condition.get("duration_s", 600.0))
+	var distance_goal := float(condition.get("distance_m", 0.0))
+	var interval := float(condition.get("sample_interval_s", scenario.get("sample_interval_s", 0.5)))
+	var received := float(condition.get("draft_received_p", 0.0))
+	if not is_finite(delta) or delta < 0.001 or not is_finite(duration) or duration <= 0 or not is_finite(distance_goal) or distance_goal < 0 or not is_finite(interval) or interval < delta or not is_finite(received) or received < 0:
+		return {"error": "単独試験の時間・距離・ドラフト条件が不正です"}
+	var schedule: Array = condition.get("drive_schedule", [{"start_s": 0.0, "drive_level": 6.0}])
+	var schedule_errors := validate_schedule(schedule)
+	if not schedule_errors.is_empty():
+		return {"error": "drive_schedule: %s" % "; ".join(schedule_errors)}
+	var adaptive_policy: Dictionary = condition.get("adaptive_heart_policy", {})
+	if not adaptive_policy is Dictionary:
+		return {"error": "adaptive_heart_policy はオブジェクトが必要です"}
+	var adaptive_next_decision_s := 0.0
+	var adaptive_level := float(adaptive_policy.get("min_drive_level", 3.0)) if not adaptive_policy.is_empty() else 0.0
+	var body_enabled := bool(condition.get("body_enabled", false))
+	var legacy_speed_cap := bool(condition.get("legacy_speed_cap", false))
+	var body := Runner.new()
+	body.set("_effective_stats", stats)
+	body.call("_reset_stamina_for_effective_stats")
+	var speed := maxf(float(condition.get("initial_speed_kmh", LocalRaceMath.MIN_SPEED_KMH)), LocalRaceMath.MIN_SPEED_KMH)
+	if not is_finite(speed):
+		body.free()
+		return {"error": "initial_speed_kmh が不正です"}
+	var elapsed := 0.0
+	var distance := 0.0
+	var next_sample := 0.0
+	var samples: Array = []
+	var thresholds := {"speed_55_s": -1.0, "speed_60_s": -1.0, "speed_70_s": -1.0, "speed_75_s": -1.0, "heart_200_s": -1.0, "heart_230_s": -1.0}
+	var max_speed := speed
+	var max_heart := float(body.call("get_heart_rate_bpm"))
+	var over_200_s := 0.0
+	var diagnostics := {}
+	var drive_time_s := {}
+	while elapsed < duration and (distance_goal <= 0.0 or distance < distance_goal):
+		var step := minf(delta, duration - elapsed)
+		var level := schedule_level(schedule, elapsed)
+		if not adaptive_policy.is_empty() and elapsed + 0.0001 >= adaptive_next_decision_s:
+			adaptive_level = _adaptive_heart_drive_level(body, stats, adaptive_policy)
+			adaptive_next_decision_s = elapsed + maxf(float(adaptive_policy.get("decision_interval_s", 0.8)), delta)
+		if not adaptive_policy.is_empty():
+			level = adaptive_level
+		var level_key := str(int(round(level)))
+		drive_time_s[level_key] = float(drive_time_s.get(level_key, 0.0)) + step
+		var efficiency := float(body.call("get_propulsion_efficiency")) if body_enabled else 1.0
+		var bonus := LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(int(stats.acceleration))
+		var response := LocalRaceMath.stat_acceleration_response_multiplier(int(stats.acceleration))
+		var draft_factor := LocalRaceMath.draft_air_resistance_factor(received, int(stats.pack))
+		var air := LocalRaceMath.aero_air_resistance_multiplier(int(stats.aero))
+		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, level, int(stats.top_speed), draft_factor, air)
+		diagnostics = LocalRaceMath.drive_diagnostics_kmh_per_s(speed, level, draft_factor, bonus, adjustment, efficiency, air, response)
+		speed = LocalRaceMath.advance_drive_speed_kmh(speed, level, LocalRaceMath.top_speed_natural_speed_kmh(int(stats.top_speed)), step, draft_factor, bonus, adjustment, efficiency, air, response, legacy_speed_cap)
+		# 実走と同じく、速度更新後に身体状態を更新する。
+		if body_enabled:
+			body.call("_update_condition_for_drive_level", level, step)
+		distance += LocalRaceMath.kmh_to_mps(speed) * step
+		elapsed += step
+		var heart := float(body.call("get_heart_rate_bpm"))
+		max_speed = maxf(max_speed, speed)
+		max_heart = maxf(max_heart, heart)
+		if heart > 200.0:
+			over_200_s += step
+		for threshold in [55, 60, 70, 75]:
+			var key := "speed_%d_s" % threshold
+			if float(thresholds[key]) < 0 and speed >= threshold:
+				thresholds[key] = elapsed
+		for threshold in [200, 230]:
+			var key := "heart_%d_s" % threshold
+			if float(thresholds[key]) < 0 and heart >= threshold:
+				thresholds[key] = elapsed
+		if elapsed + 0.0001 >= next_sample or elapsed >= duration or (distance_goal > 0 and distance >= distance_goal):
+			samples.append({"time_s": elapsed, "speed_kmh": speed, "distance_m": distance, "drive_level": level, "heart_rate_bpm": heart, "stamina": body.call("get_stamina"), "overheat_exposure": body.get("_heart_overage_exposure"), "propulsion_efficiency": body.call("get_propulsion_efficiency") if body_enabled else 1.0, "effective_stats": stats.duplicate(), "draft_received_p": received, "draft_factor": draft_factor, "drive_diagnostics": diagnostics.duplicate(true)})
+			next_sample += interval
+	var metrics := {"speed_kmh": speed, "max_speed_kmh": max_speed, "heart_rate_bpm": body.call("get_heart_rate_bpm"), "max_heart_rate_bpm": max_heart, "stamina": body.call("get_stamina"), "propulsion_efficiency": body.call("get_propulsion_efficiency") if body_enabled else 1.0, "over_200_s": over_200_s, "distance_m": distance, "elapsed_s": elapsed, "distance_goal_reached": distance_goal > 0 and distance >= distance_goal, "threshold_times": thresholds, "drive_time_s": drive_time_s}
+	body.free()
+	return {"mode": "isolated", "stats_basis": "fixed_effective_stats_without_allocation_attribute_or_style", "body_enabled": body_enabled, "legacy_speed_cap": legacy_speed_cap, "effective_stats": stats, "initial_speed_kmh": maxf(float(condition.get("initial_speed_kmh", LocalRaceMath.MIN_SPEED_KMH)), LocalRaceMath.MIN_SPEED_KMH), "condition": condition.duplicate(true), "metrics": metrics, "samples": samples, "configuration": configuration_snapshot(), "delta_s": delta, "execution_time_s": (Time.get_ticks_usec() - started_usec) / 1000000.0}
+
+
+static func _adaptive_heart_drive_level(body: Node, stats: Dictionary, policy: Dictionary) -> float:
+	var cap := float(policy.get("heart_cap_bpm", 200.0))
+	var lookahead := maxf(float(policy.get("lookahead_s", 0.8)), 0.0)
+	var minimum := clampf(float(policy.get("min_drive_level", 3.0)), LocalRaceMath.DRIVE_LEVEL_MIN, LocalRaceMath.DRIVE_LEVEL_MAX)
+	var maximum := clampf(float(policy.get("max_drive_level", 6.0)), minimum, LocalRaceMath.DRIVE_LEVEL_MAX)
+	var current := float(body.call("get_heart_rate_bpm"))
+	var cardio := int(stats.get("cardio", 5))
+	var level := floorf(maximum)
+	while level >= ceilf(minimum):
+		var net_rate := LocalRaceMath.heart_rate_net_rate_bpm_per_s(current, level, cardio)
+		var projected := current + maxf(net_rate, 0.0) * lookahead
+		if projected <= cap + 0.001:
+			return level
+		level -= 1.0
+	return ceilf(minimum)
+
+
+static func validate_schedule(schedule: Array) -> PackedStringArray:
+	var errors := PackedStringArray()
+	var previous := -1.0
+	for entry: Variant in schedule:
+		if not entry is Dictionary:
+			errors.append("各entryはオブジェクトが必要です")
+			continue
+		if not entry.has("start_s") or not entry.has("drive_level") or not (entry.start_s is int or entry.start_s is float) or not (entry.drive_level is int or entry.drive_level is float):
+			errors.append("start_s / drive_level は数値が必要です")
+			continue
+		var start := float(entry.get("start_s", -1))
+		var level := float(entry.get("drive_level", NAN))
+		if not is_finite(start) or start < 0 or start <= previous or not is_finite(level) or level < LocalRaceMath.DRIVE_LEVEL_MIN or level > LocalRaceMath.DRIVE_LEVEL_MAX:
+			errors.append("時刻は昇順・重複なし、ノッチは設定範囲内が必要です")
+		previous = start
+	return errors
+
+
+static func _validate_number_types(data: Dictionary, keys: Array) -> PackedStringArray:
+	var errors := PackedStringArray()
+	for key: String in keys:
+		if data.has(key) and (not (data[key] is int or data[key] is float) or not is_finite(float(data[key]))):
+			errors.append("%s は有限の数値が必要です" % key)
+	return errors
+
+
+static func validate_scenario(scenario: Dictionary) -> PackedStringArray:
+	var errors := _validate_number_types(scenario, ["delta_s", "max_time_s", "sample_interval_s", "distance_m", "seed"])
+	for key in ["all_cpu", "legacy_speed_cap"]:
+		if scenario.has(key) and not scenario[key] is bool:
+			errors.append("%s はboolが必要です" % key)
+	for key in ["gate_overrides", "player_override"]:
+		if scenario.has(key) and not scenario[key] is Dictionary:
+			errors.append("%s はオブジェクトが必要です" % key)
+	if scenario.has("player_drive_schedule"):
+		if not scenario.player_drive_schedule is Array:
+			errors.append("player_drive_schedule は配列が必要です")
+		else:
+			errors.append_array(validate_schedule(scenario.player_drive_schedule))
+	return errors
+
+
+static func schedule_level(schedule: Array, elapsed: float) -> float:
+	var level := 0.0
+	for entry: Dictionary in schedule:
+		if elapsed + 0.0001 >= float(entry.start_s):
+			level = float(entry.drive_level)
+	return level
+
+
 func run_scenario(parent: Node, scenario: Dictionary) -> Dictionary:
+	var scenario_errors := validate_scenario(scenario)
+	if not scenario_errors.is_empty():
+		return {"error": "scenario: %s" % "; ".join(scenario_errors)}
+	var started_usec := Time.get_ticks_usec()
+	var simulation_seed := int(scenario.get("seed", 1))
+	seed(simulation_seed)
 	var race := LocalRaceScene.instantiate()
 	parent.add_child(race)
 	# SceneTreeの通常processを止め、同じdeltaで各段階を明示的に進める。
@@ -46,24 +287,39 @@ func run_scenario(parent: Node, scenario: Dictionary) -> Dictionary:
 	if runners.is_empty():
 		race.call("_ready")
 		runners = race.call("get_runners_for_simulation")
+	var runner_ids := {}
 	for runner in runners:
+		runner_ids[runner] = str(runner.call("get_snapshot").get("id", ""))
 		runner.set_process(false)
 		# 画面用の1秒診断ログは、統合シミュレーションのJSON出力には不要。
 		runner.set("_drive_diagnostic_log_remaining", INF)
+		runner.call("set_simulation_legacy_speed_cap", bool(scenario.get("legacy_speed_cap", false)))
+		if bool(scenario.get("all_cpu", false)):
+			runner.set("player_controlled", false)
+			var pururin: Dictionary = runner.get("_pururin")
+			runner.set("_cpu_trainer_profile", LocalRaceMath.cpu_trainer_profile_by_id(str(pururin.get("trainer_profile_id", ""))))
+	var gate_override_errors := _apply_gate_overrides(runners, scenario.get("gate_overrides", {}))
+	if not gate_override_errors.is_empty():
+		race.free()
+		return {"error": "gate_overrides: %s" % "; ".join(gate_override_errors)}
 	var player_override: Variant = scenario.get("player_override", {})
 	if player_override is Dictionary and not (player_override as Dictionary).is_empty():
-		var override_errors: PackedStringArray = runners[0].call("apply_simulation_player_override", player_override)
+		var player := _player_runner(runners)
+		if player == null:
+			race.free()
+			return {"error": "player_override は all_cpu では指定できません"}
+		var override_errors: PackedStringArray = player.call("apply_simulation_player_override", player_override)
 		if not override_errors.is_empty():
 			race.free()
 			return {"error": "player_override: %s" % "; ".join(override_errors)}
-
-	var delta := maxf(float(scenario.get("delta_s", _config_number("default_delta_s", 0.05))), 0.001)
+	var delta := maxf(float(scenario.get("delta_s", 1.0 / 60.0)), 0.001)
 	var max_time := maxf(float(scenario.get("max_time_s", _config_number("default_max_time_s", 180.0))), delta)
 	var sample_interval := maxf(float(scenario.get("sample_interval_s", _config_number("default_sample_interval_s", 1.0))), delta)
 	var schedule: Array = scenario.get("player_drive_schedule", [])
 	var elapsed := 0.0
 	var next_sample := 0.0
 	var samples: Array = []
+	var finish_snapshots := {}
 
 	# カウントダウンを省略するだけで、開始時の runner 状態は通常レースと同じにする。
 	race.set("_race_started", true)
@@ -82,6 +338,11 @@ func run_scenario(parent: Node, scenario: Dictionary) -> Dictionary:
 			runner.call("_process", step)
 		race.call("_finalize_draft_tick")
 		elapsed += step
+		for runner in runners:
+			var identifier: String = runner_ids[runner]
+			if runner.call("is_finished") and not finish_snapshots.has(identifier):
+				finish_snapshots[identifier] = _snapshot_runners([runner], elapsed)[0]
+				finish_snapshots[identifier]["rank"] = int(runner.call("get_finish_order"))
 		if elapsed + 0.0001 >= next_sample:
 			samples.append(_snapshot_runners(runners, elapsed))
 			next_sample += sample_interval
@@ -94,6 +355,14 @@ func run_scenario(parent: Node, scenario: Dictionary) -> Dictionary:
 		"finished_count": _finished_count(runners),
 		"runners": _snapshot_runners(runners, elapsed),
 		"samples": samples,
+		"finish_snapshots": finish_snapshots,
+		"seed": simulation_seed,
+		"legacy_speed_cap": bool(scenario.get("legacy_speed_cap", false)),
+		"scenario": scenario.duplicate(true),
+		"delta_s": delta,
+		"session": session_snapshot(),
+		"configuration": configuration_snapshot(),
+		"execution_time_s": (Time.get_ticks_usec() - started_usec) / 1000000.0,
 	}
 	result["goal_assessment"] = assess_result(result, scenario)
 	race.free()
@@ -105,6 +374,55 @@ func run_scenario_by_id(parent: Node, identifier: String) -> Dictionary:
 	if scenario.is_empty():
 		return {"error": "シナリオが見つかりません: %s" % identifier}
 	return run_scenario(parent, scenario)
+
+
+## シミュレータ専用の開始枠差し替え。通常のローカルレース生成順は変更しない。
+## キーは runner の pururin id、値は0始まりの枠番号。
+func _apply_gate_overrides(runners: Array, overrides: Variant) -> PackedStringArray:
+	var errors := PackedStringArray()
+	if overrides == null:
+		return errors
+	if not overrides is Dictionary:
+		errors.append("Dictionary が必要です")
+		return errors
+	var runner_by_id := {}
+	for runner in runners:
+		var snapshot: Dictionary = runner.call("get_snapshot")
+		runner_by_id[str(snapshot.get("id", ""))] = runner
+	var validated := {}
+	for raw_id: Variant in overrides:
+		var runner_id := str(raw_id)
+		if not runner_by_id.has(runner_id):
+			errors.append("runner id が見つかりません: %s" % runner_id)
+			continue
+		var gate_value: Variant = overrides[raw_id]
+		if not (gate_value is int or gate_value is float) or not is_finite(float(gate_value)) or float(gate_value) != floorf(float(gate_value)):
+			errors.append("%s のgateは整数が必要です" % runner_id)
+			continue
+		var gate := int(gate_value)
+		if gate < 0 or gate >= LocalRaceMath.FIELD_SIZE:
+			errors.append("%s のgateが範囲外です: %d" % [runner_id, gate])
+			continue
+		validated[runner_id] = gate
+	if not errors.is_empty():
+		return errors
+	# 部分差し替えは、未指定の既存枠と重なる場合も拒否する。
+	var occupied := {}
+	for runner_id: String in runner_by_id:
+		var gate := int(validated.get(runner_id, runner_by_id[runner_id].get("gate_index")))
+		if occupied.has(gate):
+			errors.append("gate %d が %s と %s で重複しています" % [gate, occupied[gate], runner_id])
+		occupied[gate] = runner_id
+	if not errors.is_empty():
+		return errors
+	for runner_id: String in validated:
+		var gate := int(validated[runner_id])
+		var runner: Node = runner_by_id[runner_id]
+		var offset := LocalRaceMath.starting_offset_for_gate(gate)
+		runner.set("gate_index", gate)
+		runner.set("_offset", offset)
+		runner.set("_target_offset", offset)
+	return errors
 
 
 ## 観測結果を、シナリオ設定に置いた目標・許容範囲・相対条件で判定する。
@@ -153,8 +471,8 @@ static func assess_result(result: Dictionary, scenario: Dictionary, reference_re
 			failed += 1
 		elif str(check.get("status", "")) == "NOT_EVALUATED":
 			deferred += 1
-	var passed := failed == 0
-	var status := "PASS" if passed else "FAIL"
+	var passed := failed == 0 and deferred == 0
+	var status := "FAIL" if failed > 0 else ("NOT_EVALUATED" if deferred > 0 else "PASS")
 	var summary := "%s: %d件の目標を確認" % [status, checks.size()]
 	if deferred > 0:
 		summary += "（相対条件%d件は参照結果待ち）" % deferred
@@ -172,6 +490,8 @@ static func assess_result(result: Dictionary, scenario: Dictionary, reference_re
 
 static func _assessment_metrics(result: Dictionary) -> Dictionary:
 	var runners: Array = result.get("runners", []) if result.get("runners", []) is Array else []
+	if not result.get("finish_snapshots", {}).is_empty():
+		runners = result["finish_snapshots"].values()
 	var samples: Array = result.get("samples", []) if result.get("samples", []) is Array else []
 	var player: Dictionary = {}
 	for runner_value: Variant in runners:
@@ -183,7 +503,7 @@ static func _assessment_metrics(result: Dictionary) -> Dictionary:
 		if not sample_value is Array:
 			continue
 		for runner_value: Variant in sample_value:
-			if runner_value is Dictionary and bool(runner_value.get("player", false)):
+			if runner_value is Dictionary and bool(runner_value.get("player", false)) and not bool(runner_value.get("finished", false)):
 				player_samples.append(runner_value)
 				break
 	var max_heart_rate := float(player.get("heart_rate_bpm", NAN))
@@ -194,17 +514,17 @@ static func _assessment_metrics(result: Dictionary) -> Dictionary:
 		max_heart_rate = maxf(max_heart_rate, float(sample.get("heart_rate_bpm", NAN)))
 		min_stamina = minf(min_stamina, float(sample.get("stamina", NAN)))
 		max_overheat = maxf(max_overheat, float(sample.get("overheat_ratio", NAN)))
-	var stamina_capacity := LocalRaceMath.Config.number("stamina_capacity")
+	var stamina_capacity := float(player.get("stamina_capacity_l", NAN))
 	return {
 		"finished_count": int(result.get("finished_count", -1)),
 		"timed_out": bool(result.get("timed_out", true)),
 		"validation_errors_count": validate_result(result).size(),
-		"player_finish_stamina": float(player.get("stamina", NAN)),
-		"player_finish_heart_rate": float(player.get("heart_rate_bpm", NAN)),
-		"player_max_heart_rate": max_heart_rate,
-		"player_min_stamina": min_stamina,
-		"player_stamina_load": stamina_capacity - float(player.get("stamina", NAN)),
-		"player_max_overheat_ratio": max_overheat,
+		"player_finish_stamina": player.get("stamina", null),
+		"player_finish_heart_rate": player.get("heart_rate_bpm", null),
+		"player_max_heart_rate": max_heart_rate if not player.is_empty() else null,
+		"player_min_stamina": min_stamina if not player.is_empty() else null,
+		"player_stamina_load_l": stamina_capacity - float(player.get("stamina", 0.0)) if not player.is_empty() else null,
+		"player_max_overheat_ratio": max_overheat if not player.is_empty() else null,
 	}
 
 
@@ -348,10 +668,10 @@ static func validate_result(result: Dictionary, scenario: Dictionary = {}) -> Pa
 
 static func _validate_runner_state(runner: Dictionary, label: String, errors: PackedStringArray) -> void:
 	var speed := float(runner.get("speed_kmh", runner.get("speed", NAN)))
-	if not is_finite(speed) or speed < LocalRaceMath.MIN_SPEED_KMH or speed > LocalRaceMath.HARD_SPEED_CAP_KMH + 0.001:
+	if not is_finite(speed) or speed < LocalRaceMath.MIN_SPEED_KMH:
 		errors.append("%s の速度が範囲外です: %f" % [label, speed])
 	var target_speed := float(runner.get("target_speed_kmh", NAN))
-	if not is_finite(target_speed) or target_speed < 0.0 or target_speed > LocalRaceMath.HARD_SPEED_CAP_KMH + 0.001:
+	if not is_finite(target_speed) or target_speed < 0.0:
 		errors.append("%s の目標速度が範囲外です: %f" % [label, target_speed])
 	for key: String in ["natural_top_speed_kmh", "acceleration_force_bonus_kmh_per_s", "top_speed_drive_adjustment_kmh_per_s"]:
 		if not is_finite(float(runner.get(key, NAN))):
@@ -365,8 +685,9 @@ static func _validate_runner_state(runner: Dictionary, label: String, errors: Pa
 	if not is_finite(heart_rate) or heart_rate < heart_min - 0.001 or heart_rate > heart_max + 0.001:
 		errors.append("%s の心拍が範囲外です: %f" % [label, heart_rate])
 	var stamina := float(runner.get("stamina", NAN))
-	var stamina_min := -LocalRaceMath.Config.number("stamina_debt_limit")
-	var stamina_max := LocalRaceMath.Config.number("stamina_capacity")
+	var stamina_capacity := float(runner.get("stamina_capacity_l", NAN))
+	var stamina_min := -LocalRaceMath.stamina_debt_limit_l(stamina_capacity)
+	var stamina_max := stamina_capacity
 	if not is_finite(stamina) or stamina < stamina_min - 0.001 or stamina > stamina_max + 0.001:
 		errors.append("%s のスタミナが範囲外です: %f" % [label, stamina])
 	var drive_level := float(runner.get("drive_level", NAN))
@@ -379,7 +700,7 @@ static func _validate_runner_state(runner: Dictionary, label: String, errors: Pa
 		var draft: Dictionary = draft_value
 		for key: String in ["own_wake_p", "direct_draft_p", "chain_draft_p", "received_draft_p", "effective_draft_ratio"]:
 			var ratio := float(draft.get(key, NAN))
-			if not is_finite(ratio) or ratio < -0.001 or ratio > 1.001:
+			if not is_finite(ratio) or ratio < -0.001:
 				errors.append("%s のドラフト率%sが範囲外です: %f" % [label, key, ratio])
 		var bonus := float(draft.get("draft_speed_bonus_kmh", NAN))
 		if not is_finite(bonus):
@@ -445,13 +766,21 @@ func _config_number(key: String, fallback: float) -> float:
 
 
 func _set_player_drive(runners: Array, schedule: Array, elapsed: float) -> void:
-	if runners.is_empty():
+	var player := _player_runner(runners)
+	if player == null or schedule.is_empty():
 		return
 	var level := 0.0
 	for entry: Variant in schedule:
 		if entry is Dictionary and elapsed + 0.0001 >= float(entry.get("start_s", 0.0)):
 			level = float(entry.get("drive_level", 0.0))
-		runners[0].call("set_drive_level", level)
+	player.call("set_drive_level", level)
+
+
+func _player_runner(runners: Array) -> Node:
+	for runner in runners:
+		if bool(runner.get("player_controlled")):
+			return runner
+	return null
 
 
 func _all_finished(runners: Array) -> bool:
@@ -514,8 +843,6 @@ func _rank_for(runner: Node, runners: Array) -> int:
 			continue
 		if runner.call("is_finished"):
 			if other.call("is_finished") and int(other.call("get_finish_order")) < int(runner.call("get_finish_order")):
-				better += 1
-			elif not other.call("is_finished"):
 				better += 1
 		elif other.call("is_finished") or float(other.call("get_race_progress")) > float(runner.call("get_race_progress")) + 0.001:
 			better += 1

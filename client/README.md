@@ -51,7 +51,8 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 
 - 緑ライン＝スタート、発光＝ゴール。スタートはホーム直線上（最初のコーナーまで約 197 m）。ゴールは直線の中ほどで、その先にも直線が約 280 m ある
 - HUD に経過タイム、結果画面にゴールタイムを `58.4` / `1:23.4` で表示
-- 開始前は3秒のカウントダウン。橙（最内）が操作キャラで、初期ノッチ4から上下で開始出力を選ぶ。タイミング判定はなく、`START!` と同時に選択ノッチで走行を始める
+- 開始画面で、距離と操作するぷるりんを8体から選ぶ。選択欄には属性・脚質・属性補正後の出走前8ステータスを表示する。初期選択はヒカリで、残る7体は各自のCPUトレーナー設定で走る
+- 開始前は3秒のカウントダウン。選択した操作キャラがカメラ追従・開始ノッチ選択の対象で、初期ノッチ4から上下で開始出力を選ぶ。タイミング判定はなく、`START!` と同時に選択ノッチで走行を始める
 - レース開始後は左右／左スティック＝ライン、上下／十字キー＝出力ノッチ。V で目標スピード方式へ切り替え（上限 75 km/h）
 - Esc で一時停止→タイトルへ戻る。全員ゴール後に着順→タイトルへ戻る
 - コース正本は [`shared/course_layout_m5.json`](../shared/course_layout_m5.json)。詳細は検討事項 #23 / `protocol_local_race.md`
@@ -120,6 +121,24 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
 M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd` でカバーする。
 
 ## ローカルレースのヘッドレス統合シミュレーション
+
+比較条件ごとにコードを増やさず、共通CLIへJSONの `cases` 配列を渡せます。
+
+```bash
+tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client \
+  --script scripts/local_race_simulation_cli.gd -- \
+  --batch-config /absolute/path/conditions.json --output-dir /absolute/path/new-results
+```
+
+各caseは `id`、`mode`（`isolated` / `race`）、`config_overrides` を持ちます。設定差し替えは通常の設定検証を通し、case終了時に復元します。結果はcaseごとのJSONと `summary.json` に保存し、既存結果は上書きしません。実行エラーと数値目標のFAILは分離します。
+
+- `isolated`: `isolated.effective_stats` は1〜15の固定有効値。40点配分・属性・順位・区間補正・CPU・コースは適用しない因果比較です。`body_enabled`、`duration_s`、`distance_m`、`initial_speed_kmh`、`delta_s`、`sample_interval_s`、`draft_received_p`、`drive_schedule`（`start_s` / `drive_level`）を指定できます。速度は実走Math、心拍・スタミナ・超過負荷は実走Runnerの身体更新関数を使用します。`draft_received_p` は受取率そのもので、共有の受取上限では切りません。HUDと実効率の100%は、基準速度で真後ろの1走者が作る wake（現行 `wake_base_p + wake_speed_gain_p` = 0.18）です。身体無効時は健常な力の釣り合いを測ります。
+- `race`: `scenario` に `all_cpu:true`、`seed`、`distance_m`、`player_id`、`delta_s`、`max_time_s`、`sample_interval_s`、`gate_overrides` を指定できます。全頭CPUでは元プレイヤーもロスター指定トレーナーで判断し、固定ノッチ予定は適用しません。枠の重複は拒否するため、入れ替え相手も指定してください。
+- 旧上限を再現する比較だけ `isolated.legacy_speed_cap:true` / `scenario.legacy_speed_cap:true` を指定できます。通常はfalse。旧加算式と新加速応答式は設定上書きで比較し、上限あり／なしを区別してください。
+
+統合結果には全設定、セッション、乱数seed、条件、実行秒数、全頭の時系列、初めてゴールしたtickの `finish_snapshots` を保存します。最終 `runners` は全頭完走時点なので、先にゴールした個体の心拍等はゴール後の値です。ゴール比較は `finish_snapshots` を使用してください。時間刻み既定値は1/60秒で、半刻み比較も同じ条件データでできます。未評価の相対条件は `NOT_EVALUATED` でありPASSではありません。
+
+従来の40点配分スイープは対象以外も再配分する**合法な配分全体の比較**です。単一ステータスの因果判定には使わず、上記 `isolated` を使用してください。
 
 描画・カメラ・入力を使わず、通常のローカルレースシーンを同じ `Runner`／`LocalRaceMath`／CPU判断／ドラフト処理で進め、結果をJSONで出力できます。
 

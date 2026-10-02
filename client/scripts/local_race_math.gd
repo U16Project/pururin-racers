@@ -15,14 +15,13 @@ const RACE_DISTANCE_M := 2000.0
 
 static var _course_layout: Dictionary = {}
 
-## プレイヤー通常上限（#24・ブーストなし）。
-const PLAYER_MAX_SPEED_KMH := 75.0
+## 初期化時に使う自然最高速の既定値。出力走行のハード上限ではない。
+static var PLAYER_MAX_SPEED_KMH: float:
+	get:
+		return TOP_SPEED_NATURAL_MAX_KMH
 ## プレイヤー開始時の現在／目標（#24 巡航帯）。
 const PLAYER_INITIAL_SPEED_KMH := 58.0
-## 世界の絶対上限（#24）。ローカル簡易ではブースト未実装のため通常は PLAYER_MAX まで。
-const HARD_SPEED_CAP_KMH := 90.0
 const TARGET_SPEED_STEP_KMH := 1.0
-const TARGET_SPEED_MIN_KMH := 48.0
 ## 旧 6 m/s² 相当。
 const ACCEL_KMH_PER_S := 21.6
 
@@ -46,6 +45,12 @@ static var ROLLING_RESISTANCE_KMH_PER_S: float:
 static var AIR_RESISTANCE_QUADRATIC_COEFFICIENT: float:
 	get:
 		return Config.number("air_resistance_quadratic_coefficient")
+static var AERO_AIR_RESISTANCE_REFERENCE_STAT: int:
+	get:
+		return int(Config.number("aero_air_resistance_reference_stat"))
+static var AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT: float:
+	get:
+		return Config.number("aero_air_resistance_multiplier_per_stat")
 ## ノッチごとの駆動力。速度帯を持たず、抵抗との差分だけで加減速する。
 ## 低ノッチは低速域でわずかに加速しつつ、高速域では抵抗に負ける。
 ## 値は「ノッチ × 一律係数」よりも、操作感を調整しやすい小さなカーブとして管理する。
@@ -58,9 +63,6 @@ static var BRAKE_DECELERATION_PER_LEVEL: float:
 static var DRAFT_SPEED_BONUS_MAX_KMH: float:
 	get:
 		return DraftRules.number("assist_max_kmh")
-static var DRAFT_MAX_RECEIVED_P: float:
-	get:
-		return DraftRules.number("max_received_p")
 static var DRAFT_CHAIN_ATTENUATION: float:
 	get:
 		return DraftRules.number("chain_attenuation")
@@ -73,12 +75,15 @@ static var DRAFT_AIR_RESISTANCE_FACTOR: float:
 static var DRAFT_RESPONSE_EXPONENT: float:
 	get:
 		return Config.number("draft_response_exponent")
-static var DRAFT_EFFECTIVE_MAX_RATIO: float:
-	get:
-		return Config.number("draft_effective_max_ratio")
 static var DRAFT_AGGREGATION_EXPONENT: float:
 	get:
 		return Config.number("draft_aggregation_exponent")
+static var PACK_DRAFT_EFFECTIVE_REFERENCE_STAT: int:
+	get:
+		return int(Config.number("pack_draft_effective_reference_stat"))
+static var PACK_DRAFT_EFFECTIVE_MULTIPLIER_PER_STAT: float:
+	get:
+		return Config.number("pack_draft_effective_multiplier_per_stat")
 static var DRAFT_FORWARD_MAX_M: float:
 	get:
 		return DraftRules.number("forward_max_m")
@@ -104,9 +109,13 @@ static var ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S: float:
 	get:
 		return Config.number("acceleration_drive_force_bonus_per_stat_kmh_per_s")
 
-## 接触箱（設計案の例に近い簡易値）。
-const BLOCK_LATERAL_M := 1.5
-const CONTACT_LONGITUDINAL_M := 1.5
+## 接触箱。寸法はローカルレース設定で調整する。
+static var BLOCK_LATERAL_M: float:
+	get:
+		return Config.number("contact_lateral_range_m")
+static var CONTACT_LONGITUDINAL_M: float:
+	get:
+		return Config.number("contact_longitudinal_range_m")
 
 const FIELD_SIZE := 8
 const BAKE_INTERVAL_M := 1.0
@@ -175,8 +184,7 @@ static func mps_to_kmh(speed_mps: float) -> float:
 
 
 static func clamp_target_speed_kmh(target_kmh: float, max_speed_kmh: float) -> float:
-	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
-	return clampf(target_kmh, TARGET_SPEED_MIN_KMH, ceiling)
+	return clampf(target_kmh, 0.0, maxf(max_speed_kmh, 0.0))
 
 
 static func step_target_speed_kmh(
@@ -221,7 +229,9 @@ static func drive_diagnostics_kmh_per_s(
 	draft_factor: float = 0.0,
 	acceleration_bonus_kmh_per_s: float = 0.0,
 	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
-	propulsion_efficiency: float = 1.0
+	propulsion_efficiency: float = 1.0,
+	air_resistance_multiplier: float = 1.0,
+	acceleration_response_multiplier: float = 1.0
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
@@ -234,19 +244,31 @@ static func drive_diagnostics_kmh_per_s(
 		drive_contribution *= clampf(propulsion_efficiency, 0.0, 1.0)
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
 	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
-	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed
+	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
+	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed * safe_air_multiplier
 	var draft_reduction := air_resistance * clampf(draft_factor, 0.0, 1.0)
+	var net_acceleration := drive_contribution - rolling_resistance - air_resistance + draft_reduction
+	# 加速適性は正ノッチで速度が増える場合だけに効く。釣り合い・減速は変えない。
+	var response := maxf(acceleration_response_multiplier, 0.0) if level > 0.0 and net_acceleration > 0.0 else 1.0
 	return {
 		"drive_contribution_kmh_per_s": drive_contribution,
 		"rolling_resistance_kmh_per_s": rolling_resistance,
+		"air_resistance_multiplier": safe_air_multiplier,
 		"air_resistance_kmh_per_s": air_resistance,
 		"draft_air_reduction_kmh_per_s": draft_reduction,
-		"total_acceleration_kmh_per_s": drive_contribution - rolling_resistance - air_resistance + draft_reduction,
+		"net_force_acceleration_kmh_per_s": net_acceleration,
+		"acceleration_response_multiplier": response,
+		"acceleration_response_bonus_kmh_per_s": net_acceleration * (response - 1.0),
+		"total_acceleration_kmh_per_s": net_acceleration * response,
 	}
 
 
-static func drive_resistance_kmh_per_s(speed_kmh: float, draft_factor: float = 0.0) -> float:
-	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor)
+static func drive_resistance_kmh_per_s(
+	speed_kmh: float,
+	draft_factor: float = 0.0,
+	air_resistance_multiplier: float = 1.0
+) -> float:
+	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor, 0.0, 0.0, 1.0, air_resistance_multiplier)
 	return float(diagnostics["rolling_resistance_kmh_per_s"]) + float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
 
 
@@ -259,40 +281,54 @@ static func draft_speed_bonus_kmh(draft_factor: float) -> float:
 	return DRAFT_SPEED_BONUS_MAX_KMH * draft_presence
 
 
-## 生の受取率を正規化し、ローカル走行へ載せる実効率へ変換する共通カーブ。
-## 最大受取率でも設定上限までに留め、HUD・空気抵抗軽減・速度補助はこの値を共用する。
-static func draft_effective_ratio(received_draft_p: float) -> float:
-	var normalized := clampf(received_draft_p, 0.0, DRAFT_MAX_RECEIVED_P) / maxf(DRAFT_MAX_RECEIVED_P, 0.0001)
-	return DRAFT_EFFECTIVE_MAX_RATIO * pow(normalized, DRAFT_RESPONSE_EXPONENT)
+## 空力適性は二乗空気抵抗だけを連続的に補正する。基準値では現行抵抗と同じ。
+static func aero_air_resistance_multiplier(aero_stat: int = 5) -> float:
+	var stat := clampi(aero_stat, 1, 15)
+	return maxf(0.0, 1.0 - AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT * (stat - AERO_AIR_RESISTANCE_REFERENCE_STAT))
 
 
-## 個別のドラフト寄与を p ノルムで合成する。対象数ごとの分岐は持たない。
-## 寄与は normalization_max_p を基準に正規化し、出力は同じ単位の受取率へ戻す。
-static func draft_aggregate_contributions_p(
-	contributions: Array,
-	normalization_max_p: float = -1.0
-) -> float:
-	var cap := DRAFT_MAX_RECEIVED_P if normalization_max_p <= 0.0 else normalization_max_p
-	cap = maxf(cap, 0.0001)
+## 集団適性は生の受取率や対象判定を変えず、応答曲線後の実効率だけを連続的に補正する。
+static func pack_draft_effective_multiplier(pack_stat: int = 5) -> float:
+	var stat := clampi(pack_stat, 1, 15)
+	return maxf(0.0, 1.0 + PACK_DRAFT_EFFECTIVE_MULTIPLIER_PER_STAT * (stat - PACK_DRAFT_EFFECTIVE_REFERENCE_STAT))
+
+
+## 基準速度時に1走者が真後ろへ作る wake を単位として、
+## 生の受取率をローカル走行へ載せる実効率へ変換する共通カーブ。
+## 受取率は丸めない。実効率は x / (1 + x) で、増えるほど1へ近づく。
+static func draft_response_reference_p() -> float:
+	return DraftRules.wake_reference_p()
+
+
+static func draft_effective_ratio(received_draft_p: float, pack_stat: int = 5) -> float:
+	var normalized := maxf(0.0, received_draft_p) / draft_response_reference_p()
+	var base_ratio := pow(normalized, DRAFT_RESPONSE_EXPONENT)
+	var scaled := base_ratio * pack_draft_effective_multiplier(pack_stat)
+	return scaled / (1.0 + scaled)
+
+
+## 個別のドラフト寄与を p ノルムで合成する。対象数ごとの分岐・合算上限は持たない。
+static func draft_aggregate_contributions_p(contributions: Array) -> float:
 	var powered_sum := 0.0
 	for contribution in contributions:
-		var normalized := clampf(float(contribution), 0.0, cap) / cap
-		powered_sum += pow(normalized, DRAFT_AGGREGATION_EXPONENT)
-	var ratio := pow(powered_sum, 1.0 / DRAFT_AGGREGATION_EXPONENT) if powered_sum > 0.0 else 0.0
-	return minf(cap, ratio * cap)
+		powered_sum += pow(maxf(0.0, float(contribution)), DRAFT_AGGREGATION_EXPONENT)
+	return pow(powered_sum, 1.0 / DRAFT_AGGREGATION_EXPONENT) if powered_sum > 0.0 else 0.0
 
 
-static func draft_air_resistance_factor(received_draft_p: float) -> float:
-	return DRAFT_AIR_RESISTANCE_FACTOR * draft_effective_ratio(received_draft_p)
+static func draft_air_resistance_factor(received_draft_p: float, pack_stat: int = 5) -> float:
+	return DRAFT_AIR_RESISTANCE_FACTOR * draft_effective_ratio(received_draft_p, pack_stat)
 
 
-static func draft_assist_speed_kmh(received_draft_p: float) -> float:
-	"""ローカル目標速度方式の受取率→速度補助。最大値は実効率上限に従う。"""
-	return DRAFT_SPEED_BONUS_MAX_KMH * draft_effective_ratio(received_draft_p)
+static func draft_assist_speed_kmh(received_draft_p: float, pack_stat: int = 5) -> float:
+	"""ローカル目標速度方式の受取率→速度補助。通常ノッチ方式では診断用。"""
+	return DRAFT_SPEED_BONUS_MAX_KMH * draft_effective_ratio(received_draft_p, pack_stat)
 
 
 static func draft_wake_from_speed(speed_kmh: float) -> float:
-	return minf(0.18, 0.06 + maxf(0.0, speed_kmh) / 75.0 * 0.12)
+	var base := DraftRules.number("wake_base_p")
+	var reference := DraftRules.number("wake_speed_reference_kmh")
+	var gain := DraftRules.number("wake_speed_gain_p")
+	return base + maxf(0.0, speed_kmh) / reference * gain
 
 
 static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
@@ -313,7 +349,7 @@ static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
 		var source_wake := float(source.get("own_wake_p", 0.0))
 		if source_wake <= 0.0:
 			source_wake = draft_wake_from_speed(float(source.get("speed", 0.0)))
-		source_wake = clampf(source_wake, 0.0, 0.18)
+		source_wake = maxf(0.0, source_wake)
 		var lateral_falloff := pow(1.0 - line_gap / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
 		var strength := maxf(0.0, source_wake * (1.0 - gap / DRAFT_FORWARD_MAX_M) * lateral_falloff)
 		if strength > 0.0:
@@ -354,22 +390,20 @@ static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
 	var chain_contributions: Array = []
 	for source in selected:
 		var source_state: Dictionary = snapshot[int(source["source_index"])]
-		var source_previous := minf(DRAFT_MAX_RECEIVED_P, maxf(0.0, float(source_state.get("direct_draft_p", 0.0)) + float(source_state.get("chain_draft_p", 0.0))))
+		var source_previous := maxf(0.0, float(source_state.get("direct_draft_p", 0.0)) + float(source_state.get("chain_draft_p", 0.0)))
 		var chain_lateral_falloff := pow(1.0 - float(source["line"]) / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
 		var chain_strength := source_previous * DRAFT_CHAIN_ATTENUATION * (1.0 - float(source["gap"]) / DRAFT_FORWARD_MAX_M) * chain_lateral_falloff
 		if chain_strength > 0.0:
 			chain_sources.append(str(source["id"]))
 			chain_contributions.append(chain_strength)
-	var chain := draft_aggregate_contributions_p(
-		chain_contributions,
-		DRAFT_MAX_RECEIVED_P * DRAFT_CHAIN_ATTENUATION
-	)
+	var chain := draft_aggregate_contributions_p(chain_contributions)
+	var received := direct + chain
 	var primary: Dictionary = direct_details[0]
 	return {
 		"own_wake_p": own_wake,
 		"direct_draft_p": direct,
 		"chain_draft_p": chain,
-		"received_draft_p": direct + chain,
+		"received_draft_p": received,
 		"direct_source_ids": direct_details.map(func(detail: Dictionary): return str(detail["id"])),
 		"chain_source_ids": chain_sources,
 		"draft_source_ids": direct_details.map(func(detail: Dictionary): return str(detail["id"])),
@@ -408,7 +442,10 @@ static func advance_drive_speed_kmh(
 	draft_factor: float = 0.0,
 	acceleration_bonus_kmh_per_s: float = 0.0,
 	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
-	propulsion_efficiency: float = 1.0
+	propulsion_efficiency: float = 1.0,
+	air_resistance_multiplier: float = 1.0,
+	acceleration_response_multiplier: float = 1.0,
+	simulation_legacy_speed_cap: bool = false
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
@@ -419,34 +456,51 @@ static func advance_drive_speed_kmh(
 		draft_factor,
 		acceleration_bonus_kmh_per_s,
 		top_speed_drive_adjustment_kmh_per_s,
-		propulsion_efficiency
+		propulsion_efficiency,
+		air_resistance_multiplier,
+		acceleration_response_multiplier
 	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
-	var ceiling := minf(max_speed_kmh, HARD_SPEED_CAP_KMH)
-	return clampf(next_speed, MIN_SPEED_KMH, ceiling)
+	# 通常は自然到達速度で切らない。旧挙動の比較測定時だけ明示的に上限を再現する。
+	if simulation_legacy_speed_cap:
+		return clampf(next_speed, MIN_SPEED_KMH, maxf(max_speed_kmh, MIN_SPEED_KMH))
+	return maxf(next_speed, MIN_SPEED_KMH)
 
 
 static func top_speed_natural_speed_kmh(top_speed: int) -> float:
 	return lerpf(TOP_SPEED_NATURAL_MIN_KMH, TOP_SPEED_NATURAL_MAX_KMH, (clampi(top_speed, 1, 15) - 1) / 14.0)
 
 
-## 基準加速度5・ノッチ6・単独走行では、各最高速値の自然到達速度で推進力と抵抗が釣り合う。
-## 補正は速度の二乗に応じて現れるため、低速域を不自然に大きく変えない。
-static func top_speed_drive_adjustment_kmh_per_s(speed_kmh: float, drive_level: float, top_speed: int) -> float:
+## ノッチ6・空力5・ドラフトなしでは、各最高速値の自然到達速度で推進力と抵抗が釣り合う。
+## 補正は速度の二乗に応じて現れる。ドラフトと空力は、実際に残る空気抵抗と同じ割合で入れる。
+static func top_speed_drive_adjustment_kmh_per_s(
+	speed_kmh: float,
+	drive_level: float,
+	top_speed: int,
+	draft_factor: float = 0.0,
+	air_resistance_multiplier: float = 1.0
+) -> float:
 	var level := clamp_drive_level(drive_level)
 	if level <= 0.0:
 		return 0.0
 	var max_drive_force := drive_force_kmh_per_s(DRIVE_LEVEL_MAX)
 	var level_force := drive_force_kmh_per_s(level)
 	var natural_speed := top_speed_natural_speed_kmh(top_speed)
-	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed
+	var remaining_air_fraction := 1.0 - clampf(draft_factor, 0.0, 1.0)
+	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
+	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier * remaining_air_fraction
 	var level_share := level_force / maxf(max_drive_force, 0.001)
 	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
 	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio
 
 
 static func stat_acceleration_force_bonus_kmh_per_s(acceleration: int) -> float:
+	# 旧モデル比較用。現行設定では係数0で、常時推進加算を無効にする。
 	return (acceleration - 5) * ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S
+
+
+static func stat_acceleration_response_multiplier(acceleration: int) -> float:
+	return 1.0 + Config.number("acceleration_response_multiplier_per_stat") * (clampi(acceleration, 1, 15) - 5)
 
 
 
@@ -457,23 +511,6 @@ static func cpu_steer_reselect_interval_s(random_unit: float) -> float:
 		Config.number("cpu_steer_reselect_max_s"),
 		clampf(random_unit, 0.0, 1.0)
 	)
-
-
-static func cpu_next_target_offset_m(current_offset: float, random_unit: float) -> float:
-	var signed_unit := clampf(random_unit, 0.0, 1.0) * 2.0 - 1.0
-	var random_target := current_offset + signed_unit * Config.number("cpu_steer_target_delta_max_m")
-	var inward_target := Config.number("cpu_inward_target_offset_m")
-	var biased_target := lerpf(
-		random_target,
-		inward_target,
-		Config.number("cpu_inward_target_blend")
-	)
-	var limited_target := move_toward(
-		current_offset,
-		biased_target,
-		Config.number("cpu_steer_target_delta_max_m")
-	)
-	return M2TrackMath.clamp_offset(limited_target)
 
 
 ## 前方の近い走者を一律の距離・横差スコアで選ぶ。プル数ごとの特例は持たない。
@@ -529,7 +566,11 @@ static func cpu_open_line_target_offset_m(
 		current - spacing,
 		current + spacing,
 		preferred_line,
-		M2TrackMath.clamp_offset(lerpf(current, preferred_line, 0.5)),
+		M2TrackMath.clamp_offset(lerpf(
+			current,
+			preferred_line,
+			Config.number("cpu_follow_slot_inner_midpoint_blend")
+		)),
 		-max_abs,
 		max_abs,
 	]
@@ -537,7 +578,6 @@ static func cpu_open_line_target_offset_m(
 	var selected_offset := current
 	for offset_value in candidate_offsets:
 		var slot_offset := M2TrackMath.clamp_offset(float(offset_value))
-		var line_change := absf(slot_offset - current) / max_abs
 		var inner_distance := absf(slot_offset - preferred_line) / max_abs
 		var field_density := _cpu_follow_slot_field_density(
 			self_race_progress, slot_offset, "", others
@@ -545,25 +585,13 @@ static func cpu_open_line_target_offset_m(
 		var open_forward := _cpu_follow_slot_open_forward_score(
 			self_race_progress, slot_offset, "", others
 		)
-		var side_continuity := clampf(
-			(current / max_abs) * (slot_offset / max_abs),
-			-1.0,
-			1.0
-		)
-		# 空いている現在ラインは維持し、混雑時だけ横移動を選びやすくする。
-		# 密度に対して連続的に変化させ、開始時だけの特例にはしない。
-		var line_change_factor := lerpf(
-			1.8,
-			0.7,
-			clampf(field_density, 0.0, 1.0)
-		)
+		# 空き、内側志向、カーブの距離差を同じ式で評価する。
+		# 開始時だけの特例や、横移動そのものを抑える係数は持たない。
 		var score := field_density * Config.number("cpu_follow_slot_field_density_weight") \
 			+ inner_distance * Config.number("cpu_follow_slot_inner_bias") \
 			+ cpu_line_distance_advantage_score(slot_offset, curvature) \
-			+ line_change * Config.number("cpu_follow_slot_line_change_weight") * line_change_factor \
-			- side_continuity * Config.number("cpu_follow_slot_side_continuity_weight") \
 			- open_forward * Config.number("cpu_follow_slot_open_forward_weight") * maxf(overtake_bias, 0.0)
-		# 同点なら現在ラインを優先する。開始枠や横位置を無意味に揺らさない。
+		# 同点なら候補列の先頭（現在ライン）を優先する。
 		if score < best_score - 0.0001:
 			best_score = score
 			selected_offset = slot_offset
@@ -583,7 +611,8 @@ static func cpu_follow_slot(
 	follow_candidate: Dictionary,
 	others: Array,
 	overtake_bias: float = 0.0,
-	curvature: float = 0.0
+	curvature: float = 0.0,
+	line_pref: float = -1.0
 ) -> Dictionary:
 	if not bool(follow_candidate.get("found", false)):
 		return {"found": false}
@@ -593,11 +622,22 @@ static func cpu_follow_slot(
 	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
 	var slot_progress := leader_progress - preferred_gap
 	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
+	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var inside_reference := Config.number("cpu_inward_target_offset_m")
 	var slots := [
 		{"name": "center", "offset": leader_offset, "progress": slot_progress, "tie_rank": 1, "forward": false},
 		{"name": "inner", "offset": leader_offset - spacing, "progress": slot_progress, "tie_rank": 0, "forward": false},
 		{"name": "outer", "offset": leader_offset + spacing, "progress": slot_progress, "tie_rank": 2, "forward": false},
 	]
+	if line_pref >= 0.0:
+		inside_reference = lerpf(max_abs, -max_abs, clampf(line_pref, 0.0, 1.0))
+		slots.append({
+			"name": "inside_line",
+			"offset": inside_reference,
+			"progress": slot_progress,
+			"tie_rank": 6,
+			"forward": false,
+		})
 	var bias := clampf(overtake_bias, -1.0, 1.0)
 	var has_forward_slot := false
 	var has_open_forward_slot := false
@@ -655,15 +695,8 @@ static func cpu_follow_slot(
 		var open_forward := _cpu_follow_slot_open_forward_score(
 			candidate_progress, slot_offset, leader_id, others
 		)
-		var inner_distance := absf(slot_offset - Config.number("cpu_inward_target_offset_m")) / M2TrackMath.MAX_ABS_OFFSET_M
-		# 既に走っているラインからの移動も同じ候補評価に含める。
-		# 空きと混雑の差が小さいときは、スタート時の枠位置を維持する。
-		var line_change := absf(slot_offset - self_offset) / M2TrackMath.MAX_ABS_OFFSET_M
-		var side_continuity := clampf(
-			(self_offset / M2TrackMath.MAX_ABS_OFFSET_M) * (slot_offset / M2TrackMath.MAX_ABS_OFFSET_M),
-			-1.0,
-			1.0
-		)
+		var inner_distance := absf(slot_offset - inside_reference) / M2TrackMath.MAX_ABS_OFFSET_M
+		# 現在ラインからの移動も、空き・混雑・内側志向と同じ候補評価に含める。
 		var distance_score := follow_distance_score
 		if bool(slot.get("forward", false)):
 			distance_score = absf(float(follow_candidate.get("forward_gap_m", 0.0)) - Config.number("cpu_overtake_forward_distance_m")) / Config.number("cpu_follow_forward_range_m")
@@ -671,9 +704,7 @@ static func cpu_follow_slot(
 			+ crowding * Config.number("cpu_follow_slot_crowding_weight") \
 			+ field_density * Config.number("cpu_follow_slot_field_density_weight") \
 			+ inner_distance * Config.number("cpu_follow_slot_inner_bias") \
-			+ cpu_line_distance_advantage_score(slot_offset, curvature) \
-			+ line_change * Config.number("cpu_follow_slot_line_change_weight") \
-			- side_continuity * Config.number("cpu_follow_slot_side_continuity_weight")
+			+ cpu_line_distance_advantage_score(slot_offset, curvature)
 		if bool(slot.get("forward", false)):
 			var forward_bias_weight := Config.number("cpu_overtake_escape_bias_weight") if bool(slot.get("escape", false)) else Config.number("cpu_overtake_slot_bias_weight")
 			score -= bias * forward_bias_weight
@@ -819,30 +850,36 @@ static func cpu_trainer_profile_by_id(profile_id: String) -> Dictionary:
 
 static func cpu_trainer_settings() -> Dictionary:
 	return {
-		"min_target_speed_kmh": TARGET_SPEED_MIN_KMH,
-		"min_drive_level": 1.0,
-		"max_drive_level": DRIVE_LEVEL_MAX,
-		"finish_start_progress": Config.number("cpu_trainer_finish_start_progress"),
-		"finish_full_progress": Config.number("cpu_trainer_finish_full_progress"),
-		"finish_chase_base_ratio": Config.number("cpu_trainer_finish_chase_base_ratio"),
-		"finish_chase_position_ratio": Config.number("cpu_trainer_finish_chase_position_ratio"),
-		"finish_chase_leader_gap_ratio": Config.number("cpu_trainer_finish_chase_leader_gap_ratio"),
-		"cruise_reduction_max_kmh": Config.number("cpu_trainer_cruise_reduction_max_kmh"),
-		"global_chase_pressure_max_kmh": Config.number("cpu_trainer_global_chase_pressure_max_kmh"),
-		"global_gap_reference_m": Config.number("cpu_trainer_global_gap_reference_m"),
-		"chase_urgency_gap_reference_m": Config.number("cpu_trainer_chase_urgency_gap_reference_m"),
-		"field_pace_correction_max_kmh": Config.number("cpu_trainer_field_pace_correction_max_kmh"),
-		"field_pace_reference_kmh": Config.number("cpu_trainer_field_pace_reference_kmh"),
-		"closing_pressure_max_kmh": Config.number("cpu_trainer_closing_pressure_max_kmh"),
-		"front_chase_pressure_max_kmh": Config.number("cpu_trainer_front_chase_pressure_max_kmh"),
-		"closing_gap_reference_m": Config.number("cpu_trainer_closing_gap_reference_m"),
-		"closing_speed_reference_kmh": Config.number("cpu_trainer_closing_speed_reference_kmh"),
-		"reserve_max_kmh": Config.number("cpu_trainer_reserve_max_kmh"),
-		"position_push_max_kmh": Config.number("cpu_trainer_position_push_max_kmh"),
-		"finish_push_max_kmh": Config.number("cpu_trainer_finish_push_max_kmh"),
-		"draft_saving_max_kmh": Config.number("cpu_trainer_draft_saving_max_kmh"),
-		"low_stamina_saving_max_kmh": Config.number("cpu_trainer_low_stamina_saving_max_kmh"),
+		"cpu_start_drive_level": Config.number("cpu_start_drive_level"),
+		"heart_rate_min_bpm": Config.number("heart_rate_min_bpm"),
+		"heart_rate_normal_max_bpm": Config.number("heart_rate_normal_max_bpm"),
 	}
+
+
+## 残り距離を今の速度で走り切る間に、ゴール時の推進効率を floor より下げずに
+## 上げてよい心拍。200超過負荷の蓄積式（超過率 × 秒）をそのまま逆算する。
+## 超過で落ちた効率はゴールまで残るため、exponent が大きいほど予算を終盤へ取っておく
+## （1 で残り時間に均等配分）。
+static func heart_rate_allowance_bpm(
+	remaining_m: float,
+	speed_kmh: float,
+	overage_exposure: float,
+	finish_efficiency_floor: float,
+	exponent: float = 1.0
+) -> float:
+	var normal_max := Config.number("heart_rate_normal_max_bpm")
+	var overheat_max := Config.number("heart_rate_overheat_max_bpm")
+	if remaining_m <= 0.0:
+		return overheat_max
+	var loss_per_s := maxf(Config.number("overheat_exposure_efficiency_loss_per_s"), 0.0001)
+	var exposure_budget := maxf(
+		(1.0 - clampf(finish_efficiency_floor, 0.0, 1.0)) / loss_per_s - maxf(overage_exposure, 0.0),
+		0.0
+	)
+	var speed_m_per_s := maxf(speed_kmh, maxf(Config.number("min_speed_kmh"), 1.0)) / 3.6
+	var remaining_s := remaining_m / speed_m_per_s
+	var allowed_overheat_ratio := pow(clampf(exposure_budget / remaining_s, 0.0, 1.0), maxf(exponent, 1.0))
+	return lerpf(normal_max, overheat_max, allowed_overheat_ratio)
 
 
 static func heart_rate_rise_rate_for_drive_level(drive_level: float) -> float:
@@ -900,6 +937,22 @@ static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float
 	if net_rate < 0.0:
 		net_rate *= Config.number("heart_rate_recovery_rate_scale")
 	return net_rate
+
+
+## CPUが通常心拍上限以上にいる時、次の判断間隔まで心拍を下げられる最大ノッチを返す。
+## 200 bpm未満ではトレーナーの既存判断をそのまま使う。候補は設定済みのノッチ別心拍曲線から導き、
+## キャラクター・距離・固定ノッチによる例外は置かない。
+static func cpu_heart_safe_drive_level(
+	proposed_drive_level: float,
+	current_bpm: float,
+	cardio_stat: int
+) -> float:
+	if current_bpm < Config.number("heart_rate_normal_max_bpm"):
+		return clamp_drive_level(proposed_drive_level)
+	for drive_level in range(int(DRIVE_LEVEL_MAX), -1, -1):
+		if heart_rate_net_rate_bpm_per_s(current_bpm, float(drive_level), cardio_stat) < 0.0:
+			return float(drive_level)
+	return 0.0
 
 
 static func heart_rate_recovery_rate_base_bpm_per_s(cardio_stat: int) -> float:
@@ -960,23 +1013,26 @@ static func overheat_exposure_propulsion_efficiency(exposure: float) -> float:
 	)
 
 
-static func stamina_debt_efficiency(stamina: float, stamina_stat: int) -> float:
-	var debt_limit := Config.number("stamina_debt_limit")
-	if stamina >= 0.0 or debt_limit <= 0.0:
+static func stamina_capacity_l(stamina_stat: int) -> float:
+	return Config.number("stamina_capacity_base_l") + Config.number("stamina_capacity_per_stat_l") * clampi(stamina_stat, 1, 15)
+
+
+static func stamina_debt_limit_l(capacity_l: float) -> float:
+	return maxf(capacity_l, 0.0) * Config.number("stamina_debt_capacity_multiplier")
+
+
+static func stamina_debt_efficiency(stamina_l: float, capacity_l: float) -> float:
+	var debt_limit := stamina_debt_limit_l(capacity_l)
+	if stamina_l >= 0.0 or debt_limit <= 0.0:
 		return 1.0
-	var debt_ratio := clampf(-stamina / debt_limit, 0.0, 1.0)
-	var stat_ratio := clampf((float(stamina_stat) - 1.0) / 14.0, 0.0, 1.0)
-	var penalty_at_zero_stat := 1.0 - Config.number("stamina_debt_efficiency_min")
-	var penalty := penalty_at_zero_stat * (
-		1.0 - Config.number("stamina_debt_stat_mitigation_max") * stat_ratio
-	)
-	return clampf(1.0 - debt_ratio * penalty, Config.number("stamina_debt_efficiency_min"), 1.0)
+	var debt_ratio := clampf(-stamina_l / debt_limit, 0.0, 1.0)
+	return lerpf(1.0, Config.number("stamina_debt_efficiency_min"), debt_ratio)
 
 
-static func stamina_consumption_per_s(
+static func stamina_consumption_l_per_s(
 	drive_level: float,
 	heart_rate_bpm: float = -1.0,
-	stamina_stat: int = 5
+	load_multiplier: float = -1.0
 ) -> float:
 	var level := clamp_drive_level(drive_level)
 	if level <= 0.0:
@@ -994,21 +1050,19 @@ static func stamina_consumption_per_s(
 		Config.number("stamina_heart_rate_factor_max"),
 		heart_ratio
 	)
-	var stamina_ratio := clampf((float(stamina_stat) - 1.0) / 14.0, 0.0, 1.0)
-	var stamina_factor := 1.0 - Config.number("stamina_stat_mitigation_max") * stamina_ratio
+	var load := Config.number("stamina_consumption_load_multiplier") if load_multiplier < 0.0 else load_multiplier
 	return lerpf(
-		Config.number("stamina_consumption_min_per_s"),
-		Config.number("stamina_consumption_max_per_s"),
-		effort
-	) * heart_factor * stamina_factor * overheat_stamina_multiplier(safe_heart)
+		Config.number("stamina_consumption_min_l_per_s"),
+		Config.number("stamina_consumption_max_l_per_s"), effort
+	) * heart_factor * load * overheat_stamina_multiplier(safe_heart)
 
 
-static func stamina_delta_per_s(
+static func stamina_delta_l_per_s(
 	drive_level: float,
 	heart_rate_bpm: float = -1.0,
-	stamina_stat: int = 5
+	load_multiplier: float = -1.0
 ) -> float:
-	return -stamina_consumption_per_s(drive_level, heart_rate_bpm, stamina_stat)
+	return -stamina_consumption_l_per_s(drive_level, heart_rate_bpm, load_multiplier)
 
 
 static func contact_overlaps(

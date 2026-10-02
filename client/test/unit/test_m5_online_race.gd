@@ -226,9 +226,9 @@ func test_hud_shows_direct_chain_and_primary_source_distances() -> void:
 	assert_true(hud_lines.has("目標 62.0km/h"))
 	assert_true(hud_lines.has("実測 44.4km/h"))
 	assert_false(hud_lines.has("現在 58.0km/h"))
-	assert_true(hud_lines.has("直接 50%"))
-	assert_true(hud_lines.has("連鎖 25%"))
-	assert_true(hud_lines.has("総合 75%"))
+	assert_true(hud_lines.has("直接 67%"))
+	assert_true(hud_lines.has("連鎖 33%"))
+	assert_true(hud_lines.has("総合 100%"))
 	assert_true(hud_lines.has("対象 cpu-1（前方 4.0m／横 1.0m）"))
 	race.call("_on_race_result", {
 		"results": [{"id": "player-1", "rank": 1, "finish_time": 34.5}],

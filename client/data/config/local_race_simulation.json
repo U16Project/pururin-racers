@@ -21,7 +21,7 @@
       "goals": [
         {"id": "heart_rate_high_but_bounded", "kind": "soft", "metric": "player_max_heart_rate", "operator": "between", "min": 200.0, "max": 230.0, "target": 220.0, "unit": "bpm", "reason": "ノッチ6長時間維持は高心拍だが共通上限内"},
         {"id": "stamina_debt_bounded", "kind": "hard", "metric": "player_min_stamina", "operator": "gte", "target": -100.0, "unit": "%", "reason": "スタミナ負債は下限-100%を超えない"},
-        {"id": "higher_load_than_notch4", "kind": "relative", "metric": "player_stamina_load", "operator": "gt", "reference_scenario": "notch4_cruise", "reference_metric": "player_stamina_load", "reason": "ノッチ4巡航よりスタミナ負荷が大きい"}
+        {"id": "higher_load_than_notch4", "kind": "relative", "metric": "player_stamina_load_l", "operator": "gt", "reference_scenario": "notch4_cruise", "reference_metric": "player_stamina_load_l", "reason": "ノッチ4巡航より燃料負荷が大きい"}
       ]
     },
     {

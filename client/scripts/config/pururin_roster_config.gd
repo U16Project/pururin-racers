@@ -43,26 +43,23 @@ static func validate(data: Variant) -> PackedStringArray:
 	var known_styles: Dictionary = StatsConfig.values().get("running_styles", {})
 	var trainer_profile_ids := _trainer_profile_ids()
 	var ids := {}
-	var player_count := 0
-	var cpu_count := 0
+	var initial_player_count := 0
 	for index in roster.size():
 		var pururin: Variant = roster[index]
 		if not pururin is Dictionary:
 			errors.append("roster[%d]: オブジェクトが必要です" % index)
 			continue
 		_validate_pururin(pururin, index, known_attributes, known_styles, trainer_profile_ids, ids, errors)
-		if pururin.get("control_kind") == "player":
-			player_count += 1
-		elif pururin.get("control_kind") == "cpu":
-			cpu_count += 1
-	if player_count != 1 or cpu_count != 7:
-		errors.append("roster: player 1体、cpu 7体が必要です")
+		if str(pururin.get("control_kind", "")) == "player":
+			initial_player_count += 1
+	if initial_player_count != 1:
+		errors.append("roster: control_kind が player の初期操作個体は1体必要です")
 	return errors
 
 
 static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dictionary, styles: Dictionary, trainer_profile_ids: Dictionary, ids: Dictionary, errors: PackedStringArray) -> void:
 	for key in pururin:
-		if key not in ["id", "display_name", "control_kind", "trainer_profile_id", "attribute", "running_style", "allocation"]:
+		if key not in ["id", "display_name", "control_kind", "trainer_profile_id", "attribute", "visual_color", "running_style", "allocation"]:
 			errors.append("roster[%d].%s: 未知の項目です" % [index, key])
 	var identifier := str(pururin.get("id", ""))
 	if identifier.is_empty() or ids.has(identifier):
@@ -78,15 +75,16 @@ static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dicti
 		errors.append("roster[%d].attribute: 定義済み属性が必要です" % index)
 	if not styles.has(str(pururin.get("running_style", ""))):
 		errors.append("roster[%d].running_style: 定義済み脚質が必要です" % index)
+	var visual_color := str(pururin.get("visual_color", ""))
+	if not visual_color.begins_with("#") or (visual_color.length() != 7 and visual_color.length() != 9):
+		errors.append("roster[%d].visual_color: 有効な色が必要です" % index)
 	var allocation: Variant = pururin.get("allocation")
 	var allocation_errors := StatsMath.validate_allocation(allocation)
 	for allocation_error in allocation_errors:
 		errors.append("roster[%d].allocation: %s" % [index, allocation_error])
 	var profile_id := str(pururin.get("trainer_profile_id", ""))
-	if control_kind == "cpu" and not trainer_profile_ids.has(profile_id):
+	if not trainer_profile_ids.has(profile_id):
 		errors.append("roster[%d].trainer_profile_id: 定義済みCPUプロフィールが必要です" % index)
-	if control_kind == "player" and not profile_id.is_empty():
-		errors.append("roster[%d].trainer_profile_id: playerには設定しません" % index)
 
 
 static func _trainer_profile_ids() -> Dictionary:
@@ -115,3 +113,10 @@ static func pururin_by_id(identifier: String) -> Dictionary:
 		if pururin is Dictionary and pururin.get("id") == identifier:
 			return pururin
 	return {}
+
+
+static func default_player_pururin_id() -> String:
+	for pururin: Variant in values().get("roster", []):
+		if pururin is Dictionary and str(pururin.get("control_kind", "")) == "player":
+			return str(pururin.get("id", ""))
+	return ""

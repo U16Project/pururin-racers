@@ -44,7 +44,9 @@ var _chain_source_ids: Array = []
 var _direct_source_details: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 var _heart_overage_exposure: float = 0.0
-var _stamina: float = LocalRaceMath.Config.number("stamina_capacity")
+var _stamina: float = 0.0
+var _stamina_capacity_l: float = 0.0
+var _stamina_load_multiplier: float = 1.0
 var _race_progress: float = 0.0
 var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 var _race_route: Dictionary = {}
@@ -63,6 +65,8 @@ var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
 var _race_active: bool = false
 var _cpu_start_drive_remaining: float = 0.0
+## 比較測定専用。通常レースからは設定せず、自然最高速の旧ハード上限を再現する。
+var _simulation_legacy_speed_cap: bool = false
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
 
@@ -122,7 +126,6 @@ func setup_for_race(
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
 	_heart_overage_exposure = 0.0
-	_stamina = LocalRaceMath.Config.number("stamina_capacity")
 	_straight_len = LocalRaceMath.straight_length_m()
 	_turn_radius = LocalRaceMath.turn_radius_m()
 	if _path != null:
@@ -131,6 +134,7 @@ func setup_for_race(
 		if _path.has_method("get_turn_radius"):
 			_turn_radius = _path.get_turn_radius()
 	_apply_pururin_race_stats()
+	_reset_stamina_for_effective_stats()
 	_apply_pose()
 
 
@@ -175,6 +179,7 @@ func apply_simulation_player_override(override: Dictionary) -> PackedStringArray
 		return errors
 	_pururin = next_pururin
 	_apply_pururin_race_stats()
+	_reset_stamina_for_effective_stats()
 	return errors
 
 
@@ -223,7 +228,7 @@ func is_drafting() -> bool:
 
 
 func get_draft_bonus_kmh() -> float:
-	return _draft_bonus_kmh
+	return LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat())
 
 
 func get_draft_status() -> Dictionary:
@@ -234,8 +239,9 @@ func get_draft_status() -> Dictionary:
 		"direct_draft_p": _direct_draft_p,
 		"chain_draft_p": _chain_draft_p,
 		"received_draft_p": _received_draft_p,
-		"effective_draft_ratio": LocalRaceMath.draft_effective_ratio(_received_draft_p),
-		"draft_speed_bonus_kmh": _draft_bonus_kmh,
+		"effective_draft_ratio": LocalRaceMath.draft_effective_ratio(_received_draft_p, _effective_pack_stat()),
+		"pack_draft_effective_multiplier": LocalRaceMath.pack_draft_effective_multiplier(_effective_pack_stat()),
+		"draft_speed_bonus_kmh": LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat()),
 		"direct_source_ids": _direct_source_ids.duplicate(),
 		"chain_source_ids": _chain_source_ids.duplicate(),
 		"draft_source_ids": _direct_source_ids.duplicate(),
@@ -253,12 +259,10 @@ func get_drive_diagnostics() -> Dictionary:
 		active_drive_level,
 		_draft_air_resistance_factor(),
 		get_acceleration_force_bonus(),
-		LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
-			_current_speed_kmh,
-			active_drive_level,
-			int(_effective_stats.get("top_speed", 5))
-		),
-		get_propulsion_efficiency()
+		get_top_speed_drive_adjustment(),
+		get_propulsion_efficiency(),
+		_aero_air_resistance_multiplier(),
+		get_acceleration_response_multiplier()
 	)
 
 
@@ -272,7 +276,7 @@ func apply_draft_details(details: Dictionary) -> void:
 	_chain_source_ids = details.get("chain_source_ids", []).duplicate()
 	_direct_source_details = details.get("direct_source_details", []).duplicate(true)
 	_drafting = _received_draft_p > 0.0
-	_draft_bonus_kmh = LocalRaceMath.draft_assist_speed_kmh(_received_draft_p)
+	_draft_bonus_kmh = LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat())
 
 
 func set_drive_level(level: float) -> void:
@@ -285,6 +289,18 @@ func get_heart_rate_bpm() -> float:
 
 func get_stamina() -> float:
 	return _stamina
+
+
+func get_stamina_capacity_l() -> float:
+	return _stamina_capacity_l
+
+
+func get_stamina_ratio() -> float:
+	return clampf(_stamina / maxf(_stamina_capacity_l, 0.001), -1.0, 1.0)
+
+
+func get_stamina_load_multiplier() -> float:
+	return _stamina_load_multiplier
 
 
 func get_overheat_ratio() -> float:
@@ -302,7 +318,7 @@ func get_overheat_propulsion_efficiency() -> float:
 func get_propulsion_efficiency() -> float:
 	return get_overheat_propulsion_efficiency() * LocalRaceMath.stamina_debt_efficiency(
 		_stamina,
-		int(_effective_stats.get("stamina", 5))
+		_stamina_capacity_l
 	)
 
 
@@ -326,6 +342,14 @@ func get_acceleration_force_bonus() -> float:
 	return LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(int(_effective_stats.get("acceleration", 5)))
 
 
+func get_acceleration_response_multiplier() -> float:
+	return LocalRaceMath.stat_acceleration_response_multiplier(int(_effective_stats.get("acceleration", 5)))
+
+
+func set_simulation_legacy_speed_cap(enabled: bool) -> void:
+	_simulation_legacy_speed_cap = enabled
+
+
 func get_natural_top_speed() -> float:
 	return _natural_top_speed_kmh
 
@@ -334,7 +358,9 @@ func get_top_speed_drive_adjustment() -> float:
 	return LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
 		_current_speed_kmh,
 		_active_drive_level(),
-		int(_effective_stats.get("top_speed", 5))
+		int(_effective_stats.get("top_speed", 5)),
+		_draft_air_resistance_factor(),
+		_aero_air_resistance_multiplier()
 	)
 
 
@@ -358,7 +384,7 @@ func mark_finished(order: int, finish_time: float) -> void:
 
 func get_snapshot() -> Dictionary:
 	return {
-		"id": "player-1" if player_controlled else "cpu-%d" % (gate_index + 1),
+		"id": str(_pururin.get("id", "runner-%d" % (gate_index + 1))),
 		"distance": _distance,
 		"offset": _offset,
 		"speed": _current_speed_kmh,
@@ -385,6 +411,9 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["heart_rate_bpm"] = _heart_rate_bpm
 	snapshot["heart_overage_exposure"] = _heart_overage_exposure
 	snapshot["stamina"] = _stamina
+	snapshot["stamina_capacity_l"] = _stamina_capacity_l
+	snapshot["stamina_ratio"] = get_stamina_ratio()
+	snapshot["stamina_load_multiplier"] = _stamina_load_multiplier
 	snapshot["overheat_ratio"] = get_overheat_ratio()
 	snapshot["overheat_propulsion_efficiency"] = get_overheat_propulsion_efficiency()
 	snapshot["propulsion_efficiency"] = get_propulsion_efficiency()
@@ -402,7 +431,11 @@ func _active_drive_level() -> float:
 		return _drive_level
 	if _cpu_start_drive_remaining > 0.0:
 		return LocalRaceMath.Config.number("cpu_start_drive_level")
-	return _cpu_trainer_drive_level
+	return LocalRaceMath.cpu_heart_safe_drive_level(
+		_cpu_trainer_drive_level,
+		_heart_rate_bpm,
+		int(_effective_stats.get("cardio", 5))
+	)
 
 
 func _ready() -> void:
@@ -445,7 +478,10 @@ func _process(delta: float) -> void:
 			_draft_air_resistance_factor(),
 			get_acceleration_force_bonus(),
 			get_top_speed_drive_adjustment(),
-			get_propulsion_efficiency()
+			get_propulsion_efficiency(),
+			_aero_air_resistance_multiplier(),
+			get_acceleration_response_multiplier(),
+			_simulation_legacy_speed_cap
 		)
 		_update_condition(delta)
 		_update_drive_diagnostic_log(delta)
@@ -457,17 +493,16 @@ func _process(delta: float) -> void:
 			delta,
 			_draft_air_resistance_factor(),
 			get_acceleration_force_bonus(),
-			LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
-				_current_speed_kmh,
-				LocalRaceMath.Config.number("cpu_start_drive_level"),
-				int(_effective_stats.get("top_speed", 5))
-			),
-			get_propulsion_efficiency()
+			get_top_speed_drive_adjustment(),
+			get_propulsion_efficiency(),
+			_aero_air_resistance_multiplier(),
+			get_acceleration_response_multiplier(),
+			_simulation_legacy_speed_cap
 		)
 		_cpu_start_drive_remaining = maxf(_cpu_start_drive_remaining - delta, 0.0)
 		_update_condition_for_drive_level(LocalRaceMath.Config.number("cpu_start_drive_level"), delta)
 	else:
-		var cpu_drive_level := _cpu_trainer_drive_level
+		var cpu_drive_level := _active_drive_level()
 		# 前走者に接触しても推進を0へ戻さない。進捗は allowed_race_progress が
 		# 前走者の手前で止めるため、現在位置を維持したままラインの空きを待つ。
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
@@ -477,14 +512,13 @@ func _process(delta: float) -> void:
 			delta,
 			_draft_air_resistance_factor(),
 			get_acceleration_force_bonus(),
-			LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
-				_current_speed_kmh,
-				cpu_drive_level,
-				int(_effective_stats.get("top_speed", 5))
-			),
-			get_propulsion_efficiency()
+			get_top_speed_drive_adjustment(),
+			get_propulsion_efficiency(),
+			_aero_air_resistance_multiplier(),
+			get_acceleration_response_multiplier(),
+			_simulation_legacy_speed_cap
 		)
-		_update_condition_for_drive_level(_cpu_trainer_drive_level, delta)
+		_update_condition_for_drive_level(cpu_drive_level, delta)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
 		_current_speed_kmh, delta, _offset, curvature
 	)
@@ -519,12 +553,13 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 		_cpu_steer_timer -= delta
 		if _cpu_steer_timer <= 0.0:
 			_cpu_steer_timer = LocalRaceMath.cpu_steer_reselect_interval_s(randf())
+			var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
 			var follow_candidate := LocalRaceMath.cpu_follow_candidate(
 				_race_progress, _offset, _others_snapshot
 			)
 			if bool(follow_candidate.get("found", false)):
 				var follow_slot := LocalRaceMath.cpu_follow_slot(
-					_race_progress, _offset, follow_candidate, _others_snapshot, _cpu_overtake_bias, curvature
+					_race_progress, _offset, follow_candidate, _others_snapshot, _cpu_overtake_bias, curvature, line_pref
 				)
 				if bool(follow_slot.get("hold_current", false)):
 					_target_offset = _offset
@@ -538,7 +573,6 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 					)
 					_cpu_line_move_speed_m_per_s = LocalRaceMath.cpu_line_move_speed_m_per_s(follow_slot)
 			else:
-				var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
 				var open_line := LocalRaceMath.cpu_open_line_target_offset_m(
 					_race_progress,
 					_offset,
@@ -565,27 +599,13 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 func _update_cpu_target_speed() -> void:
 	if _cpu_trainer_profile.is_empty():
 		return
-	var capacity := LocalRaceMath.Config.number("stamina_capacity")
-	var global_gap := _cpu_global_gap_summary()
-	var pace := _cpu_pace_summary()
-	var decision := CpuTrainerMath.decide(_cpu_trainer_profile, {
-		"progress_ratio": _race_progress / _race_distance_m,
-		"field_size": LocalRaceMath.FIELD_SIZE,
-		"live_place": _cpu_live_place(),
-		"leader_gap_m": global_gap["leader_gap_m"],
-		"pack_center_gap_m": global_gap["pack_center_gap_m"],
-		"current_speed_kmh": _current_speed_kmh,
-		"field_pace_kmh": pace["field_pace_kmh"],
-		"nearest_ahead_gap_m": pace["nearest_ahead_gap_m"],
-		"nearest_ahead_speed_kmh": pace["nearest_ahead_speed_kmh"],
-		"acceleration_stat": float(_effective_stats.get("acceleration", 5)),
-		"max_speed_kmh": _natural_top_speed_kmh,
-		"stamina_ratio": _stamina / capacity,
-		"has_draft": _received_draft_p > 0.0,
-	}, LocalRaceMath.cpu_trainer_settings())
-	_target_speed_kmh = float(decision["target_speed_kmh"])
-	_cpu_trainer_drive_level = float(decision["drive_level"])
-	_cpu_overtake_bias = clampf(float(decision.get("overtake_bias", 0.0)), -1.0, 1.0)
+	var settings := LocalRaceMath.cpu_trainer_settings()
+	var decision := CpuTrainerMath.decide({"heart_rate_bpm": _heart_rate_bpm}, settings)
+	_cpu_trainer_drive_level = LocalRaceMath.cpu_heart_safe_drive_level(
+		float(decision["drive_level"]),
+		_heart_rate_bpm,
+		int(_effective_stats.get("cardio", 5))
+	)
 
 
 func _cpu_pace_summary() -> Dictionary:
@@ -650,13 +670,21 @@ func _apply_pururin_race_stats() -> void:
 		_race_progress / _race_distance_m
 	)
 	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))
-	max_speed_kmh = LocalRaceMath.HARD_SPEED_CAP_KMH
+	max_speed_kmh = _natural_top_speed_kmh
 	if not _drive_mode:
 		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_target_speed_kmh, _natural_top_speed_kmh)
 
 
 func _draft_air_resistance_factor() -> float:
-	return LocalRaceMath.draft_air_resistance_factor(_received_draft_p)
+	return LocalRaceMath.draft_air_resistance_factor(_received_draft_p, _effective_pack_stat())
+
+
+func _aero_air_resistance_multiplier() -> float:
+	return LocalRaceMath.aero_air_resistance_multiplier(int(_effective_stats.get("aero", 5)))
+
+
+func _effective_pack_stat() -> int:
+	return int(_effective_stats.get("pack", 5))
 
 
 func _update_drive_diagnostic_log(delta: float) -> void:
@@ -713,7 +741,6 @@ func _update_condition(delta: float) -> void:
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
-	var stamina_stat := int(_effective_stats.get("stamina", 5))
 	_heart_rate_bpm += LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat) * delta
 	_heart_rate_bpm = clampf(
 			_heart_rate_bpm,
@@ -725,17 +752,23 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 		_heart_rate_bpm,
 		delta
 	)
-	var stamina_delta := LocalRaceMath.stamina_delta_per_s(
+	var stamina_delta := LocalRaceMath.stamina_delta_l_per_s(
 		drive_level,
 		_heart_rate_bpm,
-		stamina_stat
+		_stamina_load_multiplier
 	)
-	var debt_limit := LocalRaceMath.Config.number("stamina_debt_limit")
+	var debt_limit := LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
 	_stamina = clampf(
 		_stamina + stamina_delta * delta,
 		-debt_limit,
-		LocalRaceMath.Config.number("stamina_capacity")
+		_stamina_capacity_l
 	)
+
+
+func _reset_stamina_for_effective_stats() -> void:
+	_stamina_capacity_l = LocalRaceMath.stamina_capacity_l(int(_effective_stats.get("stamina", 5)))
+	_stamina_load_multiplier = RaceSession.selected_stamina_load_multiplier()
+	_stamina = _stamina_capacity_l
 
 
 func _read_steer_axis() -> float:

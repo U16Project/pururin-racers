@@ -7,9 +7,8 @@ import pytest
 
 from race_m5 import (
     DRAFT_RULES,
-    DRAFT_ASSIST_MAX_KMH,
-    MAX_CHAIN_DRAFT_P,
-    MAX_DRAFT_RECEIVED_P,
+    DRAFT_ASSIST_SCALE_KMH,
+    DRAFT_RESPONSE_REFERENCE_P,
     MIN_DRAFT_FORWARD_M,
     M5Race,
     _load_draft_rules,
@@ -69,9 +68,10 @@ def test_client_draft_rules_copy_matches_shared_definition() -> None:
     ) as client_file:
         client_rules = json.load(client_file)
     assert client_rules == shared_rules
-    assert DRAFT_RULES["max_received_p"] == MAX_DRAFT_RECEIVED_P
-    assert DRAFT_RULES["assist_max_kmh"] == DRAFT_ASSIST_MAX_KMH
-    assert DRAFT_RULES["chain_attenuation"] == 0.7
+    assert "max_received_p" not in DRAFT_RULES
+    assert DRAFT_RESPONSE_REFERENCE_P == 0.18
+    assert DRAFT_RULES["assist_max_kmh"] == DRAFT_ASSIST_SCALE_KMH
+    assert DRAFT_RULES["chain_attenuation"] == 0.5
     assert DRAFT_RULES["lateral_range_m"] == 3.0
     assert DRAFT_RULES["lateral_falloff_exponent"] == 0.35
 
@@ -95,17 +95,17 @@ def test_route_goal_is_home_straight_path_400_for_all_distances() -> None:
         assert route_mainline_distance(route, route["distance_m"]) == 400.0
 
 
-def test_direct_draft_uses_progress_and_caps_received_value() -> None:
+def test_direct_draft_uses_progress_without_capping_received_value() -> None:
     snapshot = [
         {"race_progress": 10.0, "offset": 0.0},
-        {"race_progress": 12.0, "offset": 0.0},
-        {"race_progress": 14.0, "offset": 0.2},
-        {"race_progress": 16.0, "offset": 0.4},
-        {"race_progress": 18.0, "offset": 0.6},
+        {"race_progress": 12.0, "offset": 0.0, "speed": 300.0},
+        {"race_progress": 14.0, "offset": 0.2, "speed": 300.0},
+        {"race_progress": 16.0, "offset": 0.4, "speed": 300.0},
+        {"race_progress": 18.0, "offset": 0.6, "speed": 300.0},
     ]
     own, received = calculate_draft(snapshot, 0)
     assert own > 0.0
-    assert received <= MAX_DRAFT_RECEIVED_P
+    assert received > DRAFT_RESPONSE_REFERENCE_P
 
 
 def test_draft_uses_speed_when_source_wake_is_initially_zero() -> None:
@@ -117,6 +117,19 @@ def test_draft_uses_speed_when_source_wake_is_initially_zero() -> None:
     _, received = calculate_draft(snapshot, 0)
 
     assert received > 0.0
+
+
+def test_source_wake_grows_past_reference_speed_without_a_source_cap() -> None:
+    own, received = calculate_draft(
+        [
+            {"race_progress": 10.0, "offset": 0.0, "speed": 300.0},
+            {"race_progress": 12.0, "offset": 0.0, "speed": 300.0},
+        ],
+        0,
+    )
+
+    assert own == pytest.approx(0.54)
+    assert received > DRAFT_RESPONSE_REFERENCE_P
 
 
 def test_draft_distance_and_line_boundaries_are_deterministic() -> None:
@@ -187,7 +200,7 @@ def test_draft_keeps_all_four_eligible_sources_and_uses_gentle_lateral_decay() -
     _own, direct, _chain, details, _chain_sources = _calculate_draft_details(snapshot, 0)
     assert [detail["id"] for detail in details] == ["cpu-a", "cpu-b", "cpu-c", "cpu-d"]
     assert len(details) == 4
-    assert direct == MAX_DRAFT_RECEIVED_P
+    assert direct > DRAFT_RESPONSE_REFERENCE_P
 
     side_by_side = [
         {"id": "receiver", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
@@ -208,7 +221,7 @@ def test_draft_keeps_all_four_eligible_sources_and_uses_gentle_lateral_decay() -
     assert calculate_draft(just_under_min, 0)[1] == 0.0
     _own, diagonal_direct, diagonal_chain, diagonal_details, _chain_sources = _calculate_draft_details(diagonal, 0)
     assert [detail["id"] for detail in diagonal_details] == ["cpu-diagonal"]
-    source_wake = min(0.18, 0.06 + 60.0 / 75.0 * 0.12)
+    source_wake = 0.06 + 60.0 / 75.0 * 0.12
     linear_strength = source_wake * (1.0 - 4.0 / 8.0) * 0.5
     assert diagonal_direct > linear_strength
     linear_chain_strength = 0.12 * float(DRAFT_RULES["chain_attenuation"]) * (1.0 - 4.0 / 8.0) * 0.5
@@ -248,8 +261,8 @@ def test_finished_racer_cannot_provide_or_receive_draft() -> None:
     assert finished_received == 0.0
 
 
-def test_draft_assist_is_normalized_to_four_kmh() -> None:
-    race = M5Race("draft-cap")
+def test_draft_assist_uses_wake_reference_without_a_received_cap() -> None:
+    race = M5Race("draft-reference")
     race.start()
     player, source = race.racers[:2]
     for index, racer in enumerate(race.racers[2:], start=3):
@@ -260,15 +273,15 @@ def test_draft_assist_is_normalized_to_four_kmh() -> None:
     player.speed = player.target_speed = 50.0
     player.race_progress = 100.0
     player.offset = source.offset = 0.0
-    source.race_progress = 100.01
+    source.race_progress = 102.0
     source.own_wake_p = 0.18
     source.received_draft_p = 0.12
-    player.received_draft_p = MAX_DRAFT_RECEIVED_P
+    player.received_draft_p = DRAFT_RESPONSE_REFERENCE_P
 
     race.tick()
 
-    assert player.received_draft_p <= MAX_DRAFT_RECEIVED_P
-    assert player.speed <= 50.0 + DRAFT_ASSIST_MAX_KMH / 20.0
+    assert player.received_draft_p > 0.0
+    assert player.speed == 50.0 + DRAFT_ASSIST_SCALE_KMH / 20.0
 
 
 def test_received_draft_disappears_after_racer_order_changes() -> None:
@@ -321,7 +334,6 @@ def test_direct_and_chain_draft_are_separate_and_use_previous_tick_values() -> N
     assert own > 0.0
     assert direct > 0.0
     assert chain > 0.0
-    assert chain <= MAX_CHAIN_DRAFT_P
     assert direct_sources[0]["id"] == "b"
     assert chain_sources == ["b"]
     snapshot[1]["direct_draft_p"] = 0.0
@@ -334,8 +346,26 @@ def test_direct_and_chain_draft_are_separate_and_use_previous_tick_values() -> N
     assert chain_sources_without_chain == []
 
 
-def test_all_eligible_direct_sources_are_retained_and_assist_reaches_four_kmh_at_cap() -> None:
-    race = M5Race("draft-max")
+def test_draft_direct_and_chain_total_is_not_capped() -> None:
+    snapshot = [
+        {"id": "receiver", "race_progress": 0.0, "offset": 0.0, "speed": 60.0},
+        {
+            "id": "source",
+            "race_progress": 1.5,
+            "offset": 0.0,
+            "speed": 300.0,
+            "direct_draft_p": DRAFT_RESPONSE_REFERENCE_P * 2.0,
+            "chain_draft_p": DRAFT_RESPONSE_REFERENCE_P * 2.0,
+        },
+    ]
+    _own, direct, chain, _details, _chain_sources = _calculate_draft_details(snapshot, 0)
+
+    assert direct + chain > DRAFT_RESPONSE_REFERENCE_P
+    assert calculate_draft(snapshot, 0)[1] == direct + chain
+
+
+def test_all_eligible_direct_sources_are_retained_and_assist_uses_wake_reference() -> None:
+    race = M5Race("draft-reference")
     race.start()
     player = race.racers[0]
     for racer in race.racers[5:]:
@@ -348,13 +378,13 @@ def test_all_eligible_direct_sources_are_retained_and_assist_reaches_four_kmh_at
         source.race_progress = 102.0 + index
         source.offset = 0.0
         source.speed = 60.0
-    player.received_draft_p = MAX_DRAFT_RECEIVED_P
+    player.received_draft_p = DRAFT_RESPONSE_REFERENCE_P
 
     race.tick()
 
     assert len(player.direct_source_ids) == 4
-    assert player.direct_draft_p == MAX_DRAFT_RECEIVED_P
-    assert player.speed == 50.0 + DRAFT_ASSIST_MAX_KMH / 20.0
+    assert player.direct_draft_p > DRAFT_RESPONSE_REFERENCE_P
+    assert player.speed == 50.0 + DRAFT_ASSIST_SCALE_KMH / 20.0
 
 
 def test_tick_is_deterministic_and_never_exceeds_max_speed() -> None:
@@ -469,7 +499,7 @@ def test_draft_source_details_follow_post_move_snapshot_and_zero_outside_range()
     assert _calculate_draft_details(snapshot, 3)[1] == 0.0
 
 
-def test_direct_source_details_are_capped_and_sum_to_direct_total() -> None:
+def test_direct_source_details_sum_to_uncapped_direct_total() -> None:
     race = M5Race("source-contributions")
     race.start()
     player = race.racers[0]
@@ -485,7 +515,7 @@ def test_direct_source_details_are_capped_and_sum_to_direct_total() -> None:
     assert sum(
         detail["contribution_p"] for detail in player.direct_source_details
     ) == player.direct_draft_p
-    assert player.direct_draft_p <= MAX_DRAFT_RECEIVED_P
+    assert player.direct_draft_p > 0.0
 
 
 def test_full_eight_racer_result_is_reproducible() -> None:
@@ -541,7 +571,7 @@ def test_input_does_not_accept_client_supplied_p_or_speed() -> None:
     })
     assert "draft_assist" not in race.inputs["player-1"]
     race.tick()
-    assert race.racers[0].received_draft_p <= 0.24
+    assert race.racers[0].received_draft_p >= 0.0
     assert race.racers[0].speed <= race.racers[0].max_speed
 
 

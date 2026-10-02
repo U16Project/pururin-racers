@@ -4,13 +4,15 @@ extends RefCounted
 const PATH := "res://data/config/m5_draft_rules.json"
 const NUMBER_RANGES := {
 	"schema_version": [1.0, 1.0],
-	"max_received_p": [0.001, 1.0],
 	"assist_max_kmh": [0.0, 90.0],
 	"forward_min_m": [0.001, 1000.0],
 	"forward_max_m": [0.001, 1000.0],
 	"lateral_range_m": [0.001, 1000.0],
 	"lateral_falloff_exponent": [0.001, 10.0],
 	"chain_attenuation": [0.0, 1.0],
+	"wake_base_p": [0.0, 1.0],
+	"wake_speed_reference_kmh": [0.001, 300.0],
+	"wake_speed_gain_p": [0.0, 1.0],
 }
 
 static var _cached: Dictionary = {}
@@ -73,3 +75,9 @@ static func number(key: String) -> float:
 	var data := values()
 	assert(not data.is_empty(), last_error)
 	return float(data[key])
+
+
+## wake の基準速度時に、1走者が真後ろへ作る影響量。
+## 上限ではなく、HUD表示とローカル応答曲線の単位を揃える基準値。
+static func wake_reference_p() -> float:
+	return maxf(number("wake_base_p") + number("wake_speed_gain_p"), 0.0001)

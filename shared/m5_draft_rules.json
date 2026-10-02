@@ -1,10 +1,12 @@
 {
   "schema_version": 1,
-  "max_received_p": 0.24,
   "assist_max_kmh": 4.0,
   "forward_min_m": 1.5,
   "forward_max_m": 8.0,
   "lateral_range_m": 3.0,
   "lateral_falloff_exponent": 0.35,
-  "chain_attenuation": 0.7
+  "chain_attenuation": 0.5,
+  "wake_base_p": 0.06,
+  "wake_speed_reference_kmh": 75.0,
+  "wake_speed_gain_p": 0.12
 }

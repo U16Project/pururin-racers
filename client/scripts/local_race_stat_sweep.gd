@@ -22,7 +22,7 @@ static func load_config(path: String = CONFIG_PATH) -> Dictionary:
 	return {"data": parser.data}
 
 
-## 基準配分から対象ステータスだけを変更し、残りを1ずつ機械的に再配分する。
+## 合法な40点配分を作るため、対象以外も再配分する。単独因果比較には使わない。
 ## これにより合計40、各1〜10を常に維持し、補正先も再現可能になる。
 static func adjusted_allocation(target_stat: String, target_value: int, base: Dictionary = {}) -> Dictionary:
 	var allocation := StatsMath.default_allocation() if base.is_empty() else base.duplicate(true)
@@ -153,6 +153,9 @@ static func _make_case(variant_id: String, group_id: String, target_stat: String
 
 
 static func player_snapshot(result: Dictionary) -> Dictionary:
+	for value: Variant in result.get("finish_snapshots", {}).values():
+		if value is Dictionary and bool(value.get("player", false)):
+			return value
 	for value: Variant in result.get("runners", []):
 		if value is Dictionary and bool(value.get("player", false)):
 			return value
@@ -173,7 +176,7 @@ static func player_metrics(result: Dictionary) -> Dictionary:
 		"max_heart_rate_bpm": float(metrics.get("player_max_heart_rate", NAN)),
 		"stamina": float(player.get("stamina", NAN)),
 		"min_stamina": float(metrics.get("player_min_stamina", NAN)),
-		"stamina_load": float(metrics.get("player_stamina_load", NAN)),
+		"stamina_load": float(metrics.get("player_stamina_load_l", NAN)),
 		"time_to_60_s": time_to_60,
 		"effective_stats": player.get("effective_stats", {}),
 	}
@@ -191,6 +194,7 @@ static func build_record(case: Dictionary, result: Dictionary) -> Dictionary:
 				finish_order[order - 1] = {"id": runner.get("id", ""), "name": runner.get("display_name", ""), "rank": runner.get("rank", 0), "finish_time_s": runner.get("finish_time_s", -1.0)}
 	return {
 		"variant_id": case.get("variant_id", ""),
+		"comparison_scope": "legal_allocation_with_other_stats_redistributed_not_isolated_causality",
 		"comparison_group": case.get("comparison_group", ""),
 		"case_kind": case.get("case_kind", ""),
 		"target_stat": case.get("target_stat", ""),

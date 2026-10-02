@@ -105,6 +105,9 @@ static func _validate_attributes(data: Dictionary, stat_ids: Array, errors: Pack
 		if not definition is Dictionary or not definition.get("bonus_stats") is Array or definition.bonus_stats.size() != 2:
 			errors.append("attributes.%s.bonus_stats: 2項目が必要です" % attribute_id)
 			continue
+		var color_value := str(definition.get("color", ""))
+		if not color_value.begins_with("#") or (color_value.length() != 7 and color_value.length() != 9):
+			errors.append("attributes.%s.color: 有効な色が必要です" % attribute_id)
 		for stat_id in definition.bonus_stats:
 			if not stat_id in stat_ids:
 				errors.append("attributes.%s.bonus_stats: 未知のステータスです" % attribute_id)

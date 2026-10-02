@@ -39,13 +39,15 @@ def _load_draft_rules(path: Path = DRAFT_RULES_PATH) -> dict[str, float | int]:
         raise ValueError(f"{path}: root must be an object")
     expected_keys = {
         "schema_version",
-        "max_received_p",
         "assist_max_kmh",
         "forward_min_m",
         "forward_max_m",
         "lateral_range_m",
         "lateral_falloff_exponent",
         "chain_attenuation",
+        "wake_base_p",
+        "wake_speed_reference_kmh",
+        "wake_speed_gain_p",
     }
     if set(raw) != expected_keys:
         missing = sorted(expected_keys - set(raw))
@@ -68,28 +70,34 @@ def _load_draft_rules(path: Path = DRAFT_RULES_PATH) -> dict[str, float | int]:
     forward_max_m = number("forward_max_m", 0.001, 1000.0)
     if forward_min_m > forward_max_m:
         raise ValueError(f"{path}: forward_min_m must be <= forward_max_m")
+    wake_base_p = number("wake_base_p", 0.0, 1.0)
+    wake_speed_gain_p = number("wake_speed_gain_p", 0.0, 1.0)
     rules: dict[str, float | int] = {
         "schema_version": int(schema_version),
-        "max_received_p": number("max_received_p", 0.001, 1.0),
         "assist_max_kmh": number("assist_max_kmh", 0.0, 90.0),
         "forward_min_m": forward_min_m,
         "forward_max_m": forward_max_m,
         "lateral_range_m": number("lateral_range_m", 0.001, 1000.0),
         "lateral_falloff_exponent": number("lateral_falloff_exponent", 0.001, 10.0),
         "chain_attenuation": number("chain_attenuation", 0.0, 1.0),
+        "wake_base_p": wake_base_p,
+        "wake_speed_reference_kmh": number("wake_speed_reference_kmh", 0.001, 300.0),
+        "wake_speed_gain_p": wake_speed_gain_p,
     }
     return rules
 
 
 DRAFT_RULES = _load_draft_rules()
-MAX_DRAFT_RECEIVED_P = float(DRAFT_RULES["max_received_p"])
-DRAFT_ASSIST_MAX_KMH = float(DRAFT_RULES["assist_max_kmh"])
+DRAFT_ASSIST_SCALE_KMH = float(DRAFT_RULES["assist_max_kmh"])
 MIN_DRAFT_FORWARD_M = float(DRAFT_RULES["forward_min_m"])
 MAX_DRAFT_FORWARD_M = float(DRAFT_RULES["forward_max_m"])
 MAX_DRAFT_LINE_M = float(DRAFT_RULES["lateral_range_m"])
 DRAFT_LATERAL_FALLOFF_EXPONENT = float(DRAFT_RULES["lateral_falloff_exponent"])
 CHAIN_DRAFT_ATTENUATION = float(DRAFT_RULES["chain_attenuation"])
-MAX_CHAIN_DRAFT_P = MAX_DRAFT_RECEIVED_P * CHAIN_DRAFT_ATTENUATION
+WAKE_BASE_P = float(DRAFT_RULES["wake_base_p"])
+WAKE_SPEED_REFERENCE_KMH = float(DRAFT_RULES["wake_speed_reference_kmh"])
+WAKE_SPEED_GAIN_P = float(DRAFT_RULES["wake_speed_gain_p"])
+DRAFT_RESPONSE_REFERENCE_P = max(WAKE_BASE_P + WAKE_SPEED_GAIN_P, 0.0001)
 RACER_FRONT_OFFSET_M = 0.75
 
 
@@ -146,7 +154,7 @@ def centerline_delta_from_kmh(
 
 
 def _own_wake_from_speed(speed: float) -> float:
-    return min(0.18, 0.06 + max(0.0, speed) / 75.0 * 0.12)
+    return WAKE_BASE_P + max(0.0, speed) / WAKE_SPEED_REFERENCE_KMH * WAKE_SPEED_GAIN_P
 
 
 @dataclass
@@ -258,7 +266,7 @@ def _calculate_draft_details(
             source_own_wake = float(source.get("own_wake_p", 0.0))
             if source_own_wake <= 0.0:
                 source_own_wake = _own_wake_from_speed(float(source.get("speed", 0.0)))
-            source_own_wake = min(0.18, max(0.0, source_own_wake))
+            source_own_wake = max(0.0, source_own_wake)
             direct_strength = max(
                 0.0, source_own_wake * distance_falloff * line_falloff
             )
@@ -275,15 +283,13 @@ def _calculate_draft_details(
     selected = [source for source in sources if source[2] > 0.0]
     if not selected:
         return own_wake, 0.0, 0.0, [], []
-    direct_raw = sum(item[2] for item in selected)
-    direct = min(MAX_DRAFT_RECEIVED_P, direct_raw)
-    direct_scale = direct / direct_raw if direct_raw > 0.0 else 0.0
+    direct = sum(item[2] for item in selected)
     source_details = [
         {
             "id": source_id,
             "gap": gap,
             "line": line_gap,
-            "contribution_p": strength * direct_scale,
+            "contribution_p": strength,
         }
         for gap, line_gap, strength, source_id, _source_index in selected
     ]
@@ -291,13 +297,10 @@ def _calculate_draft_details(
     chain_strengths: list[float] = []
     for gap, line_gap, _direct_strength, source_id, source_index in selected:
         source = snapshot[source_index]
-        source_previous_draft = min(
-            MAX_DRAFT_RECEIVED_P,
-            max(
-                0.0,
-                float(source.get("direct_draft_p", 0.0))
-                + float(source.get("chain_draft_p", 0.0)),
-            ),
+        source_previous_draft = max(
+            0.0,
+            float(source.get("direct_draft_p", 0.0))
+            + float(source.get("chain_draft_p", 0.0)),
         )
         chain_strength = (
             source_previous_draft
@@ -308,7 +311,7 @@ def _calculate_draft_details(
         if chain_strength > 0.0:
             chain_sources.append(source_id)
             chain_strengths.append(chain_strength)
-    chain = min(MAX_CHAIN_DRAFT_P, sum(chain_strengths))
+    chain = sum(chain_strengths)
     return own_wake, direct, chain, source_details, chain_sources
 
 
@@ -445,13 +448,10 @@ class M5Race:
             if racer.cpu:
                 racer.target_speed = self._cpu_target_speed(racer, index)
                 racer.target_offset = max(LANE_MIN, min(LANE_MAX, racer.target_offset))
-            # 前 tick の received は、直接＋連鎖を既に上限内で確定した値。
-            received_draft = min(
-                MAX_DRAFT_RECEIVED_P,
-                max(0.0, float(snapshot[index].get("received_draft_p", 0.0))),
-            )
-            assist_speed = DRAFT_ASSIST_MAX_KMH * (
-                received_draft / MAX_DRAFT_RECEIVED_P
+            # 前 tick の received は、直接＋連鎖の全寄与を確定した値。
+            received_draft = max(0.0, float(snapshot[index].get("received_draft_p", 0.0)))
+            assist_speed = DRAFT_ASSIST_SCALE_KMH * (
+                received_draft / DRAFT_RESPONSE_REFERENCE_P
             )
             effective_target = min(racer.max_speed, racer.target_speed + assist_speed)
             speed = racer.speed + max(

@@ -4,13 +4,13 @@ extends RefCounted
 
 static func status_lines(
 	racer: Dictionary,
-	max_received_p: float,
+	reference_p: float,
 	require_identified_source: bool = false,
 	split_source_lines: bool = false,
 	show_effective_details: bool = false,
 	show_speed_cap_bonus: bool = true
 ) -> PackedStringArray:
-	var draft_scale := maxf(max_received_p, 0.0001)
+	var draft_scale := maxf(reference_p, 0.0001)
 	var direct := maxf(0.0, float(racer.get("direct_draft_p", 0.0)))
 	var chain := maxf(0.0, float(racer.get("chain_draft_p", 0.0)))
 	var received := maxf(0.0, float(racer.get("received_draft_p", direct + chain)))
@@ -30,7 +30,8 @@ static func status_lines(
 		"総合 %.0f%%" % total_percent,
 	])
 	if show_effective_details:
-		lines.append("実効 %.0f%%" % (clampf(float(racer.get("effective_draft_ratio", 0.0)), 0.0, 1.0) * 100.0))
+		lines.append("実効 %.0f%%" % (maxf(0.0, float(racer.get("effective_draft_ratio", 0.0))) * 100.0))
+		lines.append("集団補正 x%.2f" % float(racer.get("pack_draft_effective_multiplier", 1.0)))
 		if show_speed_cap_bonus:
 			lines.append("上限補正 %+.1fkm/h" % float(racer.get("draft_speed_bonus_kmh", 0.0)))
 	if split_source_lines and not racer.get("direct_source_details", []).is_empty():

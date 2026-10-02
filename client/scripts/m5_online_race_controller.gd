@@ -7,17 +7,12 @@ const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatt
 const NetRace := preload("res://scripts/net_race_m5.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
 const RESULT_VISUAL_HOLD_SECONDS := 10.0
 const INPUT_OFFSET_RATE := 4.0
 const INPUT_SPEED_RATE := 12.0
-const COLORS := [
-	Color(1.0, 0.45, 0.2), Color(0.25, 0.75, 1.0), Color(0.95, 0.92, 0.35),
-	Color(0.75, 0.35, 0.95), Color(0.35, 0.9, 0.55), Color(0.95, 0.55, 0.7),
-	Color(0.55, 0.7, 0.95), Color(0.9, 0.7, 0.35),
-]
-
 @onready var _runners_root: Node3D = $Runners
 @onready var _track: Path3D = $TrackPath
 @onready var _camera: Camera3D = $Camera3D
@@ -208,7 +203,7 @@ func _on_race_tick(payload: Dictionary) -> void:
 				"実測 %.1fkm/h" % actual_speed,
 			])
 			lines.append_array(DraftHudFormatter.status_lines(
-				racer, DraftRules.number("max_received_p"), true
+				racer, DraftRules.wake_reference_p(), true
 			))
 			lines.append("タイム %s" % _format_race_time(float(payload.get("elapsed_seconds", 0.0))))
 			_hud_label.text = "\n".join(lines)
@@ -249,7 +244,7 @@ func _create_visual(racer_id: String, index: int) -> void:
 	sphere.height = 1.5
 	body.mesh = sphere
 	var material := StandardMaterial3D.new()
-	material.albedo_color = COLORS[index % COLORS.size()]
+	material.albedo_color = PururinVisualStyle.color_for_racer_id(racer_id)
 	body.material_override = material
 	_runners_root.add_child(body)
 	_visuals[racer_id] = body

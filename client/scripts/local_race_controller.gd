@@ -10,21 +10,11 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 const TITLE_SCENE := "res://scenes/m3_intro.tscn"
-const RUNNER_COLORS := [
-	Color(1.0, 0.45, 0.2),
-	Color(0.25, 0.75, 1.0),
-	Color(0.95, 0.92, 0.35),
-	Color(0.75, 0.35, 0.95),
-	Color(0.35, 0.9, 0.55),
-	Color(0.95, 0.55, 0.7),
-	Color(0.55, 0.7, 0.95),
-	Color(0.9, 0.7, 0.35),
-]
-
 @onready var _track: Path3D = $TrackPath
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
@@ -179,11 +169,24 @@ func _spawn_field() -> void:
 	for child in _runners_root.get_children():
 		child.queue_free()
 	_runners.clear()
+	_player = null
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.75
 	sphere.height = 1.5
-	for i in LocalRaceMath.FIELD_SIZE:
-		var pururin: Dictionary = PururinRosterConfig.values()["roster"][i]
+	var selected_player_id := RaceSession.selected_player_pururin_id()
+	var roster: Array = PururinRosterConfig.values()["roster"]
+	var field_roster: Array = []
+	# 選択した操作個体の開始ゲートは設定で変更できる。CPUには残りのゲートを順番に割り当てる。
+	for pururin: Dictionary in roster:
+		if str(pururin.get("id", "")) == selected_player_id:
+			field_roster.append(pururin)
+	for pururin: Dictionary in roster:
+		if str(pururin.get("id", "")) != selected_player_id:
+			field_roster.append(pururin)
+	var player_gate := clampi(int(LocalRaceMath.Config.number("player_start_gate_index")), 0, LocalRaceMath.FIELD_SIZE - 1)
+	var next_cpu_gate := 0
+	for i in field_roster.size():
+		var pururin: Dictionary = field_roster[i]
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
@@ -192,17 +195,23 @@ func _spawn_field() -> void:
 		body.mesh = sphere
 		body.position = Vector3(0.0, 0.75, 0.0)
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = RUNNER_COLORS[i % RUNNER_COLORS.size()]
+		mat.albedo_color = PururinVisualStyle.color_for_pururin(pururin)
 		mat.roughness = 0.4
 		body.material_override = mat
 		runner.add_child(body)
 		_runners_root.add_child(runner)
-		var is_player: bool = pururin["control_kind"] == "player"
+		var is_player: bool = str(pururin.get("id", "")) == selected_player_id
+		var start_gate := player_gate if is_player else next_cpu_gate
+		if not is_player:
+			while next_cpu_gate == player_gate:
+				next_cpu_gate += 1
+			start_gate = next_cpu_gate
+			next_cpu_gate += 1
 		var label: String = pururin["display_name"]
 		runner.call(
 			"setup_for_race",
 			_track,
-			i,
+			start_gate,
 			LocalRaceMath.PLAYER_MAX_SPEED_KMH,
 			is_player,
 			label,
@@ -369,7 +378,12 @@ func _update_hud() -> void:
 		lines.append("出力 %+d" % int(roundi(_player.call("get_drive_level"))))
 		if effective_stats.has("top_speed") and effective_stats.has("acceleration"):
 			lines.append("最高速 有効%d　自然到達 %.1fkm/h" % [effective_stats["top_speed"], _player.call("get_natural_top_speed")])
-			lines.append("加速 有効%d　推進補正 %+.2fkm/h/s" % [effective_stats["acceleration"], _player.call("get_acceleration_force_bonus")])
+			lines.append("加速 有効%d　加速応答 ×%.2f" % [effective_stats["acceleration"], _player.call("get_acceleration_response_multiplier")])
+		if effective_stats.has("aero"):
+			lines.append("空力 有効%d　抵抗補正 x%.2f" % [
+				effective_stats["aero"],
+				LocalRaceMath.aero_air_resistance_multiplier(int(effective_stats["aero"])),
+			])
 		lines.append("心拍 %.0f/%.0f" % [
 			_player.call("get_heart_rate_bpm"),
 			LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
@@ -378,13 +392,17 @@ func _update_hud() -> void:
 			_player.call("get_heart_overage_exposure"),
 			_player.call("get_propulsion_efficiency") * 100.0,
 		])
-		lines.append("スタミナ %.0f%%" % _player.call("get_stamina"))
+		lines.append("燃料 %.1f / %.1fL（%.0f%%）" % [
+			_player.call("get_stamina"),
+			_player.call("get_stamina_capacity_l"),
+			_player.call("get_stamina_ratio") * 100.0,
+		])
 		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
 	else:
 		lines.append("目標 %.0fkm/h" % tgt)
 	lines.append_array(DraftHudFormatter.status_lines(
 		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
-		_player.call("get_draft_status"), LocalRaceMath.DRAFT_MAX_RECEIVED_P, false, true, true, false
+		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
 	))
 	lines.append("現在 %.0fkm/h" % cur)
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))

@@ -12,15 +12,21 @@ const NUMBER_RANGES := {
 	"drive_level_step": [1.0, 1.0],
 	"start_countdown_seconds": [0.0, 30.0],
 	"player_start_drive_level": [-100.0, 100.0],
+	"player_start_gate_index": [0.0, 7.0],
 	"cpu_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_duration_seconds": [0.0, 30.0],
 	"min_speed_kmh": [0.0, 75.0],
 	"rolling_resistance_kmh_per_s": [0.0, 100.0],
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
+	"aero_air_resistance_reference_stat": [1.0, 15.0],
+	"aero_air_resistance_multiplier_per_stat": [0.0, 0.10],
 	"draft_response_exponent": [1.0, 4.0],
-	"draft_effective_max_ratio": [0.001, 1.0],
-	"draft_aggregation_exponent": [1.0, 4.0],
+	"draft_aggregation_exponent": [0.5, 4.0],
+	"pack_draft_effective_reference_stat": [1.0, 15.0],
+	"pack_draft_effective_multiplier_per_stat": [0.0, 0.10],
 	"brake_deceleration_per_level": [0.001, 100.0],
+	"contact_lateral_range_m": [0.001, 15.0],
+	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
 	"drive_repeat_initial_s": [0.001, 10.0],
 	"drive_repeat_interval_s": [0.001, 10.0],
@@ -33,6 +39,7 @@ const NUMBER_RANGES := {
 	"cpu_follow_preferred_gap_m": [0.001, 100.0],
 	"cpu_follow_offset_blend": [0.0, 1.0],
 	"cpu_follow_slot_lateral_spacing_m": [0.001, 15.0],
+	"cpu_follow_slot_inner_midpoint_blend": [0.0, 1.0],
 	"cpu_follow_slot_crowding_forward_range_m": [0.001, 100.0],
 	"cpu_follow_slot_crowding_lateral_range_m": [0.001, 15.0],
 	"cpu_follow_slot_crowding_weight": [0.0, 100.0],
@@ -44,8 +51,6 @@ const NUMBER_RANGES := {
 	"cpu_follow_slot_open_forward_threshold": [0.0, 100.0],
 	"cpu_follow_slot_inner_bias": [0.0, 100.0],
 	"cpu_line_distance_advantage_weight": [0.0, 100.0],
-	"cpu_follow_slot_line_change_weight": [0.0, 100.0],
-	"cpu_follow_slot_side_continuity_weight": [0.0, 100.0],
 	"cpu_overtake_bias_threshold": [-1.0, 1.0],
 	"cpu_overtake_forward_distance_m": [0.001, 15.0],
 	"cpu_overtake_slot_lateral_spacing_m": [0.001, 15.0],
@@ -54,31 +59,11 @@ const NUMBER_RANGES := {
 	"cpu_overtake_escape_bias_weight": [0.0, 100.0],
 	"cpu_overtake_escape_steer_speed_multiplier": [1.0, 10.0],
 	"cpu_inward_target_offset_m": [-15.0, 15.0],
-	"cpu_inward_target_blend": [0.0, 1.0],
 	"cpu_trainer_reselect_seconds": [0.05, 60.0],
-	"cpu_trainer_cruise_reduction_max_kmh": [0.0, 25.0],
-	"cpu_trainer_global_chase_pressure_max_kmh": [0.0, 25.0],
-	"cpu_trainer_global_gap_reference_m": [0.001, 500.0],
-	"cpu_trainer_chase_urgency_gap_reference_m": [0.001, 500.0],
-	"cpu_trainer_field_pace_correction_max_kmh": [0.0, 25.0],
-	"cpu_trainer_field_pace_reference_kmh": [0.001, 100.0],
-	"cpu_trainer_closing_pressure_max_kmh": [0.0, 25.0],
-	"cpu_trainer_front_chase_pressure_max_kmh": [0.0, 25.0],
-	"cpu_trainer_closing_gap_reference_m": [0.001, 500.0],
-	"cpu_trainer_closing_speed_reference_kmh": [0.001, 100.0],
-	"top_speed_natural_min_kmh": [0.0, 90.0],
-	"top_speed_natural_max_kmh": [0.0, 90.0],
+	"top_speed_natural_min_kmh": [0.0, 300.0],
+	"top_speed_natural_max_kmh": [0.0, 300.0],
 	"acceleration_drive_force_bonus_per_stat_kmh_per_s": [0.0, 10.0],
-	"cpu_trainer_finish_start_progress": [0.0, 1.0],
-	"cpu_trainer_finish_full_progress": [0.0, 1.0],
-	"cpu_trainer_finish_chase_base_ratio": [0.0, 1.0],
-	"cpu_trainer_finish_chase_position_ratio": [0.0, 4.0],
-	"cpu_trainer_finish_chase_leader_gap_ratio": [0.0, 4.0],
-	"cpu_trainer_reserve_max_kmh": [0.0, 25.0],
-	"cpu_trainer_position_push_max_kmh": [0.0, 25.0],
-	"cpu_trainer_finish_push_max_kmh": [0.0, 25.0],
-	"cpu_trainer_draft_saving_max_kmh": [0.0, 25.0],
-	"cpu_trainer_low_stamina_saving_max_kmh": [0.0, 25.0],
+	"acceleration_response_multiplier_per_stat": [0.0, 0.1],
 	"heart_rate_min_bpm": [1.0, 300.0],
 	"heart_rate_normal_max_bpm": [1.0, 300.0],
 	"heart_rate_overheat_max_bpm": [1.0, 300.0],
@@ -89,20 +74,21 @@ const NUMBER_RANGES := {
 	"heart_rate_recovery_exponent": [0.1, 6.0],
 	"heart_rate_recovery_rate_scale": [0.1, 10.0],
 	"heart_rate_drive_load_scale": [0.01, 10.0],
-	"stamina_capacity": [0.001, 10000.0],
-	"stamina_debt_limit": [0.0, 10000.0],
-	"stamina_consumption_min_per_s": [0.0, 100.0],
-	"stamina_consumption_max_per_s": [0.0, 100.0],
+	"stamina_capacity_base_l": [0.0, 10000.0],
+	"stamina_capacity_per_stat_l": [0.001, 10000.0],
+	"stamina_debt_capacity_multiplier": [0.0, 100.0],
+	"stamina_consumption_min_l_per_s": [0.0, 100.0],
+	"stamina_consumption_max_l_per_s": [0.0, 100.0],
+	"stamina_consumption_load_multiplier": [0.001, 100.0],
 	"stamina_heart_rate_factor_min": [0.0, 10.0],
 	"stamina_heart_rate_factor_max": [0.0, 10.0],
-	"stamina_stat_mitigation_max": [0.0, 1.0],
 	"stamina_debt_efficiency_min": [0.0, 1.0],
-	"stamina_debt_stat_mitigation_max": [0.0, 1.0],
 	"overheat_stamina_multiplier_max": [1.0, 10.0],
 	"overheat_propulsion_efficiency_min": [0.0, 1.0],
 	"overheat_exposure_efficiency_loss_per_s": [0.0001, 1.0],
 	"overheat_exposure_recovery_per_s": [0.0, 100.0],
 }
+const PROFILE_OVERRIDE_NUMBER_KEYS: Array[String] = []
 static var _cached: Dictionary = {}
 static var _attempted := false
 static var last_error := ""
@@ -141,9 +127,14 @@ static func validate(data: Variant) -> PackedStringArray:
 	for key in ["drive_level_min", "drive_level_max", "drive_level_step"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
+	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat"]:
+		if float(data[key]) != floorf(float(data[key])):
+			errors.append("%s: 整数が必要です" % key)
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
+	if float(data.player_start_gate_index) != floorf(float(data.player_start_gate_index)):
+		errors.append("player_start_gate_index: 整数が必要です")
 	if absf(data.drive_level_min) > data.drive_level_max:
 		errors.append("drive_level_min: 絶対値は drive_level_max 以下にしてください")
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
@@ -157,8 +148,8 @@ static func validate(data: Variant) -> PackedStringArray:
 		errors.append("heart_rate_rise_time_cardio_min_s: heart_rate_rise_time_cardio_max_s 以下にしてください")
 	if data.heart_rate_recovery_time_cardio_min_s < data.heart_rate_recovery_time_cardio_max_s:
 		errors.append("heart_rate_recovery_time_cardio_min_s: heart_rate_recovery_time_cardio_max_s 以上にしてください")
-	if data.stamina_consumption_min_per_s > data.stamina_consumption_max_per_s:
-		errors.append("stamina_consumption_min_per_s: stamina_consumption_max_per_s 以下にしてください")
+	if data.stamina_consumption_min_l_per_s > data.stamina_consumption_max_l_per_s:
+		errors.append("stamina_consumption_min_l_per_s: stamina_consumption_max_l_per_s 以下にしてください")
 	if data.stamina_heart_rate_factor_min > data.stamina_heart_rate_factor_max:
 		errors.append("stamina_heart_rate_factor_min: stamina_heart_rate_factor_max 以下にしてください")
 	for pair in [
@@ -168,8 +159,6 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: %s 以下にしてください" % [pair[0], pair[1]])
 	if float(data.cpu_follow_preferred_gap_m) > float(data.cpu_follow_forward_range_m):
 		errors.append("cpu_follow_preferred_gap_m: cpu_follow_forward_range_m 以下にしてください")
-	if float(data.cpu_trainer_finish_start_progress) > float(data.cpu_trainer_finish_full_progress):
-		errors.append("cpu_trainer_finish_start_progress: cpu_trainer_finish_full_progress 以下にしてください")
 	if float(data.top_speed_natural_min_kmh) > float(data.top_speed_natural_max_kmh):
 		errors.append("top_speed_natural_min_kmh: top_speed_natural_max_kmh 以下にしてください")
 	if absf(float(data.cpu_inward_target_offset_m)) > M2TrackMath.MAX_ABS_OFFSET_M:
@@ -225,10 +214,22 @@ static func validate(data: Variant) -> PackedStringArray:
 				errors.append("cpu_trainer_profiles[%d].id: 空または重複です" % index)
 				continue
 			profile_ids[identifier] = true
-			for key in ["aggression", "patience", "drafting_pref", "line_pref"]:
+			for key in ["line_pref"]:
 				var value: Variant = profile.get(key)
 				if not (value is float or value is int) or not is_finite(float(value)) or value < 0.0 or value > 1.0:
 					errors.append("cpu_trainer_profiles[%d].%s: 0〜1の数値が必要です" % [index, key])
+			for key: String in PROFILE_OVERRIDE_NUMBER_KEYS:
+				if not profile.has(key):
+					continue
+				var override_value: Variant = profile[key]
+				var override_limits: Array = NUMBER_RANGES["cpu_trainer_" + key]
+				if (
+					not (override_value is float or override_value is int)
+					or not is_finite(float(override_value))
+					or override_value < override_limits[0]
+					or override_value > override_limits[1]
+				):
+					errors.append("cpu_trainer_profiles[%d].%s: 範囲 %s〜%s 外です" % [index, key, override_limits[0], override_limits[1]])
 	var cycle: Variant = data.get("cpu_trainer_profile_cycle")
 	if not cycle is Array or cycle.is_empty():
 		errors.append("cpu_trainer_profile_cycle: 1個以上の配列が必要です")

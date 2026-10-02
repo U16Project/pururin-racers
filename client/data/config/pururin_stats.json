@@ -27,18 +27,22 @@
   "attributes": {
     "earth": {
       "label": "地",
+      "color": "#b8894a",
       "bonus_stats": ["stamina", "contact_resistance"]
     },
     "water": {
       "label": "水",
+      "color": "#4aa9e8",
       "bonus_stats": ["handling", "pack"]
     },
     "fire": {
       "label": "火",
+      "color": "#e6533c",
       "bonus_stats": ["acceleration", "cardio"]
     },
     "wind": {
       "label": "風",
+      "color": "#64c878",
       "bonus_stats": ["top_speed", "aero"]
     }
   },
