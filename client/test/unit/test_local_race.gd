@@ -286,7 +286,7 @@ func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_
 		for speed: float in [40.0, 60.0, 90.0]:
 			for draft: float in [0.0, 0.33]:
 				for efficiency: float in [0.35, 1.0]:
-					for aero: float in [0.85, 1.06]:
+					for aero: float in [LocalRaceMath.aero_air_resistance_multiplier(15), LocalRaceMath.aero_air_resistance_multiplier(1)]:
 						var plain := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, 0.0, efficiency, aero, 1.0)
 						var responsive := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, 0.0, efficiency, aero, 1.5)
 						for field: String in ["drive_contribution_kmh_per_s", "rolling_resistance_kmh_per_s", "air_resistance_kmh_per_s", "draft_air_reduction_kmh_per_s"]:
@@ -485,15 +485,15 @@ func test_draft_source_wake_grows_past_the_reference_speed_without_a_source_cap(
 
 
 func test_aero_and_pack_stats_use_continuous_baseline_multipliers() -> void:
-	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(1), 1.06, 0.001)
+	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(1), 1.0 + LocalRaceMath.AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT * 4.0, 0.001)
 	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(5), 1.0, 0.001)
-	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(15), 0.85, 0.001)
+	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(15), 1.0 - LocalRaceMath.AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT * 10.0, 0.001)
 	var aero_one := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(1))
 	var aero_five := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(5))
 	var aero_fifteen := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(15))
-	assert_almost_eq(float(aero_one["air_resistance_kmh_per_s"]), 5.406, 0.001)
+	assert_almost_eq(float(aero_one["air_resistance_kmh_per_s"]), 5.1 * LocalRaceMath.aero_air_resistance_multiplier(1), 0.001)
 	assert_almost_eq(float(aero_five["air_resistance_kmh_per_s"]), 5.1, 0.001)
-	assert_almost_eq(float(aero_fifteen["air_resistance_kmh_per_s"]), 4.335, 0.001)
+	assert_almost_eq(float(aero_fifteen["air_resistance_kmh_per_s"]), 5.1 * LocalRaceMath.aero_air_resistance_multiplier(15), 0.001)
 	assert_almost_eq(float(aero_one["rolling_resistance_kmh_per_s"]), float(aero_fifteen["rolling_resistance_kmh_per_s"]), 0.001)
 	var half_received := LocalRaceMath.draft_response_reference_p() * 0.5
 	assert_almost_eq(LocalRaceMath.pack_draft_effective_multiplier(1), 1.0 - LocalRaceMath.PACK_DRAFT_EFFECTIVE_MULTIPLIER_PER_STAT * 4.0, 0.001)
@@ -856,12 +856,12 @@ func _notch_six_equilibrium_speed(stat: int, draft_factor: float, aero_multiplie
 func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with_draft() -> void:
 	for stat: int in [1, 5, 10, 15]:
 		var natural_speed := LocalRaceMath.top_speed_natural_speed_kmh(stat)
-		var solo := _notch_six_equilibrium_speed(stat, 0.0, 0.85)
+		var solo := _notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(15))
 		assert_true(is_finite(solo))
 		assert_almost_eq(solo, natural_speed, 0.05)
 		# ドラフトは最高速の上限を作らず、空気抵抗の軽減分だけ自然に速度が伸びる。
-		assert_gt(_notch_six_equilibrium_speed(stat, 0.2, 0.85), solo + 0.5)
-		assert_gt(_notch_six_equilibrium_speed(stat, 0.4, 0.85), _notch_six_equilibrium_speed(stat, 0.2, 0.85))
+		assert_gt(_notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)), solo + 0.5)
+		assert_gt(_notch_six_equilibrium_speed(stat, 0.4, LocalRaceMath.aero_air_resistance_multiplier(15)), _notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)))
 	var open_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(60.0, 4.0, 10, 1.0)
 	var drafted_adjustment := open_adjustment
 	var open_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 70.0, 1.0, 0.0, 0.0, open_adjustment)
@@ -1181,16 +1181,16 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	assert_true(lines.has("総合 44%"))
 	assert_true(lines.has("実効 %d%%" % int(roundf(_expected_effective_ratio(0.435, LocalRaceMath.pack_draft_effective_multiplier(15)) * 100.0))))
 	assert_true(lines.has("集団補正 x%.2f" % LocalRaceMath.pack_draft_effective_multiplier(15)))
-	assert_true(lines.has("空力 有効15　抵抗補正 x0.85"))
-	assert_true(lines.has("空気抵抗（二乗） -5.63km/h/s"))
-	var expected_air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 57.0 * 57.0 * 0.85
+	assert_true(lines.has("空力 有効15　抵抗補正 x%.2f" % LocalRaceMath.aero_air_resistance_multiplier(15)))
+	var expected_air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 57.0 * 57.0 * LocalRaceMath.aero_air_resistance_multiplier(15)
+	assert_true(lines.has("空気抵抗（二乗） %+.2fkm/h/s" % -expected_air))
 	var expected_reduction := expected_air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.435, LocalRaceMath.pack_draft_effective_multiplier(15))
 	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % expected_reduction))
 	assert_true(hud.text.contains("計算加速度"))
 	var telemetry: Dictionary = player.call("get_telemetry_snapshot")
 	assert_almost_eq(float(telemetry["draft"]["effective_draft_ratio"]), _expected_effective_ratio(0.435, LocalRaceMath.pack_draft_effective_multiplier(15)), 0.001)
 	assert_almost_eq(float(telemetry["draft"]["pack_draft_effective_multiplier"]), LocalRaceMath.pack_draft_effective_multiplier(15), 0.001)
-	assert_almost_eq(float(telemetry["drive_diagnostics"]["air_resistance_multiplier"]), 0.85, 0.001)
+	assert_almost_eq(float(telemetry["drive_diagnostics"]["air_resistance_multiplier"]), LocalRaceMath.aero_air_resistance_multiplier(15), 0.001)
 	player.free()
 	race.free()
 

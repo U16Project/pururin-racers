@@ -11,7 +11,7 @@
   "rolling_resistance_kmh_per_s": 0.55,
   "air_resistance_quadratic_coefficient": 0.00204,
   "aero_air_resistance_reference_stat": 5,
-  "aero_air_resistance_multiplier_per_stat": 0.015,
+  "aero_air_resistance_multiplier_per_stat": 0.006,
   "draft_response_reference_scale": 3.0,
   "draft_response_exponent": 1.5,
   "draft_aggregation_exponent": 0.7,

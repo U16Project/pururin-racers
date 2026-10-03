@@ -16,7 +16,7 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_eq(Config.number("drive_level_max"), 6.0)
 	assert_almost_eq(Config.number("air_resistance_quadratic_coefficient"), 0.00204, 0.000001)
 	assert_eq(Config.number("aero_air_resistance_reference_stat"), 5.0)
-	assert_almost_eq(Config.number("aero_air_resistance_multiplier_per_stat"), 0.015, 0.000001)
+	assert_almost_eq(Config.number("aero_air_resistance_multiplier_per_stat"), 0.006, 0.000001)
 	assert_almost_eq(Config.number("draft_response_exponent"), 1.5, 0.001)
 	assert_almost_eq(Config.number("draft_response_reference_scale"), 3.0, 0.001)
 	assert_almost_eq(Config.number("draft_aggregation_exponent"), 0.7, 0.001)
