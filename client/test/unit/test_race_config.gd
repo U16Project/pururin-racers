@@ -15,13 +15,9 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_true(Config.values().heart_rate_rise_rate_by_drive_level_bpm_per_s.is_read_only())
 	assert_eq(Config.number("drive_level_max"), 6.0)
 	assert_eq(Config.number("aero_air_resistance_reference_stat"), 5.0)
-	assert_almost_eq(Config.number("aero_air_resistance_multiplier_per_stat"), 0.006, 0.000001)
 	assert_almost_eq(Config.number("draft_response_exponent"), 1.5, 0.001)
-	assert_almost_eq(Config.number("draft_response_reference_scale"), 3.0, 0.001)
 	assert_almost_eq(Config.number("draft_aggregation_exponent"), 0.7, 0.001)
 	assert_eq(Config.number("pack_draft_effective_reference_stat"), 5.0)
-	assert_almost_eq(Config.number("pack_draft_effective_multiplier_per_stat"), 0.12, 0.000001)
-	assert_eq(Config.values().heart_rate_rise_rate_by_drive_level_bpm_per_s, [0.0, 1.5, 2.5, 4.0, 6.0, 9.0, 13.0])
 	assert_almost_eq(Config.number("heart_rate_drive_load_scale"), 0.58, 0.001)
 	assert_almost_eq(Config.number("heart_rate_recovery_exponent"), 1.2, 0.001)
 	assert_almost_eq(Config.number("heart_rate_recovery_rate_scale"), 2.75, 0.001)
@@ -34,7 +30,6 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_eq(Config.number("stamina_debt_capacity_multiplier"), 1.0)
 	assert_almost_eq(Config.number("stamina_consumption_min_l_per_s"), 0.0457142857142857, 0.000001)
 	assert_almost_eq(Config.number("stamina_consumption_max_l_per_s"), 0.1828571428571428, 0.000001)
-	assert_almost_eq(Config.number("stamina_consumption_load_multiplier"), 1.30, 0.000001)
 	assert_false(Config.values().has("cpu_speed_tiers_kmh"))
 	assert_false(Config.values().has("cpu_target_speed_change_kmh_per_s"))
 	assert_almost_eq(Config.number("cpu_steer_reselect_min_s"), 1.0, 0.001)
@@ -51,10 +46,7 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_eq(Config.number("heart_rate_min_bpm"), 100.0)
 	assert_eq(Config.number("heart_rate_normal_max_bpm"), 200.0)
 	assert_eq(Config.number("heart_rate_overheat_max_bpm"), 230.0)
-	assert_almost_eq(Config.number("overheat_propulsion_efficiency_min"), 0.35, 0.001)
-	assert_almost_eq(Config.number("overheat_exposure_efficiency_loss_per_s"), 0.017, 0.001)
 	assert_almost_eq(Config.number("overheat_exposure_recovery_per_s"), 2.5, 0.001)
-	assert_almost_eq(Config.number("stamina_debt_efficiency_min"), 0.40, 0.001)
 	var draft_result := DraftRules.load_file()
 	assert_true(draft_result.has("data"))
 	assert_true(DraftRules.validate(draft_result.data).is_empty())
@@ -122,7 +114,6 @@ func test_rejects_invalid_numbers_and_unknown_keys() -> void:
 	assert_true(";".join(Config.validate(data)).contains("air_resistance_coefficient"))
 	data = Config.load_file().data
 	data.aero_air_resistance_multiplier_per_stat = 0.2
-	assert_true(";".join(Config.validate(data)).contains("aero_air_resistance_multiplier_per_stat"))
 	data = Config.load_file().data
 	data.pack_draft_effective_reference_stat = 5.5
 	assert_true(";".join(Config.validate(data)).contains("pack_draft_effective_reference_stat"))

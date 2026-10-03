@@ -48,6 +48,13 @@ var _chain_source_ids: Array = []
 var _direct_source_details: Array = []
 ## 後ろの走者から受ける効果（後方支援）の受取量と、その対象。
 var _rear_assist_p: float = 0.0
+## 横に並んで接している走者の数（0〜2）。接触耐性が低いほど、心拍と体力の負荷が大きい。
+var _contact_count: int = 0
+## 押し合いの勝負が起きた走者か。負荷が大きくなる。
+var _in_push_contest: bool = false
+## このtickに横へ動こうとした向き（-1／0／+1）と、動く前の横位置。
+var _move_intent: int = 0
+var _offset_before_move: float = 0.0
 var _rear_source_ids: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 var _heart_overage_exposure: float = 0.0
@@ -284,6 +291,59 @@ func get_air_reduction_breakdown() -> Dictionary:
 	return {"aero_rear": aero_rear, "draft": maxf(total - aero_rear, 0.0), "total": total}
 
 
+func apply_contact_count(count: int) -> void:
+	_contact_count = clampi(count, 0, LocalRaceMath.CONTACT_COUNT_MAX)
+
+
+## 押し合いの入力。動いたあとの位置と、動く前の位置、動こうとした向き。
+func get_push_entry() -> Dictionary:
+	return {
+		"id": str(_pururin.get("id", "runner-%d" % (gate_index + 1))),
+		"progress": _race_progress,
+		"offset": _offset,
+		"old_offset": _offset_before_move,
+		"intent": _move_intent,
+		"stat": _contact_resistance_stat(),
+	}
+
+
+## 押し合いの結果を反映する。横位置を更新して、姿勢を取り直す。
+func apply_push_result(offset: float, in_contest: bool) -> void:
+	_in_push_contest = in_contest
+	if not is_equal_approx(offset, _offset):
+		_offset = M2TrackMath.clamp_offset(offset)
+		_apply_pose()
+
+
+func is_in_push_contest() -> bool:
+	return _in_push_contest
+
+
+func get_contact_count() -> int:
+	return _contact_count
+
+
+func _contact_resistance_stat() -> int:
+	return int(_effective_stats.get("contact_resistance", 5))
+
+
+## 押し合いの勝負が起きた走者は、接触の負荷が大きくなる（接触していない扱いでも、最低1人分）。
+func _load_count_and_multiplier() -> Array:
+	if _in_push_contest:
+		return [maxi(_contact_count, 1), LocalRaceMath.PUSH_LOAD_MULTIPLIER]
+	return [_contact_count, 1.0]
+
+
+func get_contact_heart_load_bpm_per_s() -> float:
+	var load := _load_count_and_multiplier()
+	return LocalRaceMath.contact_heart_load_bpm_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
+
+
+func get_contact_stamina_load_l_per_s() -> float:
+	var load := _load_count_and_multiplier()
+	return LocalRaceMath.contact_stamina_load_l_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
+
+
 func get_rear_assist_air_factor() -> float:
 	return LocalRaceMath.rear_assist_air_factor(_rear_assist_p, int(_effective_stats.get("aero", 5)))
 
@@ -353,6 +413,11 @@ func get_max_speed() -> float:
 
 func get_effective_stats() -> Dictionary:
 	return _effective_stats.duplicate()
+
+
+## 操作性による、左右のライン移動の速さの倍率。
+func get_handling_steer_multiplier() -> float:
+	return LocalRaceMath.handling_steer_multiplier(int(_effective_stats.get("handling", 5)))
 
 
 func get_acceleration_force_bonus() -> float:
@@ -449,6 +514,9 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["drive_diagnostics"] = get_drive_diagnostics()
 	snapshot["position"] = [global_position.x, global_position.y, global_position.z]
 	snapshot["actual_speed_kmh"] = _actual_speed_kmh
+	snapshot["contact_count"] = _contact_count
+	snapshot["in_push_contest"] = _in_push_contest
+	snapshot["contact_heart_load_bpm_per_s"] = get_contact_heart_load_bpm_per_s()
 	snapshot["rotation_y"] = rotation.y
 	return snapshot
 
@@ -495,8 +563,9 @@ func _process(delta: float) -> void:
 	var pose_distance := float(route_pose.get("mainline_distance", _distance))
 	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else M2TrackMath.curvature_at(_path.curve, pose_distance)
 	_update_inputs(delta, curvature)
-	if not LocalRaceMath.can_use_offset(_race_progress, _offset, _others_snapshot):
-		_offset = previous_offset
+	# 重なる位置へ動いたときは、動く前へ戻すのではなく、押し合いの勝負（コントローラ側）で解く。
+	_offset_before_move = previous_offset
+	_move_intent = int(signf(_offset - previous_offset)) if absf(_offset - previous_offset) > 0.00001 else 0
 	var path_len := _path.curve.get_baked_length()
 	if player_controlled:
 		_update_drive_level_input(delta)
@@ -585,12 +654,14 @@ func _clear_draft_details() -> void:
 	_direct_source_details = []
 	_rear_assist_p = 0.0
 	_rear_source_ids = []
+	_contact_count = 0
+	_in_push_contest = false
 
 
 func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 	if player_controlled:
 		var steer := _read_steer_axis()
-		_offset = M2TrackMath.clamp_offset(_offset + steer * steer_speed * delta)
+		_offset = M2TrackMath.clamp_offset(_offset + steer * steer_speed * get_handling_steer_multiplier() * delta)
 	else:
 		_cpu_steer_timer -= delta
 		if _cpu_steer_timer <= 0.0:
@@ -630,7 +701,7 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 				)
 				_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 			# ライン選択と速度方針は独立。速度はトレーナーが定期的に決める。
-		_offset = move_toward(_offset, _target_offset, _cpu_line_move_speed_m_per_s * delta)
+		_offset = move_toward(_offset, _target_offset, _cpu_line_move_speed_m_per_s * get_handling_steer_multiplier() * delta)
 		_offset = M2TrackMath.clamp_offset(_offset)
 		_cpu_trainer_timer -= delta
 		if _cpu_trainer_timer <= 0.0:
@@ -743,7 +814,7 @@ func _update_condition(delta: float) -> void:
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
-	_heart_rate_bpm += LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat) * delta
+	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat) + get_contact_heart_load_bpm_per_s()) * delta
 	_heart_rate_bpm = clampf(
 			_heart_rate_bpm,
 			LocalRaceMath.Config.number("heart_rate_min_bpm"),
@@ -759,6 +830,7 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 		_heart_rate_bpm,
 		_stamina_load_multiplier
 	)
+	stamina_delta -= get_contact_stamina_load_l_per_s()
 	var debt_limit := LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
 	_stamina = clampf(
 		_stamina + stamina_delta * delta,

@@ -35,13 +35,13 @@ func test_player_selection_accepts_roster_ids_and_falls_back_to_hikari() -> void
 
 func test_stamina_load_presets_are_explicit_and_default_to_config_high_load() -> void:
 	assert_eq(RaceSession.stamina_load_presets().size(), 3)
-	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), 1.30, 0.0001)
+	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), LocalRaceMath.Config.number("stamina_consumption_load_multiplier"), 0.0001)
 	assert_eq(RaceSession.select_stamina_load_preset("standard"), "standard")
 	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), 1.15, 0.0001)
 	assert_eq(RaceSession.select_stamina_load_preset("strong"), "strong")
 	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), 1.45, 0.0001)
 	RaceSession.reset_stamina_load_preset()
-	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), 1.30, 0.0001)
+	assert_almost_eq(RaceSession.selected_stamina_load_multiplier(), LocalRaceMath.Config.number("stamina_consumption_load_multiplier"), 0.0001)
 
 
 func test_local_runner_uses_selected_distance_and_route_goal() -> void:

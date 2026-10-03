@@ -180,6 +180,7 @@ func _finalize_draft_tick() -> void:
 	# M5オンラインと同じく、移動後のゴール判定を先に確定する。
 	# 着順とタイムを確定した後も、結果表示までは全員が接触・ドラフトを続ける。
 	_check_finishes()
+	_resolve_pushes()
 	var snapshots: Array = []
 	for runner in _runners:
 		snapshots.append(runner.call("get_snapshot"))
@@ -187,6 +188,20 @@ func _finalize_draft_tick() -> void:
 		var details: Dictionary = LocalRaceMath.calculate_draft_details(snapshots, index)
 		_runners[index].call("apply_draft_details", details)
 		_runners[index].call("apply_rear_assist_details", LocalRaceMath.calculate_rear_assist_details(snapshots, index))
+		_runners[index].call("apply_contact_count", LocalRaceMath.lateral_contact_count(snapshots, index))
+
+
+## 横に動いて他の走者に重なった分を、押し合いの勝負で解く。位置が決まってから、ドラフトなどを計算する。
+func _resolve_pushes() -> void:
+	var entries: Array = []
+	for runner in _runners:
+		entries.append(runner.call("get_push_entry"))
+	var result: Dictionary = LocalRaceMath.resolve_lateral_pushes(entries)
+	var offsets: Dictionary = result["offsets"]
+	var contest: Array = result["contest_ids"]
+	for index in _runners.size():
+		var identifier := str(entries[index]["id"])
+		_runners[index].call("apply_push_result", float(offsets.get(identifier, entries[index]["offset"])), identifier in contest)
 
 
 func _spawn_field() -> void:
@@ -439,6 +454,9 @@ func _update_hud() -> void:
 		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
 	))
 	var draft_status: Dictionary = _player.call("get_draft_status")
+	lines.append("押し合い %s" % ("発生中（負荷x%.1f）" % LocalRaceMath.PUSH_LOAD_MULTIPLIER if _player.call("is_in_push_contest") else "なし"))
+	lines.append("接触 %d人　負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_contact_count"), _player.call("get_contact_heart_load_bpm_per_s"), _player.call("get_contact_stamina_load_l_per_s")])
+	lines.append("操作性 有効%d　ライン移動 x%.2f" % [int(effective_stats.get("handling", 5)), _player.call("get_handling_steer_multiplier")])
 	lines.append("後方支援 空気抵抗 -%.1f%%" % (float(draft_status.get("rear_assist_air_factor", 0.0)) * 100.0))
 	lines.append("速度 実際 %.0f／出力上 %.0fkm/h" % [cur, output_speed])
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))

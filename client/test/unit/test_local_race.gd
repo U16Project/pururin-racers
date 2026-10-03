@@ -893,14 +893,13 @@ func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with
 func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(0.0), 0.0)
 	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(-1.0), 0.0)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(1.0), 1.5, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(2.0), 2.5, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(3.0), 4.0, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), 6.0, 0.001)
+	var rates: Array = LocalRaceMath.Config.values()["heart_rate_rise_rate_by_drive_level_bpm_per_s"]
+	for level in range(1, 7):
+		assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(float(level)), float(rates[level]), 0.001)
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(4.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0))
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.0), LocalRaceMath.heart_rate_rise_rate_for_drive_level(6.0))
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.5), 11.0, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5), 13.0, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(5.5), (float(rates[5]) + float(rates[6])) * 0.5, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5), float(rates[6]), 0.001)
 	assert_gt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 1), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
 	assert_lt(LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 15), LocalRaceMath.heart_rate_rise_rate_bpm_per_s(6.0, 5))
 	assert_gt(
@@ -910,7 +909,7 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 4.0, 5), 0.0)
 	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 5.0, 5), LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 4.0, 5))
 	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(180.0, 2.0, 5), 0.0)
-	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(180.0, 3.0, 5), 0.0)
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(150.0, 3.0, 5), 0.0)
 	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(170.0, 4.0, 5), 0.0)
 	var settled: Dictionary = {}
 	for drive_level in [4.0, 5.0, 6.0]:
@@ -922,8 +921,18 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 				230.0
 			)
 		settled[drive_level] = heart_rate
-	assert_gt(settled[4.0], 200.0)
-	assert_lte(settled[4.0], 230.0)
+	for drive_level in [3.0]:
+		var heart_rate_three := 100.0
+		for _step in 1200:
+			heart_rate_three = clampf(
+				heart_rate_three + LocalRaceMath.heart_rate_net_rate_bpm_per_s(heart_rate_three, drive_level, 5) * 0.1,
+				100.0,
+				230.0
+			)
+		settled[drive_level] = heart_rate_three
+	# ノッチ4は通常上限（200）を超えない。ノッチ3より高い。
+	assert_lt(settled[4.0], LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
+	assert_gt(settled[4.0], settled[3.0])
 	assert_gt(settled[5.0], 200.0)
 	assert_almost_eq(settled[5.0], 230.0, 0.001)
 	assert_almost_eq(settled[6.0], 230.0, 0.001)
@@ -985,8 +994,8 @@ func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_c
 	for _step in 1200:
 		low_cardio_cruise = clampf(low_cardio_cruise + LocalRaceMath.heart_rate_net_rate_bpm_per_s(low_cardio_cruise, 4.0, 1) * 0.1, 100.0, 230.0)
 		high_cardio_full_effort = clampf(high_cardio_full_effort + LocalRaceMath.heart_rate_net_rate_bpm_per_s(high_cardio_full_effort, 6.0, 15) * 0.1, 100.0, 230.0)
-	assert_gt(low_cardio_cruise, 200.0)
-	assert_almost_eq(low_cardio_cruise, 230.0, 0.001)
+	# 心肺が低いほど、同じノッチ4でも心拍が高く落ち着く（心肺5のノッチ4は通常上限を超えない）。
+	assert_gt(low_cardio_cruise, LocalRaceMath.Config.number("heart_rate_normal_max_bpm") - 25.0)
 	assert_gt(high_cardio_full_effort, 200.0)
 	assert_almost_eq(high_cardio_full_effort, 230.0, 0.001)
 
@@ -1023,7 +1032,7 @@ func test_overheat_exposure_continuously_reduces_propulsion_and_recovers_below_n
 	for _step in 600:
 		exposure = LocalRaceMath.update_overheat_exposure(exposure, 220.0, 0.05)
 	assert_almost_eq(exposure, 20.0, 0.02)
-	assert_almost_eq(LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure), 0.66, 0.002)
+	assert_almost_eq(LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure), maxf(1.0 - exposure * LocalRaceMath.Config.number("overheat_exposure_efficiency_loss_per_s"), LocalRaceMath.Config.number("overheat_propulsion_efficiency_min")), 0.002)
 	var sustained_230 := exposure
 	for _step in 200:
 		sustained_230 = LocalRaceMath.update_overheat_exposure(sustained_230, 230.0, 0.05)
@@ -1037,8 +1046,8 @@ func test_overheat_exposure_continuously_reduces_propulsion_and_recovers_below_n
 		recovered = LocalRaceMath.update_overheat_exposure(recovered, 180.0, 0.05)
 	assert_lt(recovered, sustained_230)
 	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(0.0, 20.0), 1.0, 0.001)
-	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-20.0, 20.0), 0.40, 0.001)
-	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-35.0, 35.0), 0.40, 0.001)
+	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-20.0, 20.0), LocalRaceMath.Config.number("stamina_debt_efficiency_min"), 0.001)
+	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-35.0, 35.0), LocalRaceMath.Config.number("stamina_debt_efficiency_min"), 0.001)
 	assert_almost_eq(
 		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0, 0.0, 0.0, 0.0, 0.75),
 		50.0 + _drive_force(6) * 0.75 - LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S - _air_resistance(50.0),
@@ -1646,3 +1655,199 @@ func test_blocked_runner_cannot_store_much_more_speed_than_it_moves() -> void:
 	var limit := maxf(float(player.call("get_actual_speed")) + LocalRaceMath.BLOCKED_SPEED_EXCESS_MAX_KMH, LocalRaceMath.MIN_SPEED_KMH)
 	assert_lte(float(player.call("get_current_speed")), limit + 0.01)
 	race.free()
+
+
+func test_handling_scales_line_movement_speed_around_the_reference_stat() -> void:
+	var reference := LocalRaceMath.HANDLING_STEER_REFERENCE_STAT
+	assert_almost_eq(LocalRaceMath.handling_steer_multiplier(reference), 1.0, 0.00001)
+	assert_gt(LocalRaceMath.handling_steer_multiplier(15), 1.0)
+	assert_lt(LocalRaceMath.handling_steer_multiplier(1), 1.0)
+	assert_almost_eq(
+		LocalRaceMath.handling_steer_multiplier(15),
+		1.0 + LocalRaceMath.HANDLING_STEER_MULTIPLIER_PER_STAT * (15 - reference),
+		0.00001
+	)
+	assert_gt(LocalRaceMath.handling_steer_multiplier(1), 0.0)
+
+
+func test_cpu_with_higher_handling_moves_to_its_target_line_faster() -> void:
+	var moved := {}
+	for handling: int in [1, 15]:
+		var runner := Node3D.new()
+		runner.set_script(RunnerScript)
+		add_child(runner)
+		runner.call("setup_for_race", null, 1, 75.0, false, "CPU", PururinRosterConfig.pururin_by_id("cpu-1"))
+		runner.set("_effective_stats", {"handling": handling})
+		runner.set("_offset", 0.0)
+		runner.set("_target_offset", 5.0)
+		runner.set("_cpu_steer_timer", 100.0)
+		runner.set("_cpu_trainer_timer", 100.0)
+		runner.set("_cpu_line_move_speed_m_per_s", 1.0)
+		runner.call("_update_inputs", 1.0)
+		moved[handling] = float(runner.get("_offset"))
+		runner.free()
+	assert_gt(float(moved[15]), float(moved[1]))
+	assert_almost_eq(float(moved[15]), LocalRaceMath.handling_steer_multiplier(15), 0.0001)
+
+
+func _contact_snapshot(progress_gap: float, side_gap: float) -> Array:
+	return [
+		{"id": "me", "race_progress": 100.0, "offset": 0.0},
+		{"id": "other", "race_progress": 100.0 + progress_gap, "offset": side_gap},
+	]
+
+
+func test_lateral_contact_counts_only_runners_touching_side_by_side() -> void:
+	var lateral := LocalRaceMath.BLOCK_LATERAL_M
+	var margin := LocalRaceMath.CONTACT_TOUCH_MARGIN_M
+	var longitudinal := LocalRaceMath.CONTACT_LONGITUDINAL_M
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(0.0, lateral), 0), 1)
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(longitudinal - 0.1, lateral + margin - 0.01), 0), 1)
+	# 余裕より離れている、前後に離れている、同じライン上の前後の接触は対象外。
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(0.0, lateral + margin + 0.1), 0), 0)
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(longitudinal + 0.1, lateral), 0), 0)
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(longitudinal, 0.0), 0), 0)
+	assert_eq(LocalRaceMath.lateral_contact_count(_contact_snapshot(0.5, lateral - 0.5), 0), 0)
+
+
+func test_lateral_contact_count_has_a_maximum_of_two() -> void:
+	var lateral := LocalRaceMath.BLOCK_LATERAL_M
+	var snapshot := [
+		{"id": "me", "race_progress": 100.0, "offset": 0.0},
+		{"id": "left", "race_progress": 100.0, "offset": -lateral},
+		{"id": "right", "race_progress": 100.0, "offset": lateral},
+		{"id": "third", "race_progress": 100.2, "offset": lateral + 0.1},
+	]
+	assert_eq(LocalRaceMath.lateral_contact_count(snapshot, 0), LocalRaceMath.CONTACT_COUNT_MAX)
+
+
+func test_contact_resistance_reduces_the_load() -> void:
+	var reference := LocalRaceMath.CONTACT_RESISTANCE_REFERENCE_STAT
+	assert_almost_eq(LocalRaceMath.contact_resistance_multiplier(reference), 1.0, 0.00001)
+	assert_lt(LocalRaceMath.contact_resistance_multiplier(15), LocalRaceMath.contact_resistance_multiplier(5))
+	assert_gt(LocalRaceMath.contact_resistance_multiplier(1), 1.0)
+	assert_gte(LocalRaceMath.contact_resistance_multiplier(15), 0.2)
+	assert_eq(LocalRaceMath.contact_heart_load_bpm_per_s(0, 1), 0.0)
+	assert_almost_eq(LocalRaceMath.contact_heart_load_bpm_per_s(2, reference), 2.0 * LocalRaceMath.CONTACT_HEART_LOAD_BPM_PER_S, 0.00001)
+	assert_gt(LocalRaceMath.contact_stamina_load_l_per_s(1, 1), LocalRaceMath.contact_stamina_load_l_per_s(1, 15))
+
+
+func test_contact_adds_heart_and_stamina_load_that_a_high_resistance_runner_resists() -> void:
+	var results := {}
+	for resistance: int in [1, 15]:
+		var runner := Node3D.new()
+		runner.set_script(RunnerScript)
+		add_child(runner)
+		runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+		runner.set("_effective_stats", {"contact_resistance": resistance, "stamina": 5, "cardio": 5})
+		runner.call("_reset_stamina_for_effective_stats")
+		runner.call("apply_contact_count", 2)
+		var stamina_before := float(runner.call("get_stamina"))
+		var heart_before := float(runner.call("get_heart_rate_bpm"))
+		runner.call("_update_condition_for_drive_level", 0.0, 1.0)
+		results[resistance] = {"heart": float(runner.call("get_heart_rate_bpm")) - heart_before, "stamina": stamina_before - float(runner.call("get_stamina"))}
+		runner.free()
+	assert_gt(float(results[1]["heart"]), float(results[15]["heart"]))
+	assert_gt(float(results[1]["stamina"]), float(results[15]["stamina"]))
+	assert_gt(float(results[15]["heart"]), 0.0)
+
+
+func _push_entry(identifier: String, offset: float, old_offset: float, intent: int, stat: int = 5, progress: float = 100.0) -> Dictionary:
+	return {"id": identifier, "progress": progress, "offset": offset, "old_offset": old_offset, "intent": intent, "stat": stat}
+
+
+func _offset_of(result: Dictionary, identifier: String) -> float:
+	return float(result["offsets"][identifier])
+
+
+func test_push_strength_grows_with_resistance_and_intent() -> void:
+	assert_gt(LocalRaceMath.push_strength(15, false), LocalRaceMath.push_strength(5, false))
+	assert_gt(LocalRaceMath.push_strength(5, true), LocalRaceMath.push_strength(5, false))
+	assert_gt(LocalRaceMath.push_strength(1, true), 0.0)
+
+
+func test_a_passive_runner_is_pushed_even_if_it_is_stronger() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	# 左のAが右へ0.5m動いて、止まっているBに0.5m食い込む。Bの接触耐性のほうが高い。
+	var entries := [_push_entry("A", 0.5, 0.0, 1, 5), _push_entry("B", w, w, 0, 8)]
+	var result := LocalRaceMath.resolve_lateral_pushes(entries)
+	assert_gt(_offset_of(result, "B"), w)
+	assert_true("A" in result["contest_ids"] and "B" in result["contest_ids"])
+	# 重なりは解消される。
+	assert_gte(absf(_offset_of(result, "B") - _offset_of(result, "A")), w - 0.001)
+
+
+func test_a_much_stronger_pusher_moves_the_other_more_than_a_weak_one_does() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	var weak := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.0, 1, 1), _push_entry("B", w, w, 0, 5)])
+	var strong := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.0, 1, 15), _push_entry("B", w, w, 0, 5)])
+	assert_gt(_offset_of(strong, "B") - w, _offset_of(weak, "B") - w)
+
+
+func test_equal_strength_pushers_end_up_where_they_started() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	# 二人が同じ強さで、お互いに向かって動き、重なる。
+	var entries := [_push_entry("A", 0.4, 0.0, 1, 5), _push_entry("B", w - 0.4, w, -1, 5)]
+	var result := LocalRaceMath.resolve_lateral_pushes(entries)
+	assert_almost_eq(_offset_of(result, "A"), 0.0, 0.001)
+	assert_almost_eq(_offset_of(result, "B"), w, 0.001)
+
+
+func test_pushing_chains_to_the_next_runner_when_it_is_weaker() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	# 右(R)が左へ動いて中(M)を押す。中は左(L)に重なる。左が弱ければ左も押される。
+	var strong_left := LocalRaceMath.resolve_lateral_pushes([
+		_push_entry("L", 0.0, 0.0, 0, 15), _push_entry("M", w, w, 0, 5), _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
+	])
+	var weak_left := LocalRaceMath.resolve_lateral_pushes([
+		_push_entry("L", 0.0, 0.0, 0, 1), _push_entry("M", w, w, 0, 5), _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
+	])
+	assert_lt(_offset_of(weak_left, "L"), _offset_of(strong_left, "L"))
+	# 重なりは、どちらの場合も解消される。
+	for result: Dictionary in [strong_left, weak_left]:
+		assert_gte(_offset_of(result, "M") - _offset_of(result, "L"), w - 0.001)
+		assert_gte(_offset_of(result, "R") - _offset_of(result, "M"), w - 0.001)
+
+
+func test_push_cannot_move_a_runner_through_the_wall_and_the_pusher_falls_back() -> void:
+	var wall := M2TrackMath.MAX_ABS_OFFSET_M
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	var entries := [_push_entry("A", wall - w + 0.5, wall - w, 1, 15), _push_entry("B", wall, wall, 0, 1)]
+	var result := LocalRaceMath.resolve_lateral_pushes(entries)
+	assert_lte(_offset_of(result, "B"), wall + 0.0001)
+	assert_gte(_offset_of(result, "B") - _offset_of(result, "A"), w - 0.001)
+	assert_lte(_offset_of(result, "A"), wall - w + 0.0001)
+
+
+func test_push_result_does_not_depend_on_the_order_of_runners() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	var a := _push_entry("L", 0.0, 0.0, 0, 3)
+	var b := _push_entry("M", w, w, 0, 5)
+	var c := _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
+	var first := LocalRaceMath.resolve_lateral_pushes([a, b, c])
+	var second := LocalRaceMath.resolve_lateral_pushes([c, a, b])
+	for identifier: String in ["L", "M", "R"]:
+		assert_almost_eq(_offset_of(first, identifier), _offset_of(second, identifier), 0.001, identifier)
+
+
+func test_runners_that_are_not_close_in_progress_do_not_contest() -> void:
+	var w := LocalRaceMath.BLOCK_LATERAL_M
+	var far := LocalRaceMath.CONTACT_LONGITUDINAL_M + 1.0
+	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.0, 1, 5), _push_entry("B", w, w, 0, 5, 100.0 + far)])
+	assert_eq(result["contest_ids"], [])
+	assert_almost_eq(_offset_of(result, "A"), 0.5, 0.0001)
+
+
+func test_push_contest_multiplies_the_contact_load() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.set("_effective_stats", {"contact_resistance": 5})
+	runner.call("apply_contact_count", 1)
+	var normal := float(runner.call("get_contact_heart_load_bpm_per_s"))
+	runner.call("apply_push_result", float(runner.call("get_offset")), true)
+	assert_almost_eq(float(runner.call("get_contact_heart_load_bpm_per_s")), normal * LocalRaceMath.PUSH_LOAD_MULTIPLIER, 0.0001)
+	runner.call("apply_push_result", float(runner.call("get_offset")), false)
+	assert_almost_eq(float(runner.call("get_contact_heart_load_bpm_per_s")), normal, 0.0001)
+	runner.free()

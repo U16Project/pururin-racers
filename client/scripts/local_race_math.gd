@@ -74,6 +74,45 @@ static var DRAFT_RESPONSE_REFERENCE_SCALE: float:
 		return Config.number("draft_response_reference_scale")
 ## 後ろの走者から受ける効果（後方支援）。後方の範囲、最大の減り、空力1点あたりの倍率差。
 ## 前の走者にふさがれている間、出力上の速度が実際の速度を上回れる最大の差（km/h）。
+## 操作性ステータスによる、左右のライン移動の速さの倍率（基準値で1.0）。
+static var HANDLING_STEER_REFERENCE_STAT: int:
+	get:
+		return int(Config.number("handling_steer_reference_stat"))
+static var HANDLING_STEER_MULTIPLIER_PER_STAT: float:
+	get:
+		return Config.number("handling_steer_multiplier_per_stat")
+## 横の接触（並走）の負荷。接触耐性が低いほど大きい。前後の接触は対象外。
+static var CONTACT_TOUCH_MARGIN_M: float:
+	get:
+		return Config.number("contact_touch_margin_m")
+static var CONTACT_HEART_LOAD_BPM_PER_S: float:
+	get:
+		return Config.number("contact_heart_load_bpm_per_s")
+static var CONTACT_STAMINA_LOAD_L_PER_S: float:
+	get:
+		return Config.number("contact_stamina_load_l_per_s")
+static var CONTACT_RESISTANCE_REFERENCE_STAT: int:
+	get:
+		return int(Config.number("contact_resistance_reference_stat"))
+static var CONTACT_RESISTANCE_MULTIPLIER_PER_STAT: float:
+	get:
+		return Config.number("contact_resistance_multiplier_per_stat")
+## 押し合い（横に動いて他の走者に重なったときの勝負）。
+static var PUSH_STRENGTH_PER_STAT: float:
+	get:
+		return Config.number("push_strength_per_stat")
+static var PUSH_INTENT_MULTIPLIER: float:
+	get:
+		return Config.number("push_intent_multiplier")
+static var PUSH_PASSIVE_MULTIPLIER: float:
+	get:
+		return Config.number("push_passive_multiplier")
+static var PUSH_LOAD_MULTIPLIER: float:
+	get:
+		return Config.number("push_load_multiplier")
+const PUSH_PASSES := 4
+## 同時に数える接触の最大人数（左右）。
+const CONTACT_COUNT_MAX := 2
 static var BLOCKED_SPEED_EXCESS_MAX_KMH: float:
 	get:
 		return Config.number("blocked_speed_excess_max_kmh")
@@ -263,6 +302,126 @@ static func drive_resistance_kmh_per_s(
 ) -> float:
 	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor, 0.0, 0.0, 1.0, air_resistance_multiplier)
 	return float(diagnostics["rolling_resistance_kmh_per_s"]) + float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
+
+
+## 横に並んで接している走者の数（0〜2）。前後の差が接触範囲（前後）内で、横の差が接触範囲（横）以上
+## 〜 接触範囲＋余裕の幅の間にいる走者が対象。同じライン上の前後の接触（横の差が範囲内）は数えない。
+static func lateral_contact_count(snapshot: Array, index: int) -> int:
+	if index < 0 or index >= snapshot.size() or not snapshot[index] is Dictionary:
+		return 0
+	var me: Dictionary = snapshot[index]
+	var count := 0
+	for other_index in snapshot.size():
+		if other_index == index or not snapshot[other_index] is Dictionary:
+			continue
+		var other: Dictionary = snapshot[other_index]
+		var gap := absf(float(me.get("race_progress", me.get("progress", 0.0))) - float(other.get("race_progress", other.get("progress", 0.0))))
+		var side := absf(float(me.get("offset", 0.0)) - float(other.get("offset", 0.0)))
+		if gap < CONTACT_LONGITUDINAL_M and side >= BLOCK_LATERAL_M - 0.0001 and side < BLOCK_LATERAL_M + CONTACT_TOUCH_MARGIN_M:
+			count += 1
+	return mini(count, CONTACT_COUNT_MAX)
+
+
+## 押し合いの強さ。接触耐性が基準で、相手の方向へ動こうとしていれば大きく、そうでなければ小さい。
+static func push_strength(contact_resistance_stat: int, moving_toward_other: bool) -> float:
+	var stat := clampi(contact_resistance_stat, 1, 15)
+	var base := maxf(0.2, 1.0 + PUSH_STRENGTH_PER_STAT * (stat - CONTACT_RESISTANCE_REFERENCE_STAT))
+	return base * (PUSH_INTENT_MULTIPLIER if moving_toward_other else PUSH_PASSIVE_MULTIPLIER)
+
+
+static func _entries_overlap(a_progress: float, a_offset: float, b_progress: float, b_offset: float) -> bool:
+	return absf(a_progress - b_progress) < CONTACT_LONGITUDINAL_M and absf(a_offset - b_offset) < BLOCK_LATERAL_M
+
+
+## 横に動いたあとの重なりを、押し合いの勝負で解く。
+## entries の各要素: {id, progress, offset(動いたあと), old_offset(動く前), intent(-1/0/+1: 横に動こうとした向き), stat(接触耐性)}。
+## 強い方が勝ち、f = (強い方 − 弱い方) ÷ (合計) として、弱い方が重なり × f だけ押し出され、
+## 強い方は重なり × (1 − f) だけ戻される（動く前の位置までが限度）。同じ強さなら、どちらも動かない。
+## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。壁は押せない。
+## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID}
+static func resolve_lateral_pushes(entries: Array) -> Dictionary:
+	var count := entries.size()
+	var pos: Array[float] = []
+	var intent: Array[int] = []
+	for entry in entries:
+		pos.append(float(entry["offset"]))
+		intent.append(int(entry.get("intent", 0)))
+	var contest := {}
+	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	for pass_index in PUSH_PASSES:
+		var correction: Array[float] = []
+		correction.resize(count)
+		correction.fill(0.0)
+		var any := false
+		for i in count:
+			for j in range(i + 1, count):
+				if not _entries_overlap(float(entries[i]["progress"]), pos[i], float(entries[j]["progress"]), pos[j]):
+					continue
+				any = true
+				contest[str(entries[i]["id"])] = true
+				contest[str(entries[j]["id"])] = true
+				var direction := 1 if pos[j] >= pos[i] else -1
+				var overlap := BLOCK_LATERAL_M - absf(pos[j] - pos[i])
+				var power_i := push_strength(int(entries[i].get("stat", 5)), intent[i] == direction)
+				var power_j := push_strength(int(entries[j].get("stat", 5)), intent[j] == -direction)
+				# 勝者 winner（強い方）と敗者 loser。同じ強さなら i を押した側とみなす。
+				var winner := i if power_i >= power_j else j
+				var loser := j if winner == i else i
+				var loser_away := direction if winner == i else -direction  # 敗者が押される向き
+				var margin := absf(power_i - power_j) / maxf(power_i + power_j, 0.0001)
+				var push := overlap * margin
+				var retreat := overlap - push
+				# 敗者は壁の先へは押せない。押せなかった分は、勝者がさらに戻される。
+				var loser_target := clampf(pos[loser] + correction[loser] + loser_away * push, -max_abs, max_abs)
+				var pushed := (loser_target - pos[loser] - correction[loser]) * loser_away
+				retreat += maxf(push - pushed, 0.0)
+				correction[loser] += loser_away * maxf(pushed, 0.0)
+				# 勝者が戻れるのは、動く前の位置まで。戻りきれない分は、敗者がさらに押される。
+				var winner_away := -loser_away
+				var room := maxf((float(entries[winner]["old_offset"]) - pos[winner] - correction[winner]) * winner_away, 0.0)
+				var actual_retreat := minf(retreat, room)
+				correction[winner] += winner_away * actual_retreat
+				var leftover := retreat - actual_retreat
+				if leftover > 0.0001:
+					var extra_target := clampf(pos[loser] + correction[loser] + loser_away * leftover, -max_abs, max_abs)
+					correction[loser] += extra_target - pos[loser] - correction[loser]
+		if not any:
+			break
+		for k in count:
+			if not is_zero_approx(correction[k]):
+				# 押し出された走者は、その向きへ動いている扱いにする（次の勝負で強さに効く）。
+				intent[k] = 1 if correction[k] > 0.0 else -1
+			pos[k] = clampf(pos[k] + correction[k], -max_abs, max_abs)
+	# 解けなかった重なりは、動く前の位置へ戻す（重なりを増やさない）。
+	for i in count:
+		for j in range(i + 1, count):
+			if _entries_overlap(float(entries[i]["progress"]), pos[i], float(entries[j]["progress"]), pos[j]):
+				pos[i] = float(entries[i]["old_offset"])
+				pos[j] = float(entries[j]["old_offset"])
+	var offsets := {}
+	for k in count:
+		offsets[str(entries[k]["id"])] = pos[k]
+	return {"offsets": offsets, "contest_ids": contest.keys()}
+
+
+## 接触耐性による負荷の倍率（基準値で1.0、高いほど小さい）。
+static func contact_resistance_multiplier(contact_resistance_stat: int = 5) -> float:
+	var stat := clampi(contact_resistance_stat, 1, 15)
+	return maxf(0.2, 1.0 - CONTACT_RESISTANCE_MULTIPLIER_PER_STAT * (stat - CONTACT_RESISTANCE_REFERENCE_STAT))
+
+
+static func contact_heart_load_bpm_per_s(contact_count: int, contact_resistance_stat: int = 5) -> float:
+	return float(clampi(contact_count, 0, CONTACT_COUNT_MAX)) * CONTACT_HEART_LOAD_BPM_PER_S * contact_resistance_multiplier(contact_resistance_stat)
+
+
+static func contact_stamina_load_l_per_s(contact_count: int, contact_resistance_stat: int = 5) -> float:
+	return float(clampi(contact_count, 0, CONTACT_COUNT_MAX)) * CONTACT_STAMINA_LOAD_L_PER_S * contact_resistance_multiplier(contact_resistance_stat)
+
+
+## 操作性は左右のライン移動の速さだけを連続的に補正する。プレイヤーとCPUに共通。
+static func handling_steer_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.1, 1.0 + HANDLING_STEER_MULTIPLIER_PER_STAT * (stat - HANDLING_STEER_REFERENCE_STAT))
 
 
 ## 空力適性は二乗空気抵抗だけを連続的に補正する。基準値では現行抵抗と同じ。
