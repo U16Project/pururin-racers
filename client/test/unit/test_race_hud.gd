@@ -45,9 +45,10 @@ func test_local_race_shows_the_compact_hud_and_hides_debug_text_by_default() -> 
 
 
 func test_draft_gauge_has_ten_segments_and_lights_one_for_any_draft() -> void:
+	var full := RaceHud.DRAFT_GAUGE_FULL_STRENGTH
 	assert_eq(RaceHud.draft_segments(0.0), 0)
 	assert_eq(RaceHud.draft_segments(0.001), 1)
-	assert_eq(RaceHud.draft_segments(0.5), 5)
-	assert_eq(RaceHud.draft_segments(0.55), 6)
-	assert_eq(RaceHud.draft_segments(1.0), 10)
-	assert_eq(RaceHud.draft_segments(3.0), 10)
+	assert_eq(RaceHud.draft_segments(full * 0.5), 5)
+	assert_eq(RaceHud.draft_segments(full * 0.55), 6)
+	assert_eq(RaceHud.draft_segments(full), 10)
+	assert_eq(RaceHud.draft_segments(full * 3.0), 10)

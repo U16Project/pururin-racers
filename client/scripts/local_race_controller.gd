@@ -489,7 +489,7 @@ func _update_race_hud() -> void:
 		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
 		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
 		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
-		"draft_ratio": float(draft.get("effective_draft_ratio", 0.0)),
+		"draft_strength": float(draft.get("received_draft_p", 0.0)) / LocalRaceMath.draft_response_reference_p(),
 		"countdown": not _race_started,
 	})
 
