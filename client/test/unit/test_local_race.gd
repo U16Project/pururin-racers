@@ -1466,3 +1466,28 @@ func test_same_tick_finishers_are_ordered_by_crossing_time_not_spawn_order() -> 
 	player.free()
 	cpu.free()
 	race.free()
+
+
+func test_actual_speed_matches_output_speed_when_free_and_drops_when_blocked() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var player: Node = race.get_node("Runners/Runner1")
+	player.set("_race_active", true)
+	player.call("set_drive_level", 3.0)
+	player.set("_current_speed_kmh", 60.0)
+	player.set("_others_snapshot", [])
+	for _tick in 40:
+		player.call("_process", 0.05)
+	assert_almost_eq(float(player.call("get_actual_speed")), float(player.call("get_current_speed")), 1.0)
+	# 同じラインの少し前にいる走者にふさがれると、出力上の速度が高くても実際には進めない。
+	var ahead := {
+		"id": "blocker", "race_progress": float(player.call("get_race_progress")) + LocalRaceMath.CONTACT_LONGITUDINAL_M + 0.2,
+		"progress": 0.0, "offset": float(player.call("get_offset")), "speed": 40.0,
+	}
+	player.set("_others_snapshot", [ahead])
+	player.set("_current_speed_kmh", 70.0)
+	for _tick in 40:
+		player.call("_process", 0.05)
+	assert_gt(float(player.call("get_current_speed")), 60.0)
+	assert_lt(float(player.call("get_actual_speed")), 15.0)
+	race.free()

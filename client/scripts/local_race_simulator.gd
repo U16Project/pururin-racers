@@ -807,6 +807,7 @@ func _snapshot_runners(runners: Array, elapsed: float) -> Array:
 		snapshot["path_distance_m"] = float(runner.call("get_distance"))
 		snapshot["race_progress_m"] = float(runner.call("get_race_progress"))
 		snapshot["speed_kmh"] = float(runner.call("get_current_speed"))
+		snapshot["actual_speed_kmh"] = float(runner.call("get_actual_speed"))
 		snapshot["heart_rate_bpm"] = float(runner.call("get_heart_rate_bpm"))
 		snapshot["stamina"] = float(runner.call("get_stamina"))
 		snapshot["race_active"] = bool(runner.call("is_race_active"))

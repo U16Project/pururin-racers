@@ -11,6 +11,9 @@ const CpuTrainerMath := preload("res://scripts/cpu_trainer_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
+## 実際の速さ表示のなめらかさ（秒）。1tickごとの揺れで数字が暴れないようにする。
+const ACTUAL_SPEED_SMOOTHING_S := 0.3
+
 @export var path_path: NodePath = ^"../TrackPath"
 @export var max_speed_kmh: float = 58.0
 @export var steer_speed: float = 4.0
@@ -28,6 +31,8 @@ var _distance: float = 0.0
 var _offset: float = 0.0
 var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
+## 前の走者にふさがれた分を引いた、実際に進んでいる対地速度（表示用。走行計算には使わない）。
+var _actual_speed_kmh: float = 0.0
 var _drive_level: float = 0.0
 ## ブレーキ操作を押している間 true。ノッチ設定は保持し、離すと元の出力へ戻る。
 var _braking: bool = false
@@ -103,6 +108,7 @@ func setup_for_race(
 	_finish_time = -1.0
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
+	_actual_speed_kmh = 0.0
 	_drive_level = 0.0
 	_braking = false
 	_drive_hold_direction = 0.0
@@ -188,6 +194,11 @@ func get_offset() -> float:
 
 func get_distance() -> float:
 	return _distance
+
+
+## 実際に進んでいる速さ（km/h）。ふさがれていなければ出力上の速度と同じ。
+func get_actual_speed() -> float:
+	return _actual_speed_kmh
 
 
 func get_current_speed() -> float:
@@ -410,6 +421,7 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["draft"] = get_draft_status()
 	snapshot["drive_diagnostics"] = get_drive_diagnostics()
 	snapshot["position"] = [global_position.x, global_position.y, global_position.z]
+	snapshot["actual_speed_kmh"] = _actual_speed_kmh
 	snapshot["rotation_y"] = rotation.y
 	return snapshot
 
@@ -518,6 +530,11 @@ func _process(delta: float) -> void:
 	var allowed_progress := LocalRaceMath.allowed_race_progress(
 		_race_progress, proposed_progress, _offset, _others_snapshot
 	)
+	# 前の走者にふさがれると、出力上の速度が高くても実際には進めない。
+	# 進んだ中心線距離を対地距離に戻し、1秒あたりの速さを少しなめらかにして保持する。
+	var ground_multiplier := M2TrackMath.distance_multiplier(_offset, curvature)
+	var moved_speed_kmh := (allowed_progress - _race_progress) * ground_multiplier / delta * 3.6
+	_actual_speed_kmh = lerpf(_actual_speed_kmh, moved_speed_kmh, minf(delta / ACTUAL_SPEED_SMOOTHING_S, 1.0))
 	_race_progress = allowed_progress
 	var next_pose := M5CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()

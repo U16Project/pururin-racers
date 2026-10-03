@@ -403,7 +403,8 @@ func _update_hud() -> void:
 		return
 	var order := _live_place(_player)
 	var prog: float = _player.call("get_race_progress")
-	var cur: float = _player.call("get_current_speed")
+	var cur: float = _player.call("get_actual_speed")
+	var output_speed: float = _player.call("get_current_speed")
 	var lines := PackedStringArray([
 		"順位 %d／%d" % [order, _runners.size()],
 		"残り %.0fm" % maxf(_race_distance_m - prog, 0.0),
@@ -436,7 +437,7 @@ func _update_hud() -> void:
 		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
 		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
 	))
-	lines.append("現在 %.0fkm/h" % cur)
+	lines.append("速度 実際 %.0f／出力上 %.0fkm/h" % [cur, output_speed])
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))
 	lines.append("Esc＝メニュー")
 	_hud_label.text = "\n".join(lines)
@@ -480,7 +481,7 @@ func _update_race_hud() -> void:
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
-		"speed_kmh": _player.call("get_current_speed"),
+		"speed_kmh": _player.call("get_actual_speed"),
 		"notch": int(roundi(_player.call("get_drive_level"))),
 		"notch_max": int(LocalRaceMath.DRIVE_LEVEL_MAX),
 		"braking": _player.call("is_braking"),
