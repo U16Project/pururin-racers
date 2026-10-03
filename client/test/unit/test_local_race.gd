@@ -1557,3 +1557,35 @@ func test_runner_air_reduction_combines_draft_and_rear_assist() -> void:
 	assert_gt(float(runner.call("_draft_air_resistance_factor")), without_rear)
 	assert_almost_eq(float(runner.call("get_draft_status")["rear_assist_air_factor"]), LocalRaceMath.rear_assist_air_factor(0.3, 10), 0.00001)
 	runner.free()
+
+
+func test_air_reduction_breakdown_matches_the_resistance_used_for_driving() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	for aero: int in [5, 10, 15]:
+		runner.set("_effective_stats", {"aero": aero, "pack": 5})
+		runner.set("_received_draft_p", LocalRaceMath.draft_response_reference_p() * 2.0)
+		runner.call("apply_rear_assist_details", {"rear_assist_p": 0.2, "rear_source_ids": ["x"]})
+		var breakdown: Dictionary = runner.call("get_air_reduction_breakdown")
+		var diagnostics: Dictionary = runner.call("get_drive_diagnostics")
+		var base_air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * pow(maxf(float(runner.call("get_current_speed")), LocalRaceMath.MIN_SPEED_KMH), 2.0)
+		# 実際に残る空気抵抗 ＝ 元の抵抗 × (1 − 合計の減り)。
+		var remaining := float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
+		assert_almost_eq(remaining, base_air * (1.0 - float(breakdown["total"])), 0.0001, "aero %d" % aero)
+		assert_almost_eq(float(breakdown["aero_rear"]) + float(breakdown["draft"]), float(breakdown["total"]), 0.00001)
+		assert_gt(float(breakdown["draft"]), 0.0)
+	runner.free()
+
+
+func test_air_reduction_breakdown_shows_no_green_for_low_aero() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.set("_effective_stats", {"aero": 1, "pack": 5})
+	var breakdown: Dictionary = runner.call("get_air_reduction_breakdown")
+	assert_eq(float(breakdown["aero_rear"]), 0.0)
+	assert_eq(float(breakdown["total"]), 0.0)
+	runner.free()

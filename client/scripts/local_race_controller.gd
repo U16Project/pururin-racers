@@ -478,7 +478,7 @@ func _layout_overlay_labels() -> void:
 func _update_race_hud() -> void:
 	if _race_hud == null:
 		return
-	var draft: Dictionary = _player.call("get_draft_status")
+	var air_breakdown: Dictionary = _player.call("get_air_reduction_breakdown")
 	_race_hud.call("update_state", {
 		"place": _live_place(_player) if _race_started else 0,
 		"field_size": _runners.size(),
@@ -493,7 +493,8 @@ func _update_race_hud() -> void:
 		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
 		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
 		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
-		"draft_ratio": float(draft.get("effective_draft_ratio", 0.0)),
+		"air_green": float(air_breakdown["aero_rear"]),
+		"air_blue": float(air_breakdown["draft"]),
 		"countdown": not _race_started,
 	})
 

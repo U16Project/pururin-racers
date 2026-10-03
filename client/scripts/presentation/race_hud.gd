@@ -8,7 +8,9 @@ const PANEL_HEIGHT := 196.0
 ## 画面下端からの余白。
 const PANEL_BOTTOM_MARGIN := 20.0
 const NOTCH_COUNT := 7
-const DRAFT_SEGMENTS := 10
+## 空気抵抗の減りのゲージ。20段で、満タン＝空気抵抗が80%減る（1段＝4%）。
+const AIR_GAUGE_SEGMENTS := 20
+const AIR_GAUGE_FULL := 0.80
 
 const COLOR_PANEL := Color(0.05, 0.08, 0.14, 0.72)
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -18,6 +20,7 @@ const COLOR_OK := Color(0.36, 0.86, 0.52, 1.0)
 const COLOR_WARN := Color(1.0, 0.76, 0.25, 1.0)
 const COLOR_DANGER := Color(1.0, 0.32, 0.28, 1.0)
 const COLOR_COOL := Color(0.36, 0.72, 1.0, 1.0)
+const COLOR_AERO := Color(0.36, 0.86, 0.52, 1.0)
 
 var _state := {
 	"place": 0,
@@ -33,7 +36,8 @@ var _state := {
 	"heart_min_bpm": 100.0,
 	"heart_normal_max_bpm": 200.0,
 	"heart_max_bpm": 230.0,
-	"draft_ratio": 0.0,
+	"air_green": 0.0,
+	"air_blue": 0.0,
 	"countdown": false,
 }
 var _blink := 0.0
@@ -89,12 +93,21 @@ static func heart_limit_ratio(state: Dictionary) -> float:
 	return clampf((float(state.get("heart_normal_max_bpm", 200.0)) - low) / maxf(high - low, 0.001), 0.0, 1.0)
 
 
-## ドラフトの実効率（0〜1。実際に空気抵抗を減らす割合のもと）を10段階の点灯数へ。
-## 少しでも受けていれば1つは点く。
-static func draft_segments(ratio: float) -> int:
-	if ratio <= 0.0:
-		return 0
-	return clampi(ceili(ratio * DRAFT_SEGMENTS - 0.0001), 1, DRAFT_SEGMENTS)
+## 空気抵抗の減り（緑＝空力と後方支援、青＝ドラフト）を、20段の点灯数へ。
+## 緑を先に積み、続けて青を積む。少しでもあれば、その色は最低1段は点く。合計は20段を超えない。
+static func air_gauge_segments(green: float, blue: float) -> Dictionary:
+	var step := AIR_GAUGE_FULL / float(AIR_GAUGE_SEGMENTS)
+	var green_value := maxf(green, 0.0)
+	var blue_value := maxf(blue, 0.0)
+	var green_count := 0
+	if green_value > 0.0:
+		green_count = clampi(maxi(roundi(green_value / step), 1), 1, AIR_GAUGE_SEGMENTS)
+	var total_count := clampi(ceili((green_value + blue_value) / step - 0.0001), 0, AIR_GAUGE_SEGMENTS)
+	if blue_value > 0.0:
+		total_count = maxi(total_count, green_count + 1)
+	total_count = clampi(total_count, green_count, AIR_GAUGE_SEGMENTS)
+	green_count = mini(green_count, total_count)
+	return {"green": green_count, "blue": total_count - green_count}
 
 
 static func heart_is_overheated(state: Dictionary) -> bool:
@@ -143,7 +156,7 @@ func _draw_main_panel(font: Font) -> void:
 	var speed_origin := panel.position + Vector2(24.0, 96.0)
 	_draw_text(font, "%d" % int(roundf(float(_state["speed_kmh"]))), speed_origin, 76, COLOR_TEXT)
 	_draw_text(font, "km/h", speed_origin + Vector2(0.0, 30.0), 22, COLOR_DIM)
-	_draw_draft_gauge(font, panel.position + Vector2(24.0, 168.0))
+	_draw_draft_gauge(font, panel.position + Vector2(24.0, 160.0))
 	# 右：縦ゲージ3本（ノッチ・心拍・体力）
 	var gauge_top := panel.position.y + 18.0
 	var left := panel.position.x + 224.0
@@ -166,13 +179,26 @@ func _draw_main_panel(font: Font) -> void:
 
 
 func _draw_draft_gauge(font: Font, origin: Vector2) -> void:
-	var lit := draft_segments(float(_state["draft_ratio"]))
-	_draw_text(font, "ドラフト", origin + Vector2(0.0, -6.0), 16, COLOR_DIM)
-	var segment_width := 14.0
-	var gap := 3.0
-	for index in DRAFT_SEGMENTS:
+	var green_value := float(_state["air_green"])
+	var blue_value := float(_state["air_blue"])
+	var counts := air_gauge_segments(green_value, blue_value)
+	_draw_text(font, "空気抵抗 −%d%%" % int(roundf((green_value + blue_value) * 100.0)), origin + Vector2(0.0, -8.0), 16, COLOR_DIM)
+	var segment_width := 6.5
+	var gap := 1.5
+	for index in AIR_GAUGE_SEGMENTS:
 		var rect := Rect2(origin + Vector2(index * (segment_width + gap), 0.0), Vector2(segment_width, 14.0))
-		draw_rect(rect, COLOR_COOL if index < lit else COLOR_TRACK)
+		var color := COLOR_TRACK
+		if index < int(counts["green"]):
+			color = COLOR_AERO
+		elif index < int(counts["green"]) + int(counts["blue"]):
+			color = COLOR_COOL
+		draw_rect(rect, color)
+	# 凡例
+	var legend_y := origin.y + 28.0
+	draw_rect(Rect2(Vector2(origin.x, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_AERO)
+	_draw_text(font, "空力", Vector2(origin.x + 13.0, legend_y), 14, COLOR_DIM)
+	draw_rect(Rect2(Vector2(origin.x + 56.0, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_COOL)
+	_draw_text(font, "集団", Vector2(origin.x + 69.0, legend_y), 14, COLOR_DIM)
 
 
 func _draw_notch_gauge(font: Font, origin: Vector2, braking: bool) -> void:

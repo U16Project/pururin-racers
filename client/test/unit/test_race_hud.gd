@@ -44,10 +44,18 @@ func test_local_race_shows_the_compact_hud_and_hides_debug_text_by_default() -> 
 	race.free()
 
 
-func test_draft_gauge_follows_the_effective_ratio_in_ten_segments() -> void:
-	assert_eq(RaceHud.draft_segments(0.0), 0)
-	assert_eq(RaceHud.draft_segments(0.001), 1)
-	assert_eq(RaceHud.draft_segments(0.5), 5)
-	assert_eq(RaceHud.draft_segments(0.56), 6)
-	assert_eq(RaceHud.draft_segments(1.0), 10)
-	assert_eq(RaceHud.draft_segments(2.0), 10)
+func test_air_gauge_stacks_green_then_blue_in_twenty_segments() -> void:
+	var step := RaceHud.AIR_GAUGE_FULL / float(RaceHud.AIR_GAUGE_SEGMENTS)
+	assert_eq(RaceHud.air_gauge_segments(0.0, 0.0), {"green": 0, "blue": 0})
+	# 緑だけ、青だけ、両方。
+	assert_eq(RaceHud.air_gauge_segments(step * 3.0, 0.0), {"green": 3, "blue": 0})
+	assert_eq(RaceHud.air_gauge_segments(0.0, step * 5.0), {"green": 0, "blue": 5})
+	assert_eq(RaceHud.air_gauge_segments(step * 2.0, step * 6.0), {"green": 2, "blue": 6})
+	# 少しでもあれば、その色は1段は点く。
+	assert_eq(RaceHud.air_gauge_segments(0.001, 0.0)["green"], 1)
+	assert_eq(RaceHud.air_gauge_segments(0.0, 0.001)["blue"], 1)
+	assert_eq(RaceHud.air_gauge_segments(0.001, 0.001), {"green": 1, "blue": 1})
+	# 満タンを超えても20段まで。
+	var over := RaceHud.air_gauge_segments(0.5, 0.9)
+	assert_eq(int(over["green"]) + int(over["blue"]), RaceHud.AIR_GAUGE_SEGMENTS)
+	assert_eq(RaceHud.air_gauge_segments(0.0, 0.8), {"green": 0, "blue": 20})

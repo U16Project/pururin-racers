@@ -272,6 +272,18 @@ func apply_rear_assist_details(details: Dictionary) -> void:
 	_rear_source_ids = details.get("rear_source_ids", []).duplicate()
 
 
+## 空気抵抗の減りの内訳（HUD用）。aero_rear＝空力と後方支援（緑）、draft＝ドラフト（青）、total＝合計。
+## 合計は実際の走行計算と同じ式（空力倍率 × (1 − 合成した減り)）で求める。
+## 空力が5より低く空気抵抗が増える分は、緑を0として表示し、合計には含めない。
+func get_air_reduction_breakdown() -> Dictionary:
+	var aero_multiplier := _aero_air_resistance_multiplier()
+	var rear := get_rear_assist_air_factor()
+	var combined := _draft_air_resistance_factor()
+	var total := maxf(1.0 - aero_multiplier * (1.0 - combined), 0.0)
+	var aero_rear := clampf(1.0 - aero_multiplier * (1.0 - rear), 0.0, total)
+	return {"aero_rear": aero_rear, "draft": maxf(total - aero_rear, 0.0), "total": total}
+
+
 func get_rear_assist_air_factor() -> float:
 	return LocalRaceMath.rear_assist_air_factor(_rear_assist_p, int(_effective_stats.get("aero", 5)))
 
