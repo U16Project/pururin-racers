@@ -10,8 +10,10 @@ const PANEL_BOTTOM_MARGIN := 20.0
 const NOTCH_COUNT := 7
 const DRAFT_SEGMENTS := 10
 ## ドラフトゲージの満タン。「前の走者1頭が真後ろにぴったりいる強さ」の何倍で10段になるか。
-## 走行に効く実効率は頭打ちになるため、ゲージは頭打ちにならない受取量（基準比）で表し、集団が大きいほど伸びる。
-const DRAFT_GAUGE_FULL_STRENGTH := 5.0
+## 走行に効く実効率は頭打ちになるため、ゲージは頭打ちにならない受取量（基準比）で表す。
+## 目盛りは平方根にして、少頭数ではよく伸び、10頭を超える集団でも満タンになりにくくする。
+## 12.0は最大12頭立ての最後尾（前に11頭）を想定した値。
+const DRAFT_GAUGE_FULL_STRENGTH := 12.0
 
 const COLOR_PANEL := Color(0.05, 0.08, 0.14, 0.72)
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -96,7 +98,8 @@ static func heart_limit_ratio(state: Dictionary) -> float:
 static func draft_segments(strength: float) -> int:
 	if strength <= 0.0:
 		return 0
-	return clampi(ceili(strength / DRAFT_GAUGE_FULL_STRENGTH * DRAFT_SEGMENTS - 0.0001), 1, DRAFT_SEGMENTS)
+	var fill := sqrt(minf(strength / DRAFT_GAUGE_FULL_STRENGTH, 1.0))
+	return clampi(ceili(fill * DRAFT_SEGMENTS - 0.0001), 1, DRAFT_SEGMENTS)
 
 
 static func heart_is_overheated(state: Dictionary) -> bool:

@@ -48,7 +48,13 @@ func test_draft_gauge_has_ten_segments_and_lights_one_for_any_draft() -> void:
 	var full := RaceHud.DRAFT_GAUGE_FULL_STRENGTH
 	assert_eq(RaceHud.draft_segments(0.0), 0)
 	assert_eq(RaceHud.draft_segments(0.001), 1)
-	assert_eq(RaceHud.draft_segments(full * 0.5), 5)
-	assert_eq(RaceHud.draft_segments(full * 0.55), 6)
+	# 平方根の目盛り：満タンの25%の受取量で半分（5段）、100%で10段。
+	assert_eq(RaceHud.draft_segments(full * 0.25), 5)
+	assert_eq(RaceHud.draft_segments(full * 0.36), 6)
 	assert_eq(RaceHud.draft_segments(full), 10)
 	assert_eq(RaceHud.draft_segments(full * 3.0), 10)
+	# 実測の受取量：前の走者2頭で約0.9、3頭で約1.8、6頭で約4.4、最後尾（11頭）で約9.5。
+	assert_eq(RaceHud.draft_segments(0.9), 3)
+	assert_eq(RaceHud.draft_segments(1.8), 4)
+	assert_eq(RaceHud.draft_segments(4.4), 7)
+	assert_lt(RaceHud.draft_segments(9.5), 10)
