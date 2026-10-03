@@ -18,7 +18,7 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_eq(Config.number("aero_air_resistance_reference_stat"), 5.0)
 	assert_almost_eq(Config.number("aero_air_resistance_multiplier_per_stat"), 0.015, 0.000001)
 	assert_almost_eq(Config.number("draft_response_exponent"), 1.5, 0.001)
-	assert_almost_eq(Config.number("draft_response_reference_scale"), 2.5, 0.001)
+	assert_almost_eq(Config.number("draft_response_reference_scale"), 1.5, 0.001)
 	assert_almost_eq(Config.number("draft_aggregation_exponent"), 0.7, 0.001)
 	assert_eq(Config.number("pack_draft_effective_reference_stat"), 5.0)
 	assert_almost_eq(Config.number("pack_draft_effective_multiplier_per_stat"), 0.025, 0.000001)
@@ -63,7 +63,7 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_almost_eq(DraftRules.wake_reference_p(), 0.18, 0.001)
 	assert_eq(DraftRules.number("chain_attenuation"), 0.5)
 	assert_eq(DraftRules.number("lateral_range_m"), 3.0)
-	assert_almost_eq(DraftRules.number("lateral_falloff_exponent"), 0.35, 0.001)
+	assert_almost_eq(DraftRules.number("lateral_falloff_exponent"), 1.0, 0.001)
 
 
 func test_m5_course_layout_rejects_missing_and_invalid_routes() -> void:

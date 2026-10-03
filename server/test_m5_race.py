@@ -73,7 +73,7 @@ def test_client_draft_rules_copy_matches_shared_definition() -> None:
     assert DRAFT_RULES["assist_max_kmh"] == DRAFT_ASSIST_SCALE_KMH
     assert DRAFT_RULES["chain_attenuation"] == 0.5
     assert DRAFT_RULES["lateral_range_m"] == 3.0
-    assert DRAFT_RULES["lateral_falloff_exponent"] == 0.35
+    assert DRAFT_RULES["lateral_falloff_exponent"] == 1.0
 
 
 def test_draft_rules_loader_rejects_unknown_or_invalid_rules(tmp_path: Path) -> None:
