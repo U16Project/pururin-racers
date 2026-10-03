@@ -671,9 +671,6 @@ static func _validate_runner_state(runner: Dictionary, label: String, errors: Pa
 	var speed := float(runner.get("speed_kmh", runner.get("speed", NAN)))
 	if not is_finite(speed) or speed < LocalRaceMath.MIN_SPEED_KMH:
 		errors.append("%s の速度が範囲外です: %f" % [label, speed])
-	var target_speed := float(runner.get("target_speed_kmh", NAN))
-	if not is_finite(target_speed) or target_speed < 0.0:
-		errors.append("%s の目標速度が範囲外です: %f" % [label, target_speed])
 	for key: String in ["natural_top_speed_kmh", "acceleration_force_bonus_kmh_per_s", "top_speed_drive_adjustment_kmh_per_s"]:
 		if not is_finite(float(runner.get(key, NAN))):
 			errors.append("%s の%sが不正です" % [label, key])
@@ -810,10 +807,8 @@ func _snapshot_runners(runners: Array, elapsed: float) -> Array:
 		snapshot["path_distance_m"] = float(runner.call("get_distance"))
 		snapshot["race_progress_m"] = float(runner.call("get_race_progress"))
 		snapshot["speed_kmh"] = float(runner.call("get_current_speed"))
-		snapshot["target_speed_kmh"] = float(runner.call("get_target_speed"))
 		snapshot["heart_rate_bpm"] = float(runner.call("get_heart_rate_bpm"))
 		snapshot["stamina"] = float(runner.call("get_stamina"))
-		snapshot["drive_mode"] = bool(runner.call("is_drive_mode"))
 		snapshot["race_active"] = bool(runner.call("is_race_active"))
 		snapshot["natural_top_speed_kmh"] = float(runner.call("get_natural_top_speed"))
 		snapshot["overheat_ratio"] = float(runner.call("get_overheat_ratio"))

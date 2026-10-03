@@ -105,9 +105,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.physical_keycode == KEY_ESCAPE:
 			_set_paused(not _paused)
 			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_V and _race_started and _player != null:
-			_player.call("toggle_drive_mode")
-			get_viewport().set_input_as_handled()
 
 
 func _process(_delta: float) -> void:
@@ -379,39 +376,35 @@ func _update_hud() -> void:
 		return
 	var order := _live_place(_player)
 	var prog: float = _player.call("get_race_progress")
-	var tgt: float = _player.call("get_target_speed")
 	var cur: float = _player.call("get_current_speed")
 	var lines := PackedStringArray([
 		"順位 %d／%d" % [order, _runners.size()],
 		"残り %.0fm" % maxf(_race_distance_m - prog, 0.0),
 	])
-	if _player.call("is_drive_mode"):
-		var effective_stats: Dictionary = _player.call("get_effective_stats")
-		lines.append("出力 %+d" % int(roundi(_player.call("get_drive_level"))))
-		if effective_stats.has("top_speed") and effective_stats.has("acceleration"):
-			lines.append("最高速 有効%d　自然到達 %.1fkm/h" % [effective_stats["top_speed"], _player.call("get_natural_top_speed")])
-			lines.append("加速 有効%d　加速応答 ×%.2f" % [effective_stats["acceleration"], _player.call("get_acceleration_response_multiplier")])
-		if effective_stats.has("aero"):
-			lines.append("空力 有効%d　抵抗補正 x%.2f" % [
-				effective_stats["aero"],
-				LocalRaceMath.aero_air_resistance_multiplier(int(effective_stats["aero"])),
-			])
-		lines.append("心拍 %.0f/%.0f" % [
-			_player.call("get_heart_rate_bpm"),
-			LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+	var effective_stats: Dictionary = _player.call("get_effective_stats")
+	lines.append("出力 %+d" % int(roundi(_player.call("get_drive_level"))))
+	if effective_stats.has("top_speed") and effective_stats.has("acceleration"):
+		lines.append("最高速 有効%d　自然到達 %.1fkm/h" % [effective_stats["top_speed"], _player.call("get_natural_top_speed")])
+		lines.append("加速 有効%d　加速応答 ×%.2f" % [effective_stats["acceleration"], _player.call("get_acceleration_response_multiplier")])
+	if effective_stats.has("aero"):
+		lines.append("空力 有効%d　抵抗補正 x%.2f" % [
+			effective_stats["aero"],
+			LocalRaceMath.aero_air_resistance_multiplier(int(effective_stats["aero"])),
 		])
-		lines.append("200超過 負荷 %.1fs　推進効率 %.0f%%" % [
-			_player.call("get_heart_overage_exposure"),
-			_player.call("get_propulsion_efficiency") * 100.0,
-		])
-		lines.append("燃料 %.1f / %.1fL（%.0f%%）" % [
-			_player.call("get_stamina"),
-			_player.call("get_stamina_capacity_l"),
-			_player.call("get_stamina_ratio") * 100.0,
-		])
-		lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
-	else:
-		lines.append("目標 %.0fkm/h" % tgt)
+	lines.append("心拍 %.0f/%.0f" % [
+		_player.call("get_heart_rate_bpm"),
+		LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+	])
+	lines.append("200超過 負荷 %.1fs　推進効率 %.0f%%" % [
+		_player.call("get_heart_overage_exposure"),
+		_player.call("get_propulsion_efficiency") * 100.0,
+	])
+	lines.append("燃料 %.1f / %.1fL（%.0f%%）" % [
+		_player.call("get_stamina"),
+		_player.call("get_stamina_capacity_l"),
+		_player.call("get_stamina_ratio") * 100.0,
+	])
+	lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
 	lines.append_array(DraftHudFormatter.status_lines(
 		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
 		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false

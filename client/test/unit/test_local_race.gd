@@ -125,9 +125,7 @@ func test_countdown_keeps_runners_still_then_starts_everyone_together() -> void:
 
 
 func test_player_speeds_are_kmh() -> void:
-	assert_eq(LocalRaceMath.PLAYER_INITIAL_SPEED_KMH, 58.0)
 	assert_eq(LocalRaceMath.PLAYER_MAX_SPEED_KMH, 75.0)
-	assert_lt(LocalRaceMath.PLAYER_INITIAL_SPEED_KMH, LocalRaceMath.PLAYER_MAX_SPEED_KMH)
 	assert_eq(LocalRaceMath.Config.number("player_start_gate_index"), 0.0)
 
 
@@ -296,14 +294,6 @@ func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_
 						assert_almost_eq(float(responsive["total_acceleration_kmh_per_s"]), expected, 0.00001)
 
 
-func test_target_speed_clamped_in_kmh() -> void:
-	assert_eq(LocalRaceMath.clamp_target_speed_kmh(80.0, 75.0), 75.0)
-	assert_eq(LocalRaceMath.clamp_target_speed_kmh(100.0, 90.0), 90.0)
-	assert_eq(LocalRaceMath.clamp_target_speed_kmh(40.0, 75.0), 40.0)
-	assert_eq(LocalRaceMath.step_target_speed_kmh(58.0, 1.0, 75.0), 59.0)
-	assert_eq(LocalRaceMath.step_target_speed_kmh(58.0, -1.0, 75.0), 57.0)
-
-
 func test_drive_level_is_clamped_and_steps_by_one() -> void:
 	assert_eq(LocalRaceMath.clamp_drive_level(-9.0), -3.0)
 	assert_eq(LocalRaceMath.clamp_drive_level(9.0), 6.0)
@@ -319,45 +309,26 @@ func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
 	runner.set_script(RunnerScript)
 	add_child(runner)
 	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
-	assert_true(runner.call("is_drive_mode"))
 	assert_eq(runner.call("get_current_speed"), LocalRaceMath.MIN_SPEED_KMH)
 	assert_eq(runner.call("get_drive_level"), 0.0)
-	assert_false(runner.call("toggle_drive_mode"))
 	runner.call("set_drive_level", 99.0)
 	assert_eq(runner.call("get_drive_level"), 6.0)
-	assert_true(runner.call("toggle_drive_mode"))
 	runner.free()
 
 
-func test_drive_mode_toggle_preserves_current_speed() -> void:
-	var runner := Node3D.new()
-	runner.set_script(RunnerScript)
-	add_child(runner)
-	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
-	runner.call("set", "_current_speed_kmh", 63.0)
-	runner.call("toggle_drive_mode")
-	runner.call("toggle_drive_mode")
-	assert_eq(runner.call("get_current_speed"), 63.0)
-	runner.call("set", "_race_progress", 20.0)
-	runner.call("set", "_current_speed_kmh", 71.0)
-	runner.call("toggle_drive_mode")
-	assert_eq(runner.call("get_current_speed"), 71.0)
-	runner.free()
-
-
-func test_drive_mode_zero_level_naturally_slows_but_respects_floor() -> void:
+func test_drive_zero_level_naturally_slows_but_respects_floor() -> void:
 	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 1.0)
 	assert_lt(coasting, 70.0)
 	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 75.0, 1.0), 40.0)
 
 
-func test_drive_mode_maximum_output_uses_force_without_a_hard_speed_cap() -> void:
+func test_drive_maximum_output_uses_force_without_a_hard_speed_cap() -> void:
 	var accelerated := LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0)
 	assert_almost_eq(accelerated, 51.55, 0.001)
 	assert_gt(LocalRaceMath.advance_drive_speed_kmh(74.0, 6.0, 75.0, 1.0, 1.0), 75.0)
 
 
-func test_drive_mode_braking_slows_but_does_not_stop() -> void:
+func test_drive_braking_slows_but_does_not_stop() -> void:
 	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, -3.0, 75.0, 1.0)
 	assert_almost_eq(braked, 47.454, 0.001)
 	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, -3.0, 75.0, 1.0), 40.0)
@@ -1231,7 +1202,7 @@ func test_local_goal_display_matches_m5_layout() -> void:
 	race.free()
 
 
-func test_drive_mode_has_no_curve_or_line_speed_penalty() -> void:
+func test_drive_has_no_curve_or_line_speed_penalty() -> void:
 	var straight := LocalRaceMath.advance_drive_speed_kmh(60.0, 2.0, 75.0, 1.0)
 	var draftless := LocalRaceMath.advance_drive_speed_kmh(60.0, 2.0, 75.0, 1.0, 0.0)
 	assert_eq(straight, draftless)
@@ -1357,13 +1328,6 @@ func test_contact_prevention_rejects_only_lateral_moves_into_another_runner() ->
 	var others := [{"race_progress": 10.0, "offset": 0.0}]
 	assert_false(LocalRaceMath.can_use_offset(10.0, 0.5, others))
 	assert_true(LocalRaceMath.can_use_offset(10.0, 1.5, others))
-
-
-func test_follow_speed_approaches_target() -> void:
-	var s := LocalRaceMath.follow_speed_kmh(50.0, 58.0, 0.2)
-	assert_gt(s, 50.0)
-	assert_lt(s, 58.0)
-	assert_eq(LocalRaceMath.follow_speed_kmh(57.5, 58.0, 1.0), 58.0)
 
 
 func test_contact_overlap_is_detected() -> void:

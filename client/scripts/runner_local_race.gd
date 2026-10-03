@@ -28,8 +28,6 @@ var _distance: float = 0.0
 var _offset: float = 0.0
 var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
-var _target_speed_kmh: float = 58.0
-var _drive_mode: bool = false
 var _drive_level: float = 0.0
 var _drive_hold_direction: float = 0.0
 var _drive_repeat_remaining: float = 0.0
@@ -103,8 +101,6 @@ func setup_for_race(
 	_finish_time = -1.0
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-	_target_speed_kmh = initial_max_speed_kmh
-	_drive_mode = is_player
 	_drive_level = 0.0
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
@@ -193,30 +189,6 @@ func get_distance() -> float:
 
 func get_current_speed() -> float:
 	return _current_speed_kmh
-
-
-func get_target_speed() -> float:
-	return _target_speed_kmh
-
-
-func set_drive_mode(enabled: bool) -> void:
-	if not player_controlled:
-		return
-	_drive_mode = enabled
-	_drive_hold_direction = 0.0
-	_drive_repeat_remaining = 0.0
-	if not _drive_mode:
-		# 方式を切り替えても現在速度は維持し、目標速度方式の追従先だけ同期する。
-		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_current_speed_kmh, _natural_top_speed_kmh)
-
-
-func toggle_drive_mode() -> bool:
-	set_drive_mode(not _drive_mode)
-	return _drive_mode
-
-
-func is_drive_mode() -> bool:
-	return _drive_mode
 
 
 func get_drive_level() -> float:
@@ -411,7 +383,6 @@ func get_snapshot() -> Dictionary:
 
 func get_telemetry_snapshot() -> Dictionary:
 	var snapshot := get_snapshot()
-	snapshot["target_speed"] = _target_speed_kmh
 	snapshot["drive_level"] = _active_drive_level()
 	snapshot["heart_rate_bpm"] = _heart_rate_bpm
 	snapshot["heart_overage_exposure"] = _heart_overage_exposure
@@ -459,7 +430,7 @@ func _process(delta: float) -> void:
 		return
 	if not _race_active:
 		# 開始前も出力だけは選べる。位置・速度・状態値は動かさない。
-		if _drive_mode and player_controlled:
+		if player_controlled:
 			_update_drive_level_input(delta)
 		return
 	_apply_pururin_race_stats()
@@ -475,7 +446,7 @@ func _process(delta: float) -> void:
 	if not LocalRaceMath.can_use_offset(_race_progress, _offset, _others_snapshot):
 		_offset = previous_offset
 	var path_len := _path.curve.get_baked_length()
-	if _drive_mode and player_controlled:
+	if player_controlled:
 		_update_drive_level_input(delta)
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
@@ -599,12 +570,10 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 		_cpu_trainer_timer -= delta
 		if _cpu_trainer_timer <= 0.0:
 			_cpu_trainer_timer = LocalRaceMath.Config.number("cpu_trainer_reselect_seconds")
-			_update_cpu_target_speed()
+			_update_cpu_drive_level()
 
 
-func _update_cpu_target_speed() -> void:
-	if _cpu_trainer_profile.is_empty():
-		return
+func _update_cpu_drive_level() -> void:
 	var settings := LocalRaceMath.cpu_trainer_settings()
 	var decision := CpuTrainerMath.decide({"heart_rate_bpm": _heart_rate_bpm}, settings)
 	_cpu_trainer_drive_level = LocalRaceMath.cpu_heart_safe_drive_level(
@@ -637,8 +606,6 @@ func _apply_pururin_race_stats() -> void:
 	)
 	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))
 	max_speed_kmh = _natural_top_speed_kmh
-	if not _drive_mode:
-		_target_speed_kmh = LocalRaceMath.clamp_target_speed_kmh(_target_speed_kmh, _natural_top_speed_kmh)
 
 
 func _draft_air_resistance_factor() -> float:
@@ -752,30 +719,6 @@ func _read_steer_axis() -> float:
 		v += 1.0
 	v += RaceControllerInput.line_axis()
 	return clampf(v, -1.0, 1.0)
-
-
-func _unhandled_input(event: InputEvent) -> void:
-	if not player_controlled or _paused:
-		return
-	if _drive_mode:
-		return
-	if event is InputEventKey and event.pressed and not event.echo:
-		if event.physical_keycode == KEY_UP:
-			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
-				_target_speed_kmh, 1.0, _natural_top_speed_kmh
-			)
-			get_viewport().set_input_as_handled()
-		elif event.physical_keycode == KEY_DOWN:
-			_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(
-				_target_speed_kmh, -1.0, _natural_top_speed_kmh
-			)
-			get_viewport().set_input_as_handled()
-	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_UP):
-		_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(_target_speed_kmh, 1.0, _natural_top_speed_kmh)
-		get_viewport().set_input_as_handled()
-	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_DPAD_DOWN):
-		_target_speed_kmh = LocalRaceMath.step_target_speed_kmh(_target_speed_kmh, -1.0, _natural_top_speed_kmh)
-		get_viewport().set_input_as_handled()
 
 
 func _apply_pose() -> void:

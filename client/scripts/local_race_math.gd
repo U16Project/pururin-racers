@@ -19,11 +19,6 @@ static var _course_layout: Dictionary = {}
 static var PLAYER_MAX_SPEED_KMH: float:
 	get:
 		return TOP_SPEED_NATURAL_MAX_KMH
-## プレイヤー開始時の現在／目標（#24 巡航帯）。
-const PLAYER_INITIAL_SPEED_KMH := 58.0
-const TARGET_SPEED_STEP_KMH := 1.0
-## 旧 6 m/s² 相当。
-const ACCEL_KMH_PER_S := 21.6
 
 ## M5.1 出力操作実験。出力は整数ノッチだが、入力は長押しでリピートする。
 static var DRIVE_LEVEL_MIN: float:
@@ -181,29 +176,6 @@ static func kmh_to_mps(speed_kmh: float) -> float:
 
 static func mps_to_kmh(speed_mps: float) -> float:
 	return speed_mps * 3.6
-
-
-static func clamp_target_speed_kmh(target_kmh: float, max_speed_kmh: float) -> float:
-	return clampf(target_kmh, 0.0, maxf(max_speed_kmh, 0.0))
-
-
-static func step_target_speed_kmh(
-	target_kmh: float,
-	direction: float,
-	max_speed_kmh: float
-) -> float:
-	var next := target_kmh + direction * TARGET_SPEED_STEP_KMH
-	return clamp_target_speed_kmh(next, max_speed_kmh)
-
-
-static func follow_speed_kmh(current_kmh: float, target_kmh: float, delta: float) -> float:
-	if delta <= 0.0:
-		return current_kmh
-	var diff := target_kmh - current_kmh
-	var max_step := ACCEL_KMH_PER_S * delta
-	if absf(diff) <= max_step:
-		return target_kmh
-	return current_kmh + signf(diff) * max_step
 
 
 static func clamp_drive_level(level: float) -> float:
