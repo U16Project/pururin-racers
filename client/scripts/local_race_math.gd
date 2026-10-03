@@ -72,6 +72,16 @@ static var DRAFT_AIR_RESISTANCE_FACTOR: float:
 static var DRAFT_RESPONSE_REFERENCE_SCALE: float:
 	get:
 		return Config.number("draft_response_reference_scale")
+## 後ろの走者から受ける効果（後方支援）。後方の範囲、最大の減り、空力1点あたりの倍率差。
+static var REAR_ASSIST_RANGE_M: float:
+	get:
+		return Config.number("rear_assist_range_m")
+static var REAR_ASSIST_TRANSFER_RATE: float:
+	get:
+		return Config.number("rear_assist_transfer_rate")
+static var REAR_ASSIST_AERO_MULTIPLIER_PER_STAT: float:
+	get:
+		return Config.number("rear_assist_aero_multiplier_per_stat")
 static var DRAFT_RESPONSE_EXPONENT: float:
 	get:
 		return Config.number("draft_response_exponent")
@@ -299,6 +309,55 @@ static func draft_wake_from_speed(speed_kmh: float) -> float:
 	var reference := DraftRules.number("wake_speed_reference_kmh")
 	var gain := DraftRules.number("wake_speed_gain_p")
 	return base + maxf(0.0, speed_kmh) / reference * gain
+
+
+## 後ろの走者から前の走者が受ける効果。後方 DRAFT_FORWARD_MIN_M〜REAR_ASSIST_RANGE_M、
+## 横ずれ DRAFT_LATERAL_RANGE_M 以内の全走者から、離れ具合に応じて直接受ける。連鎖はしない。
+## 元になる値は後ろの走者の wake（出力上の速度から決まる）で、実際に進めた速さではない。
+static func calculate_rear_assist_details(snapshot: Array, index: int) -> Dictionary:
+	var result := {"rear_assist_p": 0.0, "rear_source_ids": []}
+	if index < 0 or index >= snapshot.size() or not snapshot[index] is Dictionary:
+		return result
+	var receiver: Dictionary = snapshot[index]
+	var receiver_progress := float(receiver.get("race_progress", receiver.get("progress", 0.0)))
+	var contributions: Array = []
+	var ids: Array = []
+	for source_index in snapshot.size():
+		if source_index == index or not snapshot[source_index] is Dictionary:
+			continue
+		var source: Dictionary = snapshot[source_index]
+		var behind := receiver_progress - float(source.get("race_progress", source.get("progress", 0.0)))
+		var line_gap := absf(float(receiver.get("offset", 0.0)) - float(source.get("offset", 0.0)))
+		if behind < DRAFT_FORWARD_MIN_M or behind > REAR_ASSIST_RANGE_M or line_gap > DRAFT_LATERAL_RANGE_M:
+			continue
+		var source_wake := float(source.get("own_wake_p", 0.0))
+		if source_wake <= 0.0:
+			source_wake = draft_wake_from_speed(float(source.get("speed", 0.0)))
+		var lateral_falloff := pow(1.0 - line_gap / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
+		var strength := maxf(0.0, source_wake) * (1.0 - behind / REAR_ASSIST_RANGE_M) * lateral_falloff
+		if strength > 0.0:
+			contributions.append(strength)
+			ids.append(str(source.get("id", source.get("name", source_index))))
+	result["rear_assist_p"] = draft_aggregate_contributions_p(contributions)
+	result["rear_source_ids"] = ids
+	return result
+
+
+## 空力が高いほど、後方支援を多く受ける。空力5が標準。
+static func rear_assist_aero_multiplier(aero_stat: int = 5) -> float:
+	var stat := clampi(aero_stat, 1, 15)
+	return maxf(0.0, 1.0 + REAR_ASSIST_AERO_MULTIPLIER_PER_STAT * (stat - AERO_AIR_RESISTANCE_REFERENCE_STAT))
+
+
+## 後方支援の受取量 → 空気抵抗の減る割合。REAR_ASSIST_TRANSFER_RATE が最大の減り。
+static func rear_assist_air_factor(rear_assist_p: float, aero_stat: int = 5) -> float:
+	var normalized := maxf(0.0, rear_assist_p) / draft_response_reference_p() * rear_assist_aero_multiplier(aero_stat)
+	return REAR_ASSIST_TRANSFER_RATE * normalized / (1.0 + normalized)
+
+
+## ドラフトと後方支援の減る割合を合成する。どちらも1未満なら結果も1未満で、空気抵抗はマイナスにならない。
+static func combined_air_reduction_factor(draft_factor: float, rear_factor: float) -> float:
+	return 1.0 - (1.0 - clampf(draft_factor, 0.0, 1.0)) * (1.0 - clampf(rear_factor, 0.0, 1.0))
 
 
 static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:

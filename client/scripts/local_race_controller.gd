@@ -186,6 +186,7 @@ func _finalize_draft_tick() -> void:
 	for index in _runners.size():
 		var details: Dictionary = LocalRaceMath.calculate_draft_details(snapshots, index)
 		_runners[index].call("apply_draft_details", details)
+		_runners[index].call("apply_rear_assist_details", LocalRaceMath.calculate_rear_assist_details(snapshots, index))
 
 
 func _spawn_field() -> void:
@@ -437,6 +438,8 @@ func _update_hud() -> void:
 		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
 		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
 	))
+	var draft_status: Dictionary = _player.call("get_draft_status")
+	lines.append("後方支援 空気抵抗 -%.1f%%" % (float(draft_status.get("rear_assist_air_factor", 0.0)) * 100.0))
 	lines.append("速度 実際 %.0f／出力上 %.0fkm/h" % [cur, output_speed])
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))
 	lines.append("Esc＝メニュー")

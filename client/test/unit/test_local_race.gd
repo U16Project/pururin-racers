@@ -1491,3 +1491,69 @@ func test_actual_speed_matches_output_speed_when_free_and_drops_when_blocked() -
 	assert_gt(float(player.call("get_current_speed")), 60.0)
 	assert_lt(float(player.call("get_actual_speed")), 15.0)
 	race.free()
+
+
+func _rear_snapshot(behind_m: float, offset_gap: float = 0.0) -> Array:
+	var wake := LocalRaceMath.draft_wake_from_speed(60.0)
+	return [
+		{"id": "front", "race_progress": 100.0, "offset": 0.0, "speed": 60.0},
+		{"id": "rear", "race_progress": 100.0 - behind_m, "offset": offset_gap, "speed": 60.0, "own_wake_p": wake},
+	]
+
+
+func test_rear_assist_uses_runners_behind_within_range_and_lateral_limit() -> void:
+	var inside := LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0), 0)
+	assert_gt(float(inside["rear_assist_p"]), 0.0)
+	assert_eq(inside["rear_source_ids"], ["rear"])
+	# 近すぎる（接触距離）、範囲外の後方、横に離れすぎ、前にいる走者は対象外。
+	assert_eq(float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(LocalRaceMath.DRAFT_FORWARD_MIN_M - 0.1), 0)["rear_assist_p"]), 0.0)
+	assert_eq(float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(LocalRaceMath.REAR_ASSIST_RANGE_M + 0.1), 0)["rear_assist_p"]), 0.0)
+	assert_eq(float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0, LocalRaceMath.DRAFT_LATERAL_RANGE_M + 0.1), 0)["rear_assist_p"]), 0.0)
+	assert_eq(float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0), 1)["rear_assist_p"]), 0.0)
+
+
+func test_rear_assist_shrinks_with_distance_and_lateral_offset() -> void:
+	var near := float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0), 0)["rear_assist_p"])
+	var far := float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(4.0), 0)["rear_assist_p"])
+	var off_line := float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0, 1.5), 0)["rear_assist_p"])
+	assert_gt(near, far)
+	assert_gt(near, off_line)
+
+
+func test_rear_assist_does_not_chain_and_stays_below_full_reduction() -> void:
+	# 後ろの走者が、さらに後ろの走者から受けていても、前の走者への寄与は増えない。
+	var wake := LocalRaceMath.draft_wake_from_speed(60.0)
+	var plain := _rear_snapshot(2.0)
+	var chained := _rear_snapshot(2.0)
+	chained[1]["direct_draft_p"] = 1.0
+	chained[1]["chain_draft_p"] = 1.0
+	assert_almost_eq(
+		float(LocalRaceMath.calculate_rear_assist_details(chained, 0)["rear_assist_p"]),
+		float(LocalRaceMath.calculate_rear_assist_details(plain, 0)["rear_assist_p"]),
+		0.00001
+	)
+	for aero: int in [1, 5, 15]:
+		assert_lte(LocalRaceMath.rear_assist_air_factor(1000.0, aero), LocalRaceMath.REAR_ASSIST_TRANSFER_RATE)
+	assert_lt(LocalRaceMath.combined_air_reduction_factor(0.8, LocalRaceMath.REAR_ASSIST_TRANSFER_RATE), 1.0)
+	assert_eq(LocalRaceMath.combined_air_reduction_factor(0.0, 0.0), 0.0)
+	assert_gt(wake, 0.0)
+
+
+func test_higher_aero_receives_more_rear_assist() -> void:
+	var received := float(LocalRaceMath.calculate_rear_assist_details(_rear_snapshot(2.0), 0)["rear_assist_p"])
+	assert_gt(LocalRaceMath.rear_assist_air_factor(received, 15), LocalRaceMath.rear_assist_air_factor(received, 5))
+	assert_gt(LocalRaceMath.rear_assist_air_factor(received, 5), LocalRaceMath.rear_assist_air_factor(received, 1))
+	assert_eq(LocalRaceMath.rear_assist_air_factor(0.0, 15), 0.0)
+
+
+func test_runner_air_reduction_combines_draft_and_rear_assist() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.set("_effective_stats", {"aero": 10, "pack": 5})
+	var without_rear: float = runner.call("_draft_air_resistance_factor")
+	runner.call("apply_rear_assist_details", {"rear_assist_p": 0.3, "rear_source_ids": ["x"]})
+	assert_gt(float(runner.call("_draft_air_resistance_factor")), without_rear)
+	assert_almost_eq(float(runner.call("get_draft_status")["rear_assist_air_factor"]), LocalRaceMath.rear_assist_air_factor(0.3, 10), 0.00001)
+	runner.free()

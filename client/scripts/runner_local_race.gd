@@ -46,6 +46,9 @@ var _received_draft_p: float = 0.0
 var _direct_source_ids: Array = []
 var _chain_source_ids: Array = []
 var _direct_source_details: Array = []
+## 後ろの走者から受ける効果（後方支援）の受取量と、その対象。
+var _rear_assist_p: float = 0.0
+var _rear_source_ids: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 var _heart_overage_exposure: float = 0.0
 var _stamina: float = 0.0
@@ -231,6 +234,9 @@ func get_draft_status() -> Dictionary:
 		"primary_gap_m": float(_direct_source_details[0].get("gap", 0.0)) if not _direct_source_details.is_empty() else 0.0,
 		"primary_line_gap_m": float(_direct_source_details[0].get("line", 0.0)) if not _direct_source_details.is_empty() else 0.0,
 		"direct_source_details": _direct_source_details.duplicate(true),
+		"rear_assist_p": _rear_assist_p,
+		"rear_assist_air_factor": get_rear_assist_air_factor(),
+		"rear_source_ids": _rear_source_ids.duplicate(),
 	}
 
 
@@ -259,6 +265,15 @@ func apply_draft_details(details: Dictionary) -> void:
 	_chain_source_ids = details.get("chain_source_ids", []).duplicate()
 	_direct_source_details = details.get("direct_source_details", []).duplicate(true)
 	_drafting = _received_draft_p > 0.0
+
+
+func apply_rear_assist_details(details: Dictionary) -> void:
+	_rear_assist_p = float(details.get("rear_assist_p", 0.0))
+	_rear_source_ids = details.get("rear_source_ids", []).duplicate()
+
+
+func get_rear_assist_air_factor() -> float:
+	return LocalRaceMath.rear_assist_air_factor(_rear_assist_p, int(_effective_stats.get("aero", 5)))
 
 
 func set_braking(braking: bool) -> void:
@@ -551,6 +566,8 @@ func _clear_draft_details() -> void:
 	_direct_source_ids = []
 	_chain_source_ids = []
 	_direct_source_details = []
+	_rear_assist_p = 0.0
+	_rear_source_ids = []
 
 
 func _update_inputs(delta: float, curvature: float = 0.0) -> void:
@@ -640,7 +657,11 @@ func _apply_pururin_race_stats() -> void:
 
 
 func _draft_air_resistance_factor() -> float:
-	return LocalRaceMath.draft_air_resistance_factor(_received_draft_p, _effective_pack_stat())
+	# 前の走者から受けるドラフトと、後ろの走者から受ける後方支援を合わせた、空気抵抗の減る割合。
+	return LocalRaceMath.combined_air_reduction_factor(
+		LocalRaceMath.draft_air_resistance_factor(_received_draft_p, _effective_pack_stat()),
+		get_rear_assist_air_factor()
+	)
 
 
 func _aero_air_resistance_multiplier() -> float:
