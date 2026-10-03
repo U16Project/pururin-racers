@@ -4,6 +4,7 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+const RunnerScript := preload("res://scripts/runner_local_race.gd")
 
 
 func before_each() -> void:
@@ -81,3 +82,14 @@ func test_local_race_uses_the_selected_roster_entry_as_the_only_player() -> void
 				expected_pururin["trainer_profile_id"]
 			)
 	race.free()
+
+
+func test_runner_setup_does_not_change_the_selected_distance() -> void:
+	RaceSession.select_distance(1600.0)
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "テスト", {}, 2400.0)
+	assert_eq(float(runner.call("get_race_distance")), 2400.0)
+	assert_eq(RaceSession.selected_distance_m(), 1600.0)
+	runner.free()

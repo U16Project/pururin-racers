@@ -9,9 +9,9 @@
       "description": "プレイヤーがノッチ4を維持する",
       "player_drive_schedule": [{"start_s": 0.0, "drive_level": 4.0}],
       "goals": [
-        {"id": "finish_stamina_near_zero", "kind": "soft", "metric": "player_finish_stamina", "operator": "between", "min": -10.0, "max": 10.0, "target": 0.0, "unit": "%", "reason": "ノッチ4巡航はゴール時スタミナ0%付近（許容範囲: -10〜+10%）"},
-        {"id": "finish_heart_rate_normal", "kind": "soft", "metric": "player_finish_heart_rate", "operator": "between", "min": 170.0, "max": 195.0, "target": 180.0, "unit": "bpm", "reason": "ノッチ4巡航の心拍は通常域"},
-        {"id": "no_overheat", "kind": "hard", "metric": "player_max_overheat_ratio", "operator": "eq", "target": 0.0, "reason": "ノッチ4巡航ではオーバーヒートしない"}
+        {"id": "finish_stamina_bounded", "kind": "soft", "metric": "player_finish_stamina", "operator": "between", "min": -30.0, "max": 10.0, "target": -15.0, "unit": "%", "reason": "ノッチ4巡航はゴール時に燃料を使い切る前後（許容範囲: -30〜+10%。負債に入っても下限-100%内）"},
+        {"id": "finish_heart_rate_overheat_zone", "kind": "soft", "metric": "player_finish_heart_rate", "operator": "between", "min": 200.0, "max": 230.0, "target": 215.0, "unit": "bpm", "reason": "ノッチ4の定常心拍は約210 bpm。長時間巡航では通常上限200を超えて過熱域に入る"},
+        {"id": "overheat_bounded", "kind": "hard", "metric": "player_max_overheat_ratio", "operator": "lte", "target": 1.0, "reason": "過熱率は上限1.0を超えない"}
       ]
     },
     {

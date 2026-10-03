@@ -135,9 +135,10 @@ func run_isolated(condition: Dictionary, scenario: Dictionary = {}) -> Dictionar
 	var schedule_errors := validate_schedule(schedule)
 	if not schedule_errors.is_empty():
 		return {"error": "drive_schedule: %s" % "; ".join(schedule_errors)}
-	var adaptive_policy: Dictionary = condition.get("adaptive_heart_policy", {})
-	if not adaptive_policy is Dictionary:
+	# 型付き変数へ入れる前に検査する。先に代入すると不正なJSONで実行時エラーになる。
+	if not condition.get("adaptive_heart_policy", {}) is Dictionary:
 		return {"error": "adaptive_heart_policy はオブジェクトが必要です"}
+	var adaptive_policy: Dictionary = condition.get("adaptive_heart_policy", {})
 	var adaptive_next_decision_s := 0.0
 	var adaptive_level := float(adaptive_policy.get("min_drive_level", 3.0)) if not adaptive_policy.is_empty() else 0.0
 	var body_enabled := bool(condition.get("body_enabled", false))

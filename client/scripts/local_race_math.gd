@@ -218,7 +218,8 @@ static func step_drive_level(level: float, direction: float) -> float:
 
 
 static func drive_force_kmh_per_s(drive_level: float, acceleration_bonus_kmh_per_s: float = 0.0) -> float:
-	var level_index := int(round(clamp_drive_level(drive_level)))
+	# 負ノッチは制動側で扱う。配列の末尾参照にならないよう0未満を0にする。
+	var level_index := maxi(int(round(clamp_drive_level(drive_level))), 0)
 	return maxf(float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index]) + acceleration_bonus_kmh_per_s, 0.0)
 
 
@@ -270,15 +271,6 @@ static func drive_resistance_kmh_per_s(
 ) -> float:
 	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor, 0.0, 0.0, 1.0, air_resistance_multiplier)
 	return float(diagnostics["rolling_resistance_kmh_per_s"]) + float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
-
-
-static func draft_speed_bonus_kmh(draft_factor: float) -> float:
-	var draft_presence := clampf(
-		draft_factor / maxf(DRAFT_AIR_RESISTANCE_FACTOR, 0.0001),
-		0.0,
-		1.0
-	)
-	return DRAFT_SPEED_BONUS_MAX_KMH * draft_presence
 
 
 ## 空力適性は二乗空気抵抗だけを連続的に補正する。基準値では現行抵抗と同じ。
@@ -831,15 +823,7 @@ static func cpu_line_move_speed_m_per_s(slot: Dictionary, handling_multiplier: f
 	return Config.number("cpu_steer_speed_m_per_s") * multiplier * maxf(handling_multiplier, 0.0)
 
 
-static func cpu_trainer_profile(gate_index: int) -> Dictionary:
-	var values := Config.values()
-	var cycle: Array = values["cpu_trainer_profile_cycle"]
-	var profile_id := str(cycle[posmod(gate_index - 1, cycle.size())])
-	return cpu_trainer_profile_by_id(profile_id)
-
-
 ## roster の trainer_profile_id から CPU 方針を引く。
-## ゲート循環は、個別指定がない旧呼び出し用のフォールバックとしてだけ残す。
 static func cpu_trainer_profile_by_id(profile_id: String) -> Dictionary:
 	var values := Config.values()
 	for profile_value in values["cpu_trainer_profiles"]:
@@ -854,32 +838,6 @@ static func cpu_trainer_settings() -> Dictionary:
 		"heart_rate_min_bpm": Config.number("heart_rate_min_bpm"),
 		"heart_rate_normal_max_bpm": Config.number("heart_rate_normal_max_bpm"),
 	}
-
-
-## 残り距離を今の速度で走り切る間に、ゴール時の推進効率を floor より下げずに
-## 上げてよい心拍。200超過負荷の蓄積式（超過率 × 秒）をそのまま逆算する。
-## 超過で落ちた効率はゴールまで残るため、exponent が大きいほど予算を終盤へ取っておく
-## （1 で残り時間に均等配分）。
-static func heart_rate_allowance_bpm(
-	remaining_m: float,
-	speed_kmh: float,
-	overage_exposure: float,
-	finish_efficiency_floor: float,
-	exponent: float = 1.0
-) -> float:
-	var normal_max := Config.number("heart_rate_normal_max_bpm")
-	var overheat_max := Config.number("heart_rate_overheat_max_bpm")
-	if remaining_m <= 0.0:
-		return overheat_max
-	var loss_per_s := maxf(Config.number("overheat_exposure_efficiency_loss_per_s"), 0.0001)
-	var exposure_budget := maxf(
-		(1.0 - clampf(finish_efficiency_floor, 0.0, 1.0)) / loss_per_s - maxf(overage_exposure, 0.0),
-		0.0
-	)
-	var speed_m_per_s := maxf(speed_kmh, maxf(Config.number("min_speed_kmh"), 1.0)) / 3.6
-	var remaining_s := remaining_m / speed_m_per_s
-	var allowed_overheat_ratio := pow(clampf(exposure_budget / remaining_s, 0.0, 1.0), maxf(exponent, 1.0))
-	return lerpf(normal_max, overheat_max, allowed_overheat_ratio)
 
 
 static func heart_rate_rise_rate_for_drive_level(drive_level: float) -> float:

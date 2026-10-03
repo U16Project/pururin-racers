@@ -15,6 +15,11 @@ const ALLOWED_KEYS := [
 ]
 const ATTRIBUTE_IDS := ["earth", "water", "fire", "wind"]
 const RUNNING_STYLE_IDS := ["escape", "pace", "stalk", "closer"]
+## 走行計算・画面表示がIDで参照する項目。順序はJSONの stat_ids に従う。
+const CODE_STAT_IDS := [
+	"top_speed", "acceleration", "stamina", "cardio",
+	"aero", "pack", "contact_resistance", "handling",
+]
 
 static var _cached: Dictionary = {}
 static var _attempted := false
@@ -51,25 +56,36 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: 未知の項目です" % key)
 	if int(data.schema_version) != 1:
 		errors.append("schema_version: 1 が必要です")
-	if int(data.allocation_min) != 1 or int(data.allocation_max) != 10:
-		errors.append("allocation_min / allocation_max: 1 / 10 が必要です")
-	if int(data.allocation_total) != 40:
-		errors.append("allocation_total: 40 が必要です")
-	if int(data.attribute_bonus_per_stat) != 2 or int(data.attribute_stat_max) != 12:
-		errors.append("属性補正: 各+2、上限12が必要です")
-	if int(data.race_effective_min) != 1 or int(data.race_effective_max) != 15:
-		errors.append("レース中有効値: 1〜15 が必要です")
+	# 値そのものはJSONが正本。コード側は値の一致ではなく、整数性と相互の整合だけを確認する。
+	for key in REQUIRED_NUMBERS:
+		if float(data[key]) != floorf(float(data[key])):
+			errors.append("%s: 整数が必要です" % key)
+	if int(data.allocation_min) < 1 or int(data.allocation_min) > int(data.allocation_max):
+		errors.append("allocation_min / allocation_max: 1 ≦ allocation_min ≦ allocation_max にしてください")
+	if int(data.attribute_bonus_per_stat) < 0 or int(data.attribute_stat_max) < int(data.allocation_max):
+		errors.append("属性補正: attribute_bonus_per_stat は0以上、attribute_stat_max は allocation_max 以上にしてください")
+	if int(data.race_effective_min) < 1 or int(data.race_effective_min) > int(data.race_effective_max):
+		errors.append("race_effective_min / race_effective_max: 1 ≦ min ≦ max にしてください")
+	if int(data.race_phase_count) < 1:
+		errors.append("race_phase_count: 1以上が必要です")
 	var stat_ids: Variant = data.get("stat_ids")
-	if not stat_ids is Array or stat_ids.size() != 8:
-		errors.append("stat_ids: 8個の配列が必要です")
+	if not stat_ids is Array or stat_ids.is_empty():
+		errors.append("stat_ids: 1個以上の配列が必要です")
 	else:
 		var seen := {}
 		for index in stat_ids.size():
 			if not stat_ids[index] is String or str(stat_ids[index]).is_empty() or seen.has(stat_ids[index]):
 				errors.append("stat_ids[%d]: 空または重複です" % index)
 			seen[stat_ids[index]] = true
-		if int(data.allocation_total) != stat_ids.size() * 5:
-			errors.append("allocation_total: 初期値5×ステータス数と一致する必要があります")
+		for stat_id in CODE_STAT_IDS:
+			if not seen.has(stat_id):
+				errors.append("stat_ids: コードが参照する %s が必要です" % stat_id)
+		# 初期配分（default_allocation）は合計を全項目へ均等に割る。
+		var total := int(data.allocation_total)
+		if total % stat_ids.size() != 0:
+			errors.append("allocation_total: ステータス数で割り切れる必要があります（初期配分を均等にするため）")
+		elif total / stat_ids.size() < int(data.allocation_min) or total / stat_ids.size() > int(data.allocation_max):
+			errors.append("allocation_total: 均等配分が allocation_min〜allocation_max に収まる必要があります")
 	_validate_rank_groups(data, errors)
 	_validate_attributes(data, stat_ids, errors)
 	_validate_running_styles(data, stat_ids, errors)
@@ -78,15 +94,30 @@ static func validate(data: Variant) -> PackedStringArray:
 
 static func _validate_rank_groups(data: Dictionary, errors: PackedStringArray) -> void:
 	var groups: Variant = data.get("rank_groups")
-	if not groups is Array or groups.size() != 4:
-		errors.append("rank_groups: 4組の配列が必要です")
+	if not groups is Array or groups.is_empty():
+		errors.append("rank_groups: 1組以上の配列が必要です")
 		return
+	var previous_last := 0
 	for index in groups.size():
-		if not groups[index] is Array or groups[index].size() != 2:
-			errors.append("rank_groups[%d]: 2個の順位が必要です" % index)
+		var group: Variant = groups[index]
+		if not group is Array or group.size() != 2 or not _is_integer(group[0]) or not _is_integer(group[1]):
+			errors.append("rank_groups[%d]: 2個の整数順位が必要です" % index)
+			continue
+		# 順位組は1位から隙間・重なりなく昇順に並べる。
+		if int(group[0]) != previous_last + 1 or int(group[1]) < int(group[0]):
+			errors.append("rank_groups[%d]: 前の組の次の順位から始まる昇順の範囲にしてください" % index)
+		previous_last = int(group[1])
 	var bonus: Variant = data.get("rank_bonus")
-	if not bonus is Dictionary or int(bonus.get("matching", 99)) != 1 or int(bonus.get("adjacent", 99)) != 0 or int(bonus.get("distant", 99)) != -1:
-		errors.append("rank_bonus: matching=1 / adjacent=0 / distant=-1 が必要です")
+	if not bonus is Dictionary:
+		errors.append("rank_bonus: matching / adjacent / distant が必要です")
+		return
+	for key in ["matching", "adjacent", "distant"]:
+		if not _is_integer(bonus.get(key)):
+			errors.append("rank_bonus.%s: 整数が必要です" % key)
+
+
+static func _is_integer(value: Variant) -> bool:
+	return (value is int or value is float) and is_finite(float(value)) and float(value) == floorf(float(value))
 
 
 static func _validate_attributes(data: Dictionary, stat_ids: Array, errors: PackedStringArray) -> void:
@@ -132,10 +163,11 @@ static func _validate_running_styles(data: Dictionary, stat_ids: Array, errors: 
 		var group_index := int(definition.get("rank_group_index", -1))
 		var phase_index := int(definition.get("phase_index", -1))
 		var phase_bonus: Variant = definition.get("phase_bonus")
-		if group_index < 0 or group_index >= 4 or phase_index < 0 or phase_index >= int(data.race_phase_count):
+		var group_count: int = data.rank_groups.size() if data.get("rank_groups") is Array else 0
+		if group_index < 0 or group_index >= group_count or phase_index < 0 or phase_index >= int(data.race_phase_count):
 			errors.append("running_styles.%s: 順位組または区間が不正です" % style_id)
-		if not phase_bonus is Dictionary or not phase_bonus.get("stat") in stat_ids or int(phase_bonus.get("amount", 0)) != 2:
-			errors.append("running_styles.%s.phase_bonus: 定義済み項目への+2が必要です" % style_id)
+		if not phase_bonus is Dictionary or not phase_bonus.get("stat") in stat_ids or not _is_integer(phase_bonus.get("amount")):
+			errors.append("running_styles.%s.phase_bonus: 定義済み項目と整数の加算量が必要です" % style_id)
 
 
 static func values() -> Dictionary:

@@ -26,12 +26,16 @@ static func selected_distance_m() -> float:
 
 
 static func select_distance(distance_m: float) -> float:
+	_selected_distance_m = normalize_distance(distance_m)
+	return _selected_distance_m
+
+
+## 対応距離へ丸める。未対応なら既定距離。選択状態は変更しない。
+static func normalize_distance(distance_m: float) -> float:
 	for supported_distance in SUPPORTED_DISTANCE_M:
 		if is_equal_approx(float(supported_distance), distance_m):
-			_selected_distance_m = float(supported_distance)
-			return _selected_distance_m
-	_selected_distance_m = DEFAULT_DISTANCE_M
-	return _selected_distance_m
+			return float(supported_distance)
+	return DEFAULT_DISTANCE_M
 
 
 static func selected_player_pururin_id() -> String:

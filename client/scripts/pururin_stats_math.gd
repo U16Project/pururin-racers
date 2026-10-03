@@ -5,9 +5,12 @@ const Config := preload("res://scripts/config/pururin_stats_config.gd")
 
 
 static func default_allocation() -> Dictionary:
+	# 合計を全項目へ均等に割る。割り切れることは設定検証で保証する。
+	var stat_ids: Array = Config.values()["stat_ids"]
+	var per_stat := int(Config.values()["allocation_total"]) / stat_ids.size()
 	var allocation := {}
-	for stat_id in Config.values()["stat_ids"]:
-		allocation[stat_id] = 5
+	for stat_id in stat_ids:
+		allocation[stat_id] = per_stat
 	return allocation
 
 
@@ -22,13 +25,13 @@ static func validate_allocation(allocation: Variant) -> PackedStringArray:
 			errors.append("%s: 整数が必要です" % stat_id)
 			continue
 		if value < Config.values()["allocation_min"] or value > Config.values()["allocation_max"]:
-			errors.append("%s: 1〜10 の範囲にしてください" % stat_id)
+			errors.append("%s: %d〜%d の範囲にしてください" % [stat_id, int(Config.values()["allocation_min"]), int(Config.values()["allocation_max"])])
 		total += int(value)
 	for stat_id in allocation:
 		if not stat_id in Config.values()["stat_ids"]:
 			errors.append("%s: 未知のステータスです" % stat_id)
 	if total != int(Config.values()["allocation_total"]):
-		errors.append("配分合計: 40 が必要です")
+		errors.append("配分合計: %d が必要です" % int(Config.values()["allocation_total"]))
 	return errors
 
 

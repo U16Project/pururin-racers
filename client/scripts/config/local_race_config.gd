@@ -32,7 +32,6 @@ const NUMBER_RANGES := {
 	"drive_repeat_interval_s": [0.001, 10.0],
 	"cpu_steer_reselect_min_s": [0.001, 60.0],
 	"cpu_steer_reselect_max_s": [0.001, 60.0],
-	"cpu_steer_target_delta_max_m": [0.0, 15.0],
 	"cpu_steer_speed_m_per_s": [0.001, 100.0],
 	"cpu_follow_forward_range_m": [0.001, 100.0],
 	"cpu_follow_lateral_range_m": [0.001, 15.0],
@@ -88,7 +87,6 @@ const NUMBER_RANGES := {
 	"overheat_exposure_efficiency_loss_per_s": [0.0001, 1.0],
 	"overheat_exposure_recovery_per_s": [0.0, 100.0],
 }
-const PROFILE_OVERRIDE_NUMBER_KEYS: Array[String] = []
 static var _cached: Dictionary = {}
 static var _attempted := false
 static var last_error := ""
@@ -120,7 +118,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s", "cpu_trainer_profiles", "cpu_trainer_profile_cycle"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s", "cpu_trainer_profiles"]:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
@@ -218,25 +216,6 @@ static func validate(data: Variant) -> PackedStringArray:
 				var value: Variant = profile.get(key)
 				if not (value is float or value is int) or not is_finite(float(value)) or value < 0.0 or value > 1.0:
 					errors.append("cpu_trainer_profiles[%d].%s: 0〜1の数値が必要です" % [index, key])
-			for key: String in PROFILE_OVERRIDE_NUMBER_KEYS:
-				if not profile.has(key):
-					continue
-				var override_value: Variant = profile[key]
-				var override_limits: Array = NUMBER_RANGES["cpu_trainer_" + key]
-				if (
-					not (override_value is float or override_value is int)
-					or not is_finite(float(override_value))
-					or override_value < override_limits[0]
-					or override_value > override_limits[1]
-				):
-					errors.append("cpu_trainer_profiles[%d].%s: 範囲 %s〜%s 外です" % [index, key, override_limits[0], override_limits[1]])
-	var cycle: Variant = data.get("cpu_trainer_profile_cycle")
-	if not cycle is Array or cycle.is_empty():
-		errors.append("cpu_trainer_profile_cycle: 1個以上の配列が必要です")
-	else:
-		for index in cycle.size():
-			if not cycle[index] is String or not profile_ids.has(str(cycle[index])):
-				errors.append("cpu_trainer_profile_cycle[%d]: 定義済みプロフィールIDが必要です" % index)
 	return errors
 
 static func values() -> Dictionary:

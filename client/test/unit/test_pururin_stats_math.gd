@@ -68,3 +68,27 @@ func test_definition_rejects_unknown_setting_and_missing_attribute() -> void:
 	var errors := ";".join(Config.validate(data))
 	assert_true(errors.contains("unexpected_setting"))
 	assert_true(errors.contains("attributes.wind"))
+
+
+func test_definition_accepts_edited_values_when_consistent() -> void:
+	# JSONの値を変えても、整合していれば受け付ける（値をコードへ二重定義しない）。
+	var data: Dictionary = Config.load_file().data.duplicate(true)
+	data.allocation_total = 48
+	data.allocation_max = 12
+	data.attribute_stat_max = 14
+	data.rank_bonus = {"matching": 2, "adjacent": 0, "distant": -2}
+	data.running_styles.escape.phase_bonus.amount = 3
+	assert_eq(Config.validate(data), PackedStringArray())
+
+
+func test_definition_rejects_inconsistent_ranges_and_rank_groups() -> void:
+	var data: Dictionary = Config.load_file().data.duplicate(true)
+	data.allocation_total = 41
+	data.allocation_min = 11
+	data.rank_groups = [[1, 2], [4, 5]]
+	data.stat_ids = data.stat_ids.filter(func(stat_id): return stat_id != "handling")
+	var errors := ";".join(Config.validate(data))
+	assert_true(errors.contains("allocation_total"))
+	assert_true(errors.contains("allocation_min"))
+	assert_true(errors.contains("rank_groups[1]"))
+	assert_true(errors.contains("handling"))

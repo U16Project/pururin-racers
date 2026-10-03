@@ -26,7 +26,6 @@
   "drive_repeat_interval_s": 0.10,
   "cpu_steer_reselect_min_s": 1.0,
   "cpu_steer_reselect_max_s": 2.0,
-  "cpu_steer_target_delta_max_m": 1.2,
   "cpu_steer_speed_m_per_s": 1.2,
   "cpu_follow_forward_range_m": 20.0,
   "cpu_follow_lateral_range_m": 4.0,
@@ -64,7 +63,6 @@
     {"id": "draft", "line_pref": 1.00},
     {"id": "late", "line_pref": 0.70}
   ],
-  "cpu_trainer_profile_cycle": ["front", "balanced", "draft", "late"],
   "heart_rate_min_bpm": 100.0,
   "heart_rate_normal_max_bpm": 200.0,
   "heart_rate_overheat_max_bpm": 230.0,

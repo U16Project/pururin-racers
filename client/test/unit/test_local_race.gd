@@ -9,45 +9,13 @@ const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const M5CameraScript := preload("res://scripts/m5_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const RaceSession := preload("res://scripts/race_session.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)
 	RaceSession.select_player_pururin(RaceSession.default_player_pururin_id())
 	RaceSession.reset_stamina_load_preset()
-
-
-func test_heart_rate_allowance_opens_as_the_finish_approaches() -> void:
-	var normal_max := LocalRaceMath.Config.number("heart_rate_normal_max_bpm")
-	var overheat_max := LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
-	var loss_per_s := LocalRaceMath.Config.number("overheat_exposure_efficiency_loss_per_s")
-	var far := LocalRaceMath.heart_rate_allowance_bpm(1500.0, 61.0, 0.0, 0.75, 4.0)
-	var near := LocalRaceMath.heart_rate_allowance_bpm(150.0, 61.0, 0.0, 0.75, 4.0)
-	assert_lt(far, normal_max + 0.5)
-	assert_gte(far, normal_max)
-	assert_gt(
-		LocalRaceMath.heart_rate_allowance_bpm(1500.0, 61.0, 0.0, 0.75, 1.0),
-		far,
-		"指数1は残り時間へ均等配分し、大きい指数ほど終盤へ取っておく"
-	)
-	assert_almost_eq(near, overheat_max, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_allowance_bpm(0.0, 61.0, 0.0, 0.75), overheat_max, 0.001)
-	var budget_s := 0.25 / loss_per_s
-	var remaining_m := budget_s * 2.0 * 61.0 / 3.6
-	assert_almost_eq(
-		LocalRaceMath.heart_rate_allowance_bpm(remaining_m, 61.0, 0.0, 0.75),
-		lerpf(normal_max, overheat_max, 0.5),
-		0.01
-	)
-	assert_almost_eq(
-		LocalRaceMath.heart_rate_allowance_bpm(150.0, 61.0, budget_s, 0.75),
-		normal_max,
-		0.001
-	)
-	assert_gt(
-		LocalRaceMath.heart_rate_allowance_bpm(400.0, 61.0, 0.0, 0.5),
-		LocalRaceMath.heart_rate_allowance_bpm(400.0, 61.0, 0.0, 0.9)
-	)
 
 
 func test_cpu_heart_safety_uses_the_highest_notch_that_lowers_an_overheated_heart() -> void:
@@ -346,7 +314,7 @@ func test_drive_level_is_clamped_and_steps_by_one() -> void:
 	assert_eq(LocalRaceMath.step_drive_level(-3.0, -1.0), -3.0)
 
 
-func test_local_runner_defaults_to_output_mode_and_can_toggle() -> void:
+func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
 	var runner := Node3D.new()
 	runner.set_script(RunnerScript)
 	add_child(runner)
@@ -1429,3 +1397,52 @@ func test_innermost_gate_is_most_negative_offset() -> void:
 	var gate7 := LocalRaceMath.starting_offset_for_gate(7)
 	assert_lt(gate0, gate7)
 	assert_lt(gate0, 0.0)
+
+
+func test_stamina_capacity_uses_pre_race_stats_regardless_of_running_style() -> void:
+	# 生成時は他頭情報が無く全員1位扱いになるため、順位補正を容量へ混ぜない。
+	var base: Dictionary = PururinRosterConfig.pururin_by_id("player-1").duplicate(true)
+	var capacities := {}
+	for style_id in ["escape", "pace", "stalk", "closer"]:
+		var pururin := base.duplicate(true)
+		pururin["running_style"] = style_id
+		var runner := Node3D.new()
+		runner.set_script(RunnerScript)
+		add_child(runner)
+		runner.call("setup_for_race", null, 0, 75.0, false, "テスト", pururin)
+		capacities[style_id] = float(runner.call("get_stamina_capacity_l"))
+		runner.free()
+	var pre_race := PururinStatsMath.pre_race_stats(str(base["attribute"]), base["allocation"])
+	for style_id in capacities:
+		assert_almost_eq(capacities[style_id], LocalRaceMath.stamina_capacity_l(int(pre_race["stamina"])), 0.0001, style_id)
+
+
+func test_same_tick_finishers_are_ordered_by_crossing_time_not_spawn_order() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var player := Node3D.new()
+	var cpu := Node3D.new()
+	for runner in [player, cpu]:
+		runner.set_script(RunnerScript)
+		add_child(runner)
+	player.call("setup_for_race", null, 0, 75.0, true, "プレイヤー")
+	cpu.call("setup_for_race", null, 1, 75.0, false, "CPU")
+	var distance := float(race.get("_race_distance_m"))
+	# プレイヤーは生成順で先だが、線を越えたのはCPUが先。
+	player.set("_tick_start_progress", distance - 1.0)
+	player.set("_race_progress", distance + 0.5)
+	player.set("_last_tick_delta", 0.1)
+	cpu.set("_tick_start_progress", distance - 0.1)
+	cpu.set("_race_progress", distance + 1.0)
+	cpu.set("_last_tick_delta", 0.1)
+	var racers: Array[Node3D] = [player, cpu]
+	race.set("_runners", racers)
+	race.set("_race_elapsed", 10.0)
+	race.call("_check_finishes")
+	assert_eq(int(cpu.call("get_finish_order")), 1)
+	assert_eq(int(player.call("get_finish_order")), 2)
+	assert_almost_eq(float(cpu.call("get_finish_time")), 10.0 - 0.1 * (1.0 - 0.1 / 1.1), 0.0001)
+	assert_almost_eq(float(player.call("get_finish_time")), 10.0 - 0.1 * (1.0 - 1.0 / 1.5), 0.0001)
+	player.free()
+	cpu.free()
+	race.free()

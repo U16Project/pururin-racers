@@ -326,25 +326,37 @@ func _share_snapshots() -> void:
 	var snaps: Array = []
 	for r in _runners:
 		snaps.append(r.call("get_snapshot"))
-	for r in _runners:
+	for index in _runners.size():
 		var others: Array = []
-		var self_snap: Dictionary = r.call("get_snapshot")
-		for s in snaps:
-			if s.get("gate", -1) == self_snap.get("gate", -2):
-				continue
-			others.append(s)
-		r.call("set_others_snapshot", others)
+		for other_index in snaps.size():
+			if other_index != index:
+				others.append(snaps[other_index])
+		_runners[index].call("set_others_snapshot", others)
 
 
 func _check_finishes() -> void:
 	if _race_over:
 		return
+	# 同じtickで到達した走者は、生成順ではなく補間した通過時刻で着順を決める。
+	var crossings: Array = []
 	for r in _runners:
 		if r.call("is_finished"):
 			continue
 		if LocalRaceMath.has_finished(r.call("get_race_progress"), _race_distance_m):
-			_finish_count += 1
-			r.call("mark_finished", _finish_count, _race_elapsed)
+			var lead_s: float = r.call("get_finish_crossing_lead_s", _race_distance_m)
+			crossings.append({
+				"runner": r,
+				"time": maxf(_race_elapsed - lead_s, 0.0),
+				"id": str(r.call("get_snapshot").get("id", "")),
+			})
+	crossings.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if not is_equal_approx(float(a["time"]), float(b["time"])):
+			return float(a["time"]) < float(b["time"])
+		return str(a["id"]) < str(b["id"])
+	)
+	for crossing: Dictionary in crossings:
+		_finish_count += 1
+		crossing["runner"].call("mark_finished", _finish_count, float(crossing["time"]))
 	var all_done := true
 	for r in _runners:
 		if not r.call("is_finished"):
@@ -370,7 +382,7 @@ func _update_hud() -> void:
 	var tgt: float = _player.call("get_target_speed")
 	var cur: float = _player.call("get_current_speed")
 	var lines := PackedStringArray([
-		"順位 %d／8" % order,
+		"順位 %d／%d" % [order, _runners.size()],
 		"残り %.0fm" % maxf(_race_distance_m - prog, 0.0),
 	])
 	if _player.call("is_drive_mode"):

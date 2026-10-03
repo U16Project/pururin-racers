@@ -34,7 +34,6 @@ var _drive_level: float = 0.0
 var _drive_hold_direction: float = 0.0
 var _drive_repeat_remaining: float = 0.0
 var _drafting: bool = false
-var _draft_bonus_kmh: float = 0.0
 var _own_wake_p: float = 0.0
 var _direct_draft_p: float = 0.0
 var _chain_draft_p: float = 0.0
@@ -48,6 +47,8 @@ var _stamina: float = 0.0
 var _stamina_capacity_l: float = 0.0
 var _stamina_load_multiplier: float = 1.0
 var _race_progress: float = 0.0
+var _tick_start_progress: float = 0.0
+var _last_tick_delta: float = 0.0
 var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 var _race_route: Dictionary = {}
 var _finished: bool = false
@@ -59,7 +60,6 @@ var _cpu_steer_timer: float = 0.0
 var _cpu_trainer_timer: float = 0.0
 var _cpu_trainer_profile: Dictionary = {}
 var _cpu_trainer_drive_level: float = 0.0
-var _cpu_overtake_bias: float = 0.0
 var _cpu_line_move_speed_m_per_s: float = 0.0
 var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
@@ -85,7 +85,8 @@ func setup_for_race(
 	_base_max_speed_kmh = initial_max_speed_kmh
 	max_speed_kmh = initial_max_speed_kmh
 	_pururin = pururin.duplicate(true)
-	_race_distance_m = RaceSession.select_distance(race_distance_m)
+	# ランナー生成は画面の距離選択を書き換えない。
+	_race_distance_m = RaceSession.normalize_distance(race_distance_m)
 	_race_route = M5CourseBuilder.route_for_distance(
 		LocalRaceMath.course_layout(), _race_distance_m
 	)
@@ -95,6 +96,8 @@ func setup_for_race(
 	_target_offset = _offset
 	_distance = LocalRaceMath.start_path_for_distance_m(_race_distance_m)
 	_race_progress = 0.0
+	_tick_start_progress = 0.0
+	_last_tick_delta = 0.0
 	_finished = false
 	_finish_order = -1
 	_finish_time = -1.0
@@ -108,21 +111,18 @@ func setup_for_race(
 	_cpu_steer_timer = 0.0
 	_cpu_trainer_timer = 0.0
 	if not is_player:
-		var trainer_profile_id := str(_pururin.get("trainer_profile_id", ""))
-		_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(trainer_profile_id)
-		# roster 未指定時だけ、従来のゲート循環を使う。
-		if _cpu_trainer_profile.is_empty():
-			_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile(gate)
+		# roster 検証で全個体に定義済み trainer_profile_id があることを保証している。
+		_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(
+			str(_pururin.get("trainer_profile_id", ""))
+		)
 	else:
 		_cpu_trainer_profile = {}
 	_cpu_trainer_drive_level = 0.0
-	_cpu_overtake_bias = 0.0
 	_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 	_drive_diagnostic_log_remaining = 0.0
 	_race_active = false
 	_cpu_start_drive_remaining = 0.0
 	_drafting = false
-	_draft_bonus_kmh = 0.0
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
 	_heart_overage_exposure = 0.0
@@ -227,10 +227,6 @@ func is_drafting() -> bool:
 	return _drafting
 
 
-func get_draft_bonus_kmh() -> float:
-	return LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat())
-
-
 func get_draft_status() -> Dictionary:
 	# HUD は生の受取率と、走行に使う応答曲線後の実効率を並べて示す。
 	# 計算式は LocalRaceMath にだけ置き、表示側で再計算しない。
@@ -276,7 +272,6 @@ func apply_draft_details(details: Dictionary) -> void:
 	_chain_source_ids = details.get("chain_source_ids", []).duplicate()
 	_direct_source_details = details.get("direct_source_details", []).duplicate(true)
 	_drafting = _received_draft_p > 0.0
-	_draft_bonus_kmh = LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat())
 
 
 func set_drive_level(level: float) -> void:
@@ -376,6 +371,16 @@ func get_finish_time() -> float:
 	return _finish_time
 
 
+## 直前tickでゴール線を越えた時点が、tick終了の何秒前かを返す。
+## 同一tick内の複数到達を、配列順ではなく通過時刻で並べるために使う（M5サーバーと同じ補間）。
+func get_finish_crossing_lead_s(race_distance_m: float) -> float:
+	var progress_delta := _race_progress - _tick_start_progress
+	if progress_delta <= 0.0 or _last_tick_delta <= 0.0:
+		return 0.0
+	var fraction := clampf((race_distance_m - _tick_start_progress) / progress_delta, 0.0, 1.0)
+	return (1.0 - fraction) * _last_tick_delta
+
+
 func mark_finished(order: int, finish_time: float) -> void:
 	_finished = true
 	_finish_order = order
@@ -458,6 +463,8 @@ func _process(delta: float) -> void:
 			_update_drive_level_input(delta)
 		return
 	_apply_pururin_race_stats()
+	_tick_start_progress = _race_progress
+	_last_tick_delta = delta
 	var previous_offset := _offset
 	var route_pose := M5CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
@@ -526,7 +533,6 @@ func _process(delta: float) -> void:
 	var allowed_progress := LocalRaceMath.allowed_race_progress(
 		_race_progress, proposed_progress, _offset, _others_snapshot
 	)
-	var allowed_advance := allowed_progress - _race_progress
 	_race_progress = allowed_progress
 	var next_pose := M5CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
@@ -559,7 +565,7 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 			)
 			if bool(follow_candidate.get("found", false)):
 				var follow_slot := LocalRaceMath.cpu_follow_slot(
-					_race_progress, _offset, follow_candidate, _others_snapshot, _cpu_overtake_bias, curvature, line_pref
+					_race_progress, _offset, follow_candidate, _others_snapshot, 0.0, curvature, line_pref
 				)
 				if bool(follow_slot.get("hold_current", false)):
 					_target_offset = _offset
@@ -578,7 +584,7 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 					_offset,
 					_others_snapshot,
 					line_pref,
-					_cpu_overtake_bias,
+					0.0,
 					curvature
 				)
 				_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
@@ -606,46 +612,6 @@ func _update_cpu_target_speed() -> void:
 		_heart_rate_bpm,
 		int(_effective_stats.get("cardio", 5))
 	)
-
-
-func _cpu_pace_summary() -> Dictionary:
-	var speed_total := _current_speed_kmh
-	var runner_count := 1
-	var nearest_ahead_gap := INF
-	var nearest_ahead_speed := _current_speed_kmh
-	for other_value in _others_snapshot:
-		if not other_value is Dictionary:
-			continue
-		speed_total += float(other_value.get("speed", _current_speed_kmh))
-		runner_count += 1
-		var gap := float(other_value.get("race_progress", _race_progress)) - _race_progress
-		if gap > 0.001 and gap < nearest_ahead_gap:
-			nearest_ahead_gap = gap
-			nearest_ahead_speed = float(other_value.get("speed", _current_speed_kmh))
-	return {
-		"field_pace_kmh": speed_total / float(runner_count),
-		"nearest_ahead_gap_m": 0.0 if is_inf(nearest_ahead_gap) else nearest_ahead_gap,
-		"nearest_ahead_speed_kmh": nearest_ahead_speed,
-	}
-
-
-func _cpu_global_gap_summary() -> Dictionary:
-	var progress_values: Array[float] = [_race_progress]
-	for other_value in _others_snapshot:
-		if other_value is Dictionary:
-			progress_values.append(float(other_value.get("race_progress", _race_progress)))
-	progress_values.sort()
-	var leader_progress: float = _race_progress
-	var pack_center_progress: float = _race_progress
-	if not progress_values.is_empty():
-		leader_progress = progress_values.back()
-		var median_index: int = int(progress_values.size() / 2)
-		pack_center_progress = progress_values[median_index]
-	return {
-		"leader_gap_m": maxf(leader_progress - _race_progress, 0.0),
-		# 符号を残す。集団より前に出たCPUは負値になり、独走の抑制へ使える。
-		"pack_center_gap_m": pack_center_progress - _race_progress,
-	}
 
 
 func _cpu_live_place() -> int:
@@ -766,7 +732,14 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 
 
 func _reset_stamina_for_effective_stats() -> void:
-	_stamina_capacity_l = LocalRaceMath.stamina_capacity_l(int(_effective_stats.get("stamina", 5)))
+	# 容量はレース中に変えないため、順位・区間補正を含まない出走前値で決める。
+	# 生成時は他頭情報が無く全員が1位扱いになり、脚質で容量がずれるのを防ぐ。
+	var stamina_stat := int(_effective_stats.get("stamina", 5))
+	if not _pururin.is_empty():
+		stamina_stat = int(PururinStatsMath.pre_race_stats(
+			str(_pururin["attribute"]), _pururin["allocation"]
+		)["stamina"])
+	_stamina_capacity_l = LocalRaceMath.stamina_capacity_l(stamina_stat)
 	_stamina_load_multiplier = RaceSession.selected_stamina_load_multiplier()
 	_stamina = _stamina_capacity_l
 
