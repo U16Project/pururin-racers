@@ -426,7 +426,7 @@ func _update_hud() -> void:
 		_player.call("get_heart_overage_exposure"),
 		_player.call("get_propulsion_efficiency") * 100.0,
 	])
-	lines.append("燃料 %.1f / %.1fL（%.0f%%）" % [
+	lines.append("体力 %.1f / %.1fL（%.0f%%）" % [
 		_player.call("get_stamina"),
 		_player.call("get_stamina_capacity_l"),
 		_player.call("get_stamina_ratio") * 100.0,

@@ -1,6 +1,6 @@
 extends Control
 ## ローカルレースの常時表示HUD。数値の羅列ではなく、走りながら読める4つ
-## （速度・ノッチ・燃料・心拍）を画面下中央に大きく描く。詳細な診断はデバッグ表示（F3）へ分ける。
+## （速度・ノッチ・心拍・体力）を画面下中央に大きく描く。詳細な診断はデバッグ表示（F3）へ分ける。
 ## 値は update_state() で受け取り、計算はここでは行わない（表示用の割合と色だけ）。
 
 const PANEL_WIDTH := 440.0
@@ -143,22 +143,22 @@ func _draw_main_panel(font: Font) -> void:
 	_draw_text(font, "%d" % int(roundf(float(_state["speed_kmh"]))), speed_origin, 76, COLOR_TEXT)
 	_draw_text(font, "km/h", speed_origin + Vector2(0.0, 30.0), 22, COLOR_DIM)
 	_draw_draft_gauge(font, panel.position + Vector2(24.0, 168.0))
-	# 右：縦ゲージ3本（ノッチ・燃料・心拍）
+	# 右：縦ゲージ3本（ノッチ・心拍・体力）
 	var gauge_top := panel.position.y + 18.0
 	var left := panel.position.x + 224.0
 	var column := 68.0
 	_draw_notch_gauge(font, Vector2(left, gauge_top), braking)
-	var fuel := float(_state["fuel_ratio"])
-	_draw_vertical_gauge(
-		font, "燃料", Vector2(left + column, gauge_top), fuel_fill_ratio(fuel), fuel_color(fuel),
-		-1.0, "負債" if fuel_is_in_debt(_state) else "%d%%" % int(roundf(fuel * 100.0))
-	)
 	var heart_color_now := heart_color(_state)
 	if heart_is_overheated(_state) and _blink > 0.5:
 		heart_color_now = heart_color_now.lightened(0.35)
 	_draw_vertical_gauge(
-		font, "心拍", Vector2(left + column * 2.0, gauge_top), heart_fill_ratio(_state), heart_color_now,
+		font, "心拍", Vector2(left + column, gauge_top), heart_fill_ratio(_state), heart_color_now,
 		heart_limit_ratio(_state), "%d" % int(roundf(float(_state["heart_bpm"])))
+	)
+	var fuel := float(_state["fuel_ratio"])
+	_draw_vertical_gauge(
+		font, "体力", Vector2(left + column * 2.0, gauge_top), fuel_fill_ratio(fuel), fuel_color(fuel),
+		-1.0, "負債" if fuel_is_in_debt(_state) else "%d%%" % int(roundf(fuel * 100.0))
 	)
 	if bool(_state["countdown"]):
 		_draw_text(font, "↑↓で開始ノッチを選択", Vector2(panel.position.x + 24.0, panel.position.y - 10.0), 20, COLOR_TEXT)
