@@ -19,6 +19,7 @@ const NUMBER_RANGES := {
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
 	"aero_air_resistance_reference_stat": [1.0, 15.0],
 	"aero_air_resistance_multiplier_per_stat": [0.0, 0.10],
+	"blocked_speed_excess_max_kmh": [0.0, 100.0],
 	"rear_assist_range_m": [0.1, 20.0],
 	"rear_assist_transfer_rate": [0.0, 0.9],
 	"rear_assist_aero_multiplier_per_stat": [0.0, 0.2],

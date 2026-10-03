@@ -73,6 +73,10 @@ static var DRAFT_RESPONSE_REFERENCE_SCALE: float:
 	get:
 		return Config.number("draft_response_reference_scale")
 ## 後ろの走者から受ける効果（後方支援）。後方の範囲、最大の減り、空力1点あたりの倍率差。
+## 前の走者にふさがれている間、出力上の速度が実際の速度を上回れる最大の差（km/h）。
+static var BLOCKED_SPEED_EXCESS_MAX_KMH: float:
+	get:
+		return Config.number("blocked_speed_excess_max_kmh")
 static var REAR_ASSIST_RANGE_M: float:
 	get:
 		return Config.number("rear_assist_range_m")
@@ -314,6 +318,11 @@ static func draft_wake_from_speed(speed_kmh: float) -> float:
 ## 後ろの走者から前の走者が受ける効果。後方 DRAFT_FORWARD_MIN_M〜REAR_ASSIST_RANGE_M、
 ## 横ずれ DRAFT_LATERAL_RANGE_M 以内の全走者から、離れ具合に応じて直接受ける。連鎖はしない。
 ## 元になる値は後ろの走者の wake（出力上の速度から決まる）で、実際に進めた速さではない。
+## 出力上の速度が、実際の速度を max_excess 以上は上回らないようにする。最低速度は下回らない。
+static func limit_speed_excess_kmh(output_kmh: float, actual_kmh: float, max_excess_kmh: float) -> float:
+	return maxf(minf(output_kmh, actual_kmh + maxf(max_excess_kmh, 0.0)), MIN_SPEED_KMH)
+
+
 static func calculate_rear_assist_details(snapshot: Array, index: int) -> Dictionary:
 	var result := {"rear_assist_p": 0.0, "rear_source_ids": []}
 	if index < 0 or index >= snapshot.size() or not snapshot[index] is Dictionary:

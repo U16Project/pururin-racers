@@ -111,7 +111,7 @@ func setup_for_race(
 	_finish_time = -1.0
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-	_actual_speed_kmh = 0.0
+	_actual_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
 	_drive_level = 0.0
 	_braking = false
 	_drive_hold_direction = 0.0
@@ -562,6 +562,11 @@ func _process(delta: float) -> void:
 	var ground_multiplier := M2TrackMath.distance_multiplier(_offset, curvature)
 	var moved_speed_kmh := (allowed_progress - _race_progress) * ground_multiplier / delta * 3.6
 	_actual_speed_kmh = lerpf(_actual_speed_kmh, moved_speed_kmh, minf(delta / ACTUAL_SPEED_SMOOTHING_S, 1.0))
+	# ふさがれている間に、出力上の速度だけが実際の速度を大きく上回って溜まるのを防ぐ。
+	# 上限までは溜まり、前が空いたときの加速に使われる。
+	_current_speed_kmh = LocalRaceMath.limit_speed_excess_kmh(
+		_current_speed_kmh, _actual_speed_kmh, LocalRaceMath.BLOCKED_SPEED_EXCESS_MAX_KMH
+	)
 	_race_progress = allowed_progress
 	var next_pose := M5CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()

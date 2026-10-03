@@ -213,6 +213,41 @@
         "panel": "dedicated",
         "echo": true
       }
+    },
+    {
+      "label": "サーバーとPC版を再起動",
+      "type": "shell",
+      "linux": {
+        "command": "python3",
+        "args": [
+          "${workspaceFolder}/tools/restart-pururin-pc.py"
+        ]
+      },
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/tools/restart-pururin-pc.py"
+        ]
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "pururin-pc-restart",
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "サーバー待受確認OK"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "echo": true,
+        "focus": false,
+        "showReuseMessage": false,
+        "clear": false
+      }
     }
   ]
 }
