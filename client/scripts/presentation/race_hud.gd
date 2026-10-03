@@ -9,11 +9,6 @@ const PANEL_HEIGHT := 196.0
 const PANEL_BOTTOM_MARGIN := 20.0
 const NOTCH_COUNT := 7
 const DRAFT_SEGMENTS := 10
-## ドラフトゲージの満タン。「前の走者1頭が真後ろにぴったりいる強さ」の何倍で10段になるか。
-## 走行に効く実効率は頭打ちになるため、ゲージは頭打ちにならない受取量（基準比）で表す。
-## 目盛りは平方根にして、少頭数ではよく伸び、10頭を超える集団でも満タンになりにくくする。
-## 12.0は最大12頭立ての最後尾（前に11頭）を想定した値。
-const DRAFT_GAUGE_FULL_STRENGTH := 12.0
 
 const COLOR_PANEL := Color(0.05, 0.08, 0.14, 0.72)
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -38,7 +33,7 @@ var _state := {
 	"heart_min_bpm": 100.0,
 	"heart_normal_max_bpm": 200.0,
 	"heart_max_bpm": 230.0,
-	"draft_strength": 0.0,
+	"draft_ratio": 0.0,
 	"countdown": false,
 }
 var _blink := 0.0
@@ -94,12 +89,12 @@ static func heart_limit_ratio(state: Dictionary) -> float:
 	return clampf((float(state.get("heart_normal_max_bpm", 200.0)) - low) / maxf(high - low, 0.001), 0.0, 1.0)
 
 
-## ドラフトの受取量（基準比）を10段階の点灯数へ。少しでも受けていれば1つは点く。
-static func draft_segments(strength: float) -> int:
-	if strength <= 0.0:
+## ドラフトの実効率（0〜1。実際に空気抵抗を減らす割合のもと）を10段階の点灯数へ。
+## 少しでも受けていれば1つは点く。
+static func draft_segments(ratio: float) -> int:
+	if ratio <= 0.0:
 		return 0
-	var fill := sqrt(minf(strength / DRAFT_GAUGE_FULL_STRENGTH, 1.0))
-	return clampi(ceili(fill * DRAFT_SEGMENTS - 0.0001), 1, DRAFT_SEGMENTS)
+	return clampi(ceili(ratio * DRAFT_SEGMENTS - 0.0001), 1, DRAFT_SEGMENTS)
 
 
 static func heart_is_overheated(state: Dictionary) -> bool:
@@ -171,7 +166,7 @@ func _draw_main_panel(font: Font) -> void:
 
 
 func _draw_draft_gauge(font: Font, origin: Vector2) -> void:
-	var lit := draft_segments(float(_state["draft_strength"]))
+	var lit := draft_segments(float(_state["draft_ratio"]))
 	_draw_text(font, "ドラフト", origin + Vector2(0.0, -6.0), 16, COLOR_DIM)
 	var segment_width := 14.0
 	var gap := 3.0
