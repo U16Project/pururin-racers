@@ -67,6 +67,11 @@ static var DRAFT_FORWARD_MIN_M: float:
 static var DRAFT_AIR_RESISTANCE_FACTOR: float:
 	get:
 		return Config.number("draft_air_resistance_factor")
+## 応答曲線の基準を、HUD表示の基準（真後ろ1走者のwake）の何倍に置くか。
+## 大きいほど、少ない頭数ではドラフトが効きにくく、大きな集団で伸びる。
+static var DRAFT_RESPONSE_REFERENCE_SCALE: float:
+	get:
+		return Config.number("draft_response_reference_scale")
 static var DRAFT_RESPONSE_EXPONENT: float:
 	get:
 		return Config.number("draft_response_exponent")
@@ -266,7 +271,7 @@ static func draft_response_reference_p() -> float:
 
 
 static func draft_effective_ratio(received_draft_p: float, pack_stat: int = 5) -> float:
-	var normalized := maxf(0.0, received_draft_p) / draft_response_reference_p()
+	var normalized := maxf(0.0, received_draft_p) / (draft_response_reference_p() * DRAFT_RESPONSE_REFERENCE_SCALE)
 	var base_ratio := pow(normalized, DRAFT_RESPONSE_EXPONENT)
 	var scaled := base_ratio * pack_draft_effective_multiplier(pack_stat)
 	return scaled / (1.0 + scaled)

@@ -19,6 +19,7 @@ const NUMBER_RANGES := {
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
 	"aero_air_resistance_reference_stat": [1.0, 15.0],
 	"aero_air_resistance_multiplier_per_stat": [0.0, 0.10],
+	"draft_response_reference_scale": [0.1, 20.0],
 	"draft_response_exponent": [1.0, 4.0],
 	"draft_aggregation_exponent": [0.5, 4.0],
 	"pack_draft_effective_reference_stat": [1.0, 15.0],

@@ -450,7 +450,7 @@ func test_drive_diagnostics_explain_force_resistance_and_draft_reduction() -> vo
 
 ## 応答曲線の期待値。指数と集団適性倍率から x / (1 + x) を作る（指数の現値に依存しない）。
 func _expected_effective_ratio(reference_ratio: float, pack_multiplier: float = 1.0) -> float:
-	var x := pow(reference_ratio, LocalRaceMath.DRAFT_RESPONSE_EXPONENT) * pack_multiplier
+	var x := pow(reference_ratio / LocalRaceMath.DRAFT_RESPONSE_REFERENCE_SCALE, LocalRaceMath.DRAFT_RESPONSE_EXPONENT) * pack_multiplier
 	return x / (1.0 + x)
 
 
@@ -1096,16 +1096,16 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(lines.has("直接 100%"))
 	assert_true(lines.has("連鎖 0%"))
 	assert_true(lines.has("総合 100%"))
-	assert_true(lines.has("実効 50%"))
+	assert_true(lines.has("実効 %d%%" % int(roundf(_expected_effective_ratio(1.0) * 100.0))))
 	assert_true(lines.has("集団補正 x1.00"))
 	assert_false(hud.text.contains("上限補正"))
 	assert_true(lines.has("対象1 CPU2 前4.0m 横1.0m"))
 	assert_true(lines.has("推進力 +0.00km/h/s"))
 	assert_true(lines.has("転がり抵抗 -0.55km/h/s"))
 	assert_true(lines.has("空気抵抗（二乗） -3.26km/h/s"))
-	# 40km/h・空力5・実効率50%の組み合わせ。係数の現値に依存せず式から期待値を作る。
+	# 40km/h・空力5・基準比100%の組み合わせ。設定の現値に依存せず式から期待値を作る。
 	var air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 40.0 * 40.0
-	var reduction := air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * 0.5
+	var reduction := air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(1.0)
 	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % reduction))
 	assert_true(lines.has("計算加速度 %+.2fkm/h/s" % (-(0.55 + air - reduction))))
 	for line in lines:
