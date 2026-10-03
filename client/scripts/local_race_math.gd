@@ -439,12 +439,12 @@ static func top_speed_natural_speed_kmh(top_speed: int) -> float:
 
 
 ## ノッチ6・空力5・ドラフトなしでは、各最高速値の自然到達速度で推進力と抵抗が釣り合う。
-## 補正は速度の二乗に応じて現れる。ドラフトと空力は、実際に残る空気抵抗と同じ割合で入れる。
+## 補正は速度の二乗に応じて現れる。空力は、実際に残る空気抵抗と同じ割合で入れる。
+## ドラフトは補正に含めない。軽くなった空気抵抗の分だけ、速度は自然に自然最高速を超えて伸びる。
 static func top_speed_drive_adjustment_kmh_per_s(
 	speed_kmh: float,
 	drive_level: float,
 	top_speed: int,
-	draft_factor: float = 0.0,
 	air_resistance_multiplier: float = 1.0
 ) -> float:
 	var level := clamp_drive_level(drive_level)
@@ -453,9 +453,8 @@ static func top_speed_drive_adjustment_kmh_per_s(
 	var max_drive_force := drive_force_kmh_per_s(DRIVE_LEVEL_MAX)
 	var level_force := drive_force_kmh_per_s(level)
 	var natural_speed := top_speed_natural_speed_kmh(top_speed)
-	var remaining_air_fraction := 1.0 - clampf(draft_factor, 0.0, 1.0)
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
-	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier * remaining_air_fraction
+	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier
 	var level_share := level_force / maxf(max_drive_force, 0.001)
 	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
 	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio

@@ -175,7 +175,7 @@ func run_isolated(condition: Dictionary, scenario: Dictionary = {}) -> Dictionar
 		var response := LocalRaceMath.stat_acceleration_response_multiplier(int(stats.acceleration))
 		var draft_factor := LocalRaceMath.draft_air_resistance_factor(received, int(stats.pack))
 		var air := LocalRaceMath.aero_air_resistance_multiplier(int(stats.aero))
-		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, level, int(stats.top_speed), draft_factor, air)
+		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, level, int(stats.top_speed), air)
 		diagnostics = LocalRaceMath.drive_diagnostics_kmh_per_s(speed, level, draft_factor, bonus, adjustment, efficiency, air, response)
 		speed = LocalRaceMath.advance_drive_speed_kmh(speed, level, LocalRaceMath.top_speed_natural_speed_kmh(int(stats.top_speed)), step, draft_factor, bonus, adjustment, efficiency, air, response, legacy_speed_cap)
 		# 実走と同じく、速度更新後に身体状態を更新する。

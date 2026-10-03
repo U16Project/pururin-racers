@@ -207,7 +207,6 @@ func test_cpu_telemetry_uses_trainer_drive_level_for_drive_diagnostics() -> void
 			60.0,
 			4.0,
 			int(effective_stats["top_speed"]),
-			runner.call("_draft_air_resistance_factor"),
 			runner.call("_aero_air_resistance_multiplier")
 		),
 		1.0
@@ -811,7 +810,7 @@ func test_simulation_legacy_speed_cap_is_explicit_and_off_by_default() -> void:
 	assert_almost_eq(with_cap, 75.0, 0.00001)
 
 
-func test_real_runner_draft_holds_natural_speed_on_notch_six() -> void:
+func test_real_runner_draft_lifts_speed_above_natural_speed_on_notch_six() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
 	var player: Node = race.get_node("Runners/Runner1")
@@ -821,7 +820,8 @@ func test_real_runner_draft_holds_natural_speed_on_notch_six() -> void:
 	player.set("_received_draft_p", LocalRaceMath.draft_response_reference_p() * 4.0)
 	player.set("_current_speed_kmh", player.call("get_natural_top_speed"))
 	player.call("_process", 0.05)
-	assert_almost_eq(float(player.call("get_current_speed")), float(player.call("get_natural_top_speed")), 0.01)
+	# ドラフトで空気抵抗が軽くなる分、自然最高速を超えて自然に伸びる。
+	assert_gt(float(player.call("get_current_speed")), float(player.call("get_natural_top_speed")))
 	assert_true(is_finite(float(player.call("get_current_speed"))))
 	assert_lt(float(player.call("get_telemetry_snapshot")["draft"]["effective_draft_ratio"]), 1.0)
 	race.set("_race_started", true)
@@ -836,20 +836,26 @@ func test_real_runner_draft_holds_natural_speed_on_notch_six() -> void:
 	race.free()
 
 
-func test_draft_notch_six_converges_to_natural_speed() -> void:
+func _notch_six_equilibrium_speed(stat: int, draft_factor: float, aero_multiplier: float) -> float:
+	var speed := 40.0
+	var natural_speed := LocalRaceMath.top_speed_natural_speed_kmh(stat)
+	for _tick in 1800:
+		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, stat, aero_multiplier)
+		speed = LocalRaceMath.advance_drive_speed_kmh(speed, 6.0, natural_speed, 0.1, draft_factor, 0.0, adjustment, 1.0, aero_multiplier, LocalRaceMath.stat_acceleration_response_multiplier(stat))
+	return speed
+
+
+func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with_draft() -> void:
 	for stat: int in [1, 5, 10, 15]:
-		var speed := 40.0
 		var natural_speed := LocalRaceMath.top_speed_natural_speed_kmh(stat)
-		for _tick in 1200:
-			var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, stat, 0.33, 0.85)
-			speed = LocalRaceMath.advance_drive_speed_kmh(speed, 6.0, natural_speed, 0.1, 0.33, 0.0, adjustment, 1.0, 0.85, LocalRaceMath.stat_acceleration_response_multiplier(stat))
-		assert_true(is_finite(speed))
-		assert_almost_eq(speed, natural_speed, 0.05)
-		var last_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, stat, 0.33, 0.85)
-		var final_diagnostics := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, 6.0, 0.33, 0.0, last_adjustment, 1.0, 0.85, LocalRaceMath.stat_acceleration_response_multiplier(stat))
-		assert_almost_eq(float(final_diagnostics["total_acceleration_kmh_per_s"]), 0.0, 0.001)
-	var open_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(60.0, 4.0, 10, 0.0, 1.0)
-	var drafted_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(60.0, 4.0, 10, 0.4, 1.0)
+		var solo := _notch_six_equilibrium_speed(stat, 0.0, 0.85)
+		assert_true(is_finite(solo))
+		assert_almost_eq(solo, natural_speed, 0.05)
+		# ドラフトは最高速の上限を作らず、空気抵抗の軽減分だけ自然に速度が伸びる。
+		assert_gt(_notch_six_equilibrium_speed(stat, 0.2, 0.85), solo + 0.5)
+		assert_gt(_notch_six_equilibrium_speed(stat, 0.4, 0.85), _notch_six_equilibrium_speed(stat, 0.2, 0.85))
+	var open_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(60.0, 4.0, 10, 1.0)
+	var drafted_adjustment := open_adjustment
 	var open_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 70.0, 1.0, 0.0, 0.0, open_adjustment)
 	var drafted_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 70.0, 1.0, 0.4, 0.0, drafted_adjustment)
 	assert_gt(drafted_notch_four, open_notch_four)

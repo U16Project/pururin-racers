@@ -338,7 +338,6 @@ func get_top_speed_drive_adjustment() -> float:
 		_current_speed_kmh,
 		_active_drive_level(),
 		int(_effective_stats.get("top_speed", 5)),
-		_draft_air_resistance_factor(),
 		_aero_air_resistance_multiplier()
 	)
 
