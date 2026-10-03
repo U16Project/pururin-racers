@@ -465,7 +465,7 @@ func test_draft_response_curve_saturates_toward_full_effect() -> void:
 	assert_almost_eq(LocalRaceMath.draft_effective_ratio(above_reference), _expected_effective_ratio(1.2), 0.001)
 	assert_lt(LocalRaceMath.draft_effective_ratio(above_reference), 1.0)
 	assert_gt(LocalRaceMath.draft_effective_ratio(above_reference), LocalRaceMath.draft_effective_ratio(reference))
-	assert_almost_eq(LocalRaceMath.draft_air_resistance_factor(half_received), 0.55 * _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_air_resistance_factor(half_received), LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.5), 0.001)
 	assert_almost_eq(LocalRaceMath.draft_assist_speed_kmh(three_quarters_received), 4.0 * _expected_effective_ratio(0.75), 0.001)
 
 
@@ -535,10 +535,10 @@ func test_draft_response_curve_reduces_air_resistance_and_stays_below_full_cance
 	var three_quarters := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, LocalRaceMath.draft_air_resistance_factor(three_quarters_received))
 	var above_reference := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, LocalRaceMath.draft_air_resistance_factor(LocalRaceMath.draft_response_reference_p() * 1.2))
 	assert_almost_eq(float(open["draft_air_reduction_kmh_per_s"]), 0.0, 0.001)
-	assert_almost_eq(float(half["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * _expected_effective_ratio(0.5), 0.001)
-	assert_almost_eq(float(three_quarters["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * _expected_effective_ratio(0.75), 0.001)
+	assert_almost_eq(float(half["draft_air_reduction_kmh_per_s"]), 5.1 * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(float(three_quarters["draft_air_reduction_kmh_per_s"]), 5.1 * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.75), 0.001)
 	assert_gt(float(above_reference["draft_air_reduction_kmh_per_s"]), float(three_quarters["draft_air_reduction_kmh_per_s"]))
-	assert_lt(float(above_reference["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55)
+	assert_lt(float(above_reference["draft_air_reduction_kmh_per_s"]), 5.1 * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR)
 
 
 func test_quadratic_air_resistance_grows_with_speed_and_draft_keeps_rolling_resistance() -> void:
@@ -1103,8 +1103,11 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(lines.has("推進力 +0.00km/h/s"))
 	assert_true(lines.has("転がり抵抗 -0.55km/h/s"))
 	assert_true(lines.has("空気抵抗（二乗） -3.26km/h/s"))
-	assert_true(lines.has("ドラフト軽減 +0.90km/h/s"))
-	assert_true(lines.has("計算加速度 -2.92km/h/s"))
+	# 40km/h・空力5・実効率50%の組み合わせ。係数の現値に依存せず式から期待値を作る。
+	var air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 40.0 * 40.0
+	var reduction := air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * 0.5
+	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % reduction))
+	assert_true(lines.has("計算加速度 %+.2fkm/h/s" % (-(0.55 + air - reduction))))
 	for line in lines:
 		if line.begins_with("推進力") or line.begins_with("転がり抵抗") \
 				or line.begins_with("空気抵抗（二乗）") or line.begins_with("ドラフト軽減") \
@@ -1181,7 +1184,7 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	assert_true(lines.has("空力 有効15　抵抗補正 x0.85"))
 	assert_true(lines.has("空気抵抗（二乗） -5.63km/h/s"))
 	var expected_air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 57.0 * 57.0 * 0.85
-	var expected_reduction := expected_air * 0.55 * _expected_effective_ratio(0.435, 1.25)
+	var expected_reduction := expected_air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.435, 1.25)
 	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % expected_reduction))
 	assert_true(hud.text.contains("計算加速度"))
 	var telemetry: Dictionary = player.call("get_telemetry_snapshot")
