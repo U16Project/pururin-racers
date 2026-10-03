@@ -1091,13 +1091,12 @@ static func has_finished(progress: float, race_distance: float = RACE_DISTANCE_M
 	return progress >= race_distance
 
 
+## 「1分23秒44」形式。小数点2位（1/100秒）まで、切り捨てで表示する。
 static func format_race_time(seconds: float) -> String:
-	var safe_seconds := maxf(seconds, 0.0)
-	var minutes := int(safe_seconds / 60.0)
-	var remaining := fmod(safe_seconds, 60.0)
-	if minutes > 0:
-		return "%d:%04.1f" % [minutes, remaining]
-	return "%.1f" % remaining
+	var total_centiseconds := int(floorf(maxf(seconds, 0.0) * 100.0 + 0.0001))
+	var minutes := total_centiseconds / 6000
+	var whole_seconds := (total_centiseconds / 100) % 60
+	return "%d分%02d秒%02d" % [minutes, whole_seconds, total_centiseconds % 100]
 
 
 ## 最内＝枠1。offset は負が内側。8プルを可動幅に等間隔。

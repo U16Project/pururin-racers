@@ -1387,9 +1387,11 @@ func test_kmh_advance_matches_divide_by_36() -> void:
 
 
 func test_race_time_uses_competition_style_minutes() -> void:
-	assert_eq(LocalRaceMath.format_race_time(58.44), "58.4")
-	assert_eq(LocalRaceMath.format_race_time(83.44), "1:23.4")
-	assert_eq(LocalRaceMath.format_race_time(125.0), "2:05.0")
+	assert_eq(LocalRaceMath.format_race_time(58.449), "0分58秒44")
+	assert_eq(LocalRaceMath.format_race_time(83.44), "1分23秒44")
+	assert_eq(LocalRaceMath.format_race_time(125.0), "2分05秒00")
+	assert_eq(LocalRaceMath.format_race_time(119.999), "1分59秒99")
+	assert_eq(LocalRaceMath.format_race_time(-1.0), "0分00秒00")
 
 
 func test_innermost_gate_is_most_negative_offset() -> void:
