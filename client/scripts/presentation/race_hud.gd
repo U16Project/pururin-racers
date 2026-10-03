@@ -8,9 +8,9 @@ const PANEL_HEIGHT := 196.0
 ## 画面下端からの余白。
 const PANEL_BOTTOM_MARGIN := 20.0
 const NOTCH_COUNT := 7
-## 空気抵抗の減りのゲージ。20段で、満タン＝空気抵抗が80%減る（1段＝4%）。
-const AIR_GAUGE_SEGMENTS := 20
-const AIR_GAUGE_FULL := 0.80
+## 空気抵抗の減りのゲージ。30段で、満タン＝空気抵抗が60%減る（1段＝2%）。
+const AIR_GAUGE_SEGMENTS := 30
+const AIR_GAUGE_FULL := 0.60
 
 const COLOR_PANEL := Color(0.05, 0.08, 0.14, 0.72)
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -183,8 +183,8 @@ func _draw_draft_gauge(font: Font, origin: Vector2) -> void:
 	var blue_value := float(_state["air_blue"])
 	var counts := air_gauge_segments(green_value, blue_value)
 	_draw_text(font, "空気抵抗 −%d%%" % int(roundf((green_value + blue_value) * 100.0)), origin + Vector2(0.0, -8.0), 16, COLOR_DIM)
-	var segment_width := 6.5
-	var gap := 1.5
+	var segment_width := 4.5
+	var gap := 1.2
 	for index in AIR_GAUGE_SEGMENTS:
 		var rect := Rect2(origin + Vector2(index * (segment_width + gap), 0.0), Vector2(segment_width, 14.0))
 		var color := COLOR_TRACK

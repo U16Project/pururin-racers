@@ -56,6 +56,6 @@ func test_air_gauge_stacks_green_then_blue_in_twenty_segments() -> void:
 	assert_eq(RaceHud.air_gauge_segments(0.0, 0.001)["blue"], 1)
 	assert_eq(RaceHud.air_gauge_segments(0.001, 0.001), {"green": 1, "blue": 1})
 	# 満タンを超えても20段まで。
-	var over := RaceHud.air_gauge_segments(0.5, 0.9)
+	var over := RaceHud.air_gauge_segments(RaceHud.AIR_GAUGE_FULL, RaceHud.AIR_GAUGE_FULL)
 	assert_eq(int(over["green"]) + int(over["blue"]), RaceHud.AIR_GAUGE_SEGMENTS)
-	assert_eq(RaceHud.air_gauge_segments(0.0, 0.8), {"green": 0, "blue": 20})
+	assert_eq(RaceHud.air_gauge_segments(0.0, RaceHud.AIR_GAUGE_FULL), {"green": 0, "blue": RaceHud.AIR_GAUGE_SEGMENTS})
