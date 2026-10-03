@@ -21,9 +21,8 @@ static var PLAYER_MAX_SPEED_KMH: float:
 		return TOP_SPEED_NATURAL_MAX_KMH
 
 ## M5.1 出力操作実験。出力は整数ノッチだが、入力は長押しでリピートする。
-static var DRIVE_LEVEL_MIN: float:
-	get:
-		return Config.number("drive_level_min")
+## ノッチは0（ニュートラル）〜最大。制動はノッチではなく別のブレーキ操作で行う。
+const DRIVE_LEVEL_MIN := 0.0
 static var DRIVE_LEVEL_MAX: float:
 	get:
 		return Config.number("drive_level_max")
@@ -52,9 +51,10 @@ static var AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT: float:
 static var DRIVE_FORCE_BY_LEVEL_KMH_PER_S: Array:
 	get:
 		return Config.values()["drive_force_by_level_kmh_per_s"]
-static var BRAKE_DECELERATION_PER_LEVEL: float:
+## ブレーキ操作を押している間の制動（km/h/s）。ノッチの設定とは独立で、離すと元のノッチへ戻る。
+static var BRAKE_DECELERATION_KMH_PER_S: float:
 	get:
-		return Config.number("brake_deceleration_per_level")
+		return Config.number("brake_deceleration_kmh_per_s")
 static var DRAFT_SPEED_BONUS_MAX_KMH: float:
 	get:
 		return DraftRules.number("assist_max_kmh")
@@ -204,13 +204,14 @@ static func drive_diagnostics_kmh_per_s(
 	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
 	propulsion_efficiency: float = 1.0,
 	air_resistance_multiplier: float = 1.0,
-	acceleration_response_multiplier: float = 1.0
+	acceleration_response_multiplier: float = 1.0,
+	braking: bool = false
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
-	if level < 0.0:
-		# 負ノッチは推進力の代わりに制動寄与として負値にする。
-		drive_contribution = level * BRAKE_DECELERATION_PER_LEVEL
+	if braking:
+		# ブレーキ中は推進力の代わりに制動寄与を負値で入れる。
+		drive_contribution = -BRAKE_DECELERATION_KMH_PER_S
 	elif level > 0.0:
 		drive_contribution = drive_force_kmh_per_s(level, acceleration_bonus_kmh_per_s) + top_speed_drive_adjustment_kmh_per_s
 	if drive_contribution > 0.0:
@@ -222,7 +223,7 @@ static func drive_diagnostics_kmh_per_s(
 	var draft_reduction := air_resistance * clampf(draft_factor, 0.0, 1.0)
 	var net_acceleration := drive_contribution - rolling_resistance - air_resistance + draft_reduction
 	# 加速適性は正ノッチで速度が増える場合だけに効く。釣り合い・減速は変えない。
-	var response := maxf(acceleration_response_multiplier, 0.0) if level > 0.0 and net_acceleration > 0.0 else 1.0
+	var response := maxf(acceleration_response_multiplier, 0.0) if level > 0.0 and not braking and net_acceleration > 0.0 else 1.0
 	return {
 		"drive_contribution_kmh_per_s": drive_contribution,
 		"rolling_resistance_kmh_per_s": rolling_resistance,
@@ -409,7 +410,8 @@ static func advance_drive_speed_kmh(
 	propulsion_efficiency: float = 1.0,
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
-	simulation_legacy_speed_cap: bool = false
+	simulation_legacy_speed_cap: bool = false,
+	braking: bool = false
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
@@ -422,7 +424,8 @@ static func advance_drive_speed_kmh(
 		top_speed_drive_adjustment_kmh_per_s,
 		propulsion_efficiency,
 		air_resistance_multiplier,
-		acceleration_response_multiplier
+		acceleration_response_multiplier,
+		braking
 	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	# 通常は自然到達速度で切らない。旧挙動の比較測定時だけ明示的に上限を再現する。

@@ -253,10 +253,13 @@ func test_acceleration_response_is_linear_and_does_not_raise_equilibrium() -> vo
 
 
 func test_acceleration_response_does_not_change_coasting_braking_or_positive_notch_deceleration() -> void:
-	for notch: float in [-3.0, 0.0, 3.0, 6.0]:
+	for notch: float in [0.0, 3.0, 6.0]:
 		var low := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 0.8)
 		var high := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 1.5)
 		assert_almost_eq(low, high, 0.00001)
+	var braked_low := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 0.8, false, true)
+	var braked_high := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 1.5, false, true)
+	assert_almost_eq(braked_low, braked_high, 0.00001)
 	var equilibrium_speed := LocalRaceMath.top_speed_natural_speed_kmh(5)
 	var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(equilibrium_speed, 6.0, 5)
 	assert_almost_eq(LocalRaceMath.advance_drive_speed_kmh(equilibrium_speed, 6.0, INF, 0.1, 0.0, 0.0, adjustment, 1.0, 1.0, 1.5), equilibrium_speed, 0.00001)
@@ -280,7 +283,7 @@ func test_runner_diagnostics_include_effective_acceleration_response() -> void:
 
 
 func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_net_force() -> void:
-	for notch: float in [-3.0, 0.0, 2.0, 4.0, 6.0]:
+	for notch: float in [0.0, 2.0, 4.0, 6.0]:
 		for speed: float in [40.0, 60.0, 90.0]:
 			for draft: float in [0.0, 0.33]:
 				for efficiency: float in [0.35, 1.0]:
@@ -295,13 +298,13 @@ func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_
 
 
 func test_drive_level_is_clamped_and_steps_by_one() -> void:
-	assert_eq(LocalRaceMath.clamp_drive_level(-9.0), -3.0)
+	assert_eq(LocalRaceMath.clamp_drive_level(-9.0), 0.0)
 	assert_eq(LocalRaceMath.clamp_drive_level(9.0), 6.0)
 	assert_eq(LocalRaceMath.step_drive_level(0.0, 1.0), 1.0)
-	assert_eq(LocalRaceMath.step_drive_level(0.0, -1.0), -1.0)
+	assert_eq(LocalRaceMath.step_drive_level(0.0, -1.0), 0.0)
 	assert_eq(LocalRaceMath.step_drive_level(5.0, 1.0), 6.0)
 	assert_eq(LocalRaceMath.step_drive_level(6.0, 1.0), 6.0)
-	assert_eq(LocalRaceMath.step_drive_level(-3.0, -1.0), -3.0)
+	assert_eq(LocalRaceMath.step_drive_level(1.0, -1.0), 0.0)
 
 
 func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
@@ -329,14 +332,46 @@ func test_drive_maximum_output_uses_force_without_a_hard_speed_cap() -> void:
 
 
 func test_drive_braking_slows_but_does_not_stop() -> void:
-	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, -3.0, 75.0, 1.0)
-	assert_almost_eq(braked, 47.454, 0.001)
-	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, -3.0, 75.0, 1.0), 40.0)
+	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, true)
+	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 1.0)
+	assert_almost_eq(coasting - braked, LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, 0.001)
+	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 75.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, true), 40.0)
+
+
+func test_braking_overrides_the_notch_without_spending_fuel_or_raising_heart() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.call("set_drive_level", 6.0)
+	runner.call("set_braking", true)
+	assert_true(runner.call("is_braking"))
+	# ノッチ設定は保持され、有効な出力だけ0になる。
+	assert_eq(runner.call("get_drive_level"), 6.0)
+	var diagnostics: Dictionary = runner.call("get_drive_diagnostics")
+	assert_almost_eq(float(diagnostics["drive_contribution_kmh_per_s"]), -LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, 0.0001)
+	var stamina_before := float(runner.call("get_stamina"))
+	runner.call("_update_condition", 1.0)
+	assert_eq(float(runner.call("get_stamina")), stamina_before)
+	runner.call("set_braking", false)
+	assert_false(runner.call("is_braking"))
+	assert_gt(float(runner.call("get_drive_diagnostics")["drive_contribution_kmh_per_s"]), 0.0)
+	runner.free()
+
+
+func test_cpu_cannot_brake() -> void:
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 1, 75.0, false, "CPU", PururinRosterConfig.pururin_by_id("cpu-1"))
+	runner.call("set_braking", true)
+	assert_false(runner.call("is_braking"))
+	runner.free()
 
 
 func test_drive_coefficients_are_moderate_for_one_second_step() -> void:
 	assert_eq(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S, [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 7.2])
-	assert_almost_eq(LocalRaceMath.BRAKE_DECELERATION_PER_LEVEL, 4.0, 0.001)
+	assert_almost_eq(LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, 8.0, 0.001)
 	assert_almost_eq(
 		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0) - 50.0,
 		1.55,
@@ -822,7 +857,7 @@ func test_draft_notch_six_converges_to_natural_speed() -> void:
 
 func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(0.0), 0.0)
-	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(-3.0), 0.0)
+	assert_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(-1.0), 0.0)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(1.0), 1.5, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(2.0), 2.5, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_rate_for_drive_level(3.0), 4.0, 0.001)

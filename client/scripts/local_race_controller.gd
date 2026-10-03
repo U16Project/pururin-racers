@@ -86,7 +86,7 @@ func _ready() -> void:
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
-	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
+	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Space／B／LT：ブレーキ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -110,6 +110,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
+	if _player != null:
+		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
 	if not _paused and not _race_started:
 		_update_start_countdown(_delta)
 	elif not _paused and not _race_over:

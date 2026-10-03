@@ -7,7 +7,6 @@ const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const PATH := "res://data/config/local_race.json"
 const NUMBER_RANGES := {
 	"schema_version": [1.0, 1.0],
-	"drive_level_min": [-100.0, -1.0],
 	"drive_level_max": [1.0, 100.0],
 	"drive_level_step": [1.0, 1.0],
 	"start_countdown_seconds": [0.0, 30.0],
@@ -24,7 +23,7 @@ const NUMBER_RANGES := {
 	"draft_aggregation_exponent": [0.5, 4.0],
 	"pack_draft_effective_reference_stat": [1.0, 15.0],
 	"pack_draft_effective_multiplier_per_stat": [0.0, 0.10],
-	"brake_deceleration_per_level": [0.001, 100.0],
+	"brake_deceleration_kmh_per_s": [0.001, 100.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
@@ -122,7 +121,7 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
-	for key in ["drive_level_min", "drive_level_max", "drive_level_step"]:
+	for key in ["drive_level_max", "drive_level_step"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
 	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat"]:
@@ -133,11 +132,9 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: 整数が必要です" % key)
 	if float(data.player_start_gate_index) != floorf(float(data.player_start_gate_index)):
 		errors.append("player_start_gate_index: 整数が必要です")
-	if absf(data.drive_level_min) > data.drive_level_max:
-		errors.append("drive_level_min: 絶対値は drive_level_max 以下にしてください")
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
-		if float(data[key]) < float(data.drive_level_min) or float(data[key]) > float(data.drive_level_max):
-			errors.append("%s: drive_level_min〜drive_level_max の範囲にしてください" % key)
+		if float(data[key]) < 0.0 or float(data[key]) > float(data.drive_level_max):
+			errors.append("%s: 0〜drive_level_max の範囲にしてください" % key)
 	if data.heart_rate_min_bpm > data.heart_rate_normal_max_bpm:
 		errors.append("heart_rate_min_bpm: heart_rate_normal_max_bpm 以下にしてください")
 	if data.heart_rate_normal_max_bpm > data.heart_rate_overheat_max_bpm:

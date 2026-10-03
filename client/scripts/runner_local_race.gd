@@ -29,6 +29,8 @@ var _offset: float = 0.0
 var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
 var _drive_level: float = 0.0
+## ブレーキ操作を押している間 true。ノッチ設定は保持し、離すと元の出力へ戻る。
+var _braking: bool = false
 var _drive_hold_direction: float = 0.0
 var _drive_repeat_remaining: float = 0.0
 var _drafting: bool = false
@@ -102,6 +104,7 @@ func setup_for_race(
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
 	_drive_level = 0.0
+	_braking = false
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
 	_cpu_steer_timer = 0.0
@@ -230,7 +233,8 @@ func get_drive_diagnostics() -> Dictionary:
 		get_top_speed_drive_adjustment(),
 		get_propulsion_efficiency(),
 		_aero_air_resistance_multiplier(),
-		get_acceleration_response_multiplier()
+		get_acceleration_response_multiplier(),
+		_braking
 	)
 
 
@@ -244,6 +248,14 @@ func apply_draft_details(details: Dictionary) -> void:
 	_chain_source_ids = details.get("chain_source_ids", []).duplicate()
 	_direct_source_details = details.get("direct_source_details", []).duplicate(true)
 	_drafting = _received_draft_p > 0.0
+
+
+func set_braking(braking: bool) -> void:
+	_braking = braking and player_controlled
+
+
+func is_braking() -> bool:
+	return _braking
 
 
 func set_drive_level(level: float) -> void:
@@ -384,6 +396,7 @@ func get_snapshot() -> Dictionary:
 func get_telemetry_snapshot() -> Dictionary:
 	var snapshot := get_snapshot()
 	snapshot["drive_level"] = _active_drive_level()
+	snapshot["braking"] = _braking
 	snapshot["heart_rate_bpm"] = _heart_rate_bpm
 	snapshot["heart_overage_exposure"] = _heart_overage_exposure
 	snapshot["stamina"] = _stamina
@@ -404,7 +417,8 @@ func get_telemetry_snapshot() -> Dictionary:
 
 func _active_drive_level() -> float:
 	if player_controlled:
-		return _drive_level
+		# ブレーキ中は出力0として扱う。燃料も心拍上昇も使わず、制動だけが働く。
+		return 0.0 if _braking else _drive_level
 	if _cpu_start_drive_remaining > 0.0:
 		return LocalRaceMath.Config.number("cpu_start_drive_level")
 	return LocalRaceMath.cpu_heart_safe_drive_level(
@@ -450,7 +464,7 @@ func _process(delta: float) -> void:
 		_update_drive_level_input(delta)
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
-			_drive_level,
+			_active_drive_level(),
 			max_speed_kmh,
 			delta,
 			_draft_air_resistance_factor(),
@@ -459,7 +473,8 @@ func _process(delta: float) -> void:
 			get_propulsion_efficiency(),
 			_aero_air_resistance_multiplier(),
 			get_acceleration_response_multiplier(),
-			_simulation_legacy_speed_cap
+			_simulation_legacy_speed_cap,
+			_braking
 		)
 		_update_condition(delta)
 		_update_drive_diagnostic_log(delta)
@@ -669,7 +684,7 @@ func _read_drive_axis() -> float:
 
 
 func _update_condition(delta: float) -> void:
-	_update_condition_for_drive_level(_drive_level, delta)
+	_update_condition_for_drive_level(_active_drive_level(), delta)
 
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:

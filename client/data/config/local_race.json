@@ -1,6 +1,5 @@
 {
   "schema_version": 1,
-  "drive_level_min": -3,
   "drive_level_max": 6,
   "drive_level_step": 1,
   "start_countdown_seconds": 3.0,
@@ -18,7 +17,7 @@
   "pack_draft_effective_reference_stat": 5,
   "pack_draft_effective_multiplier_per_stat": 0.025,
   "drive_force_by_level_kmh_per_s": [0.0, 3.0, 3.5, 4.3, 5.0, 5.8, 7.2],
-  "brake_deceleration_per_level": 4.0,
+  "brake_deceleration_kmh_per_s": 8.0,
   "contact_lateral_range_m": 1.5,
   "contact_longitudinal_range_m": 1.5,
   "draft_air_resistance_factor": 0.55,

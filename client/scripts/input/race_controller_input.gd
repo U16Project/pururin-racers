@@ -3,6 +3,7 @@ extends RefCounted
 
 const DEVICE := 0
 const STICK_DEADZONE := 0.25
+const TRIGGER_THRESHOLD := 0.5
 
 
 static func line_axis() -> float:
@@ -23,6 +24,16 @@ static func notch_axis() -> float:
 	if Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_DOWN):
 		axis -= 1.0
 	return axis
+
+
+## ブレーキ操作。押している間だけ制動し、ノッチ設定は変えない。
+## キーボードはスペース、ゲームパッドはBボタンまたは左トリガー。
+static func brake_pressed() -> bool:
+	return (
+		Input.is_physical_key_pressed(KEY_SPACE)
+		or Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_B)
+		or Input.get_joy_axis(DEVICE, JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
+	)
 
 
 static func chase_yaw_axis() -> float:
