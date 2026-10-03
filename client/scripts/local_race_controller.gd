@@ -9,6 +9,7 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
@@ -47,12 +48,22 @@ var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 var _race_route: Dictionary = {}
 var _launch_visual: MeshInstance3D
 var _telemetry_recorder := RaceTelemetryRecorder.new()
+## 常時表示のHUD。詳細な診断テキスト（_hud_label）はF3で切り替えるデバッグ表示。
+var _race_hud: Control
 
 
 func _ready() -> void:
 	print("ぷるりんレーサーズ — ローカル簡易レースを開始します")
 	_pause_panel.visible = false
 	_result_panel.visible = false
+	_race_hud = RaceHud.new()
+	_race_hud.name = "RaceHud"
+	$UI.add_child(_race_hud)
+	$UI.move_child(_race_hud, 0)
+	_hud_label.visible = false
+	# 操作ガイドは長いので、画面幅で折り返して見切れを防ぐ。
+	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pause_return_button.pressed.connect(_return_to_title)
 	_result_return_button.pressed.connect(_return_to_title)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -86,7 +97,7 @@ func _ready() -> void:
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
-	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Space／B／LT：ブレーキ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー"
+	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Space／B／LT：ブレーキ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー　F3：詳細表示"
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -104,6 +115,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
 			_set_paused(not _paused)
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_F3:
+			_hud_label.visible = not _hud_label.visible
 			get_viewport().set_input_as_handled()
 
 
@@ -369,6 +383,7 @@ func _check_finishes() -> void:
 func _update_hud() -> void:
 	if _player == null:
 		return
+	_update_race_hud()
 	if not _race_started:
 		_hud_label.text = "\n".join(PackedStringArray([
 			"開始出力 %+d" % int(roundi(_player.call("get_drive_level"))),
@@ -415,6 +430,29 @@ func _update_hud() -> void:
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))
 	lines.append("Esc＝メニュー")
 	_hud_label.text = "\n".join(lines)
+
+
+func _update_race_hud() -> void:
+	if _race_hud == null:
+		return
+	var draft: Dictionary = _player.call("get_draft_status")
+	_race_hud.call("update_state", {
+		"place": _live_place(_player) if _race_started else 0,
+		"field_size": _runners.size(),
+		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
+		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
+		"speed_kmh": _player.call("get_current_speed"),
+		"notch": int(roundi(_player.call("get_drive_level"))),
+		"notch_max": int(LocalRaceMath.DRIVE_LEVEL_MAX),
+		"braking": _player.call("is_braking"),
+		"fuel_ratio": _player.call("get_stamina_ratio"),
+		"heart_bpm": _player.call("get_heart_rate_bpm"),
+		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
+		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
+		"drafting": float(draft.get("received_draft_p", 0.0)) > 0.0,
+		"countdown": not _race_started,
+	})
 
 
 func _drive_diagnostic_hud_lines(diagnostics: Dictionary) -> PackedStringArray:
