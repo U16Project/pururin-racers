@@ -23,7 +23,7 @@ const NUMBER_RANGES := {
 	"draft_response_exponent": [1.0, 4.0],
 	"draft_aggregation_exponent": [0.5, 4.0],
 	"pack_draft_effective_reference_stat": [1.0, 15.0],
-	"pack_draft_effective_multiplier_per_stat": [0.0, 0.10],
+	"pack_draft_effective_multiplier_per_stat": [0.0, 0.20],
 	"brake_deceleration_kmh_per_s": [0.001, 100.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
