@@ -27,11 +27,11 @@ static func notch_axis() -> float:
 
 
 ## ブレーキ操作。押している間だけ制動し、ノッチ設定は変えない。
-## キーボードはスペース、ゲームパッドはBボタンまたは左トリガー。
+## キーボードはスペース、ゲームパッドはAボタンまたは左トリガー。
 static func brake_pressed() -> bool:
 	return (
 		Input.is_physical_key_pressed(KEY_SPACE)
-		or Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_B)
+		or Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_A)
 		or Input.get_joy_axis(DEVICE, JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
 	)
 

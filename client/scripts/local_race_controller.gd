@@ -61,9 +61,8 @@ func _ready() -> void:
 	$UI.add_child(_race_hud)
 	$UI.move_child(_race_hud, 0)
 	_hud_label.visible = false
-	# 操作ガイドは長いので、画面幅で折り返して見切れを防ぐ。
-	_guide_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_guide_label.visible = false
+	_layout_overlay_labels()
 	_pause_return_button.pressed.connect(_return_to_title)
 	_result_return_button.pressed.connect(_return_to_title)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -97,7 +96,16 @@ func _ready() -> void:
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
-	_guide_label.text = "←→／左スティック：ライン　↑↓／十字キー：出力ノッチ　Space／B／LT：ブレーキ　Y/C：視点切替　右スティック左右／QE：向き　右スティック押込／R：リセット　Start/Esc：メニュー　F3：詳細表示"
+	_guide_label.text = "\n".join(PackedStringArray([
+		"←→／左スティック　ライン",
+		"↑↓／十字キー　ノッチ",
+		"Space／A／LT　ブレーキ",
+		"Y／C　視点切替",
+		"右スティック／QE　向き",
+		"右スティック押込／R　リセット",
+		"Esc／Start　メニュー",
+		"F3　詳細表示の切替",
+	]))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -117,7 +125,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_paused(not _paused)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_F3:
+			# 診断数値と操作ガイドは同じ「詳細表示」として切り替える。
 			_hud_label.visible = not _hud_label.visible
+			_guide_label.visible = _hud_label.visible
 			get_viewport().set_input_as_handled()
 
 
@@ -432,6 +442,35 @@ func _update_hud() -> void:
 	_hud_label.text = "\n".join(lines)
 
 
+## 詳細表示（診断数値・操作ガイド）の配置。診断は左の順位表示の下に小さく、ガイドは右側に縦並び。
+## 項目が増えても順位表示や下部ゲージに重ならないよう、診断は左端の列に収める。
+func _layout_overlay_labels() -> void:
+	var outline := Color(0.03, 0.05, 0.1, 0.9)
+	_hud_label.position = Vector2(16.0, 190.0)
+	_hud_label.size = Vector2(420.0, 480.0)
+	_hud_label.clip_text = false
+	_hud_label.add_theme_font_size_override("font_size", 13)
+	_hud_label.add_theme_constant_override("line_spacing", -3)
+	_hud_label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
+	_hud_label.add_theme_color_override("font_outline_color", outline)
+	_hud_label.add_theme_constant_override("outline_size", 5)
+	_guide_label.anchor_left = 1.0
+	_guide_label.anchor_right = 1.0
+	_guide_label.anchor_top = 0.0
+	_guide_label.anchor_bottom = 0.0
+	_guide_label.offset_left = -280.0
+	_guide_label.offset_right = -16.0
+	_guide_label.offset_top = 24.0
+	_guide_label.offset_bottom = 300.0
+	_guide_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_guide_label.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_guide_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	_guide_label.add_theme_font_size_override("font_size", 15)
+	_guide_label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
+	_guide_label.add_theme_color_override("font_outline_color", outline)
+	_guide_label.add_theme_constant_override("outline_size", 5)
+
+
 func _update_race_hud() -> void:
 	if _race_hud == null:
 		return
@@ -450,7 +489,7 @@ func _update_race_hud() -> void:
 		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
 		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
 		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
-		"drafting": float(draft.get("received_draft_p", 0.0)) > 0.0,
+		"draft_ratio": float(draft.get("effective_draft_ratio", 0.0)),
 		"countdown": not _race_started,
 	})
 
