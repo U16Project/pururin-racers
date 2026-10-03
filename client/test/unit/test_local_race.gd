@@ -448,19 +448,25 @@ func test_drive_diagnostics_explain_force_resistance_and_draft_reduction() -> vo
 	assert_almost_eq(float(drafted["total_acceleration_kmh_per_s"]), 4.355, 0.001)
 
 
+## 応答曲線の期待値。指数と集団適性倍率から x / (1 + x) を作る（指数の現値に依存しない）。
+func _expected_effective_ratio(reference_ratio: float, pack_multiplier: float = 1.0) -> float:
+	var x := pow(reference_ratio, LocalRaceMath.DRAFT_RESPONSE_EXPONENT) * pack_multiplier
+	return x / (1.0 + x)
+
+
 func test_draft_response_curve_saturates_toward_full_effect() -> void:
 	var reference := LocalRaceMath.draft_response_reference_p()
 	var half_received := reference * 0.5
 	var three_quarters_received := reference * 0.75
 	var above_reference := reference * 1.2
 	assert_almost_eq(LocalRaceMath.draft_effective_ratio(0.0), 0.0, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received), 0.2, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(three_quarters_received), 0.36, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(above_reference), 1.44 / 2.44, 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received), _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(three_quarters_received), _expected_effective_ratio(0.75), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(above_reference), _expected_effective_ratio(1.2), 0.001)
 	assert_lt(LocalRaceMath.draft_effective_ratio(above_reference), 1.0)
 	assert_gt(LocalRaceMath.draft_effective_ratio(above_reference), LocalRaceMath.draft_effective_ratio(reference))
-	assert_almost_eq(LocalRaceMath.draft_air_resistance_factor(half_received), 0.55 * 0.2, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_assist_speed_kmh(three_quarters_received), 4.0 * 0.36, 0.001)
+	assert_almost_eq(LocalRaceMath.draft_air_resistance_factor(half_received), 0.55 * _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_assist_speed_kmh(three_quarters_received), 4.0 * _expected_effective_ratio(0.75), 0.001)
 
 
 func test_draft_source_wake_grows_past_the_reference_speed_without_a_source_cap() -> void:
@@ -493,10 +499,10 @@ func test_aero_and_pack_stats_use_continuous_baseline_multipliers() -> void:
 	assert_almost_eq(LocalRaceMath.pack_draft_effective_multiplier(1), 0.90, 0.001)
 	assert_almost_eq(LocalRaceMath.pack_draft_effective_multiplier(5), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.pack_draft_effective_multiplier(15), 1.25, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 1), 0.225 / 1.225, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 5), 0.2, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 15), 0.3125 / 1.3125, 0.001)
-	assert_almost_eq(LocalRaceMath.draft_effective_ratio(LocalRaceMath.draft_response_reference_p(), 15), 1.25 / 2.25, 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 1), _expected_effective_ratio(0.5, 0.90), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 5), _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(half_received, 15), _expected_effective_ratio(0.5, 1.25), 0.001)
+	assert_almost_eq(LocalRaceMath.draft_effective_ratio(LocalRaceMath.draft_response_reference_p(), 15), _expected_effective_ratio(1.0, 1.25), 0.001)
 	assert_lt(LocalRaceMath.draft_effective_ratio(LocalRaceMath.draft_response_reference_p(), 15), 1.0)
 	assert_eq(LocalRaceMath.draft_effective_ratio(0.0, 15), 0.0)
 
@@ -506,9 +512,11 @@ func test_draft_aggregation_uses_same_general_formula_for_one_two_and_three_sour
 	var one := LocalRaceMath.draft_aggregate_contributions_p([contribution]) / LocalRaceMath.draft_response_reference_p()
 	var two := LocalRaceMath.draft_aggregate_contributions_p([contribution, contribution]) / LocalRaceMath.draft_response_reference_p()
 	var three := LocalRaceMath.draft_aggregate_contributions_p([contribution, contribution, contribution]) / LocalRaceMath.draft_response_reference_p()
-	assert_almost_eq(pow(one, LocalRaceMath.DRAFT_RESPONSE_EXPONENT), 0.230, 0.002)
-	assert_almost_eq(pow(two, LocalRaceMath.DRAFT_RESPONSE_EXPONENT), 1.669, 0.002)
-	assert_almost_eq(pow(three, LocalRaceMath.DRAFT_RESPONSE_EXPONENT), 5.317, 0.002)
+	# 同じ寄与 n 個の p ノルム合成は、寄与 × n^(1/指数)。
+	var aggregation := LocalRaceMath.DRAFT_AGGREGATION_EXPONENT
+	assert_almost_eq(one, 0.48, 0.002)
+	assert_almost_eq(two, 0.48 * pow(2.0, 1.0 / aggregation), 0.002)
+	assert_almost_eq(three, 0.48 * pow(3.0, 1.0 / aggregation), 0.002)
 	assert_gt(two, one * 2.0)
 	assert_eq(LocalRaceMath.draft_aggregate_contributions_p([]), 0.0)
 	assert_almost_eq(LocalRaceMath.draft_aggregate_contributions_p([contribution * 10.0]), contribution * 10.0, 0.001)
@@ -527,8 +535,8 @@ func test_draft_response_curve_reduces_air_resistance_and_stays_below_full_cance
 	var three_quarters := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, LocalRaceMath.draft_air_resistance_factor(three_quarters_received))
 	var above_reference := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, LocalRaceMath.draft_air_resistance_factor(LocalRaceMath.draft_response_reference_p() * 1.2))
 	assert_almost_eq(float(open["draft_air_reduction_kmh_per_s"]), 0.0, 0.001)
-	assert_almost_eq(float(half["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * 0.2, 0.001)
-	assert_almost_eq(float(three_quarters["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * 0.36, 0.001)
+	assert_almost_eq(float(half["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * _expected_effective_ratio(0.5), 0.001)
+	assert_almost_eq(float(three_quarters["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55 * _expected_effective_ratio(0.75), 0.001)
 	assert_gt(float(above_reference["draft_air_reduction_kmh_per_s"]), float(three_quarters["draft_air_reduction_kmh_per_s"]))
 	assert_lt(float(above_reference["draft_air_reduction_kmh_per_s"]), 5.1 * 0.55)
 
@@ -1153,7 +1161,7 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	player.set("_effective_stats", {"aero": 15, "pack": 15})
 	player.set("_current_speed_kmh", 57.0)
 	player.call("set_drive_level", 3.0)
-	# 生の44%表示へ丸まる43.5%は、集団15の飽和後に実効約19%となる。
+	# 生の44%表示へ丸まる43.5%は、集団15の補正後に実効約35%となる。
 	var received := LocalRaceMath.draft_response_reference_p() * 0.435
 	player.call("apply_draft_details", {
 		"direct_draft_p": received,
@@ -1168,14 +1176,16 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	assert_true(lines.has("直接 44%"))
 	assert_true(lines.has("連鎖 0%"))
 	assert_true(lines.has("総合 44%"))
-	assert_true(lines.has("実効 19%"))
+	assert_true(lines.has("実効 %d%%" % int(roundf(_expected_effective_ratio(0.435, 1.25) * 100.0))))
 	assert_true(lines.has("集団補正 x1.25"))
 	assert_true(lines.has("空力 有効15　抵抗補正 x0.85"))
 	assert_true(lines.has("空気抵抗（二乗） -5.63km/h/s"))
-	assert_true(lines.has("ドラフト軽減 +0.59km/h/s"))
+	var expected_air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 57.0 * 57.0 * 0.85
+	var expected_reduction := expected_air * 0.55 * _expected_effective_ratio(0.435, 1.25)
+	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % expected_reduction))
 	assert_true(hud.text.contains("計算加速度"))
 	var telemetry: Dictionary = player.call("get_telemetry_snapshot")
-	assert_almost_eq(float(telemetry["draft"]["effective_draft_ratio"]), 0.1913, 0.001)
+	assert_almost_eq(float(telemetry["draft"]["effective_draft_ratio"]), _expected_effective_ratio(0.435, 1.25), 0.001)
 	assert_almost_eq(float(telemetry["draft"]["pack_draft_effective_multiplier"]), 1.25, 0.001)
 	assert_almost_eq(float(telemetry["drive_diagnostics"]["air_resistance_multiplier"]), 0.85, 0.001)
 	player.free()
