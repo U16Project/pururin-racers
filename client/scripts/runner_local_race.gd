@@ -479,6 +479,8 @@ func get_snapshot() -> Dictionary:
 		"distance": _distance,
 		"offset": _offset,
 		"speed": _current_speed_kmh,
+		"actual_speed": _actual_speed_kmh,
+		"contact_resistance": _contact_resistance_stat(),
 		"progress": _race_progress,
 		"race_progress": _race_progress,
 		"own_wake_p": _own_wake_p,
@@ -564,6 +566,9 @@ func _process(delta: float) -> void:
 	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else M2TrackMath.curvature_at(_path.curve, pose_distance)
 	_update_inputs(delta, curvature)
 	# 重なる位置へ動いたときは、動く前へ戻すのではなく、押し合いの勝負（コントローラ側）で解く。
+	_offset = LocalRaceMath.limit_offset_by_stronger_neighbors(
+		previous_offset, _offset, _race_progress, _contact_resistance_stat(), _others_snapshot
+	)
 	_offset_before_move = previous_offset
 	_move_intent = int(signf(_offset - previous_offset)) if absf(_offset - previous_offset) > 0.00001 else 0
 	var path_len := _path.curve.get_baked_length()
@@ -624,7 +629,7 @@ func _process(delta: float) -> void:
 	)
 	var proposed_progress := LocalRaceMath.add_race_progress(_race_progress, d_center)
 	var allowed_progress := LocalRaceMath.allowed_race_progress(
-		_race_progress, proposed_progress, _offset, _others_snapshot
+		_race_progress, proposed_progress, _offset, _others_snapshot, delta
 	)
 	# 前の走者にふさがれると、出力上の速度が高くても実際には進めない。
 	# 進んだ中心線距離を対地距離に戻し、1秒あたりの速さを少しなめらかにして保持する。

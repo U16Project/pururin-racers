@@ -31,6 +31,7 @@ const NUMBER_RANGES := {
 	"handling_steer_multiplier_per_stat": [0.0, 0.2],
 	"aero_air_resistance_multiplier_per_stat": [0.0, 0.10],
 	"blocked_speed_excess_max_kmh": [0.0, 100.0],
+	"block_approach_rate_per_s": [0.1, 20.0],
 	"rear_assist_range_m": [0.1, 20.0],
 	"rear_assist_transfer_rate": [0.0, 0.9],
 	"rear_assist_aero_multiplier_per_stat": [0.0, 0.2],

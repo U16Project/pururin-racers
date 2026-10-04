@@ -24,6 +24,7 @@
   "handling_steer_multiplier_per_stat": 0.05,
   "aero_air_resistance_multiplier_per_stat": 0.006,
   "blocked_speed_excess_max_kmh": 8.0,
+  "block_approach_rate_per_s": 1.0,
   "rear_assist_range_m": 5.0,
   "rear_assist_transfer_rate": 0.10,
   "rear_assist_aero_multiplier_per_stat": 0.12,

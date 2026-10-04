@@ -169,6 +169,9 @@ static var BLOCK_LATERAL_M: float:
 static var CONTACT_LONGITUDINAL_M: float:
 	get:
 		return Config.number("contact_longitudinal_range_m")
+static var BLOCK_APPROACH_RATE_PER_S: float:
+	get:
+		return Config.number("block_approach_rate_per_s")
 
 const FIELD_SIZE := 8
 const BAKE_INTERVAL_M := 1.0
@@ -329,14 +332,63 @@ static func push_strength(contact_resistance_stat: int, moving_toward_other: boo
 	return base * (PUSH_INTENT_MULTIPLIER if moving_toward_other else PUSH_PASSIVE_MULTIPLIER)
 
 
+## 体は楕円（前後 CONTACT_LONGITUDINAL_M × 横 BLOCK_LATERAL_M）。
+## 横の差がこの値のとき、前後に最低限あけるべき間隔。横の差が範囲以上なら 0。
+static func required_longitudinal_gap(lateral_diff: float) -> float:
+	var ratio := absf(lateral_diff) / BLOCK_LATERAL_M
+	if ratio >= 1.0:
+		return 0.0
+	return CONTACT_LONGITUDINAL_M * sqrt(1.0 - ratio * ratio)
+
+
+## 前後の差がこの値のとき、横に最低限あけるべき間隔。前後の差が範囲以上なら 0。
+static func required_lateral_gap(longitudinal_diff: float) -> float:
+	var ratio := absf(longitudinal_diff) / CONTACT_LONGITUDINAL_M
+	if ratio >= 1.0:
+		return 0.0
+	return BLOCK_LATERAL_M * sqrt(1.0 - ratio * ratio)
+
+
 static func _entries_overlap(a_progress: float, a_offset: float, b_progress: float, b_offset: float) -> bool:
-	return absf(a_progress - b_progress) < CONTACT_LONGITUDINAL_M and absf(a_offset - b_offset) < BLOCK_LATERAL_M
+	return absf(a_offset - b_offset) < required_lateral_gap(a_progress - b_progress)
+
+
+## 横に動く前に、勝ち負けを決める。
+## 新しい横位置が、前のフレームの位置にいる走者の体に入るとき、自分の強さ（相手の方向へ動いている）が
+## 相手の強さ（止まっている）以下なら、体の縁で止める。強ければそのまま入り、あとで相手が押し出される。
+## others の各要素: {race_progress, offset, contact_resistance}。
+static func limit_offset_by_stronger_neighbors(
+	previous_offset: float,
+	new_offset: float,
+	progress: float,
+	own_contact_resistance: int,
+	others: Array
+) -> float:
+	var result := new_offset
+	for other_value in others:
+		if not other_value is Dictionary:
+			continue
+		var other_offset := float(other_value.get("offset", 0.0))
+		var longitudinal_diff := progress - float(other_value.get("race_progress", 0.0))
+		var required := required_lateral_gap(longitudinal_diff)
+		if absf(result - other_offset) >= required:
+			continue
+		# すでに重なっている相手との勝負は、動いたあとの押し合いに任せる。
+		if absf(previous_offset - other_offset) < required:
+			continue
+		var own_power := push_strength(own_contact_resistance, true)
+		var other_power := push_strength(int(other_value.get("contact_resistance", 5)), false)
+		if own_power > other_power:
+			continue
+		var side := 1.0 if previous_offset >= other_offset else -1.0
+		result = other_offset + side * required
+	return result
 
 
 ## 横に動いたあとの重なりを、押し合いの勝負で解く。
 ## entries の各要素: {id, progress, offset(動いたあと), old_offset(動く前), intent(-1/0/+1: 横に動こうとした向き), stat(接触耐性)}。
-## 強い方が勝ち、f = (強い方 − 弱い方) ÷ (合計) として、弱い方が重なり × f だけ押し出され、
-## 強い方は重なり × (1 − f) だけ戻される（動く前の位置までが限度）。同じ強さなら、どちらも動かない。
+## 強い方が勝ち。勝った方は動いたまま、弱い方が重なり全部だけ押し出される。同じ強さなら、どちらも動く前の位置へ戻る。
+## 壁で押し出せなかった分は、勝った方が戻される（動く前の位置までが限度）。
 ## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。壁は押せない。
 ## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID}
 static func resolve_lateral_pushes(entries: Array) -> Dictionary:
@@ -361,7 +413,7 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 				contest[str(entries[i]["id"])] = true
 				contest[str(entries[j]["id"])] = true
 				var direction := 1 if pos[j] >= pos[i] else -1
-				var overlap := BLOCK_LATERAL_M - absf(pos[j] - pos[i])
+				var overlap := required_lateral_gap(float(entries[i]["progress"]) - float(entries[j]["progress"])) - absf(pos[j] - pos[i])
 				var power_i := push_strength(int(entries[i].get("stat", 5)), intent[i] == direction)
 				var power_j := push_strength(int(entries[j].get("stat", 5)), intent[j] == -direction)
 				# 勝者 winner（強い方）と敗者 loser。同じ強さなら i を押した側とみなす。
@@ -369,7 +421,8 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 				var loser := j if winner == i else i
 				var loser_away := direction if winner == i else -direction  # 敗者が押される向き
 				var margin := absf(power_i - power_j) / maxf(power_i + power_j, 0.0001)
-				var push := overlap * margin
+				# 強さに差があれば、勝者は動かず、敗者が重なり全部を押し出される。同じ強さなら、どちらも戻る。
+				var push := overlap if margin > 0.0001 else 0.0
 				var retreat := overlap - push
 				# 敗者は壁の先へは押せない。押せなかった分は、勝者がさらに戻される。
 				var loser_target := clampf(pos[loser] + correction[loser] + loser_away * push, -max_abs, max_abs)
@@ -1235,31 +1288,35 @@ static func contact_overlaps(
 	second_progress: float,
 	second_offset: float
 ) -> bool:
-	return (
-		absf(first_progress - second_progress) < CONTACT_LONGITUDINAL_M
-		and absf(first_offset - second_offset) < BLOCK_LATERAL_M
-	)
+	return absf(first_offset - second_offset) < required_lateral_gap(first_progress - second_progress)
 
 
 ## 他走者の現在位置を通り抜けず、次フレームで進める最大の進捗。
-## 前走者の手前で止めるだけで、接触後の強制位置補正は行わない。
+## 前走者の手前（体の楕円ぶん）までしか進めないが、急には止めない。
+## 進める量 = 前走者の進む量 + 残りの距離 × BLOCK_APPROACH_RATE_PER_S × delta なので、
+## 近づくほど前走者の速さへなめらかに寄る。接触後の強制位置補正は行わない。
 static func allowed_race_progress(
 	current_progress: float,
 	proposed_progress: float,
 	offset: float,
-	others: Array
+	others: Array,
+	delta: float
 ) -> float:
 	var allowed := maxf(proposed_progress, current_progress)
 	for other_value in others:
 		if not other_value is Dictionary:
 			continue
 		var other_offset := float(other_value.get("offset", 0.0))
-		if absf(offset - other_offset) >= BLOCK_LATERAL_M:
-			continue
 		var other_progress := float(other_value.get("race_progress", 0.0))
 		if other_progress <= current_progress:
 			continue
-		allowed = minf(allowed, other_progress - CONTACT_LONGITUDINAL_M)
+		var limit := other_progress - required_longitudinal_gap(offset - other_offset)
+		if limit >= other_progress:
+			continue
+		var remaining := maxf(limit - current_progress, 0.0)
+		var other_move := maxf(float(other_value.get("actual_speed", 0.0)), 0.0) / 3.6 * delta
+		var eased := current_progress + minf(other_move + remaining * BLOCK_APPROACH_RATE_PER_S * delta, remaining)
+		allowed = minf(allowed, eased)
 	return maxf(current_progress, allowed)
 
 
