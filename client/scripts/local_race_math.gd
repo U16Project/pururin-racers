@@ -463,6 +463,22 @@ static func lateral_move_load_multiplier(handling_stat: int = 5) -> float:
 	return maxf(0.2, 1.0 - Config.number("lateral_move_load_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
 
 
+## 操作性による、ノッチ変更の負荷の倍率（基準値で1.0、高いほど小さい）。
+static func drive_change_load_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.2, 1.0 - Config.number("drive_change_load_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
+
+
+## ノッチを変えた段数あたりの、心拍の増え（bpm）。上げるときも下げるときも同じ。
+static func drive_change_heart_load_bpm(levels_changed: float, handling_stat: int = 5) -> float:
+	return maxf(levels_changed, 0.0) * Config.number("drive_change_heart_load_bpm_per_level") * drive_change_load_multiplier(handling_stat)
+
+
+## ノッチを変えた段数あたりの、体力の減り（L）。
+static func drive_change_stamina_load_l(levels_changed: float, handling_stat: int = 5) -> float:
+	return maxf(levels_changed, 0.0) * Config.number("drive_change_stamina_load_l_per_level") * drive_change_load_multiplier(handling_stat)
+
+
 ## 横に動いた距離（m）あたりの、心拍の増え（bpm）。
 static func lateral_move_heart_load_bpm(distance_m: float, handling_stat: int = 5) -> float:
 	return maxf(distance_m, 0.0) * Config.number("lateral_move_heart_load_bpm_per_m") * lateral_move_load_multiplier(handling_stat)

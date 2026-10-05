@@ -62,6 +62,8 @@ var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 var _heart_adaptation: float = 0.0
 ## このフレームに、自分の操作・進路どりで横に動いた距離（m）。押し出された分と、止められた分は含まない。
 var _lateral_move_m: float = 0.0
+## 前のフレームで選んでいたノッチ。-1は、まだ決まっていない（レース開始の最初のフレームは、負荷を数えない）。
+var _previous_selected_drive_level: float = -1.0
 ## 接触の見た目の強さ（0〜1）。接触中は0.5、押し合い中は1へ向かう。
 var _contact_level: float = 0.0
 var _body_mesh: MeshInstance3D
@@ -151,6 +153,7 @@ func setup_for_race(
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
 	_heart_adaptation = 0.0
 	_lateral_move_m = 0.0
+	_previous_selected_drive_level = -1.0
 	_contact_level = 0.0
 	_heart_overage_exposure = 0.0
 	_straight_len = LocalRaceMath.straight_length_m()
@@ -867,11 +870,21 @@ func _update_condition(delta: float) -> void:
 	_update_condition_for_drive_level(_active_drive_level(), delta)
 
 
+## 選んでいるノッチ。プレイヤーはブレーキ中でも選んだノッチ、CPUは実際に使うノッチ。
+func _selected_drive_level() -> float:
+	return _drive_level if player_controlled else _active_drive_level()
+
+
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
 	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat, _heart_adaptation) + get_contact_heart_load_bpm_per_s()) * delta
 	var handling_stat := int(_effective_stats.get("handling", 5))
 	_heart_rate_bpm += LocalRaceMath.lateral_move_heart_load_bpm(_lateral_move_m, handling_stat)
+	# ノッチを変えた段数に比例する負荷（上げ下げとも）。レース開始の最初のフレームは数えない。
+	var selected_level := _selected_drive_level()
+	var levels_changed := 0.0 if _previous_selected_drive_level < 0.0 else absf(selected_level - _previous_selected_drive_level)
+	_previous_selected_drive_level = selected_level
+	_heart_rate_bpm += LocalRaceMath.drive_change_heart_load_bpm(levels_changed, handling_stat)
 	_heart_rate_bpm = clampf(
 			_heart_rate_bpm,
 			LocalRaceMath.Config.number("heart_rate_min_bpm"),
@@ -890,6 +903,7 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 	)
 	stamina_delta -= get_contact_stamina_load_l_per_s()
 	stamina_delta -= LocalRaceMath.lateral_move_stamina_load_l(_lateral_move_m, handling_stat) / maxf(delta, 0.0001)
+	stamina_delta -= LocalRaceMath.drive_change_stamina_load_l(levels_changed, handling_stat) / maxf(delta, 0.0001)
 	var debt_limit := LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
 	_stamina = clampf(
 		_stamina + stamina_delta * delta,
