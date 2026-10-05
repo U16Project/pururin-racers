@@ -1070,6 +1070,29 @@ func test_lateral_move_adds_heart_and_stamina_load_to_the_runner() -> void:
 	)
 
 
+func test_line_speed_penalty_grows_toward_the_edge_of_the_course_in_corners() -> void:
+	var curvature := 1.0 / 164.0
+	var edge := M2TrackMath.MAX_ABS_OFFSET_M
+	var reference_speed := LocalRaceMath.Config.number("line_speed_penalty_reference_speed_kmh")
+	var outer_edge := LocalRaceMath.Config.number("line_speed_penalty_outer_edge")
+	# 中央では遅くならない。直線では、端でも遅くならない。
+	assert_eq(LocalRaceMath.line_speed_multiplier(0.0, curvature, reference_speed), 1.0)
+	assert_eq(LocalRaceMath.line_speed_multiplier(edge, 0.0, reference_speed), 1.0)
+	# 外側の端・基準の速さ・操作性5で、設定の遅れ。
+	assert_almost_eq(LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed), 1.0 - outer_edge, 0.0001)
+	# 内側（距離倍率が小さい側）は、外側より軽い。
+	var inner := LocalRaceMath.line_speed_multiplier(-edge, curvature, reference_speed)
+	assert_almost_eq(inner, 1.0 - outer_edge * LocalRaceMath.Config.number("line_speed_penalty_inner_ratio"), 0.0001)
+	assert_gt(inner, LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed))
+	# 中央から離れるほど遅い。端までの半分では、端の4分の1の遅れ。
+	assert_almost_eq(1.0 - LocalRaceMath.line_speed_multiplier(edge * 0.5, curvature, reference_speed), outer_edge * 0.25, 0.0001)
+	# 速いほど、遅れが大きい。操作性が高いほど、遅れが小さい。
+	assert_lt(LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed * 1.2), LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed))
+	assert_gt(LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed, 15), LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed, 5))
+	# 曲がる向きが逆でも、内側は内側。
+	assert_almost_eq(LocalRaceMath.line_speed_multiplier(edge, -curvature, reference_speed), inner, 0.0001)
+
+
 func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_costly() -> void:
 	var low_cardio_cruise := 100.0
 	var high_cardio_full_effort := 100.0

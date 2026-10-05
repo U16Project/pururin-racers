@@ -670,8 +670,12 @@ func _process(delta: float) -> void:
 			_simulation_legacy_speed_cap
 		)
 		_update_condition_for_drive_level(cpu_drive_level, delta)
+	# カーブで、コースの中央から離れるほど少し遅くなる（操作性が高いほど小さい）。
+	var line_multiplier := LocalRaceMath.line_speed_multiplier(
+		_offset, curvature, _current_speed_kmh, int(_effective_stats.get("handling", 5))
+	)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
-		_current_speed_kmh, delta, _offset, curvature
+		_current_speed_kmh * line_multiplier, delta, _offset, curvature
 	)
 	var proposed_progress := LocalRaceMath.add_race_progress(_race_progress, d_center)
 	var allowed_progress := LocalRaceMath.allowed_race_progress(

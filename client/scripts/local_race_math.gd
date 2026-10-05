@@ -473,6 +473,21 @@ static func lateral_move_stamina_load_l(distance_m: float, handling_stat: int = 
 	return maxf(distance_m, 0.0) * Config.number("lateral_move_stamina_load_l_per_m") * lateral_move_load_multiplier(handling_stat)
 
 
+## カーブで、コースの中央から離れるほど少し遅くなる倍率（1.0以下）。直線では1.0。
+## 遅れ = 外側の端の遅れ × (中央からの距離 ÷ 端までの距離)の2乗 × (内側なら内側の割合) × (速さ ÷ 基準の速さ) × 操作性の倍率。
+## 内側・外側は、距離倍率（1 + 横位置 × 曲率）が1より小さい側が内側。
+static func line_speed_multiplier(offset: float, curvature: float, speed_kmh: float, handling_stat: int = 5) -> float:
+	if absf(curvature) < 0.00001:
+		return 1.0
+	var ratio := clampf(absf(offset) / M2TrackMath.MAX_ABS_OFFSET_M, 0.0, 1.0)
+	var side := Config.number("line_speed_penalty_inner_ratio") if offset * curvature < 0.0 else 1.0
+	var speed_factor := maxf(speed_kmh, 0.0) / maxf(Config.number("line_speed_penalty_reference_speed_kmh"), 0.001)
+	var stat := clampi(handling_stat, 1, 15)
+	var handling := maxf(0.2, 1.0 - Config.number("line_speed_penalty_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
+	var penalty := Config.number("line_speed_penalty_outer_edge") * ratio * ratio * side * speed_factor * handling
+	return clampf(1.0 - penalty, 0.5, 1.0)
+
+
 ## 接触耐性による負荷の倍率（基準値で1.0、高いほど小さい）。
 static func contact_resistance_multiplier(contact_resistance_stat: int = 5) -> float:
 	var stat := clampi(contact_resistance_stat, 1, 15)
