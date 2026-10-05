@@ -457,6 +457,22 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 	return {"offsets": offsets, "contest_ids": contest.keys()}
 
 
+## 操作性による、左右に動く負荷の倍率（基準値で1.0、高いほど小さい）。
+static func lateral_move_load_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.2, 1.0 - Config.number("lateral_move_load_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
+
+
+## 横に動いた距離（m）あたりの、心拍の増え（bpm）。
+static func lateral_move_heart_load_bpm(distance_m: float, handling_stat: int = 5) -> float:
+	return maxf(distance_m, 0.0) * Config.number("lateral_move_heart_load_bpm_per_m") * lateral_move_load_multiplier(handling_stat)
+
+
+## 横に動いた距離（m）あたりの、体力の減り（L）。
+static func lateral_move_stamina_load_l(distance_m: float, handling_stat: int = 5) -> float:
+	return maxf(distance_m, 0.0) * Config.number("lateral_move_stamina_load_l_per_m") * lateral_move_load_multiplier(handling_stat)
+
+
 ## 接触耐性による負荷の倍率（基準値で1.0、高いほど小さい）。
 static func contact_resistance_multiplier(contact_resistance_stat: int = 5) -> float:
 	var stat := clampi(contact_resistance_stat, 1, 15)

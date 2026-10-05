@@ -461,6 +461,7 @@ func _update_hud() -> void:
 	))
 	var draft_status: Dictionary = _player.call("get_draft_status")
 	lines.append("押し合い %s" % ("発生中（負荷x%.1f）" % LocalRaceMath.PUSH_LOAD_MULTIPLIER if _player.call("is_in_push_contest") else "なし"))
+	lines.append("横移動 負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_lateral_move_heart_load_bpm_per_s"), _player.call("get_lateral_move_stamina_load_l_per_s")])
 	lines.append("接触 %d人　負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_contact_count"), _player.call("get_contact_heart_load_bpm_per_s"), _player.call("get_contact_stamina_load_l_per_s")])
 	lines.append("操作性 有効%d　ライン移動 x%.2f" % [int(effective_stats.get("handling", 5)), _player.call("get_handling_steer_multiplier")])
 	lines.append("後方支援 空気抵抗 -%.1f%%" % (float(draft_status.get("rear_assist_air_factor", 0.0)) * 100.0))

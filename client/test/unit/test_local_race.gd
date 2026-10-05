@@ -1034,6 +1034,42 @@ func test_with_adaptation_the_heart_rate_peaks_and_then_eases_down_at_a_steady_n
 	assert_almost_eq(plain, plain_peak, 0.001)
 
 
+func test_lateral_move_load_is_proportional_to_distance_and_smaller_for_high_handling() -> void:
+	assert_eq(LocalRaceMath.lateral_move_heart_load_bpm(0.0, 5), 0.0)
+	assert_eq(LocalRaceMath.lateral_move_stamina_load_l(0.0, 5), 0.0)
+	var one := LocalRaceMath.lateral_move_heart_load_bpm(1.0, 5)
+	assert_gt(one, 0.0)
+	assert_almost_eq(LocalRaceMath.lateral_move_heart_load_bpm(3.0, 5), one * 3.0, 0.0001)
+	assert_almost_eq(LocalRaceMath.lateral_move_heart_load_bpm(1.0, 5), LocalRaceMath.Config.number("lateral_move_heart_load_bpm_per_m"), 0.0001)
+	assert_lt(LocalRaceMath.lateral_move_heart_load_bpm(1.0, 15), LocalRaceMath.lateral_move_heart_load_bpm(1.0, 5))
+	assert_gt(LocalRaceMath.lateral_move_stamina_load_l(1.0, 1), LocalRaceMath.lateral_move_stamina_load_l(1.0, 5))
+	assert_gte(LocalRaceMath.lateral_move_load_multiplier(15), 0.2)
+
+
+func test_lateral_move_adds_heart_and_stamina_load_to_the_runner() -> void:
+	var results := {}
+	for moved: float in [0.0, 2.0]:
+		var runner := Node3D.new()
+		runner.set_script(RunnerScript)
+		add_child(runner)
+		runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+		runner.set("_effective_stats", {"handling": 5, "stamina": 5, "cardio": 5})
+		runner.call("_reset_stamina_for_effective_stats")
+		runner.set("_lateral_move_m", moved)
+		var heart_before := float(runner.call("get_heart_rate_bpm"))
+		var stamina_before := float(runner.call("get_stamina"))
+		runner.call("_update_condition_for_drive_level", 0.0, 1.0)
+		results[moved] = {"heart": float(runner.call("get_heart_rate_bpm")) - heart_before, "stamina": stamina_before - float(runner.call("get_stamina"))}
+		runner.free()
+	assert_gt(float(results[2.0]["heart"]), float(results[0.0]["heart"]))
+	assert_gt(float(results[2.0]["stamina"]), float(results[0.0]["stamina"]))
+	assert_almost_eq(
+		float(results[2.0]["stamina"]) - float(results[0.0]["stamina"]),
+		LocalRaceMath.lateral_move_stamina_load_l(2.0, 5),
+		0.0001
+	)
+
+
 func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_costly() -> void:
 	var low_cardio_cruise := 100.0
 	var high_cardio_full_effort := 100.0

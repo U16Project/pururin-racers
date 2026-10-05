@@ -60,6 +60,8 @@ var _rear_source_ids: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 ## 慣れ（0〜1）。高い心拍が続くほど大きくなり、心拍を下げる力が強くなる。
 var _heart_adaptation: float = 0.0
+## このフレームに、自分の操作・進路どりで横に動いた距離（m）。押し出された分と、止められた分は含まない。
+var _lateral_move_m: float = 0.0
 ## 接触の見た目の強さ（0〜1）。接触中は0.5、押し合い中は1へ向かう。
 var _contact_level: float = 0.0
 var _body_mesh: MeshInstance3D
@@ -148,6 +150,7 @@ func setup_for_race(
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
 	_heart_adaptation = 0.0
+	_lateral_move_m = 0.0
 	_contact_level = 0.0
 	_heart_overage_exposure = 0.0
 	_straight_len = LocalRaceMath.straight_length_m()
@@ -370,6 +373,15 @@ func get_contact_heart_load_bpm_per_s() -> float:
 	return LocalRaceMath.contact_heart_load_bpm_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
 
 
+## 直近のフレームの横移動を、1秒あたりに直した心拍の増え（表示・記録用）。
+func get_lateral_move_heart_load_bpm_per_s() -> float:
+	return LocalRaceMath.lateral_move_heart_load_bpm(_lateral_move_m, int(_effective_stats.get("handling", 5))) / maxf(_last_tick_delta, 0.0001)
+
+
+func get_lateral_move_stamina_load_l_per_s() -> float:
+	return LocalRaceMath.lateral_move_stamina_load_l(_lateral_move_m, int(_effective_stats.get("handling", 5))) / maxf(_last_tick_delta, 0.0001)
+
+
 func get_contact_stamina_load_l_per_s() -> float:
 	var load := _load_count_and_multiplier()
 	return LocalRaceMath.contact_stamina_load_l_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
@@ -550,6 +562,7 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["contact_count"] = _contact_count
 	snapshot["in_push_contest"] = _in_push_contest
 	snapshot["contact_heart_load_bpm_per_s"] = get_contact_heart_load_bpm_per_s()
+	snapshot["lateral_move_heart_load_bpm_per_s"] = get_lateral_move_heart_load_bpm_per_s()
 	snapshot["rotation_y"] = rotation.y
 	return snapshot
 
@@ -601,6 +614,7 @@ func _process(delta: float) -> void:
 	_offset = LocalRaceMath.limit_offset_by_stronger_neighbors(
 		previous_offset, _offset, _race_progress, _contact_resistance_stat(), _others_snapshot
 	)
+	_lateral_move_m = absf(_offset - previous_offset)
 	_offset_before_move = previous_offset
 	_move_intent = int(signf(_offset - previous_offset)) if absf(_offset - previous_offset) > 0.00001 else 0
 	var path_len := _path.curve.get_baked_length()
@@ -852,6 +866,8 @@ func _update_condition(delta: float) -> void:
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
 	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat, _heart_adaptation) + get_contact_heart_load_bpm_per_s()) * delta
+	var handling_stat := int(_effective_stats.get("handling", 5))
+	_heart_rate_bpm += LocalRaceMath.lateral_move_heart_load_bpm(_lateral_move_m, handling_stat)
 	_heart_rate_bpm = clampf(
 			_heart_rate_bpm,
 			LocalRaceMath.Config.number("heart_rate_min_bpm"),
@@ -869,6 +885,7 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 		_stamina_load_multiplier
 	)
 	stamina_delta -= get_contact_stamina_load_l_per_s()
+	stamina_delta -= LocalRaceMath.lateral_move_stamina_load_l(_lateral_move_m, handling_stat) / maxf(delta, 0.0001)
 	var debt_limit := LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
 	_stamina = clampf(
 		_stamina + stamina_delta * delta,
