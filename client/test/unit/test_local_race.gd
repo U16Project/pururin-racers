@@ -929,8 +929,17 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 				230.0
 			)
 		settled[drive_level] = heart_rate_three
-	# ノッチ4は通常上限（200）を超えない。ノッチ3より高い。
-	assert_lt(settled[4.0], LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
+	# ノッチ4は、約2000mに当たる時間の間、慣れも含めて、通常上限（200）を超えない。ノッチ3より高い。
+	var notch_four_with_adaptation := 100.0
+	var adaptation := 0.0
+	for _step in 1200:
+		notch_four_with_adaptation = clampf(
+			notch_four_with_adaptation + LocalRaceMath.heart_rate_net_rate_bpm_per_s(notch_four_with_adaptation, 4.0, 5, adaptation) * 0.1,
+			100.0,
+			230.0
+		)
+		adaptation = LocalRaceMath.heart_adaptation_next(adaptation, notch_four_with_adaptation, 0.1)
+	assert_lt(notch_four_with_adaptation, LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
 	assert_gt(settled[4.0], settled[3.0])
 	assert_gt(settled[5.0], 200.0)
 	assert_almost_eq(settled[5.0], 230.0, 0.001)
