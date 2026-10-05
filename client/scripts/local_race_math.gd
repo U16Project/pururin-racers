@@ -1133,7 +1133,16 @@ static func heart_rate_rise_rate_bpm_per_s(drive_level: float, cardio_stat: int)
 	return reference_rate * heart_rate_rise_time_s(5) / maxf(heart_rate_rise_time_s(cardio_stat), 0.001)
 
 
-static func heart_rate_natural_recovery_rate_bpm_per_s(current_bpm: float, cardio_stat: int) -> float:
+## 慣れ（0〜1）。高い心拍が続くほど、ゆっくり1に近づく。慣れが大きいほど、心拍を下げる力が強くなる。
+static func heart_adaptation_next(current: float, heart_rate_bpm: float, delta: float) -> float:
+	var low := Config.number("heart_rate_min_bpm")
+	var high := Config.number("heart_rate_overheat_max_bpm")
+	var target := clampf((heart_rate_bpm - low) / maxf(high - low, 0.001), 0.0, 1.0)
+	var step := clampf(delta / maxf(Config.number("heart_adaptation_time_s"), 0.001), 0.0, 1.0)
+	return clampf(current + (target - current) * step, 0.0, 1.0)
+
+
+static func heart_rate_natural_recovery_rate_bpm_per_s(current_bpm: float, cardio_stat: int, adaptation: float = 0.0) -> float:
 	var full_span := Config.number("heart_rate_overheat_max_bpm") - Config.number("heart_rate_min_bpm")
 	var normalized_heart := clampf(
 		(current_bpm - Config.number("heart_rate_min_bpm")) / maxf(full_span, 0.001),
@@ -1143,12 +1152,12 @@ static func heart_rate_natural_recovery_rate_bpm_per_s(current_bpm: float, cardi
 	return heart_rate_recovery_rate_base_bpm_per_s(cardio_stat) * pow(
 		normalized_heart,
 		Config.number("heart_rate_recovery_exponent")
-	)
+	) * (1.0 + Config.number("heart_adaptation_recovery_gain") * clampf(adaptation, 0.0, 1.0))
 
 
-static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float, cardio_stat: int) -> float:
+static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float, cardio_stat: int, adaptation: float = 0.0) -> float:
 	var drive_load := heart_rate_rise_rate_bpm_per_s(drive_level, cardio_stat) * Config.number("heart_rate_drive_load_scale")
-	var net_rate := drive_load - heart_rate_natural_recovery_rate_bpm_per_s(current_bpm, cardio_stat)
+	var net_rate := drive_load - heart_rate_natural_recovery_rate_bpm_per_s(current_bpm, cardio_stat, adaptation)
 	# 回復方向だけを倍率調整する。正ノッチの定常域と上昇カーブは変えず、
 	# ノッチを下げたときは高心拍ほど速く戻り、100付近では指数的に穏やかに収束する。
 	if net_rate < 0.0:

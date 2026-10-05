@@ -3,6 +3,7 @@ extends Node3D
 ## 速度は km/h（検討事項 #24）。
 
 
+const ContactFeedback := preload("res://scripts/presentation/contact_feedback.gd")
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
@@ -57,6 +58,12 @@ var _move_intent: int = 0
 var _offset_before_move: float = 0.0
 var _rear_source_ids: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
+## 慣れ（0〜1）。高い心拍が続くほど大きくなり、心拍を下げる力が強くなる。
+var _heart_adaptation: float = 0.0
+## 接触の見た目の強さ（0〜1）。接触中は0.5、押し合い中は1へ向かう。
+var _contact_level: float = 0.0
+var _body_mesh: MeshInstance3D
+var _body_base_y: float = 0.0
 var _heart_overage_exposure: float = 0.0
 var _stamina: float = 0.0
 var _stamina_capacity_l: float = 0.0
@@ -140,6 +147,8 @@ func setup_for_race(
 	_drafting = false
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
+	_heart_adaptation = 0.0
+	_contact_level = 0.0
 	_heart_overage_exposure = 0.0
 	_straight_len = LocalRaceMath.straight_length_m()
 	_turn_radius = LocalRaceMath.turn_radius_m()
@@ -317,6 +326,28 @@ func apply_push_result(offset: float, in_contest: bool) -> void:
 
 func is_in_push_contest() -> bool:
 	return _in_push_contest
+
+
+## 接触・押し合い中の見た目（光る・つぶれる・震える）を、体に反映する。
+func _update_contact_visual(delta: float) -> void:
+	if _body_mesh == null:
+		_body_mesh = get_node_or_null("Body") as MeshInstance3D
+		if _body_mesh == null:
+			return
+		_body_base_y = _body_mesh.position.y
+		var material := _body_mesh.material_override as StandardMaterial3D
+		if material != null:
+			material.emission_enabled = true
+			material.emission = Color(1.0, 1.0, 1.0)
+			material.emission_energy_multiplier = 0.0
+	_contact_level = ContactFeedback.next_level(_contact_level, ContactFeedback.target_level(_contact_count, _in_push_contest), delta)
+	var scale_now := ContactFeedback.body_scale(_contact_level, Time.get_ticks_msec() / 1000.0)
+	_body_mesh.scale = scale_now
+	# 上下に縮んだり伸びたりしても、地面から浮かない。
+	_body_mesh.position.y = _body_base_y * scale_now.y
+	var body_material := _body_mesh.material_override as StandardMaterial3D
+	if body_material != null:
+		body_material.emission_energy_multiplier = ContactFeedback.glow_energy(_contact_level)
 
 
 func get_contact_count() -> int:
@@ -548,6 +579,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _paused:
 		return
+	_update_contact_visual(delta)
 	if _path == null or _path.curve == null:
 		return
 	if not _race_active:
@@ -819,12 +851,13 @@ func _update_condition(delta: float) -> void:
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
-	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat) + get_contact_heart_load_bpm_per_s()) * delta
+	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat, _heart_adaptation) + get_contact_heart_load_bpm_per_s()) * delta
 	_heart_rate_bpm = clampf(
 			_heart_rate_bpm,
 			LocalRaceMath.Config.number("heart_rate_min_bpm"),
 			LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
 	)
+	_heart_adaptation = LocalRaceMath.heart_adaptation_next(_heart_adaptation, _heart_rate_bpm, delta)
 	_heart_overage_exposure = LocalRaceMath.update_overheat_exposure(
 		_heart_overage_exposure,
 		_heart_rate_bpm,

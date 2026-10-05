@@ -993,6 +993,38 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_eq(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 0.0, 5), 0.0)
 
 
+func test_heart_adaptation_moves_toward_the_heart_level_and_strengthens_recovery() -> void:
+	var low := LocalRaceMath.Config.number("heart_rate_min_bpm")
+	var high := LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
+	# 心拍が最低なら0へ、最高なら1へ向かう。
+	assert_almost_eq(LocalRaceMath.heart_adaptation_next(0.5, low, 1.0), 0.5 - 0.5 * (1.0 / LocalRaceMath.Config.number("heart_adaptation_time_s")), 0.0001)
+	assert_gt(LocalRaceMath.heart_adaptation_next(0.2, high, 1.0), 0.2)
+	assert_lte(LocalRaceMath.heart_adaptation_next(0.99, high, 1000.0), 1.0)
+	# 慣れが1のとき、下げる力は（1 + 効き）倍。
+	var gain := LocalRaceMath.Config.number("heart_adaptation_recovery_gain")
+	var plain := LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(170.0, 5)
+	assert_almost_eq(LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(170.0, 5, 1.0), plain * (1.0 + gain), 0.0001)
+	assert_almost_eq(LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(170.0, 5, 0.0), plain, 0.0001)
+
+
+func test_with_adaptation_the_heart_rate_peaks_and_then_eases_down_at_a_steady_notch() -> void:
+	var heart := LocalRaceMath.Config.number("heart_rate_min_bpm")
+	var adaptation := 0.0
+	var peak := heart
+	for _step in 1300:
+		heart = clampf(heart + LocalRaceMath.heart_rate_net_rate_bpm_per_s(heart, 4.0, 5, adaptation) * 0.1, 100.0, 230.0)
+		adaptation = LocalRaceMath.heart_adaptation_next(adaptation, heart, 0.1)
+		peak = maxf(peak, heart)
+	assert_lt(heart, peak)
+	# 慣れがなければ、同じノッチで最高から下がることはない。
+	var plain := LocalRaceMath.Config.number("heart_rate_min_bpm")
+	var plain_peak := plain
+	for _step in 1300:
+		plain = clampf(plain + LocalRaceMath.heart_rate_net_rate_bpm_per_s(plain, 4.0, 5) * 0.1, 100.0, 230.0)
+		plain_peak = maxf(plain_peak, plain)
+	assert_almost_eq(plain, plain_peak, 0.001)
+
+
 func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_costly() -> void:
 	var low_cardio_cruise := 100.0
 	var high_cardio_full_effort := 100.0

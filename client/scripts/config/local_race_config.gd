@@ -88,6 +88,8 @@ const NUMBER_RANGES := {
 	"heart_rate_recovery_time_cardio_min_s": [0.1, 300.0],
 	"heart_rate_recovery_time_cardio_max_s": [0.1, 300.0],
 	"heart_rate_recovery_exponent": [0.1, 6.0],
+	"heart_adaptation_recovery_gain": [0.0, 10.0],
+	"heart_adaptation_time_s": [1.0, 600.0],
 	"heart_rate_recovery_rate_scale": [0.1, 10.0],
 	"heart_rate_drive_load_scale": [0.01, 10.0],
 	"stamina_capacity_base_l": [0.0, 10000.0],
