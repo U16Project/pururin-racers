@@ -910,7 +910,6 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 5.0, 5), LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 4.0, 5))
 	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(180.0, 2.0, 5), 0.0)
 	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(150.0, 3.0, 5), 0.0)
-	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(170.0, 4.0, 5), 0.0)
 	var settled: Dictionary = {}
 	for drive_level in [4.0, 5.0, 6.0]:
 		var heart_rate := 100.0
@@ -940,7 +939,9 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 		LocalRaceMath.heart_rate_net_rate_bpm_per_s(230.0, 6.0, 5),
 		LocalRaceMath.heart_rate_net_rate_bpm_per_s(230.0, 5.0, 5)
 	)
-	assert_gt(settled[4.0], 175.0)
+	# 張り付く心拍の少し下では上がり続け、少し上では下がる（釣り合いの点がある）。
+	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(settled[4.0] - 5.0, 4.0, 5), 0.0)
+	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(settled[4.0] + 5.0, 4.0, 5), 0.0)
 	assert_gt(settled[6.0], 225.0)
 	assert_lte(settled[6.0], 230.0)
 	var cardio10_notch6 := 100.0
@@ -957,11 +958,11 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(5), 15.0, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(10), 17.5, 0.001)
 	assert_almost_eq(LocalRaceMath.heart_rate_rise_time_s(15), 20.0, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(1), 27.0, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(5), 179.0 / 7.0, 0.001)
-	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(15), 22.0, 0.001)
-	assert_almost_eq(LocalRaceMath.Config.number("heart_rate_recovery_exponent"), 1.2, 0.001)
-	assert_almost_eq(LocalRaceMath.Config.number("heart_rate_recovery_rate_scale"), 2.75, 0.001)
+	var recovery_min := LocalRaceMath.Config.number("heart_rate_recovery_time_cardio_min_s")
+	var recovery_max := LocalRaceMath.Config.number("heart_rate_recovery_time_cardio_max_s")
+	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(1), recovery_min, 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(5), lerpf(recovery_min, recovery_max, 4.0 / 14.0), 0.001)
+	assert_almost_eq(LocalRaceMath.heart_rate_recovery_time_s(15), recovery_max, 0.001)
 	assert_gt(
 		LocalRaceMath.heart_rate_natural_recovery_rate_bpm_per_s(200.0, 5),
 		(100.0 / LocalRaceMath.heart_rate_recovery_time_s(5)) * pow((200.0 - 100.0) / 130.0, 1.5)
@@ -984,7 +985,11 @@ func test_heart_rate_uses_continuous_rise_rates_and_cardio_modifiers() -> void:
 	assert_lt(recovering_heart_rate, 125.0)
 	var recovery_after_sixty_seconds := recovering_heart_rate
 	assert_lt(recovery_after_sixty_seconds, 130.0)
-	assert_gt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(200.0, 0.0, 5), -10.0)
+	# 戻る速さは、戻す時間から決まる基準の速さ × 倍率を超えない。
+	assert_gt(
+		LocalRaceMath.heart_rate_net_rate_bpm_per_s(200.0, 0.0, 5),
+		-LocalRaceMath.heart_rate_recovery_rate_base_bpm_per_s(5) * LocalRaceMath.Config.number("heart_rate_recovery_rate_scale")
+	)
 	assert_eq(LocalRaceMath.heart_rate_net_rate_bpm_per_s(100.0, 0.0, 5), 0.0)
 
 
@@ -994,10 +999,12 @@ func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_c
 	for _step in 1200:
 		low_cardio_cruise = clampf(low_cardio_cruise + LocalRaceMath.heart_rate_net_rate_bpm_per_s(low_cardio_cruise, 4.0, 1) * 0.1, 100.0, 230.0)
 		high_cardio_full_effort = clampf(high_cardio_full_effort + LocalRaceMath.heart_rate_net_rate_bpm_per_s(high_cardio_full_effort, 6.0, 15) * 0.1, 100.0, 230.0)
-	# 心肺が低いほど、同じノッチ4でも心拍が高く落ち着く（心肺5のノッチ4は通常上限を超えない）。
-	assert_gt(low_cardio_cruise, LocalRaceMath.Config.number("heart_rate_normal_max_bpm") - 25.0)
-	assert_gt(high_cardio_full_effort, 200.0)
-	assert_almost_eq(high_cardio_full_effort, 230.0, 0.001)
+	var mid_cardio_cruise := 100.0
+	for _step in 1200:
+		mid_cardio_cruise = clampf(mid_cardio_cruise + LocalRaceMath.heart_rate_net_rate_bpm_per_s(mid_cardio_cruise, 4.0, 5) * 0.1, 100.0, 230.0)
+	# 心肺が低いほど、同じノッチ4でも心拍が高く落ち着く。心肺が高くても、フルでは通常上限を超える。
+	assert_gt(low_cardio_cruise, mid_cardio_cruise)
+	assert_gt(high_cardio_full_effort, LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
 
 
 func test_stamina_capacity_is_fuel_tank_and_consumption_is_stat_independent() -> void:

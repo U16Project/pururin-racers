@@ -1,6 +1,7 @@
 extends Node3D
 
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
+const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
@@ -32,6 +33,7 @@ const TITLE_SCENE := "res://scenes/m3_intro.tscn"
 @onready var _goal_marker: MeshInstance3D = $GoalMarker
 
 var _goal_visual := GoalVisual.new()
+var _course_markers := CourseMarkers.new()
 
 var _runners: Array[Node3D] = []
 var _paused: bool = false
@@ -286,6 +288,10 @@ func _place_markers() -> void:
 	)
 	_goal_visual.place(_track, goal_path, 15.0)
 	_place_route_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
+	_course_markers.place(
+		_track, _race_route, _race_distance_m, LocalRaceMath.lap_length_m(),
+		LocalRaceMath.Config.number("course_marker_sign_interval_m")
+	)
 	_update_launch_visual()
 
 
@@ -501,6 +507,8 @@ func _update_race_hud() -> void:
 		"place": _live_place(_player) if _race_started else 0,
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
+		"race_distance_m": _race_distance_m,
+		"runners": _hud_runner_marks(),
 		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
 		"speed_kmh": _player.call("get_actual_speed"),
 		"notch": int(roundi(_player.call("get_drive_level"))),
@@ -515,6 +523,18 @@ func _update_race_hud() -> void:
 		"air_blue": float(air_breakdown["draft"]),
 		"countdown": not _race_started,
 	})
+
+
+## 進行バーに出す全走者の位置（割合）・自分かどうか・色。
+func _hud_runner_marks() -> Array:
+	var marks: Array = []
+	for runner in _runners:
+		marks.append({
+			"ratio": RaceHud.progress_ratio(float(runner.call("get_race_progress")), _race_distance_m),
+			"player": runner == _player,
+			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
+		})
+	return marks
 
 
 func _drive_diagnostic_hud_lines(diagnostics: Dictionary) -> PackedStringArray:

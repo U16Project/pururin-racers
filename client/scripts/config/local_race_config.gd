@@ -41,6 +41,7 @@ const NUMBER_RANGES := {
 	"pack_draft_effective_reference_stat": [1.0, 15.0],
 	"pack_draft_effective_multiplier_per_stat": [0.0, 0.20],
 	"brake_deceleration_kmh_per_s": [0.001, 100.0],
+	"course_marker_sign_interval_m": [10.0, 1000.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
