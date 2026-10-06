@@ -628,12 +628,20 @@ static func combined_air_reduction_factor(draft_factor: float, rear_factor: floa
 	return 1.0 - (1.0 - clampf(draft_factor, 0.0, 1.0)) * (1.0 - clampf(rear_factor, 0.0, 1.0))
 
 
+## 操作性による、ドラフトの効く横幅の倍率（基準値で1.0、高いほど広い。下限0.5）。
+static func draft_lateral_range_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.5, 1.0 + Config.number("draft_lateral_range_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
+
+
 static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
 	"""M5 post-moveドラフト判定のローカル版。progressは単調値として扱う。"""
 	if index < 0 or index >= snapshot.size() or not snapshot[index] is Dictionary:
 		return _empty_draft_details()
 	var receiver: Dictionary = snapshot[index]
 	var own_wake := draft_wake_from_speed(float(receiver.get("speed", 0.0)))
+	# 受け取る側の操作性で、効く横幅が広がる・狭まる（共有のドラフト規則は変えない）。
+	var lateral_range := DRAFT_LATERAL_RANGE_M * draft_lateral_range_multiplier(int(receiver.get("handling", HANDLING_STEER_REFERENCE_STAT)))
 	var sources: Array = []
 	for source_index in snapshot.size():
 		if source_index == index or not snapshot[source_index] is Dictionary:
@@ -641,13 +649,13 @@ static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
 		var source: Dictionary = snapshot[source_index]
 		var gap := float(source.get("race_progress", source.get("progress", 0.0))) - float(receiver.get("race_progress", receiver.get("progress", 0.0)))
 		var line_gap := absf(float(receiver.get("offset", 0.0)) - float(source.get("offset", 0.0)))
-		if gap < DRAFT_FORWARD_MIN_M or gap > DRAFT_FORWARD_MAX_M or line_gap > DRAFT_LATERAL_RANGE_M:
+		if gap < DRAFT_FORWARD_MIN_M or gap > DRAFT_FORWARD_MAX_M or line_gap > lateral_range:
 			continue
 		var source_wake := float(source.get("own_wake_p", 0.0))
 		if source_wake <= 0.0:
 			source_wake = draft_wake_from_speed(float(source.get("speed", 0.0)))
 		source_wake = maxf(0.0, source_wake)
-		var lateral_falloff := pow(1.0 - line_gap / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
+		var lateral_falloff := pow(1.0 - line_gap / lateral_range, DRAFT_LATERAL_FALLOFF_EXPONENT)
 		var strength := maxf(0.0, source_wake * (1.0 - gap / DRAFT_FORWARD_MAX_M) * lateral_falloff)
 		if strength > 0.0:
 			sources.append({
@@ -688,7 +696,7 @@ static func calculate_draft_details(snapshot: Array, index: int) -> Dictionary:
 	for source in selected:
 		var source_state: Dictionary = snapshot[int(source["source_index"])]
 		var source_previous := maxf(0.0, float(source_state.get("direct_draft_p", 0.0)) + float(source_state.get("chain_draft_p", 0.0)))
-		var chain_lateral_falloff := pow(1.0 - float(source["line"]) / DRAFT_LATERAL_RANGE_M, DRAFT_LATERAL_FALLOFF_EXPONENT)
+		var chain_lateral_falloff := pow(1.0 - float(source["line"]) / lateral_range, DRAFT_LATERAL_FALLOFF_EXPONENT)
 		var chain_strength := source_previous * DRAFT_CHAIN_ATTENUATION * (1.0 - float(source["gap"]) / DRAFT_FORWARD_MAX_M) * chain_lateral_falloff
 		if chain_strength > 0.0:
 			chain_sources.append(str(source["id"]))
@@ -1212,18 +1220,21 @@ static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float
 	return net_rate
 
 
-## CPUが通常心拍上限以上にいる時、次の判断間隔まで心拍を下げられる最大ノッチを返す。
-## 200 bpm未満ではトレーナーの既存判断をそのまま使う。候補は設定済みのノッチ別心拍曲線から導き、
+## CPUの心拍が、下げ始める心拍（cpu_heart_drop_threshold_bpm）以上の時、心拍を下げられる最大ノッチを返す。
+## それ未満ではトレーナーの既存判断をそのまま使う。心拍の変化は、実際の計算と同じく、慣れと、
+## 接触・横移動などの追加の負荷（1秒あたり）を含めて判断する。候補は設定済みのノッチ別心拍曲線から導き、
 ## キャラクター・距離・固定ノッチによる例外は置かない。
 static func cpu_heart_safe_drive_level(
 	proposed_drive_level: float,
 	current_bpm: float,
-	cardio_stat: int
+	cardio_stat: int,
+	adaptation: float = 0.0,
+	extra_load_bpm_per_s: float = 0.0
 ) -> float:
-	if current_bpm < Config.number("heart_rate_normal_max_bpm"):
+	if current_bpm < Config.number("cpu_heart_drop_threshold_bpm"):
 		return clamp_drive_level(proposed_drive_level)
 	for drive_level in range(int(DRIVE_LEVEL_MAX), -1, -1):
-		if heart_rate_net_rate_bpm_per_s(current_bpm, float(drive_level), cardio_stat) < 0.0:
+		if heart_rate_net_rate_bpm_per_s(current_bpm, float(drive_level), cardio_stat, adaptation) + extra_load_bpm_per_s < 0.0:
 			return float(drive_level)
 	return 0.0
 

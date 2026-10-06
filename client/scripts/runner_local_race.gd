@@ -527,6 +527,7 @@ func get_snapshot() -> Dictionary:
 		"speed": _current_speed_kmh,
 		"actual_speed": _actual_speed_kmh,
 		"contact_resistance": _contact_resistance_stat(),
+		"handling": int(_effective_stats.get("handling", 5)),
 		"progress": _race_progress,
 		"race_progress": _race_progress,
 		"own_wake_p": _own_wake_p,
@@ -579,7 +580,9 @@ func _active_drive_level() -> float:
 	return LocalRaceMath.cpu_heart_safe_drive_level(
 		_cpu_trainer_drive_level,
 		_heart_rate_bpm,
-		int(_effective_stats.get("cardio", 5))
+		int(_effective_stats.get("cardio", 5)),
+		_heart_adaptation,
+		_cpu_extra_heart_load_bpm_per_s()
 	)
 
 
@@ -773,8 +776,15 @@ func _update_cpu_drive_level() -> void:
 	_cpu_trainer_drive_level = LocalRaceMath.cpu_heart_safe_drive_level(
 		float(decision["drive_level"]),
 		_heart_rate_bpm,
-		int(_effective_stats.get("cardio", 5))
+		int(_effective_stats.get("cardio", 5)),
+		_heart_adaptation,
+		_cpu_extra_heart_load_bpm_per_s()
 	)
+
+
+## CPUのノッチ判断に含める、ノッチ以外の心拍の負荷（接触・押し合いと、横移動。1秒あたり）。
+func _cpu_extra_heart_load_bpm_per_s() -> float:
+	return get_contact_heart_load_bpm_per_s() + get_lateral_move_heart_load_bpm_per_s()
 
 
 func _cpu_live_place() -> int:

@@ -38,9 +38,25 @@ func test_cpu_heart_safety_uses_the_highest_notch_that_lowers_an_overheated_hear
 
 func test_cpu_heart_safety_keeps_the_trainer_notch_below_normal_max() -> void:
 	assert_eq(
-		LocalRaceMath.cpu_heart_safe_drive_level(5.0, LocalRaceMath.Config.number("heart_rate_normal_max_bpm") - 0.1, 5),
+		LocalRaceMath.cpu_heart_safe_drive_level(5.0, LocalRaceMath.Config.number("cpu_heart_drop_threshold_bpm") - 0.1, 5),
 		5.0
 	)
+
+
+func test_cpu_heart_safety_starts_below_the_normal_max_and_counts_adaptation_and_extra_load() -> void:
+	var threshold := LocalRaceMath.Config.number("cpu_heart_drop_threshold_bpm")
+	assert_lt(threshold, LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
+	# 下げ始める心拍以上なら、基本ノッチより下げる。
+	assert_lt(LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold, 5), 6.0)
+	# 慣れがあると下げる力が強いので、より高いノッチを選べる。
+	var plain := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5)
+	var adapted := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5, 1.0)
+	assert_gte(adapted, plain)
+	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(threshold + 5.0, adapted, 5, 1.0), 0.0)
+	# 追加の負荷があると、より低いノッチを選ぶ。
+	var loaded := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5, 0.0, 2.0)
+	assert_lte(loaded, plain)
+	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(threshold + 5.0, loaded, 5) + 2.0, 0.0)
 
 
 func test_cpu_trainer_settings_use_the_common_start_notch_and_heart_limit() -> void:
@@ -1124,6 +1140,31 @@ func test_changing_the_notch_adds_heart_and_stamina_load_but_the_first_frame_doe
 	assert_gt(float(results[3.0]["heart"]), float(results[0.0]["heart"]))
 	var stamina_gap := float(results[3.0]["stamina"]) - float(results[0.0]["stamina"])
 	assert_gt(stamina_gap, LocalRaceMath.drive_change_stamina_load_l(3.0, 5) * 0.99)
+
+
+func _draft_received(handling: int, line_gap: float) -> float:
+	var snapshot := [
+		{"id": "me", "race_progress": 100.0, "offset": 0.0, "speed": 60.0, "handling": handling},
+		{"id": "front", "race_progress": 103.0, "offset": line_gap, "speed": 60.0},
+	]
+	return float(LocalRaceMath.calculate_draft_details(snapshot, 0)["received_draft_p"])
+
+
+func test_handling_widens_the_lateral_range_that_draft_reaches() -> void:
+	var lateral_range := float(LocalRaceMath.DRAFT_LATERAL_RANGE_M)
+	var straight := _draft_received(5, 0.0)
+	assert_gt(straight, 0.0)
+	# 操作性5は、今の効き方（1 − 横の差 ÷ 効く横幅）。
+	assert_almost_eq(_draft_received(5, 1.0) / straight, pow(1.0 - 1.0 / lateral_range, LocalRaceMath.DRAFT_LATERAL_FALLOFF_EXPONENT), 0.0001)
+	# 操作性が高いほど、同じ横の差で効く。低いほど効かない。真後ろは変わらない。
+	assert_gt(_draft_received(15, 1.0), _draft_received(5, 1.0))
+	assert_lt(_draft_received(1, 1.0), _draft_received(5, 1.0))
+	assert_almost_eq(_draft_received(15, 0.0), straight, 0.0001)
+	# 操作性が高いと、基準の横幅より外の走者からも効く。
+	assert_eq(_draft_received(5, lateral_range + 0.2), 0.0)
+	assert_gt(_draft_received(15, lateral_range + 0.2), 0.0)
+	assert_almost_eq(LocalRaceMath.draft_lateral_range_multiplier(5), 1.0, 0.0001)
+	assert_gte(LocalRaceMath.draft_lateral_range_multiplier(1), 0.5)
 
 
 func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_costly() -> void:
