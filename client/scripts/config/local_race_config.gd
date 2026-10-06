@@ -19,9 +19,7 @@ const NUMBER_RANGES := {
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
 	"aero_air_resistance_reference_stat": [1.0, 15.0],
 	"handling_steer_reference_stat": [1.0, 15.0],
-	"push_strength_per_stat": [0.0, 0.5],
-	"push_intent_multiplier": [0.1, 10.0],
-	"push_passive_multiplier": [0.05, 1.0],
+	"front_block_lateral_m": [0.0, 15.0],
 	"push_load_multiplier": [1.0, 20.0],
 	"contact_touch_margin_m": [0.0, 3.0],
 	"contact_heart_load_bpm_per_s": [0.0, 50.0],
@@ -186,8 +184,6 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: %s 以下にしてください" % [pair[0], pair[1]])
 	if float(data.cpu_follow_preferred_gap_m) > float(data.cpu_follow_forward_range_m):
 		errors.append("cpu_follow_preferred_gap_m: cpu_follow_forward_range_m 以下にしてください")
-	if float(data.push_passive_multiplier) > float(data.push_intent_multiplier):
-		errors.append("push_passive_multiplier: push_intent_multiplier 以下にしてください")
 	if float(data.top_speed_natural_min_kmh) > float(data.top_speed_natural_max_kmh):
 		errors.append("top_speed_natural_min_kmh: top_speed_natural_max_kmh 以下にしてください")
 	if absf(float(data.cpu_inward_target_offset_m)) > M2TrackMath.MAX_ABS_OFFSET_M:

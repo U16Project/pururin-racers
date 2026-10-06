@@ -1646,16 +1646,18 @@ func test_contact_prevention_follows_leader_speed_smoothly() -> void:
 	assert_almost_eq(previous_move / delta * 3.6, leader_kmh, 0.5)
 
 
-func test_grazing_contact_gets_closer_than_head_on() -> void:
+func test_front_block_applies_only_to_a_runner_almost_straight_ahead() -> void:
 	var delta := 1.0 / 60.0
 	var others := [{"race_progress": 12.0, "offset": 0.0, "actual_speed": 0.0}]
-	var graze_offset := LocalRaceMath.BLOCK_LATERAL_M * 0.9
-	var graze := 10.0
-	var head_on := 10.0
+	var front := LocalRaceMath.FRONT_BLOCK_LATERAL_M
+	# 真後ろに近い（横の差が小さい）と、前の走者の手前で止まる。
+	var behind := 10.0
 	for i in 600:
-		graze = LocalRaceMath.allowed_race_progress(graze, graze + 0.3, graze_offset, others, delta)
-		head_on = LocalRaceMath.allowed_race_progress(head_on, head_on + 0.3, 0.0, others, delta)
-	assert_gt(graze, head_on)
+		behind = LocalRaceMath.allowed_race_progress(behind, behind + 0.3, front * 0.5, others, delta)
+	assert_lt(behind, 12.0)
+	# 斜め・横（横の差がそれ以上）では、前後では止めない（横の押し合いで解く）。
+	assert_almost_eq(LocalRaceMath.allowed_race_progress(11.5, 11.8, front + 0.01, others, delta), 11.8, 0.0001)
+	assert_lt(front, LocalRaceMath.BLOCK_LATERAL_M)
 
 
 func test_contact_prevention_rejects_only_lateral_moves_into_another_runner() -> void:
@@ -1994,8 +1996,8 @@ func test_contact_adds_heart_and_stamina_load_that_a_high_resistance_runner_resi
 	assert_gt(float(results[15]["heart"]), 0.0)
 
 
-func _push_entry(identifier: String, offset: float, old_offset: float, intent: int, stat: int = 5, progress: float = 100.0) -> Dictionary:
-	return {"id": identifier, "progress": progress, "offset": offset, "old_offset": old_offset, "intent": intent, "stat": stat}
+func _push_entry(identifier: String, offset: float, old_offset: float, stat: int = 5, progress: float = 100.0) -> Dictionary:
+	return {"id": identifier, "progress": progress, "offset": offset, "old_offset": old_offset, "stat": stat}
 
 
 func _offset_of(result: Dictionary, identifier: String) -> float:
@@ -2006,22 +2008,19 @@ func _neighbor(progress: float, offset: float, stat: int) -> Dictionary:
 	return {"race_progress": progress, "offset": offset, "contact_resistance": stat}
 
 
-func test_a_weaker_runner_stops_at_the_edge_of_a_stronger_one() -> void:
+func test_only_a_runner_with_higher_contact_resistance_may_move_into_another_body() -> void:
 	var edge := LocalRaceMath.required_lateral_gap(0.0)
-	var others := [_neighbor(100.0, 0.0, 15)]
-	# 動いて入ろうとする側の強さが、止まっている相手以下になる組み合わせ。
-	assert_lte(LocalRaceMath.push_strength(1, true), LocalRaceMath.push_strength(15, false))
-	# 左から右へ入ろうとすると、縁で止まる。
-	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.2, -edge + 0.5, 100.0, 1, others), -edge, 0.0001)
-	# 右から左へ入ろうとしても同じ。
-	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(edge + 0.2, edge - 0.5, 100.0, 1, others), edge, 0.0001)
+	var others := [_neighbor(100.0, 0.0, 8)]
+	# 接触耐性が低い・同じなら、縁で止まる（左右どちらからでも）。
+	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.2, -edge + 0.5, 100.0, 7, others), -edge, 0.0001)
+	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(edge + 0.2, edge - 0.5, 100.0, 7, others), edge, 0.0001)
+	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.2, -edge + 0.5, 100.0, 8, others), -edge, 0.0001)
+	# 高ければ、そのまま入る。
+	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.2, -edge + 0.5, 100.0, 9, others), -edge + 0.5, 0.0001)
 
 
-func test_a_stronger_runner_may_enter_and_other_cases_are_left_alone() -> void:
+func test_moves_that_do_not_enter_a_body_are_left_alone() -> void:
 	var edge := LocalRaceMath.required_lateral_gap(0.0)
-	var weak := [_neighbor(100.0, 0.0, 1)]
-	assert_gt(LocalRaceMath.push_strength(15, true), LocalRaceMath.push_strength(1, false))
-	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.2, -edge + 0.5, 100.0, 15, weak), -edge + 0.5, 0.0001)
 	var strong := [_neighbor(100.0, 0.0, 15)]
 	# 体の外への移動は止めない。
 	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge - 0.5, -edge - 0.2, 100.0, 1, strong), -edge - 0.2, 0.0001)
@@ -2032,81 +2031,64 @@ func test_a_stronger_runner_may_enter_and_other_cases_are_left_alone() -> void:
 	assert_almost_eq(LocalRaceMath.limit_offset_by_stronger_neighbors(-edge + 0.3, -edge + 0.5, 100.0, 1, strong), -edge + 0.5, 0.0001)
 
 
-func test_a_stronger_runner_moving_in_from_diagonally_behind_pushes_the_slower_one_aside() -> void:
-	var gap := LocalRaceMath.CONTACT_LONGITUDINAL_M * 0.5
-	var lateral := LocalRaceMath.required_lateral_gap(gap) * 0.5
-	var result := LocalRaceMath.resolve_lateral_pushes([
-		_push_entry("A", 0.0, -0.1, 1, 8, 100.0 - gap), _push_entry("B", lateral, lateral, 0, 5, 100.0)])
-	assert_gt(_offset_of(result, "B"), lateral)
-	assert_almost_eq(_offset_of(result, "A"), 0.0, 0.0001)
-
-
-func test_push_strength_grows_with_resistance_and_intent() -> void:
-	assert_gt(LocalRaceMath.push_strength(15, false), LocalRaceMath.push_strength(5, false))
-	assert_gt(LocalRaceMath.push_strength(5, true), LocalRaceMath.push_strength(5, false))
-	assert_gt(LocalRaceMath.push_strength(1, true), 0.0)
-
-
-func test_a_passive_runner_is_pushed_even_if_it_is_stronger() -> void:
+func test_the_runner_with_lower_contact_resistance_takes_the_whole_overlap() -> void:
 	var w := LocalRaceMath.BLOCK_LATERAL_M
-	# 左のAが右へ0.5m動いて、止まっているBに0.5m食い込む。Bの接触耐性のほうが高い。
-	var entries := [_push_entry("A", 0.5, 0.0, 1, 5), _push_entry("B", w, w, 0, 8)]
-	var result := LocalRaceMath.resolve_lateral_pushes(entries)
-	assert_gt(_offset_of(result, "B"), w)
-	assert_true("A" in result["contest_ids"] and "B" in result["contest_ids"])
-	# 重なりは解消される。
-	assert_gte(absf(_offset_of(result, "B") - _offset_of(result, "A")), w - 0.001)
-
-
-func test_the_winner_keeps_its_move_and_the_loser_takes_the_whole_overlap() -> void:
-	var w := LocalRaceMath.BLOCK_LATERAL_M
-	# AがBへ0.5m食い込む。Aのほうが強い。Aは動いたまま、Bが重なり全部ぶん押し出される。
-	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.0, 1, 15), _push_entry("B", w, w, 0, 1)])
+	# AとBが0.5m重なっている。Aのほうが接触耐性が高い。Aは動かず、Bが重なり全部ぶん押し出される。
+	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.5, 9), _push_entry("B", w, w, 5)])
 	assert_almost_eq(_offset_of(result, "A"), 0.5, 0.0001)
 	assert_almost_eq(_offset_of(result, "B"), 0.5 + w, 0.0001)
+	assert_true("A" in result["contest_ids"] and "B" in result["contest_ids"])
+	# 逆なら、Aが押し出される。
+	var reverse := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.5, 3), _push_entry("B", w, w, 5)])
+	assert_almost_eq(_offset_of(reverse, "B"), w, 0.0001)
+	assert_almost_eq(_offset_of(reverse, "A"), 0.0, 0.0001)
 
 
-func test_equal_strength_pushers_end_up_where_they_started() -> void:
+func test_equal_contact_resistance_splits_the_overlap_in_half() -> void:
 	var w := LocalRaceMath.BLOCK_LATERAL_M
-	# 二人が同じ強さで、お互いに向かって動き、重なる。
-	var entries := [_push_entry("A", 0.4, 0.0, 1, 5), _push_entry("B", w - 0.4, w, -1, 5)]
-	var result := LocalRaceMath.resolve_lateral_pushes(entries)
-	assert_almost_eq(_offset_of(result, "A"), 0.0, 0.001)
-	assert_almost_eq(_offset_of(result, "B"), w, 0.001)
+	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.4, 0.4, 5), _push_entry("B", w, w, 5)])
+	assert_almost_eq(_offset_of(result, "A"), 0.2, 0.0001)
+	assert_almost_eq(_offset_of(result, "B"), w + 0.2, 0.0001)
 
 
-func test_pushing_chains_to_the_next_runner_when_it_is_weaker() -> void:
+func test_a_diagonal_overlap_from_moving_forward_is_resolved_sideways() -> void:
+	# 後ろのAが前へ進んで、斜め前のBと重なった（どちらも横には動いていない）。
+	var gap := LocalRaceMath.CONTACT_LONGITUDINAL_M * 0.5
+	var needed := LocalRaceMath.required_lateral_gap(gap)
+	var lateral := needed * 0.6
+	var result := LocalRaceMath.resolve_lateral_pushes([
+		_push_entry("A", 0.0, 0.0, 8, 100.0 - gap), _push_entry("B", lateral, lateral, 5, 100.0)])
+	# 接触耐性が高いAは動かず、Bが横へ離される。重なりは解ける。
+	assert_almost_eq(_offset_of(result, "A"), 0.0, 0.0001)
+	assert_almost_eq(_offset_of(result, "B"), needed, 0.0001)
+
+
+func test_pushing_chains_to_the_next_runner() -> void:
 	var w := LocalRaceMath.BLOCK_LATERAL_M
-	# 右(R)が左へ動いて中(M)を押す。中は左(L)に重なる。左が弱ければ左も押される。強い左は、中と勝負する。
-	var strong_left := LocalRaceMath.resolve_lateral_pushes([
-		_push_entry("L", 0.0, 0.0, 0, 15), _push_entry("M", w, w, 0, 5), _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
+	# 右(R)が中(M)に重なり、押された中が左(L)に重なる。左が弱ければ左も押される。
+	var result := LocalRaceMath.resolve_lateral_pushes([
+		_push_entry("L", 0.0, 0.0, 1), _push_entry("M", w, w, 5), _push_entry("R", 2.0 * w - 0.6, 2.0 * w - 0.6, 10)
 	])
-	var weak_left := LocalRaceMath.resolve_lateral_pushes([
-		_push_entry("L", 0.0, 0.0, 0, 1), _push_entry("M", w, w, 0, 5), _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
-	])
-	# 押された中が次の走者へ重なれば、左も押される。
-	assert_lt(_offset_of(weak_left, "L"), 0.0)
-	# 重なりは、どちらの場合も解消される。
-	for result: Dictionary in [strong_left, weak_left]:
-		assert_gte(_offset_of(result, "M") - _offset_of(result, "L"), w - 0.001)
-		assert_gte(_offset_of(result, "R") - _offset_of(result, "M"), w - 0.001)
+	assert_lt(_offset_of(result, "L"), 0.0)
+	assert_almost_eq(_offset_of(result, "R"), 2.0 * w - 0.6, 0.0001)
+	assert_gte(_offset_of(result, "M") - _offset_of(result, "L"), w - 0.001)
+	assert_gte(_offset_of(result, "R") - _offset_of(result, "M"), w - 0.001)
 
 
-func test_push_cannot_move_a_runner_through_the_wall_and_the_pusher_falls_back() -> void:
+func test_push_cannot_move_a_runner_through_the_wall_and_the_other_gives_way() -> void:
 	var wall := M2TrackMath.MAX_ABS_OFFSET_M
 	var w := LocalRaceMath.BLOCK_LATERAL_M
-	var entries := [_push_entry("A", wall - w + 0.5, wall - w, 1, 15), _push_entry("B", wall, wall, 0, 1)]
+	var entries := [_push_entry("A", wall - w + 0.5, wall - w + 0.5, 15), _push_entry("B", wall, wall, 1)]
 	var result := LocalRaceMath.resolve_lateral_pushes(entries)
 	assert_lte(_offset_of(result, "B"), wall + 0.0001)
 	assert_gte(_offset_of(result, "B") - _offset_of(result, "A"), w - 0.001)
-	assert_lte(_offset_of(result, "A"), wall - w + 0.0001)
 
 
 func test_push_result_does_not_depend_on_the_order_of_runners() -> void:
 	var w := LocalRaceMath.BLOCK_LATERAL_M
-	var a := _push_entry("L", 0.0, 0.0, 0, 3)
-	var b := _push_entry("M", w, w, 0, 5)
-	var c := _push_entry("R", 2.0 * w - 0.6, 2.0 * w, -1, 10)
+	var a := _push_entry("L", 0.0, 0.0, 3)
+	var b := _push_entry("M", w, w, 5)
+	var c := _push_entry("R", 2.0 * w - 0.6, 2.0 * w - 0.6, 10)
 	var first := LocalRaceMath.resolve_lateral_pushes([a, b, c])
 	var second := LocalRaceMath.resolve_lateral_pushes([c, a, b])
 	for identifier: String in ["L", "M", "R"]:
@@ -2116,7 +2098,7 @@ func test_push_result_does_not_depend_on_the_order_of_runners() -> void:
 func test_runners_that_are_not_close_in_progress_do_not_contest() -> void:
 	var w := LocalRaceMath.BLOCK_LATERAL_M
 	var far := LocalRaceMath.CONTACT_LONGITUDINAL_M + 1.0
-	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.0, 1, 5), _push_entry("B", w, w, 0, 5, 100.0 + far)])
+	var result := LocalRaceMath.resolve_lateral_pushes([_push_entry("A", 0.5, 0.5, 5), _push_entry("B", w, w, 5, 100.0 + far)])
 	assert_eq(result["contest_ids"], [])
 	assert_almost_eq(_offset_of(result, "A"), 0.5, 0.0001)
 

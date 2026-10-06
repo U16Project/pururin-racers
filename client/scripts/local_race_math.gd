@@ -98,15 +98,6 @@ static var CONTACT_RESISTANCE_MULTIPLIER_PER_STAT: float:
 	get:
 		return Config.number("contact_resistance_multiplier_per_stat")
 ## 押し合い（横に動いて他の走者に重なったときの勝負）。
-static var PUSH_STRENGTH_PER_STAT: float:
-	get:
-		return Config.number("push_strength_per_stat")
-static var PUSH_INTENT_MULTIPLIER: float:
-	get:
-		return Config.number("push_intent_multiplier")
-static var PUSH_PASSIVE_MULTIPLIER: float:
-	get:
-		return Config.number("push_passive_multiplier")
 static var PUSH_LOAD_MULTIPLIER: float:
 	get:
 		return Config.number("push_load_multiplier")
@@ -169,6 +160,9 @@ static var BLOCK_LATERAL_M: float:
 static var CONTACT_LONGITUDINAL_M: float:
 	get:
 		return Config.number("contact_longitudinal_range_m")
+static var FRONT_BLOCK_LATERAL_M: float:
+	get:
+		return Config.number("front_block_lateral_m")
 static var BLOCK_APPROACH_RATE_PER_S: float:
 	get:
 		return Config.number("block_approach_rate_per_s")
@@ -325,13 +319,6 @@ static func lateral_contact_count(snapshot: Array, index: int) -> int:
 	return mini(count, CONTACT_COUNT_MAX)
 
 
-## 押し合いの強さ。接触耐性が基準で、相手の方向へ動こうとしていれば大きく、そうでなければ小さい。
-static func push_strength(contact_resistance_stat: int, moving_toward_other: bool) -> float:
-	var stat := clampi(contact_resistance_stat, 1, 15)
-	var base := maxf(0.2, 1.0 + PUSH_STRENGTH_PER_STAT * (stat - CONTACT_RESISTANCE_REFERENCE_STAT))
-	return base * (PUSH_INTENT_MULTIPLIER if moving_toward_other else PUSH_PASSIVE_MULTIPLIER)
-
-
 ## 体は楕円（前後 CONTACT_LONGITUDINAL_M × 横 BLOCK_LATERAL_M）。
 ## 横の差がこの値のとき、前後に最低限あけるべき間隔。横の差が範囲以上なら 0。
 static func required_longitudinal_gap(lateral_diff: float) -> float:
@@ -354,8 +341,9 @@ static func _entries_overlap(a_progress: float, a_offset: float, b_progress: flo
 
 
 ## 横に動く前に、勝ち負けを決める。
-## 新しい横位置が、前のフレームの位置にいる走者の体に入るとき、自分の強さ（相手の方向へ動いている）が
-## 相手の強さ（止まっている）以下なら、体の縁で止める。強ければそのまま入り、あとで相手が押し出される。
+## 新しい横位置が、前のフレームの位置にいる走者の体に入るとき、接触耐性が相手より高ければそのまま入り
+## （あとで相手が横へ押し出される）、同じか低ければ、体の縁で止まる。
+## 入れるかどうかを接触耐性の大小だけで決めるので、両方が押し込み合って往復することがない。
 ## others の各要素: {race_progress, offset, contact_resistance}。
 static func limit_offset_by_stronger_neighbors(
 	previous_offset: float,
@@ -376,28 +364,24 @@ static func limit_offset_by_stronger_neighbors(
 		# すでに重なっている相手との勝負は、動いたあとの押し合いに任せる。
 		if absf(previous_offset - other_offset) < required:
 			continue
-		var own_power := push_strength(own_contact_resistance, true)
-		var other_power := push_strength(int(other_value.get("contact_resistance", 5)), false)
-		if own_power > other_power:
+		if own_contact_resistance > int(other_value.get("contact_resistance", 5)):
 			continue
 		var side := 1.0 if previous_offset >= other_offset else -1.0
 		result = other_offset + side * required
 	return result
 
 
-## 横に動いたあとの重なりを、押し合いの勝負で解く。
-## entries の各要素: {id, progress, offset(動いたあと), old_offset(動く前), intent(-1/0/+1: 横に動こうとした向き), stat(接触耐性)}。
-## 強い方が勝ち。勝った方は動いたまま、弱い方が重なり全部だけ押し出される。同じ強さなら、どちらも動く前の位置へ戻る。
-## 壁で押し出せなかった分は、勝った方が戻される（動く前の位置までが限度）。
-## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。壁は押せない。
+## 体の重なりを、横の押し合いで解く。勝ち負けは接触耐性の大小だけで決まる。
+## entries の各要素: {id, progress, offset, old_offset(動く前), stat(接触耐性)}。
+## 接触耐性が高い方は動かず、低い方が重なり全部ぶん横へ押し出される。同じなら、両方が半分ずつ離れる。
+## 壁で押し出せなかった分は、相手が逆向きに動いて解く。
+## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。
 ## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID}
 static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 	var count := entries.size()
 	var pos: Array[float] = []
-	var intent: Array[int] = []
 	for entry in entries:
 		pos.append(float(entry["offset"]))
-		intent.append(int(entry.get("intent", 0)))
 	var contest := {}
 	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
 	for pass_index in PUSH_PASSES:
@@ -412,45 +396,37 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 				any = true
 				contest[str(entries[i]["id"])] = true
 				contest[str(entries[j]["id"])] = true
-				var direction := 1 if pos[j] >= pos[i] else -1
+				# j が i から見てどちら側か（同じ横位置なら、動く前の位置で決める）。
+				var side := pos[j] - pos[i]
+				if is_zero_approx(side):
+					side = float(entries[j].get("old_offset", pos[j])) - float(entries[i].get("old_offset", pos[i]))
+				var direction := 1.0 if side >= 0.0 else -1.0
 				var overlap := required_lateral_gap(float(entries[i]["progress"]) - float(entries[j]["progress"])) - absf(pos[j] - pos[i])
-				var power_i := push_strength(int(entries[i].get("stat", 5)), intent[i] == direction)
-				var power_j := push_strength(int(entries[j].get("stat", 5)), intent[j] == -direction)
-				# 勝者 winner（強い方）と敗者 loser。同じ強さなら i を押した側とみなす。
-				var winner := i if power_i >= power_j else j
-				var loser := j if winner == i else i
-				var loser_away := direction if winner == i else -direction  # 敗者が押される向き
-				var margin := absf(power_i - power_j) / maxf(power_i + power_j, 0.0001)
-				# 強さに差があれば、勝者は動かず、敗者が重なり全部を押し出される。同じ強さなら、どちらも戻る。
-				var push := overlap if margin > 0.0001 else 0.0
-				var retreat := overlap - push
-				# 敗者は壁の先へは押せない。押せなかった分は、勝者がさらに戻される。
-				var loser_target := clampf(pos[loser] + correction[loser] + loser_away * push, -max_abs, max_abs)
-				var pushed := (loser_target - pos[loser] - correction[loser]) * loser_away
-				retreat += maxf(push - pushed, 0.0)
-				correction[loser] += loser_away * maxf(pushed, 0.0)
-				# 勝者が戻れるのは、動く前の位置まで。戻りきれない分は、敗者がさらに押される。
-				var winner_away := -loser_away
-				var room := maxf((float(entries[winner]["old_offset"]) - pos[winner] - correction[winner]) * winner_away, 0.0)
-				var actual_retreat := minf(retreat, room)
-				correction[winner] += winner_away * actual_retreat
-				var leftover := retreat - actual_retreat
-				if leftover > 0.0001:
-					var extra_target := clampf(pos[loser] + correction[loser] + loser_away * leftover, -max_abs, max_abs)
-					correction[loser] += extra_target - pos[loser] - correction[loser]
+				var stat_i := int(entries[i].get("stat", 5))
+				var stat_j := int(entries[j].get("stat", 5))
+				# i が動く割合。接触耐性が低い方が全部、同じなら半分ずつ。
+				var share_i := 0.5
+				if stat_i > stat_j:
+					share_i = 0.0
+				elif stat_i < stat_j:
+					share_i = 1.0
+				var want_i := -direction * overlap * share_i
+				var want_j := direction * overlap * (1.0 - share_i)
+				var moved_i := clampf(pos[i] + correction[i] + want_i, -max_abs, max_abs) - pos[i] - correction[i]
+				var moved_j := clampf(pos[j] + correction[j] + want_j, -max_abs, max_abs) - pos[j] - correction[j]
+				# 壁で動けなかった分は、相手が逆向きに動いて解く。
+				var left_i := absf(want_i) - absf(moved_i)
+				var left_j := absf(want_j) - absf(moved_j)
+				if left_i > 0.0001:
+					moved_j = clampf(pos[j] + correction[j] + moved_j + direction * left_i, -max_abs, max_abs) - pos[j] - correction[j]
+				if left_j > 0.0001:
+					moved_i = clampf(pos[i] + correction[i] + moved_i - direction * left_j, -max_abs, max_abs) - pos[i] - correction[i]
+				correction[i] += moved_i
+				correction[j] += moved_j
 		if not any:
 			break
 		for k in count:
-			if not is_zero_approx(correction[k]):
-				# 押し出された走者は、その向きへ動いている扱いにする（次の勝負で強さに効く）。
-				intent[k] = 1 if correction[k] > 0.0 else -1
 			pos[k] = clampf(pos[k] + correction[k], -max_abs, max_abs)
-	# 解けなかった重なりは、動く前の位置へ戻す（重なりを増やさない）。
-	for i in count:
-		for j in range(i + 1, count):
-			if _entries_overlap(float(entries[i]["progress"]), pos[i], float(entries[j]["progress"]), pos[j]):
-				pos[i] = float(entries[i]["old_offset"])
-				pos[j] = float(entries[j]["old_offset"])
 	var offsets := {}
 	for k in count:
 		offsets[str(entries[k]["id"])] = pos[k]
@@ -1377,9 +1353,10 @@ static func allowed_race_progress(
 		var other_progress := float(other_value.get("race_progress", 0.0))
 		if other_progress <= current_progress:
 			continue
-		var limit := other_progress - required_longitudinal_gap(offset - other_offset)
-		if limit >= other_progress:
+		# 前後で止めるのは、真後ろに近い相手だけ。斜め・横の相手とは、横の押し合いで解く。
+		if absf(offset - other_offset) >= FRONT_BLOCK_LATERAL_M:
 			continue
+		var limit := other_progress - required_longitudinal_gap(offset - other_offset)
 		var remaining := maxf(limit - current_progress, 0.0)
 		var other_move := maxf(float(other_value.get("actual_speed", 0.0)), 0.0) / 3.6 * delta
 		var eased := current_progress + minf(other_move + remaining * BLOCK_APPROACH_RATE_PER_S * delta, remaining)

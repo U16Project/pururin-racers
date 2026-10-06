@@ -54,7 +54,6 @@ var _contact_count: int = 0
 ## 押し合いの勝負が起きた走者か。負荷が大きくなる。
 var _in_push_contest: bool = false
 ## このtickに横へ動こうとした向き（-1／0／+1）と、動く前の横位置。
-var _move_intent: int = 0
 var _offset_before_move: float = 0.0
 var _rear_source_ids: Array = []
 var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
@@ -317,7 +316,6 @@ func get_push_entry() -> Dictionary:
 		"progress": _race_progress,
 		"offset": _offset,
 		"old_offset": _offset_before_move,
-		"intent": _move_intent,
 		"stat": _contact_resistance_stat(),
 	}
 
@@ -622,7 +620,6 @@ func _process(delta: float) -> void:
 	)
 	_lateral_move_m = absf(_offset - previous_offset)
 	_offset_before_move = previous_offset
-	_move_intent = int(signf(_offset - previous_offset)) if absf(_offset - previous_offset) > 0.00001 else 0
 	var path_len := _path.curve.get_baked_length()
 	if player_controlled:
 		_update_drive_level_input(delta)
