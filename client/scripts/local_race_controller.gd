@@ -102,6 +102,8 @@ func _ready() -> void:
 		"←→／左スティック　ライン",
 		"↑↓／十字キー　ノッチ",
 		"Space／A／LT　ブレーキ",
+		"Aキー／B　ダッシュ",
+		"Xキー／X　ブースト",
 		"Y／C　視点切替",
 		"右スティック／QE　向き",
 		"右スティック押込／R　リセット",
@@ -121,6 +123,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif RaceControllerInput.is_cancel_pressed(event) and _paused:
 		_set_paused(false)
+		get_viewport().set_input_as_handled()
+	elif not _paused and _race_started and _player != null and RaceControllerInput.is_dash_pressed(event):
+		_player.call("trigger_dash")
+		get_viewport().set_input_as_handled()
+	elif not _paused and _race_started and _player != null and RaceControllerInput.is_boost_pressed(event):
+		_player.call("trigger_boost")
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
@@ -461,6 +469,7 @@ func _update_hud() -> void:
 	))
 	var draft_status: Dictionary = _player.call("get_draft_status")
 	lines.append("押し合い %s" % ("発生中（負荷x%.1f）" % LocalRaceMath.PUSH_LOAD_MULTIPLIER if _player.call("is_in_push_contest") else "なし"))
+	lines.append("ダッシュ %s　ブースト %dpt 残り%d回　推進力x%.2f" % ["効果中" if _player.call("is_dash_active") else "なし", int(roundf(float(_player.call("get_boost_points")))), int(_player.call("get_boost_uses_left")), float(_player.call("get_drive_boost_multiplier"))])
 	lines.append("横移動 負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_lateral_move_heart_load_bpm_per_s"), _player.call("get_lateral_move_stamina_load_l_per_s")])
 	lines.append("接触 %d人　負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_contact_count"), _player.call("get_contact_heart_load_bpm_per_s"), _player.call("get_contact_stamina_load_l_per_s")])
 	lines.append("操作性 有効%d　ライン移動 x%.2f" % [int(effective_stats.get("handling", 5)), _player.call("get_handling_steer_multiplier")])
@@ -509,6 +518,11 @@ func _update_race_hud() -> void:
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"race_distance_m": _race_distance_m,
+		"dash_ratio": _player.call("get_dash_time_ratio"),
+		"boost_ratio": _player.call("get_boost_time_ratio"),
+		"boost_points": _player.call("get_boost_points"),
+		"boost_uses_left": _player.call("get_boost_uses_left"),
+		"boost_max_uses": int(LocalRaceMath.Config.number("boost_max_uses")),
 		"runners": _hud_runner_marks(),
 		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
 		"speed_kmh": _player.call("get_actual_speed"),

@@ -31,6 +31,7 @@ const COLOR_FUEL_FULL := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_FUEL_LOW := Color(1.0, 0.55, 0.2, 1.0)
 const COLOR_DEBT_DEEP := Color(0.72, 0.04, 0.06, 1.0)
 const COLOR_PROGRESS := Color(0.3, 0.88, 1.0, 1.0)
+const COLOR_BOOST := Color(1.0, 0.55, 0.2, 1.0)
 const COLOR_COOL := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_AERO := Color(0.36, 0.86, 0.52, 1.0)
 
@@ -39,6 +40,11 @@ var _state := {
 	"field_size": 0,
 	"remaining_m": 0.0,
 	"race_distance_m": 0.0,
+	"dash_ratio": 0.0,
+	"boost_ratio": 0.0,
+	"boost_points": 0.0,
+	"boost_uses_left": 0,
+	"boost_max_uses": 0,
 	"runners": [],
 	"time_text": "",
 	"speed_kmh": 0.0,
@@ -203,6 +209,7 @@ func _draw_main_panel(font: Font) -> void:
 	_draw_text(font, "%d" % int(roundf(float(_state["speed_kmh"]))), speed_origin, 76, COLOR_TEXT)
 	_draw_text(font, "km/h", speed_origin + Vector2(0.0, 30.0), 22, COLOR_DIM)
 	_draw_draft_gauge(font, Vector2(panel.position.x + 24.0, body_top + 160.0))
+	_draw_drive_actions(font, Vector2(panel.position.x + 128.0, body_top + 34.0))
 	# 右：縦ゲージ3本（ノッチ・心拍・体力）
 	var gauge_top := body_top + 18.0
 	var left := panel.position.x + 224.0
@@ -219,6 +226,31 @@ func _draw_main_panel(font: Font) -> void:
 	_draw_fuel_gauge(font, Vector2(left + column * 2.0, gauge_top), fuel)
 	if bool(_state["countdown"]):
 		_draw_text(font, "↑↓で開始ノッチを選択", Vector2(panel.position.x + 24.0, panel.position.y - 10.0), 20, COLOR_TEXT)
+
+
+## ダッシュとブーストの小さな表示。ブーストは残り回数（丸）と、効いている間の残り（バー）。
+## ダッシュは、効いている間だけ光るバー。
+func _draw_drive_actions(font: Font, origin: Vector2) -> void:
+	var width := 78.0
+	_draw_text(font, "BOOST", origin, 12, COLOR_DIM)
+	var uses_left := int(_state["boost_uses_left"])
+	for index in int(_state["boost_max_uses"]):
+		var center := Vector2(origin.x + 6.0 + index * 15.0, origin.y + 12.0)
+		if index < uses_left:
+			draw_circle(center, 5.0, COLOR_BOOST)
+		else:
+			draw_arc(center, 4.5, 0.0, TAU, 20, COLOR_DIM, 1.0)
+	_draw_ratio_bar(Vector2(origin.x, origin.y + 22.0), width, float(_state["boost_ratio"]), COLOR_BOOST)
+	_draw_text(font, "DASH", origin + Vector2(0.0, 46.0), 12, COLOR_DIM)
+	_draw_ratio_bar(Vector2(origin.x, origin.y + 51.0), width, float(_state["dash_ratio"]), COLOR_PROGRESS)
+
+
+func _draw_ratio_bar(position: Vector2, width: float, ratio: float, color: Color) -> void:
+	var height := 5.0
+	_draw_rounded_rect(Rect2(position, Vector2(width, height)), COLOR_TRACK, height * 0.5)
+	var fill := width * clampf(ratio, 0.0, 1.0)
+	if fill > 0.0:
+		_draw_rounded_rect(Rect2(position, Vector2(maxf(fill, height), height)), color, height * 0.5)
 
 
 ## パネル上部の進行バー。上にレース距離（左）と残り距離（右）、下に全走者の位置。

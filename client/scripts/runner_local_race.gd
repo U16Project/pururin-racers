@@ -61,6 +61,12 @@ var _heart_rate_bpm: float = LocalRaceMath.Config.number("heart_rate_min_bpm")
 var _heart_adaptation: float = 0.0
 ## このフレームに、自分の操作・進路どりで横に動いた距離（m）。押し出された分と、止められた分は含まない。
 var _lateral_move_m: float = 0.0
+## ダッシュの残り時間（秒）。0より大きい間、効いている。
+var _dash_time_left: float = 0.0
+## ブースト：最後に押した直後のポイント、残り時間（秒）、使った回数。
+var _boost_points_at_press: float = 0.0
+var _boost_time_left: float = 0.0
+var _boost_uses: int = 0
 ## 前のフレームで選んでいたノッチ。-1は、まだ決まっていない（レース開始の最初のフレームは、負荷を数えない）。
 var _previous_selected_drive_level: float = -1.0
 ## 接触の見た目の強さ（0〜1）。接触中は0.5、押し合い中は1へ向かう。
@@ -152,6 +158,10 @@ func setup_for_race(
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
 	_heart_adaptation = 0.0
 	_lateral_move_m = 0.0
+	_dash_time_left = 0.0
+	_boost_points_at_press = 0.0
+	_boost_time_left = 0.0
+	_boost_uses = 0
 	_previous_selected_drive_level = -1.0
 	_contact_level = 0.0
 	_heart_overage_exposure = 0.0
@@ -272,7 +282,8 @@ func get_drive_diagnostics() -> Dictionary:
 		get_propulsion_efficiency(),
 		_aero_air_resistance_multiplier(),
 		get_acceleration_response_multiplier(),
-		_braking
+		_braking,
+		get_drive_boost_multiplier()
 	)
 
 
@@ -437,10 +448,95 @@ func get_overheat_propulsion_efficiency() -> float:
 
 
 func get_propulsion_efficiency() -> float:
-	return get_overheat_propulsion_efficiency() * LocalRaceMath.stamina_debt_efficiency(
-		_stamina,
-		_stamina_capacity_l
+	var debt_efficiency := LocalRaceMath.stamina_debt_efficiency(_stamina, _stamina_capacity_l)
+	if is_boost_active():
+		debt_efficiency = LocalRaceMath.boosted_debt_efficiency(debt_efficiency)
+	return get_overheat_propulsion_efficiency() * debt_efficiency
+
+
+## ダッシュ・ブーストを使えるか（プレイヤーだけ。レース中で、推進力があるとき）。
+func _can_use_drive_action() -> bool:
+	return player_controlled and _race_active and not _finished and not _braking and _drive_level > 0.0
+
+
+## ダッシュ。押した瞬間に呼ぶ。効果は重ならず、残り時間が延びる。
+func trigger_dash() -> bool:
+	if not _can_use_drive_action():
+		return false
+	_dash_time_left = LocalRaceMath.Config.number("dash_duration_s")
+	return true
+
+
+## ブースト。押した瞬間に呼ぶ。残りのポイントに上乗せし、残り時間を戻す。使った瞬間に心拍と体力を払う。
+func trigger_boost() -> bool:
+	if not _can_use_drive_action() or get_boost_uses_left() <= 0:
+		return false
+	# 残っているポイントは、割り増しして受け継ぐ（早めに重ねるほど有利）。
+	_boost_points_at_press = LocalRaceMath.boost_points_after_press(get_boost_points())
+	_boost_time_left = LocalRaceMath.Config.number("boost_duration_s")
+	_boost_uses += 1
+	_heart_rate_bpm = minf(
+		_heart_rate_bpm + LocalRaceMath.Config.number("boost_heart_cost_bpm"),
+		LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
 	)
+	_stamina = maxf(
+		_stamina - LocalRaceMath.Config.number("boost_stamina_cost_l"),
+		-LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
+	)
+	return true
+
+
+func is_dash_active() -> bool:
+	return _dash_time_left > 0.0
+
+
+func get_dash_time_ratio() -> float:
+	return clampf(_dash_time_left / maxf(LocalRaceMath.Config.number("dash_duration_s"), 0.001), 0.0, 1.0)
+
+
+func is_boost_active() -> bool:
+	return _boost_time_left > 0.0
+
+
+func get_boost_points() -> float:
+	return LocalRaceMath.boost_points(_boost_points_at_press, _boost_time_left)
+
+
+func get_boost_time_ratio() -> float:
+	return clampf(_boost_time_left / maxf(LocalRaceMath.Config.number("boost_duration_s"), 0.001), 0.0, 1.0)
+
+
+func get_boost_uses_left() -> int:
+	return maxi(int(LocalRaceMath.Config.number("boost_max_uses")) - _boost_uses, 0)
+
+
+## ダッシュ・ブーストによる、推進力の倍率。
+func get_drive_boost_multiplier() -> float:
+	var bonus := 0.0
+	if is_dash_active():
+		bonus += LocalRaceMath.dash_thrust_bonus(int(_effective_stats.get("acceleration", 5)), int(_effective_stats.get("handling", 5)))
+	if is_boost_active():
+		bonus += LocalRaceMath.boost_thrust_bonus(get_boost_points(), get_stamina_ratio())
+	return 1.0 + bonus
+
+
+## ダッシュ・ブーストが効いている間の、心拍の上がる力と、体力の消費の倍率。
+func _drive_action_heart_multiplier() -> float:
+	var multiplier := 1.0
+	if is_dash_active():
+		multiplier *= LocalRaceMath.Config.number("dash_heart_rise_multiplier")
+	if is_boost_active():
+		multiplier *= LocalRaceMath.Config.number("boost_heart_rise_multiplier")
+	return multiplier
+
+
+func _drive_action_stamina_multiplier() -> float:
+	var multiplier := 1.0
+	if is_dash_active():
+		multiplier *= LocalRaceMath.Config.number("dash_stamina_multiplier")
+	if is_boost_active():
+		multiplier *= LocalRaceMath.Config.number("boost_stamina_multiplier")
+	return multiplier
 
 
 func get_race_progress() -> float:
@@ -564,6 +660,9 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["contact_count"] = _contact_count
 	snapshot["in_push_contest"] = _in_push_contest
 	snapshot["contact_heart_load_bpm_per_s"] = get_contact_heart_load_bpm_per_s()
+	snapshot["dash_active"] = is_dash_active()
+	snapshot["boost_points"] = get_boost_points()
+	snapshot["boost_uses_left"] = get_boost_uses_left()
 	snapshot["lateral_move_heart_load_bpm_per_s"] = get_lateral_move_heart_load_bpm_per_s()
 	snapshot["rotation_y"] = rotation.y
 	return snapshot
@@ -635,9 +734,12 @@ func _process(delta: float) -> void:
 			_aero_air_resistance_multiplier(),
 			get_acceleration_response_multiplier(),
 			_simulation_legacy_speed_cap,
-			_braking
+			_braking,
+			get_drive_boost_multiplier()
 		)
 		_update_condition(delta)
+		_dash_time_left = maxf(_dash_time_left - delta, 0.0)
+		_boost_time_left = maxf(_boost_time_left - delta, 0.0)
 		_update_drive_diagnostic_log(delta)
 	elif _cpu_start_drive_remaining > 0.0:
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
@@ -884,7 +986,7 @@ func _selected_drive_level() -> float:
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
 	var cardio_stat := int(_effective_stats.get("cardio", 5))
-	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat, _heart_adaptation) + get_contact_heart_load_bpm_per_s()) * delta
+	_heart_rate_bpm += (LocalRaceMath.heart_rate_net_rate_bpm_per_s(_heart_rate_bpm, drive_level, cardio_stat, _heart_adaptation, _drive_action_heart_multiplier()) + get_contact_heart_load_bpm_per_s()) * delta
 	var handling_stat := int(_effective_stats.get("handling", 5))
 	_heart_rate_bpm += LocalRaceMath.lateral_move_heart_load_bpm(_lateral_move_m, handling_stat)
 	# ノッチを変えた段数に比例する負荷（上げ下げとも）。レース開始の最初のフレームは数えない。
@@ -907,7 +1009,7 @@ func _update_condition_for_drive_level(drive_level: float, delta: float) -> void
 		drive_level,
 		_heart_rate_bpm,
 		_stamina_load_multiplier
-	)
+	) * _drive_action_stamina_multiplier()
 	stamina_delta -= get_contact_stamina_load_l_per_s()
 	stamina_delta -= LocalRaceMath.lateral_move_stamina_load_l(_lateral_move_m, handling_stat) / maxf(delta, 0.0001)
 	stamina_delta -= LocalRaceMath.drive_change_stamina_load_l(levels_changed, handling_stat) / maxf(delta, 0.0001)

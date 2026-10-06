@@ -260,7 +260,8 @@ static func drive_diagnostics_kmh_per_s(
 	propulsion_efficiency: float = 1.0,
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
-	braking: bool = false
+	braking: bool = false,
+	drive_boost_multiplier: float = 1.0
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
@@ -270,7 +271,8 @@ static func drive_diagnostics_kmh_per_s(
 	elif level > 0.0:
 		drive_contribution = drive_force_kmh_per_s(level, acceleration_bonus_kmh_per_s) + top_speed_drive_adjustment_kmh_per_s
 	if drive_contribution > 0.0:
-		drive_contribution *= clampf(propulsion_efficiency, 0.0, 1.0)
+		# ダッシュ・ブーストは、推進力そのものを一時的に増やす（抵抗には触れない）。
+		drive_contribution *= maxf(drive_boost_multiplier, 0.0) * clampf(propulsion_efficiency, 0.0, 1.0)
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
 	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
@@ -478,6 +480,39 @@ static func line_speed_multiplier(offset: float, curvature: float, speed_kmh: fl
 	var handling := maxf(0.2, 1.0 - Config.number("line_speed_penalty_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
 	var penalty := Config.number("line_speed_penalty_outer_edge") * ratio * ratio * side * speed_factor * handling
 	return clampf(1.0 - penalty, 0.5, 1.0)
+
+
+## ダッシュで増える推進力の割合。加速と操作性（少し）で変わる。
+static func dash_thrust_bonus(acceleration_stat: int = 5, handling_stat: int = 5) -> float:
+	var scale := 1.0 \
+		+ Config.number("dash_thrust_per_acceleration_stat") * (clampi(acceleration_stat, 1, 15) - 5) \
+		+ Config.number("dash_thrust_per_handling_stat") * (clampi(handling_stat, 1, 15) - 5)
+	return maxf(Config.number("dash_thrust_bonus") * scale, 0.0)
+
+
+## ブーストの今のポイント。押した直後のポイントから、残り時間に比例して、まっすぐ0へ減る。
+static func boost_points(points_at_press: float, time_left_s: float) -> float:
+	return maxf(points_at_press, 0.0) * clampf(time_left_s / maxf(Config.number("boost_duration_s"), 0.001), 0.0, 1.0)
+
+
+## ブーストを押した直後のポイント。残っているポイントを、割り増しして受け継ぎ、1回ぶんを足す。
+static func boost_points_after_press(remaining_points: float) -> float:
+	return Config.number("boost_points_per_use") + maxf(remaining_points, 0.0) * (1.0 + Config.number("boost_stack_bonus"))
+
+
+## 残りの体力の割合による、ブーストの効きの係数（満タンで1.0、0以下で下限）。
+static func boost_stamina_factor(stamina_ratio: float) -> float:
+	return lerpf(Config.number("boost_stamina_factor_min"), 1.0, clampf(stamina_ratio, 0.0, 1.0))
+
+
+## ブーストで増える推進力の割合。
+static func boost_thrust_bonus(points: float, stamina_ratio: float) -> float:
+	return maxf(points, 0.0) * Config.number("boost_thrust_per_point") * boost_stamina_factor(stamina_ratio)
+
+
+## ブーストが効いている間の、体力の負債による推進効率。悪い効果（1からの下がり）を一部だけにする。
+static func boosted_debt_efficiency(debt_efficiency: float) -> float:
+	return 1.0 - (1.0 - clampf(debt_efficiency, 0.0, 1.0)) * Config.number("boost_debt_penalty_scale")
 
 
 ## 接触耐性による負荷の倍率（基準値で1.0、高いほど小さい）。
@@ -727,7 +762,8 @@ static func advance_drive_speed_kmh(
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
 	simulation_legacy_speed_cap: bool = false,
-	braking: bool = false
+	braking: bool = false,
+	drive_boost_multiplier: float = 1.0
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
@@ -741,7 +777,8 @@ static func advance_drive_speed_kmh(
 		propulsion_efficiency,
 		air_resistance_multiplier,
 		acceleration_response_multiplier,
-		braking
+		braking,
+		drive_boost_multiplier
 	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	# 通常は自然到達速度で切らない。旧挙動の比較測定時だけ明示的に上限を再現する。
@@ -1186,8 +1223,8 @@ static func heart_rate_natural_recovery_rate_bpm_per_s(current_bpm: float, cardi
 	) * (1.0 + Config.number("heart_adaptation_recovery_gain") * clampf(adaptation, 0.0, 1.0))
 
 
-static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float, cardio_stat: int, adaptation: float = 0.0) -> float:
-	var drive_load := heart_rate_rise_rate_bpm_per_s(drive_level, cardio_stat) * Config.number("heart_rate_drive_load_scale")
+static func heart_rate_net_rate_bpm_per_s(current_bpm: float, drive_level: float, cardio_stat: int, adaptation: float = 0.0, rise_multiplier: float = 1.0) -> float:
+	var drive_load := heart_rate_rise_rate_bpm_per_s(drive_level, cardio_stat) * Config.number("heart_rate_drive_load_scale") * maxf(rise_multiplier, 0.0)
 	var net_rate := drive_load - heart_rate_natural_recovery_rate_bpm_per_s(current_bpm, cardio_stat, adaptation)
 	# 回復方向だけを倍率調整する。正ノッチの定常域と上昇カーブは変えず、
 	# ノッチを下げたときは高心拍ほど速く戻り、100付近では指数的に穏やかに収束する。

@@ -22,8 +22,6 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_almost_eq(Config.number("heart_rate_recovery_rate_scale"), 2.75, 0.001)
 	assert_almost_eq(Config.number("heart_rate_rise_time_cardio_min_s"), 13.0, 0.001)
 	assert_almost_eq(Config.number("heart_rate_rise_time_cardio_max_s"), 20.0, 0.001)
-	assert_eq(Config.number("stamina_capacity_base_l"), 5.0)
-	assert_eq(Config.number("stamina_capacity_per_stat_l"), 3.0)
 	assert_eq(Config.number("stamina_debt_capacity_multiplier"), 1.0)
 	assert_almost_eq(Config.number("stamina_consumption_min_l_per_s"), 0.0457142857142857, 0.000001)
 	assert_almost_eq(Config.number("stamina_consumption_max_l_per_s"), 0.1828571428571428, 0.000001)

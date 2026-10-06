@@ -36,6 +36,20 @@ static func brake_pressed() -> bool:
 	)
 
 
+## ダッシュ。押した瞬間だけ（押しっぱなしの繰り返しは数えない）。ゲームパッドはB、キーボードはA。
+static func is_dash_pressed(event: InputEvent) -> bool:
+	return is_button_pressed(event, JOY_BUTTON_B) or _is_key_just_pressed(event, KEY_A)
+
+
+## ブースト。押した瞬間だけ。ゲームパッドはX、キーボードはX。
+static func is_boost_pressed(event: InputEvent) -> bool:
+	return is_button_pressed(event, JOY_BUTTON_X) or _is_key_just_pressed(event, KEY_X)
+
+
+static func _is_key_just_pressed(event: InputEvent, keycode: Key) -> bool:
+	return event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == keycode
+
+
 static func chase_yaw_axis() -> float:
 	return _deadzone(Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_X))
 

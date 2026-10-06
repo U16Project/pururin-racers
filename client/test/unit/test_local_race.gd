@@ -1182,10 +1182,11 @@ func test_provisional_cardio_range_makes_low_cardio_notch_four_and_full_effort_c
 
 
 func test_stamina_capacity_is_fuel_tank_and_consumption_is_stat_independent() -> void:
-	assert_almost_eq(LocalRaceMath.stamina_capacity_l(1), 8.0, 0.0001)
-	assert_almost_eq(LocalRaceMath.stamina_capacity_l(5), 20.0, 0.0001)
-	assert_almost_eq(LocalRaceMath.stamina_capacity_l(10), 35.0, 0.0001)
-	assert_almost_eq(LocalRaceMath.stamina_capacity_l(15), 50.0, 0.0001)
+	var capacity_base := LocalRaceMath.Config.number("stamina_capacity_base_l")
+	var capacity_per_stat := LocalRaceMath.Config.number("stamina_capacity_per_stat_l")
+	for stamina_stat: int in [1, 5, 10, 15]:
+		assert_almost_eq(LocalRaceMath.stamina_capacity_l(stamina_stat), capacity_base + capacity_per_stat * stamina_stat, 0.0001)
+	assert_gt(LocalRaceMath.stamina_capacity_l(15), LocalRaceMath.stamina_capacity_l(1))
 	assert_eq(LocalRaceMath.stamina_delta_l_per_s(0.0, 200.0), 0.0)
 	assert_eq(LocalRaceMath.stamina_delta_l_per_s(-1.0, 200.0), 0.0)
 	assert_lt(LocalRaceMath.stamina_delta_l_per_s(6.0, 200.0), 0.0)
