@@ -6,7 +6,7 @@ const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
-const M5CameraScript := preload("res://scripts/m5_camera.gd")
+const LocalRaceCameraScript := preload("res://scripts/local_race_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
@@ -1421,28 +1421,33 @@ func runner_snapshot_for_hud(race: Node3D, player: Node3D) -> void:
 	race.call("_update_hud")
 
 
-func test_local_race_uses_m5_camera_with_chase_controls() -> void:
+func test_local_race_uses_its_own_camera_with_adjustable_views() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
 	var camera: Camera3D = race.get_node("Camera3D")
-	assert_eq(camera.get_script(), M5CameraScript)
-	assert_eq(camera.get("mode"), 0)
-	assert_eq(camera.get("follow_distance"), 12.0)
+	assert_eq(camera.get_script(), LocalRaceCameraScript)
+	assert_eq(camera.get("view"), LocalRaceCameraScript.View.DEFAULT)
 	var target := Node3D.new()
 	add_child(target)
 	target.global_position = Vector3(3.0, 0.0, 4.0)
 	camera.call("set_follow_target", target)
 	camera.call("_process", 0.0)
+	var settings: Dictionary = LocalRaceCameraScript.VIEW_SETTINGS[LocalRaceCameraScript.View.DEFAULT]
 	var initial_position := camera.global_position
-	camera.set("_follow_yaw", PI * 0.5)
+	assert_almost_eq(initial_position.y, float(settings["height"]), 0.001)
+	assert_almost_eq(initial_position.z - target.global_position.z, float(settings["back"]), 0.001)
+	# 向きの微調整は、カメラの位置を動かさない。
+	camera.set("_yaw_offset", PI * 0.5)
 	camera.call("_process", 0.0)
 	assert_almost_eq(camera.global_position.x, initial_position.x, 0.001)
 	assert_almost_eq(camera.global_position.z, initial_position.z, 0.001)
-	camera.set("follow_distance", 30.0)
-	camera.set("_follow_lateral", 8.0)
-	camera.call("_reset_chase_adjustment")
-	assert_eq(camera.get("follow_distance"), 12.0)
-	assert_eq(camera.get("_follow_lateral"), 0.0)
+	# 微調整は、元に戻せる。
+	camera.set("_back_offset", 10.0)
+	camera.set("_lateral_offset", 8.0)
+	camera.call("_reset_adjustment")
+	camera.call("_process", 0.0)
+	assert_almost_eq(camera.global_position.x, initial_position.x, 0.001)
+	assert_almost_eq(camera.global_position.z, initial_position.z, 0.001)
 	target.free()
 	race.free()
 

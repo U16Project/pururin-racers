@@ -92,3 +92,13 @@ func test_definition_rejects_inconsistent_ranges_and_rank_groups() -> void:
 	assert_true(errors.contains("allocation_min"))
 	assert_true(errors.contains("rank_groups[1]"))
 	assert_true(errors.contains("handling"))
+
+
+func test_style_rank_group_matches_the_group_that_gives_the_matching_bonus() -> void:
+	var config: Dictionary = Config.values()
+	var groups: Array = config["rank_groups"]
+	assert_eq(Stats.rank_group_count(), groups.size())
+	for style_id: String in config["running_styles"]:
+		var group_index: int = Stats.style_rank_group_index(style_id)
+		var rank_in_group := int(groups[group_index][0])
+		assert_eq(Stats.rank_bonus(style_id, rank_in_group), int(config["rank_bonus"]["matching"]), style_id)

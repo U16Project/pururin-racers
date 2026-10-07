@@ -78,3 +78,19 @@ func test_fuel_color_is_a_smooth_gradient_from_blue_to_deep_red() -> void:
 	assert_almost_eq(RaceHud.fuel_y(zero_y, 0.0), zero_y, 0.0001)
 	assert_almost_eq(RaceHud.fuel_y(zero_y, -1.0), RaceHud.GAUGE_BAR_HEIGHT, 0.0001)
 	assert_lt(absf(RaceHud.fuel_y(zero_y, -0.1) - zero_y), absf(RaceHud.fuel_y(zero_y, 0.1) - zero_y))
+
+func test_style_state_color_follows_the_rank_bonus_sign() -> void:
+	assert_eq(RaceHud.style_state_color(1), RaceHud.COLOR_STYLE_MATCH)
+	assert_eq(RaceHud.style_state_color(0), RaceHud.COLOR_TEXT)
+	assert_eq(RaceHud.style_state_color(-1), RaceHud.COLOR_STYLE_FAR)
+
+
+func test_fit_text_shrinks_then_truncates_to_stay_within_the_width() -> void:
+	var font := ThemeDB.fallback_font
+	var short := RaceHud.fit_text(font, "イワ", 200.0, 16, 11)
+	assert_eq(short["text"], "イワ")
+	assert_eq(int(short["font_size"]), 16)
+	var long := RaceHud.fit_text(font, "とてもながいなまえのぷるりん", 60.0, 16, 11)
+	assert_lte(float(long["width"]), 60.0)
+	assert_eq(int(long["font_size"]), 11)
+	assert_true(str(long["text"]).ends_with("…"))

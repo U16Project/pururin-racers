@@ -162,13 +162,13 @@ func test_boost_softens_the_debt_penalty_on_propulsion() -> void:
 
 func test_only_a_fresh_press_counts_for_dash_and_boost_keys() -> void:
 	var press := InputEventKey.new()
-	press.physical_keycode = KEY_A
+	press.physical_keycode = KEY_Z
 	press.pressed = true
 	assert_true(RaceControllerInput.is_dash_pressed(press))
 	assert_false(RaceControllerInput.is_boost_pressed(press))
 	# 押しっぱなしの繰り返しは数えない。
 	var held := InputEventKey.new()
-	held.physical_keycode = KEY_A
+	held.physical_keycode = KEY_Z
 	held.pressed = true
 	held.echo = true
 	assert_false(RaceControllerInput.is_dash_pressed(held))

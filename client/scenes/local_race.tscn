@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/local_race_controller.gd" id="1_ctrl"]
 [ext_resource type="Script" path="res://scripts/m2_track_path.gd" id="2_track"]
-[ext_resource type="Script" path="res://scripts/m5_camera.gd" id="3_cam"]
+[ext_resource type="Script" path="res://scripts/local_race_camera.gd" id="3_cam"]
 [ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="4_font"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_track"]
@@ -75,10 +75,6 @@ material = SubResource("Mat_track")
 
 [node name="Camera3D" type="Camera3D" parent="."]
 script = ExtResource("3_cam")
-follow_distance = 12.0
-follow_height = 4.0
-overview_height = 420.0
-overview_ortho_size = 560.0
 fov = 55.0
 
 [node name="UI" type="CanvasLayer" parent="."]

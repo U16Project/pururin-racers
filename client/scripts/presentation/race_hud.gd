@@ -13,6 +13,10 @@ const PANEL_TOP_STRIP := 52.0
 const PANEL_HEIGHT := PANEL_BODY_HEIGHT + PANEL_TOP_STRIP
 const PROGRESS_BAR_HEIGHT := 10.0
 const PROGRESS_SIDE_MARGIN := 24.0
+## 順位とタイムの間。
+const PROGRESS_RANK_GAP := 12.0
+## 脚質の印「〈」の間隔。
+const STYLE_CHEVRON_STEP := 10.0
 ## 画面下端からの余白。
 const PANEL_BOTTOM_MARGIN := 20.0
 const NOTCH_COUNT := 7
@@ -31,6 +35,9 @@ const COLOR_FUEL_FULL := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_FUEL_LOW := Color(1.0, 0.55, 0.2, 1.0)
 const COLOR_DEBT_DEEP := Color(0.72, 0.04, 0.06, 1.0)
 const COLOR_PROGRESS := Color(0.3, 0.88, 1.0, 1.0)
+## 脚質と順位の関係の色。得意な順位にいる（補正がプラス）と青、普通は白、離れている（マイナス）と赤。
+const COLOR_STYLE_MATCH := Color(0.35, 0.72, 1.0, 1.0)
+const COLOR_STYLE_FAR := Color(1.0, 0.36, 0.32, 1.0)
 const COLOR_BOOST := Color(1.0, 0.55, 0.2, 1.0)
 const COLOR_COOL := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_AERO := Color(0.36, 0.86, 0.52, 1.0)
@@ -40,6 +47,10 @@ var _state := {
 	"field_size": 0,
 	"remaining_m": 0.0,
 	"race_distance_m": 0.0,
+	"player_name": "",
+	"style_group_index": -1,
+	"style_group_count": 0,
+	"style_rank_bonus": 0,
 	"dash_ratio": 0.0,
 	"boost_ratio": 0.0,
 	"boost_points": 0.0,
@@ -78,6 +89,32 @@ func update_state(values: Dictionary) -> void:
 	for key in values:
 		_state[key] = values[key]
 	queue_redraw()
+
+
+## 脚質と今の順位の関係の色（順位の補正がプラスなら青、0なら白、マイナスなら赤）。
+static func style_state_color(rank_bonus: int) -> Color:
+	if rank_bonus > 0:
+		return COLOR_STYLE_MATCH
+	if rank_bonus < 0:
+		return COLOR_STYLE_FAR
+	return COLOR_TEXT
+
+
+## 文字を、決めた幅に収める。まず文字を小さくし（下限まで）、それでも長ければ末尾を「…」にする。
+## 戻り値: {text, font_size, width}
+static func fit_text(font: Font, text: String, max_width: float, font_size: int, min_font_size: int) -> Dictionary:
+	var size := font_size
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	while width > max_width and size > min_font_size:
+		size -= 1
+		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var shown := text
+	while width > max_width and shown.length() > 1:
+		shown = shown.substr(0, shown.length() - 1)
+		width = font.get_string_size(shown + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	if shown != text:
+		shown += "…"
+	return {"text": shown, "font_size": size, "width": width}
 
 
 ## 進行バー上の位置（0〜1）。
@@ -258,13 +295,29 @@ func _draw_progress_bar(font: Font, panel: Rect2) -> void:
 	var left := panel.position.x + PROGRESS_SIDE_MARGIN
 	var width := PANEL_WIDTH - PROGRESS_SIDE_MARGIN * 2.0
 	var text_y := panel.position.y + 28.0
-	_draw_text(font, "%d m" % int(roundf(float(_state["race_distance_m"]))), Vector2(left, text_y), 14, COLOR_DIM)
+	# 左：名前。中央：順位・脚質の印・タイム。右：残り距離とレース距離。
+	var state_color := style_state_color(int(_state["style_rank_bonus"]))
 	var time_text := str(_state["time_text"])
 	var time_width := font.get_string_size(time_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	_draw_text(font, time_text, Vector2(left + (width - time_width) * 0.5, text_y), 16, COLOR_TEXT)
-	var remaining_text := "残り %d m" % int(roundf(float(_state["remaining_m"])))
+	var time_x := left + (width - time_width) * 0.5 + 18.0
+	_draw_text(font, time_text, Vector2(time_x, text_y), 16, COLOR_TEXT)
+	# 順位と脚質の印は、タイムのすぐ左に、少し間をあけて右寄せで置く（順位、印の順）。
+	var chevrons_width := float(int(_state["style_group_count"])) * STYLE_CHEVRON_STEP
+	var chevrons_x := time_x - PROGRESS_RANK_GAP - chevrons_width
+	_draw_style_chevrons(Vector2(chevrons_x, text_y - 6.0), state_color)
+	var place := int(_state["place"])
+	var place_text := "%s/%d位" % [str(place) if place > 0 else "-", int(_state["field_size"])]
+	var place_x := chevrons_x - 6.0 - font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	_draw_text(font, place_text, Vector2(place_x, text_y), 16, state_color)
+	# 名前は、単独で左寄せ。長い名前は、順位に重ならない幅に収める（小さくし、それでも長ければ末尾を省く）。
+	var fitted := fit_text(font, str(_state["player_name"]), maxf(place_x - 10.0 - left, 0.0), 16, 11)
+	_draw_text(font, str(fitted["text"]), Vector2(left, text_y), int(fitted["font_size"]), COLOR_TEXT)
+	var total_text := " / %d m" % int(roundf(float(_state["race_distance_m"])))
+	var total_width := font.get_string_size(total_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+	var remaining_text := "残り %d" % int(roundf(float(_state["remaining_m"])))
 	var remaining_width := font.get_string_size(remaining_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	_draw_text(font, remaining_text, Vector2(left + width - remaining_width, text_y), 16, COLOR_TEXT)
+	_draw_text(font, total_text, Vector2(left + width - total_width, text_y), 12, COLOR_DIM)
+	_draw_text(font, remaining_text, Vector2(left + width - total_width - remaining_width, text_y), 16, COLOR_TEXT)
 	var bar_y := panel.position.y + 38.0
 	var rail := Rect2(Vector2(left, bar_y), Vector2(width, PROGRESS_BAR_HEIGHT))
 	_draw_rounded_rect(rail, COLOR_TRACK, PROGRESS_BAR_HEIGHT * 0.5)
@@ -288,6 +341,27 @@ func _draw_progress_bar(font: Font, panel: Rect2) -> void:
 			var center := Vector2(left + width * float(mark["ratio"]), center_y)
 			draw_circle(center, 8.5, COLOR_TEXT)
 			draw_circle(center, 6.0, mark["color"])
+
+
+## 脚質の印。順位の組の数だけ「〈」を並べ、左が先頭の組。得意な組だけ、はっきり太く描く。
+## center_left は、印の並びの左端・縦の中央。色は、今の順位との関係（青・白・赤）。
+func _draw_style_chevrons(center_left: Vector2, color: Color) -> void:
+	var count := int(_state["style_group_count"])
+	var own := int(_state["style_group_index"])
+	var step := STYLE_CHEVRON_STEP
+	var half_height := 6.5
+	var depth := 5.0
+	for index in count:
+		var tip := Vector2(center_left.x + index * step, center_left.y)
+		var points := PackedVector2Array([
+			tip + Vector2(depth, -half_height), tip, tip + Vector2(depth, half_height),
+		])
+		if index == own:
+			# 光っているように、外側を薄く太く、内側を濃く描く。
+			draw_polyline(points, Color(color, 0.28), 6.0, true)
+			draw_polyline(points, color, 2.6, true)
+		else:
+			draw_polyline(points, Color(color, 0.38), 1.6, true)
 
 
 func _draw_goal_checker(center: Vector2) -> void:

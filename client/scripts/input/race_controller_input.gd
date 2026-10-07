@@ -36,9 +36,10 @@ static func brake_pressed() -> bool:
 	)
 
 
-## ダッシュ。押した瞬間だけ（押しっぱなしの繰り返しは数えない）。ゲームパッドはB、キーボードはA。
+## ダッシュ。押した瞬間だけ（押しっぱなしの繰り返しは数えない）。ゲームパッドはB、キーボードはZ。
+## （キーボードのAは、カメラを左へずらす操作に使っている）
 static func is_dash_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_B) or _is_key_just_pressed(event, KEY_A)
+	return is_button_pressed(event, JOY_BUTTON_B) or _is_key_just_pressed(event, KEY_Z)
 
 
 ## ブースト。押した瞬間だけ。ゲームパッドはX、キーボードはX。
@@ -48,6 +49,12 @@ static func is_boost_pressed(event: InputEvent) -> bool:
 
 static func _is_key_just_pressed(event: InputEvent, keycode: Key) -> bool:
 	return event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == keycode
+
+
+## 見回し（右スティック）。倒していなければゼロ。倒した向きと量を、そのまま返す。
+static func look_vector() -> Vector2:
+	var stick := Vector2(Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_X), Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_Y))
+	return stick if stick.length() >= STICK_DEADZONE else Vector2.ZERO
 
 
 static func chase_yaw_axis() -> float:

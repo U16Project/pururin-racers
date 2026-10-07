@@ -67,6 +67,17 @@ static func effective_stats(attribute_id: String, allocation: Dictionary, style_
 	return result
 
 
+## 脚質が得意とする順位の組（0が先頭の組）。
+static func style_rank_group_index(style_id: String) -> int:
+	var styles: Dictionary = Config.values()["running_styles"]
+	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)
+	return int(styles[style_id]["rank_group_index"])
+
+
+static func rank_group_count() -> int:
+	return Config.values()["rank_groups"].size()
+
+
 static func rank_bonus(style_id: String, live_rank: int) -> int:
 	var styles: Dictionary = Config.values()["running_styles"]
 	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)

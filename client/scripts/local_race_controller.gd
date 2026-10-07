@@ -13,6 +13,7 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
@@ -102,10 +103,11 @@ func _ready() -> void:
 		"←→／左スティック　ライン",
 		"↑↓／十字キー　ノッチ",
 		"Space／A／LT　ブレーキ",
-		"Aキー／B　ダッシュ",
+		"Zキー／B　ダッシュ",
 		"Xキー／X　ブースト",
-		"Y／C　視点切替",
-		"右スティック／QE　向き",
+		"Y／C　視点切替（通常・遠距離・上空・一人称）",
+		"右スティック　見回す（離すと戻る）",
+		"WASD・QE　カメラの微調整",
 		"右スティック押込／R　リセット",
 		"Esc／Start　メニュー",
 		"F3　詳細表示の切替",
@@ -513,8 +515,15 @@ func _update_race_hud() -> void:
 	if _race_hud == null:
 		return
 	var air_breakdown: Dictionary = _player.call("get_air_reduction_breakdown")
+	var place := _live_place(_player) if _race_started else 0
+	var style_id := str(_player.call("get_running_style_id"))
+	var has_style := not style_id.is_empty()
 	_race_hud.call("update_state", {
-		"place": _live_place(_player) if _race_started else 0,
+		"place": place,
+		"player_name": str(_player.get("display_name")),
+		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
+		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
+		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place) if has_style and place > 0 else 0,
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"race_distance_m": _race_distance_m,

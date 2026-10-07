@@ -556,6 +556,10 @@ func get_effective_stats() -> Dictionary:
 
 
 ## 操作性による、左右のライン移動の速さの倍率。
+func get_running_style_id() -> String:
+	return str(_pururin.get("running_style", ""))
+
+
 func get_handling_steer_multiplier() -> float:
 	return LocalRaceMath.handling_steer_multiplier(int(_effective_stats.get("handling", 5)))
 
