@@ -53,6 +53,8 @@ var _launch_visual: MeshInstance3D
 var _telemetry_recorder := RaceTelemetryRecorder.new()
 ## 常時表示のHUD。詳細な診断テキスト（_hud_label）はF3で切り替えるデバッグ表示。
 var _race_hud: Control
+## 詳細な診断テキストの後半（2列目）。前半は _hud_label（1列目）。どちらも操作盤の右。
+var _hud_label_right: Label
 
 
 func _ready() -> void:
@@ -63,7 +65,13 @@ func _ready() -> void:
 	_race_hud.name = "RaceHud"
 	$UI.add_child(_race_hud)
 	$UI.move_child(_race_hud, 0)
+	_hud_label_right = _hud_label.duplicate()
+	_hud_label_right.name = "HudLabelRight"
+	_hud_label_right.unique_name_in_owner = false
+	_hud_label_right.text = ""
+	$UI.add_child(_hud_label_right)
 	_hud_label.visible = false
+	_hud_label_right.visible = false
 	_guide_label.visible = false
 	_layout_overlay_labels()
 	_pause_return_button.pressed.connect(_return_to_title)
@@ -139,6 +147,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_F3:
 			# 診断数値と操作ガイドは同じ「詳細表示」として切り替える。
 			_hud_label.visible = not _hud_label.visible
+			_hud_label_right.visible = _hud_label.visible
 			_guide_label.visible = _hud_label.visible
 			get_viewport().set_input_as_handled()
 
@@ -427,6 +436,7 @@ func _update_hud() -> void:
 		return
 	_update_race_hud()
 	if not _race_started:
+		_hud_label_right.text = ""
 		_hud_label.text = "\n".join(PackedStringArray([
 			"開始出力 %+d" % int(roundi(_player.call("get_drive_level"))),
 			"カウント中に↑↓で開始出力を選択",
@@ -479,26 +489,39 @@ func _update_hud() -> void:
 	lines.append("速度 実際 %.0f／出力上 %.0fkm/h" % [cur, output_speed])
 	lines.append("タイム %s" % LocalRaceMath.format_race_time(_race_elapsed))
 	lines.append("Esc＝メニュー")
-	_hud_label.text = "\n".join(lines)
+	# 前半を1列目、後半を2列目に出す。
+	var left_count := ceili(lines.size() * 0.5)
+	_hud_label.text = "\n".join(lines.slice(0, left_count))
+	_hud_label_right.text = "\n".join(lines.slice(left_count))
 
 
-## 詳細表示（診断数値・操作ガイド）の配置。診断は左の順位表示の下に小さく、ガイドは右側に縦並び。
-## 項目が増えても順位表示や下部ゲージに重ならないよう、診断は左端の列に収める。
+## 詳細表示（診断数値・操作ガイド）の配置。診断は、操作盤の右に2列（左は順位表と操作盤が使う）。ガイドは右上に縦並び。
 func _layout_overlay_labels() -> void:
 	var outline := Color(0.03, 0.05, 0.1, 0.9)
-	_hud_label.position = Vector2(16.0, 190.0)
-	_hud_label.size = Vector2(420.0, 480.0)
-	_hud_label.clip_text = false
-	_hud_label.add_theme_font_size_override("font_size", 13)
-	_hud_label.add_theme_constant_override("line_spacing", -3)
-	_hud_label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
-	_hud_label.add_theme_color_override("font_outline_color", outline)
-	_hud_label.add_theme_constant_override("outline_size", 5)
+	var panel_top := -(RaceHud.PANEL_BOTTOM_MARGIN + RaceHud.PANEL_HEIGHT)
+	var column_width := 320.0
+	for label: Label in [_hud_label, _hud_label_right]:
+		label.anchor_top = 1.0
+		label.anchor_bottom = 1.0
+		label.offset_top = panel_top
+		label.offset_bottom = -RaceHud.PANEL_BOTTOM_MARGIN
+		label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		label.clip_text = false
+		label.add_theme_font_size_override("font_size", 13)
+		label.add_theme_constant_override("line_spacing", -5)
+		label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
+		label.add_theme_color_override("font_outline_color", outline)
+		label.add_theme_constant_override("outline_size", 5)
+	var first_left := RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH + 12.0
+	_hud_label.offset_left = first_left
+	_hud_label.offset_right = first_left + column_width
+	_hud_label_right.offset_left = first_left + column_width
+	_hud_label_right.offset_right = first_left + column_width * 2.0
 	_guide_label.anchor_left = 1.0
 	_guide_label.anchor_right = 1.0
 	_guide_label.anchor_top = 0.0
 	_guide_label.anchor_bottom = 0.0
-	_guide_label.offset_left = -280.0
+	_guide_label.offset_left = -440.0
 	_guide_label.offset_right = -16.0
 	_guide_label.offset_top = 24.0
 	_guide_label.offset_bottom = 300.0
@@ -533,6 +556,7 @@ func _update_race_hud() -> void:
 		"boost_uses_left": _player.call("get_boost_uses_left"),
 		"boost_max_uses": int(LocalRaceMath.Config.number("boost_max_uses")),
 		"runners": _hud_runner_marks(),
+		"standings": _hud_standings(),
 		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
 		"speed_kmh": _player.call("get_actual_speed"),
 		"notch": int(roundi(_player.call("get_drive_level"))),
@@ -559,6 +583,34 @@ func _hud_runner_marks() -> Array:
 			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
 		})
 	return marks
+
+
+## 左上の順位表に出す全走者。今の順位の順（ゴール済みは着順で上）。
+func _hud_standings() -> Array:
+	var rows: Array = []
+	for runner in _runners:
+		var place := _live_place(runner)
+		var style_id := str(runner.call("get_running_style_id"))
+		var has_style := not style_id.is_empty()
+		rows.append({
+			"place": place,
+			"name": str(runner.get("display_name")),
+			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
+			"player": runner == _player,
+			"finished": bool(runner.call("is_finished")),
+			"finish_time": float(runner.call("get_finish_time")),
+			"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
+			"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
+			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place) if has_style else 0,
+			"heart_bpm": float(runner.call("get_heart_rate_bpm")),
+			"fuel_ratio": float(runner.call("get_stamina_ratio")),
+		})
+	# 同じ順位（横並び）は、元の並びのままにする。
+	for index in rows.size():
+		rows[index]["index"] = index
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return a["place"] < b["place"] if a["place"] != b["place"] else a["index"] < b["index"])
+	return rows
 
 
 func _drive_diagnostic_hud_lines(diagnostics: Dictionary) -> PackedStringArray:

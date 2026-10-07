@@ -10,17 +10,15 @@ enum View { DEFAULT, FAR, FIRST_PERSON, OVERHEAD }
 const VIEW_SETTINGS := {
 	View.DEFAULT: {"back": 6.0, "height": 3.0, "look_ahead": false},
 	View.FAR: {"back": 12.0, "height": 4.0, "look_ahead": false},
-	View.FIRST_PERSON: {"back": 0.0, "height": 1.5, "look_ahead": true},
+	View.FIRST_PERSON: {"back": 0.0, "height": 1.55, "look_ahead": true},
 	View.OVERHEAD: {"back": 5.0, "height": 40.0, "look_ahead": false},
 }
 const VIEW_ORDER := [View.DEFAULT, View.FAR, View.OVERHEAD, View.FIRST_PERSON]
 ## 追う視点で見る点の高さ（走者の足元から）。
 const LOOK_TARGET_HEIGHT_M := 0.6
-## 走者の体の高さ（頭の位置）。
-const BODY_TOP_HEIGHT_M := 1.5
-## 見回し：頭の上の高さと、見下ろす角度。
-const LOOK_AROUND_ABOVE_HEAD_M := 1.6
-const LOOK_AROUND_PITCH_DEG := 12.0
+## 見回し：カメラの高さ（地面から）と、見下ろす角度。
+const LOOK_AROUND_HEIGHT_M := 3.1
+const LOOK_AROUND_PITCH_DEG := 22.0
 const BACK_MIN_M := 0.0
 const BACK_MAX_M := 40.0
 const LATERAL_MAX_M := 12.0
@@ -111,23 +109,25 @@ func _apply() -> void:
 	forward = forward.normalized() if forward.length_squared() > 0.0001 else Vector3.FORWARD
 	var stick := RaceControllerInput.look_vector()
 	var looking_around := stick.length_squared() > 0.0
-	_set_own_body_visible(looking_around or view != View.FIRST_PERSON)
-	if looking_around:
+	var first_person := view == View.FIRST_PERSON
+	_set_own_body_visible(not first_person)
+	if looking_around and not first_person:
 		_apply_look_around(forward, stick)
 	else:
-		_apply_view(forward)
+		# 一人称の見回しは、位置と傾きはそのままで、向きだけ変える。
+		_apply_view(forward, -look_yaw_from_stick(stick) if looking_around else 0.0)
 
 
-## 見回し：頭の上から、倒した向きを、やや見下ろして見る。
+## 見回し：自分の真上から、倒した向きを、見下ろして見る。
 func _apply_look_around(forward: Vector3, stick: Vector2) -> void:
-	global_position = _target.global_position + Vector3.UP * (BODY_TOP_HEIGHT_M + LOOK_AROUND_ABOVE_HEAD_M)
+	global_position = _target.global_position + Vector3.UP * LOOK_AROUND_HEIGHT_M
 	var direction := Basis(Vector3.UP, -look_yaw_from_stick(stick)) * forward
 	var right := direction.cross(Vector3.UP).normalized()
 	direction = Basis(right, -deg_to_rad(LOOK_AROUND_PITCH_DEG)) * direction
 	look_at(global_position + direction, Vector3.UP)
 
 
-func _apply_view(forward: Vector3) -> void:
+func _apply_view(forward: Vector3, look_yaw: float = 0.0) -> void:
 	var settings: Dictionary = VIEW_SETTINGS[view]
 	var back := clampf(float(settings["back"]) + _back_offset, BACK_MIN_M, BACK_MAX_M)
 	# 微調整は、限度を超えて溜めない。
@@ -137,8 +137,9 @@ func _apply_view(forward: Vector3) -> void:
 	var direction := forward
 	if not bool(settings["look_ahead"]):
 		direction = (_target.global_position + Vector3.UP * LOOK_TARGET_HEIGHT_M - global_position).normalized()
-	if absf(_yaw_offset) > 0.0001:
-		direction = (Basis(Vector3.UP, _yaw_offset) * direction).normalized()
+	var yaw := _yaw_offset + look_yaw
+	if absf(yaw) > 0.0001:
+		direction = (Basis(Vector3.UP, yaw) * direction).normalized()
 	# 真下を見るとき（上空で真上に来たとき）でも、向きが決まるようにする。
 	var up := Vector3.UP if absf(direction.dot(Vector3.UP)) < 0.999 else forward
 	look_at(global_position + direction, up)

@@ -8,6 +8,7 @@ const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const LocalRaceCameraScript := preload("res://scripts/local_race_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
@@ -872,8 +873,8 @@ func test_real_runner_draft_lifts_speed_above_natural_speed_on_notch_six() -> vo
 	race.set("_race_started", true)
 	race.call("_update_hud")
 	var hud: Label = race.get_node("UI/HudLabel")
-	assert_true(hud.text.contains("加速応答 ×"))
-	assert_false(hud.text.contains("推進補正"))
+	assert_true(_detail_text(race).contains("加速応答 ×"))
+	assert_false(_detail_text(race).contains("推進補正"))
 	player.call("set_simulation_legacy_speed_cap", true)
 	player.set("_current_speed_kmh", 75.0)
 	player.call("_process", 0.016667)
@@ -1264,6 +1265,51 @@ func test_220_bpm_thirty_seconds_lowers_single_runner_speed() -> void:
 	assert_gt(overheated, LocalRaceMath.MIN_SPEED_KMH)
 
 
+## F3の詳細の文字（操作盤の左と右に分けて出している）を、1つにつなげる。
+func _detail_text(race: Node) -> String:
+	return str(race.get_node("UI/HudLabel").text) + "\n" + str(race.get_node("UI/HudLabelRight").text)
+
+
+func test_hud_standings_list_finishers_first_then_runners_by_progress() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var runners: Array = race.call("get_runners_for_simulation")
+	for index in runners.size():
+		runners[index].set("_race_progress", 100.0 + index * 10.0)
+	# いちばん後ろの2人を、先にゴールさせる（着順は、進んだ距離ではなく、ゴールした順）。
+	runners[1].call("mark_finished", 1, 9.0)
+	runners[0].call("mark_finished", 2, 10.0)
+	var rows: Array = race.call("_hud_standings")
+	assert_eq(rows.size(), runners.size())
+	assert_eq(RaceHud.confirmed_count(rows), 2)
+	assert_eq(float(rows[0]["finish_time"]), 9.0)
+	assert_eq(float(rows[1]["finish_time"]), 10.0)
+	assert_eq(str(rows[0]["name"]), str(runners[1].get("display_name")))
+	assert_eq(str(rows[1]["name"]), str(runners[0].get("display_name")))
+	# 残りは、進んだ順（前にいる走者が上）。
+	for index in range(2, rows.size()):
+		assert_eq(str(rows[index]["name"]), str(runners[runners.size() + 1 - index].get("display_name")))
+		assert_false(bool(rows[index]["finished"]))
+	race.free()
+
+
+func test_detail_text_sits_right_of_the_panel_inside_the_screen() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var left: Label = race.get_node("UI/HudLabel")
+	var right: Label = race.get_node("UI/HudLabelRight")
+	# テスト用の画面は小さいので、ゲームの画面の大きさ（プロジェクト設定）で、位置を計算する。
+	var screen := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
+	)
+	var panel_right: float = RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH
+	assert_gte(left.anchor_left * screen.x + left.offset_left, panel_right)
+	assert_gte(right.anchor_left * screen.x + right.offset_left, left.anchor_right * screen.x + left.offset_right)
+	assert_lte(right.anchor_right * screen.x + right.offset_right, screen.x)
+	race.free()
+
+
 func test_live_place_keeps_finished_order_fixed() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
@@ -1307,10 +1353,9 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	race.set("_race_started", true)
 	race.call("_update_hud")
 	var hud: Label = race.get_node("UI/HudLabel")
-	var lines := hud.text.split("\n")
+	var lines := _detail_text(race).split("\n")
 	assert_eq(hud.anchor_left, 0.0)
 	assert_eq(hud.anchor_right, 0.0)
-	assert_eq(hud.offset_left, 16.0)
 	assert_eq(hud.horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
 	assert_eq(hud.autowrap_mode, TextServer.AUTOWRAP_OFF)
 	assert_true(lines.has("直接 100%"))
@@ -1318,7 +1363,7 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(lines.has("総合 100%"))
 	assert_true(lines.has("実効 %d%%" % int(roundf(_expected_effective_ratio(1.0) * 100.0))))
 	assert_true(lines.has("集団補正 x1.00"))
-	assert_false(hud.text.contains("上限補正"))
+	assert_false(_detail_text(race).contains("上限補正"))
 	assert_true(lines.has("対象1 CPU2 前4.0m 横1.0m"))
 	assert_true(lines.has("推進力 +0.00km/h/s"))
 	assert_true(lines.has("転がり抵抗 %+.2fkm/h/s" % -LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S))
@@ -1349,26 +1394,26 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 		{"id": "CPU3", "gap": 7.5, "line": 1.7},
 	])
 	race.call("_update_hud")
-	for line in hud.text.split("\n"):
+	for line in _detail_text(race).split("\n"):
 		if line.begins_with("対象"):
 			# 18px・固定544pxのHUDで、対象3件も1行ずつ表示する。
 			assert_lte(line.length(), 30)
-	assert_true(hud.text.contains("対象1 CPU1 前2.0m 横0.4m"))
-	assert_true(hud.text.contains("対象2 CPU2 前4.0m 横1.0m"))
-	assert_true(hud.text.contains("対象3 CPU3 前7.5m 横1.7m"))
+	assert_true(_detail_text(race).contains("対象1 CPU1 前2.0m 横0.4m"))
+	assert_true(_detail_text(race).contains("対象2 CPU2 前4.0m 横1.0m"))
+	assert_true(_detail_text(race).contains("対象3 CPU3 前7.5m 横1.7m"))
 	player.set("_drafting", false)
 	player.set("_received_draft_p", 0.0)
 	player.set("_direct_draft_p", 0.0)
 	player.set("_direct_source_ids", [])
 	player.set("_direct_source_details", [])
 	race.call("_update_hud")
-	var solo_lines := hud.text.split("\n")
+	var solo_lines := _detail_text(race).split("\n")
 	assert_true(solo_lines.has("直接 0%"))
 	assert_true(solo_lines.has("連鎖 0%"))
 	assert_true(solo_lines.has("総合 0%"))
 	assert_true(solo_lines.has("実効 0%"))
 	assert_true(solo_lines.has("集団補正 x1.00"))
-	assert_false(hud.text.contains("上限補正"))
+	assert_false(_detail_text(race).contains("上限補正"))
 	assert_true(solo_lines.has("対象 なし"))
 	player.free()
 	race.free()
@@ -1395,7 +1440,7 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	})
 	runner_snapshot_for_hud(race, player)
 	var hud: Label = race.get_node("UI/HudLabel")
-	var lines := hud.text.split("\n")
+	var lines := _detail_text(race).split("\n")
 	assert_true(lines.has("直接 44%"))
 	assert_true(lines.has("連鎖 0%"))
 	assert_true(lines.has("総合 44%"))
@@ -1406,7 +1451,7 @@ func test_local_hud_shows_effective_draft_ratio_and_air_reduction() -> void:
 	assert_true(lines.has("空気抵抗（二乗） %+.2fkm/h/s" % -expected_air))
 	var expected_reduction := expected_air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.435, LocalRaceMath.pack_draft_effective_multiplier(15))
 	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % expected_reduction))
-	assert_true(hud.text.contains("計算加速度"))
+	assert_true(_detail_text(race).contains("計算加速度"))
 	var telemetry: Dictionary = player.call("get_telemetry_snapshot")
 	assert_almost_eq(float(telemetry["draft"]["effective_draft_ratio"]), _expected_effective_ratio(0.435, LocalRaceMath.pack_draft_effective_multiplier(15)), 0.001)
 	assert_almost_eq(float(telemetry["draft"]["pack_draft_effective_multiplier"]), LocalRaceMath.pack_draft_effective_multiplier(15), 0.001)

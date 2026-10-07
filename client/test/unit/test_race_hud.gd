@@ -94,3 +94,25 @@ func test_fit_text_shrinks_then_truncates_to_stay_within_the_width() -> void:
 	assert_lte(float(long["width"]), 60.0)
 	assert_eq(int(long["font_size"]), 11)
 	assert_true(str(long["text"]).ends_with("…"))
+
+
+func test_confirmed_count_counts_the_finished_rows_at_the_top() -> void:
+	assert_eq(RaceHud.confirmed_count([]), 0)
+	assert_eq(RaceHud.confirmed_count([{"finished": false}, {"finished": false}]), 0)
+	assert_eq(RaceHud.confirmed_count([{"finished": true}, {"finished": true}, {"finished": false}]), 2)
+	assert_eq(RaceHud.confirmed_count([{"finished": true}, {"finished": true}]), 2)
+
+
+func test_standings_time_text_shows_minutes_seconds_and_hundredths() -> void:
+	assert_eq(RaceHud.standings_time_text(118.32), "1:58:32")
+	assert_eq(RaceHud.standings_time_text(9.05), "0:09:05")
+
+
+func test_standings_sit_midway_between_the_race_info_and_the_panel() -> void:
+	var screen_height := 648.0
+	var rows := 8
+	var top := RaceHud.standings_top(screen_height, rows)
+	var gap_above := top - (RaceHud.RACE_INFO_ORIGIN.y + RaceHud.RACE_INFO_HEIGHT)
+	var gap_below := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT - (top + rows * RaceHud.STANDINGS_ROW_HEIGHT)
+	assert_almost_eq(gap_above, gap_below, 0.0001)
+	assert_gt(gap_above, 0.0)
