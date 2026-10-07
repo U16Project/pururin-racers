@@ -9,6 +9,11 @@ config/name="ぷるりんレーサーズ"
 config/features=PackedStringArray("4.7")
 run/main_scene="res://scenes/m3_intro.tscn"
 
+[display]
+
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
 [gui]
 
 theme/custom_font="res://fonts/NotoSansCJK-Regular.ttc"

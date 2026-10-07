@@ -9,6 +9,8 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
+## 中身と、画面の上下の端との間に残す余白。
+const CONTENT_SCREEN_MARGIN := 12.0
 const INTRO_ITEMS := [
 	"←→／左スティック：走る位置　↑↓／十字キー：ローカルは出力、オンラインは目標スピード",
 	"Y/C：カメラ切替　Start/Esc：メニュー（レース中）",
@@ -58,6 +60,18 @@ func _ready() -> void:
 	_refresh_pururin_preview()
 	_distance_option.grab_focus()
 	_refresh_guide_label()
+	get_viewport().size_changed.connect(_fit_content_to_screen)
+	_fit_content_to_screen.call_deferred()
+
+
+## 中身が画面の高さより大きいときは、全体を縮めて、画面に収める。
+func _fit_content_to_screen() -> void:
+	var content := get_node_or_null("Content") as Control
+	if content == null:
+		return
+	var needed := content.get_combined_minimum_size().y + CONTENT_SCREEN_MARGIN * 2.0
+	content.pivot_offset = content.size * 0.5
+	content.scale = Vector2.ONE * minf(1.0, get_viewport_rect().size.y / needed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
