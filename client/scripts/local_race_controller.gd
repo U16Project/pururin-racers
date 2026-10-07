@@ -17,7 +17,7 @@ const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
-const TITLE_SCENE := "res://scenes/m3_intro.tscn"
+const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
 @onready var _track: Path3D = $TrackPath
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
@@ -74,8 +74,8 @@ func _ready() -> void:
 	_hud_label_right.visible = false
 	_guide_label.visible = false
 	_layout_overlay_labels()
-	_pause_return_button.pressed.connect(_return_to_title)
-	_result_return_button.pressed.connect(_return_to_title)
+	_pause_return_button.pressed.connect(_return_to_race_select)
+	_result_return_button.pressed.connect(_return_to_race_select)
 	_resume_button.pressed.connect(_set_paused.bind(false))
 	var course_result := M5CourseBuilder.load_layout_result()
 	if course_result.has("error"):
@@ -683,5 +683,5 @@ func _set_paused(paused: bool) -> void:
 		_resume_button.grab_focus()
 
 
-func _return_to_title() -> void:
-	get_tree().change_scene_to_file(TITLE_SCENE)
+func _return_to_race_select() -> void:
+	get_tree().change_scene_to_file(RACE_SELECT_SCENE)

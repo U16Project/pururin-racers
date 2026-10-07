@@ -16,7 +16,6 @@ const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)
 	RaceSession.select_player_pururin(RaceSession.default_player_pururin_id())
-	RaceSession.reset_stamina_load_preset()
 
 
 func test_cpu_heart_safety_uses_the_highest_notch_that_lowers_an_overheated_heart() -> void:

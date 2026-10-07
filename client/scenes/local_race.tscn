@@ -172,7 +172,7 @@ custom_minimum_size = Vector2(0, 44)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 20
-text = "タイトルへ戻る"
+text = "レース選択へ戻る"
 
 [node name="ResultPanel" type="PanelContainer" parent="UI"]
 unique_name_in_owner = true
@@ -217,4 +217,4 @@ custom_minimum_size = Vector2(0, 48)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("4_font")
 theme_override_font_sizes/font_size = 20
-text = "タイトルへ戻る"
+text = "レース選択へ戻る"

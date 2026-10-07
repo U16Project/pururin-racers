@@ -52,7 +52,6 @@ static func session_snapshot() -> Dictionary:
 	return {
 		"distance_m": LocalRaceMath.RaceSession.selected_distance_m(),
 		"player_id": LocalRaceMath.RaceSession.selected_player_pururin_id(),
-		"stamina_load_preset_id": LocalRaceMath.RaceSession.selected_stamina_load_preset_id(),
 	}
 
 
@@ -79,8 +78,7 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 		return {"error": "config_overrides: %s" % "; ".join(errors)}
 	var previous_session := session_snapshot()
 	LocalRaceMath.Config._cached = candidate
-	# 共通シミュレータは常にconfig_overridesを正本にする。実機用の選択状態は終了後に戻す。
-	LocalRaceMath.RaceSession.reset_stamina_load_preset()
+	# 実機用の選択状態は終了後に戻す。
 	var scenario: Dictionary = condition.get("scenario", {}).duplicate(true)
 	if scenario.has("distance_m"):
 		LocalRaceMath.RaceSession.select_distance(float(scenario.distance_m))
@@ -97,7 +95,6 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 	LocalRaceMath.Config._cached = original_config
 	LocalRaceMath.RaceSession.select_distance(float(previous_session.distance_m))
 	LocalRaceMath.RaceSession.select_player_pururin(str(previous_session.player_id))
-	LocalRaceMath.RaceSession.select_stamina_load_preset(str(previous_session.stamina_load_preset_id))
 	result["case_id"] = str(condition.get("id", scenario.get("id", "unnamed")))
 	result["condition"] = condition.duplicate(true)
 	return result

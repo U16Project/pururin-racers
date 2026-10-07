@@ -1,7 +1,6 @@
 extends GutTest
 
 const M5Scene := preload("res://scenes/m5_online_race.tscn")
-const IntroScene := preload("res://scenes/m3_intro.tscn")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 
 func test_m5_scene_exists_and_has_online_controller() -> void:
@@ -319,9 +318,3 @@ func test_finished_visual_runs_until_result_arrives() -> void:
 	race.call("_process", 9.0)
 	assert_eq(visual.global_position, during_hold)
 	race.free()
-
-func test_intro_exposes_m5_entry() -> void:
-	var intro := IntroScene.instantiate()
-	add_child(intro)
-	assert_true(intro.get_node("%M5Button") != null)
-	intro.free()

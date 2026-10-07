@@ -1034,7 +1034,7 @@ func _reset_stamina_for_effective_stats() -> void:
 			str(_pururin["attribute"]), _pururin["allocation"]
 		)["stamina"])
 	_stamina_capacity_l = LocalRaceMath.stamina_capacity_l(stamina_stat)
-	_stamina_load_multiplier = RaceSession.selected_stamina_load_multiplier()
+	_stamina_load_multiplier = LocalRaceMath.Config.number("stamina_consumption_load_multiplier")
 	_stamina = _stamina_capacity_l
 
 
