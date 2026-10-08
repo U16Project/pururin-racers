@@ -25,7 +25,7 @@ const COLOR_PANEL_BORDER := Color(1.0, 1.0, 1.0, 0.3)
 const COLOR_PANEL_BACK_TAKEN := Color(1.0, 0.6, 0.2, 0.1)
 const COLOR_PANEL_BORDER_TAKEN := Color(1.0, 0.6, 0.2, 0.75)
 const MARK_SIZE := 28.0
-const CHEVRON_SCALE := 1.15
+const CHEVRON_SCALE := 1.0
 ## 属性・脚質の行の文字の大きさ。
 const INFO_FONT_SIZE := 20
 ## 能力の表示名（画面用の短い名前）。
@@ -53,7 +53,7 @@ var _attribute_label: Label
 var _attribute_mark: Control
 var _style_row: HBoxContainer
 var _style_chevrons: Control
-var _style_label: Label
+var _style_label: Control
 var _bars: Control
 var _preview: Dictionary = {}
 var _filled_box: Control
@@ -91,7 +91,7 @@ func _ready() -> void:
 	_name_label.call("setup", NAME_FONT_SIZE)
 	column.add_child(_name_label)
 	var top := HBoxContainer.new()
-	top.add_theme_constant_override("separation", 14)
+	top.add_theme_constant_override("separation", 10)
 	column.add_child(top)
 	_portrait = Portrait.new()
 	_portrait.name = "Portrait"
@@ -121,8 +121,10 @@ func _ready() -> void:
 	_style_chevrons = Control.new()
 	_style_chevrons.draw.connect(_draw_style_chevrons)
 	_style_row.add_child(_style_chevrons)
-	_style_label = MenuStyle.label("", INFO_FONT_SIZE)
-	_style_label.clip_text = true
+	# 脚質の名前は、欄に入りきらないときも切らずに、縮めて出す（名前と同じ決まり）。
+	_style_label = FitLabel.new()
+	_style_label.name = "StyleLabel"
+	_style_label.call("setup", INFO_FONT_SIZE)
 	_style_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_row.add_child(_style_label)
 	# 他のスロットで使っている個体を見ているときだけ出す帯。
@@ -228,7 +230,7 @@ func show_pururin(pururin_id: String, taken_by: String = "", holder_locked: bool
 	if not _preview.is_empty():
 		_name_label.call("set_text", str(_preview["display_name"]))
 		_attribute_label.text = "属性：%s" % _preview["attribute"]
-		_style_label.text = str(_preview["running_style"])
+		_style_label.call("set_text", str(_preview["running_style"]))
 		_style_chevrons.custom_minimum_size = Vector2(
 			RaceHud.STYLE_CHEVRON_STEP * CHEVRON_SCALE * PururinStatsMath.rank_group_count() + 4.0, MARK_SIZE
 		)

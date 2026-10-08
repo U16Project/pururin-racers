@@ -658,3 +658,26 @@ func test_a_nine_character_name_is_never_cut_on_the_race_select_screen() -> void
 	assert_eq(in_tile["text"], nine)
 	screen.free()
 	pururin["display_name"] = original
+
+
+func test_every_running_style_name_fits_in_the_detail_panel_at_full_size() -> void:
+	var styles: Dictionary = PururinStatsConfig.values()["running_styles"]
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var seen := {}
+	for id: String in RaceSession.roster_ids():
+		screen.get("_detail").call("show_pururin", id)
+		await wait_process_frames(2)
+		var style_id := str(PururinRosterConfig.pururin_by_id(id)["running_style"])
+		var label: Control = screen.get("_detail").find_child("StyleLabel", true, false)
+		var fitted: Dictionary = label.call("fitted")
+		# 切らない。縮めもしない。
+		assert_eq(fitted["text"], str(styles[style_id]["label"]), id)
+		assert_eq(fitted["x_scale"], 1.0, id)
+		assert_eq(int(fitted["font_size"]), PururinDetail.INFO_FONT_SIZE, id)
+		seen[style_id] = true
+	# 個体一覧で、全部の脚質を確かめている。
+	for style_id: String in styles:
+		assert_true(seen.has(style_id), style_id)
+	screen.free()
+
