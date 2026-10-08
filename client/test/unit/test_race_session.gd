@@ -10,6 +10,7 @@ const RunnerScript := preload("res://scripts/runner_local_race.gd")
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)
 	RaceSession.select_player_pururin(RaceSession.default_player_pururin_id())
+	RaceSession.select_all_opponents()
 
 
 func test_supported_distances_are_the_five_course_routes() -> void:
@@ -81,3 +82,60 @@ func test_runner_setup_does_not_change_the_selected_distance() -> void:
 	assert_eq(float(runner.call("get_race_distance")), 2400.0)
 	assert_eq(RaceSession.selected_distance_m(), 1600.0)
 	runner.free()
+
+
+func test_every_other_pururin_is_an_opponent_until_some_are_removed() -> void:
+	var roster: Array = PururinRosterConfig.values()["roster"]
+	var candidates := RaceSession.opponent_candidate_ids()
+	assert_eq(candidates.size(), roster.size() - 1)
+	assert_false(RaceSession.selected_player_pururin_id() in candidates)
+	assert_eq(RaceSession.selected_opponent_ids(), candidates)
+	assert_true(RaceSession.set_opponent_selected(candidates[0], false))
+	assert_false(candidates[0] in RaceSession.selected_opponent_ids())
+	assert_eq(RaceSession.selected_opponent_ids().size(), candidates.size() - 1)
+	assert_true(RaceSession.set_opponent_selected(candidates[0], true))
+	assert_eq(RaceSession.selected_opponent_ids(), candidates)
+
+
+func test_the_last_opponent_cannot_be_removed() -> void:
+	var candidates := RaceSession.opponent_candidate_ids()
+	for index in range(1, candidates.size()):
+		assert_true(RaceSession.set_opponent_selected(candidates[index], false))
+	assert_eq(RaceSession.selected_opponent_ids(), [candidates[0]] as Array[String])
+	assert_false(RaceSession.set_opponent_selected(candidates[0], false))
+	assert_eq(RaceSession.selected_opponent_ids(), [candidates[0]] as Array[String])
+
+
+func test_changing_the_player_swaps_the_candidates_and_keeps_at_least_one_opponent() -> void:
+	var first_player := RaceSession.selected_player_pururin_id()
+	var candidates := RaceSession.opponent_candidate_ids()
+	var only := candidates[0]
+	for index in range(1, candidates.size()):
+		RaceSession.set_opponent_selected(candidates[index], false)
+	# ただ1体の相手を、自分にする。前に自分だった個体が、相手に入る。
+	RaceSession.select_player_pururin(only)
+	assert_false(only in RaceSession.opponent_candidate_ids())
+	assert_eq(RaceSession.selected_opponent_ids(), [first_player] as Array[String])
+
+
+func test_local_race_spawns_only_the_player_and_the_selected_opponents() -> void:
+	var candidates := RaceSession.opponent_candidate_ids()
+	for index in range(3, candidates.size()):
+		RaceSession.set_opponent_selected(candidates[index], false)
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var runners: Array = race.call("get_runners_for_simulation")
+	assert_eq(runners.size(), 4)
+	var ids := []
+	var offsets := []
+	for runner in runners:
+		ids.append(str(runner.call("get_snapshot")["id"]))
+		offsets.append(float(runner.call("get_snapshot")["offset"]))
+	assert_true(RaceSession.selected_player_pururin_id() in ids)
+	for index in 3:
+		assert_true(candidates[index] in ids)
+	# スタートの位置は、満員のときと同じ間で、内側の枠から詰める。
+	offsets.sort()
+	for gate in runners.size():
+		assert_almost_eq(float(offsets[gate]), LocalRaceMath.starting_offset_for_gate(gate), 0.002)
+	race.free()

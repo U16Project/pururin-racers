@@ -52,6 +52,7 @@ static func session_snapshot() -> Dictionary:
 	return {
 		"distance_m": LocalRaceMath.RaceSession.selected_distance_m(),
 		"player_id": LocalRaceMath.RaceSession.selected_player_pururin_id(),
+		"excluded_opponent_ids": LocalRaceMath.RaceSession.excluded_opponent_ids(),
 	}
 
 
@@ -78,7 +79,8 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 		return {"error": "config_overrides: %s" % "; ".join(errors)}
 	var previous_session := session_snapshot()
 	LocalRaceMath.Config._cached = candidate
-	# 実機用の選択状態は終了後に戻す。
+	# 測定は、いつも全員で走る。実機用の選択状態は終了後に戻す。
+	LocalRaceMath.RaceSession.select_all_opponents()
 	var scenario: Dictionary = condition.get("scenario", {}).duplicate(true)
 	if scenario.has("distance_m"):
 		LocalRaceMath.RaceSession.select_distance(float(scenario.distance_m))
@@ -95,6 +97,7 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 	LocalRaceMath.Config._cached = original_config
 	LocalRaceMath.RaceSession.select_distance(float(previous_session.distance_m))
 	LocalRaceMath.RaceSession.select_player_pururin(str(previous_session.player_id))
+	LocalRaceMath.RaceSession.restore_excluded_opponent_ids(previous_session.excluded_opponent_ids)
 	result["case_id"] = str(condition.get("id", scenario.get("id", "unnamed")))
 	result["condition"] = condition.duplicate(true)
 	return result

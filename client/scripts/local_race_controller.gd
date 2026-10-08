@@ -235,15 +235,18 @@ func _spawn_field() -> void:
 	sphere.height = 1.5
 	var selected_player_id := RaceSession.selected_player_pururin_id()
 	var roster: Array = PururinRosterConfig.values()["roster"]
+	var opponent_ids := RaceSession.selected_opponent_ids()
 	var field_roster: Array = []
 	# 選択した操作個体の開始ゲートは設定で変更できる。CPUには残りのゲートを順番に割り当てる。
+	# 出る人数が少ないときは、内側の枠から詰めて使う（枠の間は、満員のときと同じ）。
 	for pururin: Dictionary in roster:
 		if str(pururin.get("id", "")) == selected_player_id:
 			field_roster.append(pururin)
 	for pururin: Dictionary in roster:
-		if str(pururin.get("id", "")) != selected_player_id:
+		if str(pururin.get("id", "")) in opponent_ids:
 			field_roster.append(pururin)
-	var player_gate := clampi(int(LocalRaceMath.Config.number("player_start_gate_index")), 0, LocalRaceMath.FIELD_SIZE - 1)
+	var field_size := field_roster.size()
+	var player_gate := clampi(int(LocalRaceMath.Config.number("player_start_gate_index")), 0, field_size - 1)
 	var next_cpu_gate := 0
 	for i in field_roster.size():
 		var pururin: Dictionary = field_roster[i]
@@ -276,7 +279,8 @@ func _spawn_field() -> void:
 			is_player,
 			label,
 			pururin,
-			_race_distance_m
+			_race_distance_m,
+			field_size
 		)
 		_runners.append(runner)
 		if is_player:
@@ -546,7 +550,7 @@ func _update_race_hud() -> void:
 		"player_name": str(_player.get("display_name")),
 		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
-		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place) if has_style and place > 0 else 0,
+		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"race_distance_m": _race_distance_m,
@@ -601,7 +605,7 @@ func _hud_standings() -> Array:
 			"finish_time": float(runner.call("get_finish_time")),
 			"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 			"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
-			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place) if has_style else 0,
+			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style else 0,
 			"heart_bpm": float(runner.call("get_heart_rate_bpm")),
 			"fuel_ratio": float(runner.call("get_stamina_ratio")),
 		})

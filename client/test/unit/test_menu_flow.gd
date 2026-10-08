@@ -13,6 +13,7 @@ const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)
 	RaceSession.select_player_pururin(RaceSession.default_player_pururin_id())
+	RaceSession.select_all_opponents()
 
 
 func test_game_starts_with_the_logo_and_the_logo_leads_to_the_title() -> void:
@@ -85,3 +86,36 @@ func test_selected_pururin_preview_uses_attribute_adjusted_pre_race_stats() -> v
 	assert_eq(preview["pre_race_stats"]["acceleration"], 9)
 	assert_eq(preview["pre_race_stats"]["cardio"], 8)
 	assert_eq(preview["pre_race_stats"]["top_speed"], 5)
+
+
+func test_race_select_lists_the_opponents_and_keeps_at_least_one() -> void:
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var boxes: Dictionary = screen.get("_opponent_boxes")
+	var candidates := RaceSession.opponent_candidate_ids()
+	assert_eq(boxes.size(), candidates.size())
+	for identifier in candidates:
+		assert_true((boxes[identifier] as Button).button_pressed)
+	# 1体だけ残して外す。最後の1体は、外そうとしても選ばれたまま。
+	for index in range(1, candidates.size()):
+		(boxes[candidates[index]] as Button).button_pressed = false
+	assert_eq(RaceSession.selected_opponent_ids(), [candidates[0]] as Array[String])
+	(boxes[candidates[0]] as Button).button_pressed = false
+	assert_true((boxes[candidates[0]] as Button).button_pressed)
+	assert_eq(RaceSession.selected_opponent_ids(), [candidates[0]] as Array[String])
+	screen.free()
+
+
+func test_race_select_swaps_the_opponent_candidates_when_the_player_changes() -> void:
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var first_player := RaceSession.selected_player_pururin_id()
+	var option: OptionButton = screen.get_node("Panel/Content/PururinOption")
+	var roster: Array = PururinRosterConfig.values()["roster"]
+	var last := roster.size() - 1
+	option.item_selected.emit(last)
+	var boxes: Dictionary = screen.get("_opponent_boxes")
+	assert_true(boxes.has(first_player))
+	assert_false(boxes.has(str(roster[last]["id"])))
+	assert_eq(boxes.size(), roster.size() - 1)
+	screen.free()

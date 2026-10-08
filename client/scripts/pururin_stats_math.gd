@@ -50,12 +50,12 @@ static func pre_race_stats(attribute_id: String, allocation: Dictionary) -> Dict
 	return result
 
 
-static func effective_stats(attribute_id: String, allocation: Dictionary, style_id: String, live_rank: int, progress_ratio: float) -> Dictionary:
+static func effective_stats(attribute_id: String, allocation: Dictionary, style_id: String, live_rank: int, progress_ratio: float, field_size: int = rank_reference_size()) -> Dictionary:
 	var styles: Dictionary = Config.values()["running_styles"]
 	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)
 	var style: Dictionary = styles[style_id]
 	var result := pre_race_stats(attribute_id, allocation)
-	var position_bonus := rank_bonus(style_id, live_rank)
+	var position_bonus := rank_bonus(style_id, live_rank, field_size)
 	for stat_id in result:
 		result[stat_id] = int(result[stat_id]) + position_bonus
 	var phase_index := mini(int(floor(clampf(progress_ratio, 0.0, 0.999999) * int(Config.values()["race_phase_count"]))), int(Config.values()["race_phase_count"]) - 1)
@@ -78,10 +78,26 @@ static func rank_group_count() -> int:
 	return Config.values()["rank_groups"].size()
 
 
-static func rank_bonus(style_id: String, live_rank: int) -> int:
+## 順位の組が前提にしている出走数（組の最後の順位。現行8）。
+static func rank_reference_size() -> int:
+	var groups: Array = Config.values()["rank_groups"]
+	return int(groups[groups.size() - 1][1])
+
+
+## 出る人数が少ない（多い）レースの順位を、順位の組の判定に使う順位に置き換える。
+## 先頭は1位、最後尾は最後の順位（現行8位）として、間を均等に割り当てる。
+static func scaled_rank(live_rank: int, field_size: int) -> int:
+	var reference := rank_reference_size()
+	if field_size == reference or field_size <= 1:
+		return live_rank
+	var rank := clampi(live_rank, 1, field_size)
+	return 1 + roundi(float(reference - 1) * float(rank - 1) / float(field_size - 1))
+
+
+static func rank_bonus(style_id: String, live_rank: int, field_size: int = rank_reference_size()) -> int:
 	var styles: Dictionary = Config.values()["running_styles"]
 	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)
-	var group_index := _rank_group_index(live_rank)
+	var group_index := _rank_group_index(scaled_rank(live_rank, field_size))
 	var desired_group := int(styles[style_id]["rank_group_index"])
 	var distance: int = abs(group_index - desired_group)
 	var bonus: Dictionary = Config.values()["rank_bonus"]

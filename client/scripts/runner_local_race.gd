@@ -100,6 +100,8 @@ var _cpu_start_drive_remaining: float = 0.0
 var _simulation_legacy_speed_cap: bool = false
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
+## このレースに出る人数（脚質の順位の判定に使う）。
+var _field_size: int = LocalRaceMath.FIELD_SIZE
 
 
 func setup_for_race(
@@ -109,10 +111,12 @@ func setup_for_race(
 	is_player: bool,
 	label: String,
 	pururin: Dictionary = {},
-	race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
+	race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M,
+	field_size: int = LocalRaceMath.FIELD_SIZE
 ) -> void:
 	_path = path
 	gate_index = gate
+	_field_size = field_size
 	_base_max_speed_kmh = initial_max_speed_kmh
 	max_speed_kmh = initial_max_speed_kmh
 	_pururin = pururin.duplicate(true)
@@ -123,6 +127,7 @@ func setup_for_race(
 	)
 	player_controlled = is_player
 	display_name = label
+	# スタートの枠の間は、出る人数が少なくても、満員のときと同じ。
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
 	_target_offset = _offset
 	_distance = LocalRaceMath.start_path_for_distance_m(_race_distance_m)
@@ -909,7 +914,8 @@ func _apply_pururin_race_stats() -> void:
 		_pururin["allocation"],
 		str(_pururin["running_style"]),
 		_cpu_live_place(),
-		_race_progress / _race_distance_m
+		_race_progress / _race_distance_m,
+		_field_size
 	)
 	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))
 	max_speed_kmh = _natural_top_speed_kmh

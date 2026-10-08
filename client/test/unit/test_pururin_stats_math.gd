@@ -102,3 +102,35 @@ func test_style_rank_group_matches_the_group_that_gives_the_matching_bonus() -> 
 		var group_index: int = Stats.style_rank_group_index(style_id)
 		var rank_in_group := int(groups[group_index][0])
 		assert_eq(Stats.rank_bonus(style_id, rank_in_group), int(config["rank_bonus"]["matching"]), style_id)
+
+
+func test_a_full_field_uses_the_actual_rank_for_the_rank_groups() -> void:
+	var reference := Stats.rank_reference_size()
+	for rank in range(1, reference + 1):
+		assert_eq(Stats.scaled_rank(rank, reference), rank)
+
+
+func test_a_smaller_field_spreads_its_ranks_evenly_from_first_to_last_of_the_full_field() -> void:
+	var reference := Stats.rank_reference_size()
+	for field_size in range(2, reference):
+		assert_eq(Stats.scaled_rank(1, field_size), 1, "先頭は1位（%d人）" % field_size)
+		assert_eq(Stats.scaled_rank(field_size, field_size), reference, "最後尾は最後の順位（%d人）" % field_size)
+		for rank in range(2, field_size + 1):
+			assert_gt(Stats.scaled_rank(rank, field_size), Stats.scaled_rank(rank - 1, field_size), "順位の前後は入れ替わらない")
+	# 4人なら、4つの順位の組に1人ずつ入る。
+	var groups := {}
+	for rank in range(1, 5):
+		groups[Stats._rank_group_index(Stats.scaled_rank(rank, 4))] = true
+	assert_eq(groups.size(), Stats.rank_group_count())
+
+
+func test_every_running_style_can_reach_its_matching_rank_bonus_in_a_small_field() -> void:
+	var config := Config.values()
+	for field_size in [2, 4, 6]:
+		for style_id: String in config["running_styles"]:
+			var best := -99
+			for rank in range(1, field_size + 1):
+				best = maxi(best, Stats.rank_bonus(style_id, rank, field_size))
+			# 2人のレースは、順位の組が2つしか使えないので、4人以上で全脚質が得意な順位を持つ。
+			if field_size >= Stats.rank_group_count():
+				assert_eq(best, int(config["rank_bonus"]["matching"]), "%s（%d人）" % [style_id, field_size])

@@ -1,5 +1,5 @@
 extends Control
-## オフラインフリー対戦のレース選択画面。距離と、自分が操作するぷるりんを選んで、レースを始める。
+## オフラインフリー対戦のレース選択画面。距離・自分が操作するぷるりん・対戦相手を選んで、レースを始める。
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
 const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
@@ -9,11 +9,15 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
-const PANEL_SIZE := Vector2(820.0, 560.0)
+const PANEL_SIZE := Vector2(860.0, 612.0)
+const OPPONENT_COLUMNS := 4
 
 var _distance_buttons: Array[Button] = []
 var _pururin_option: OptionButton
 var _pururin_preview: Label
+var _opponent_label: Label
+var _opponent_grid: GridContainer
+var _opponent_boxes: Dictionary = {}
 var _race_button: Button
 var _back_button: Button
 
@@ -30,7 +34,7 @@ func _ready() -> void:
 	add_child(background)
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL, 16, 36.0, 26.0))
+	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL, 16, 36.0, 18.0))
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -PANEL_SIZE.x * 0.5
 	panel.offset_right = PANEL_SIZE.x * 0.5
@@ -39,9 +43,9 @@ func _ready() -> void:
 	add_child(panel)
 	var content := VBoxContainer.new()
 	content.name = "Content"
-	content.add_theme_constant_override("separation", 14)
+	content.add_theme_constant_override("separation", 9)
 	panel.add_child(content)
-	var heading := MenuStyle.label("オフラインフリー対戦", 34)
+	var heading := MenuStyle.label("オフラインフリー対戦", 30)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(heading)
 	content.add_child(MenuStyle.label("距離", 20, MenuStyle.COLOR_DIM))
@@ -61,8 +65,17 @@ func _ready() -> void:
 	_pururin_preview = MenuStyle.label("", 17)
 	_pururin_preview.name = "PururinPreview"
 	_pururin_preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_pururin_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	content.add_child(_pururin_preview)
+	_opponent_label = MenuStyle.label("", 20, MenuStyle.COLOR_DIM)
+	_opponent_label.name = "OpponentLabel"
+	content.add_child(_opponent_label)
+	_opponent_grid = GridContainer.new()
+	_opponent_grid.name = "OpponentGrid"
+	_opponent_grid.columns = OPPONENT_COLUMNS
+	_opponent_grid.add_theme_constant_override("h_separation", 10)
+	_opponent_grid.add_theme_constant_override("v_separation", 8)
+	_opponent_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(_opponent_grid)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 20)
 	content.add_child(buttons)
@@ -78,6 +91,7 @@ func _ready() -> void:
 	_race_button.pressed.connect(go_to_race)
 	buttons.add_child(_race_button)
 	_refresh_pururin_preview()
+	_rebuild_opponents()
 	_race_button.grab_focus()
 
 
@@ -124,6 +138,7 @@ func _on_pururin_selected(index: int) -> void:
 	if index >= 0 and index < roster.size() and roster[index] is Dictionary:
 		RaceSession.select_player_pururin(str(roster[index].get("id", "")))
 		_refresh_pururin_preview()
+		_rebuild_opponents()
 
 
 func _pururin_index(identifier: String) -> int:
@@ -165,5 +180,39 @@ func _refresh_pururin_preview() -> void:
 		"空力 %d　集団 %d　接触耐性 %d　操作性 %d" % [
 			int(stats["aero"]), int(stats["pack"]), int(stats["contact_resistance"]), int(stats["handling"]),
 		],
-		"（出走前の値。順位・区間の補正は、レース中に変わります）",
 	]))
+
+
+## 対戦相手の候補を並べ直す（自分のぷるりんを変えると、候補が入れ替わる）。
+func _rebuild_opponents() -> void:
+	for child in _opponent_grid.get_children():
+		_opponent_grid.remove_child(child)
+		child.queue_free()
+	_opponent_boxes.clear()
+	var styles: Dictionary = PururinStatsConfig.values().get("running_styles", {})
+	var selected := RaceSession.selected_opponent_ids()
+	for identifier in RaceSession.opponent_candidate_ids():
+		var pururin := PururinRosterConfig.pururin_by_id(identifier)
+		var style_id := str(pururin.get("running_style", ""))
+		var box := MenuStyle.button("%s（%s）" % [str(pururin.get("display_name", "")), str(styles.get(style_id, {}).get("label", style_id))], 18, MenuStyle.COLOR_BUTTON_QUIET)
+		box.name = "Opponent_%s" % identifier
+		box.toggle_mode = true
+		box.custom_minimum_size = Vector2(0.0, 46.0)
+		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		box.button_pressed = identifier in selected
+		box.toggled.connect(_on_opponent_toggled.bind(identifier))
+		_opponent_grid.add_child(box)
+		_opponent_boxes[identifier] = box
+	_refresh_opponent_label()
+
+
+func _on_opponent_toggled(pressed: bool, identifier: String) -> void:
+	if not RaceSession.set_opponent_selected(identifier, pressed):
+		# 最後の1体は外せない。ボタンを、選んだ状態に戻す。
+		(_opponent_boxes[identifier] as Button).set_pressed_no_signal(true)
+	_refresh_opponent_label()
+
+
+func _refresh_opponent_label() -> void:
+	var count := RaceSession.selected_opponent_ids().size()
+	_opponent_label.text = "対戦相手　%d体（自分を入れて%d体で走る。緑が出る相手。最低1体）" % [count, count + 1]
