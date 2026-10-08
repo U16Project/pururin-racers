@@ -3,12 +3,14 @@ extends Control
 ## ユーザーの行は、帯と名前の色で目立たせる。値は set_rows() で受け取り、計算はしない。
 
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const FitText := preload("res://scripts/presentation/fit_text.gd")
 const BOARD_WIDTH := 500.0
 const ROW_HEIGHT := 40.0
 const RANK_CENTER_X := 30.0
 const DOT_X := 76.0
 const NAME_X := 96.0
 const TIME_RIGHT_MARGIN := 16.0
+const NAME_TIME_GAP := 12.0
 const FONT_SIZE := 24
 const MARK_SCALE := 1.35
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -60,9 +62,11 @@ func _draw() -> void:
 		draw_circle(Vector2(DOT_X, center_y), 8.5, RaceHud.COLOR_OUTLINE)
 		draw_circle(Vector2(DOT_X, center_y), 7.0, row["color"])
 		var name_font: Font = _bold_font if is_player else font
-		draw_string(name_font, Vector2(NAME_X, baseline), str(row["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, COLOR_PLAYER if is_player else COLOR_TEXT)
 		var time_text := str(row["time_text"])
 		var time_width := font.get_string_size(time_text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_SIZE).x
+		# 名前は、タイムの手前までの幅に収める（全角9文字は、そのままの大きさで入る）。
+		var name_width := size.x - TIME_RIGHT_MARGIN - time_width - NAME_TIME_GAP - NAME_X
+		FitText.draw(self, name_font, Vector2(NAME_X, baseline), str(row["name"]), name_width, FONT_SIZE, COLOR_PLAYER if is_player else COLOR_TEXT)
 		draw_string(font, Vector2(size.x - TIME_RIGHT_MARGIN - time_width, baseline), time_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, RaceHud.COLOR_GOLD if place == 1 else COLOR_TEXT)
 
 

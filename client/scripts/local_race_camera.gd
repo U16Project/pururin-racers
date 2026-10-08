@@ -1,6 +1,8 @@
 extends Camera3D
 ## ローカルレースのカメラ。追う視点を4つ切り替える（デフォルト・遠距離・上空・一人称の順）。
 ## ゲームパッドの右スティックを倒している間は「見回し」になり、倒した向きを見る。離すと元の視点に戻る。
+## 追っている走者がゴールすると、少ししてから、前へ回り込んで、まわりをゆっくり回りながら映す
+## （走者との距離と高さは、選んでいる視点のまま。視点の切り替えと見回しは、レース中と同じ。一人称は回り込まない）。
 
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
@@ -19,6 +21,10 @@ const LOOK_TARGET_HEIGHT_M := 0.6
 ## 見回し：カメラの高さ（地面から）と、見下ろす角度。
 const LOOK_AROUND_HEIGHT_M := 3.1
 const LOOK_AROUND_PITCH_DEG := 22.0
+## ゴール後：回り込みを始めるまでの秒数、後ろから前へ回り込む秒数、そのあと回り続ける速さ（度/秒）。
+const GOAL_VIEW_DELAY_S := 1.5
+const GOAL_SWING_SECONDS := 2.0
+const GOAL_ORBIT_DEG_PER_S := 20.0
 const BACK_MIN_M := 0.0
 const BACK_MAX_M := 40.0
 const LATERAL_MAX_M := 12.0
@@ -32,6 +38,8 @@ var _target: Node3D
 var _back_offset := 0.0
 var _lateral_offset := 0.0
 var _yaw_offset := 0.0
+## 追っている走者がゴールしてからの秒数（ゴール前は0）。
+var _goal_seconds := 0.0
 
 
 func _ready() -> void:
@@ -81,7 +89,28 @@ func _reset_adjustment() -> void:
 
 func _process(delta: float) -> void:
 	_process_keyboard_adjustment(delta)
+	advance_goal_view(delta)
 	_apply()
+
+
+## ゴールしてからの秒数を進める（ゴール前は0に戻す）。
+func advance_goal_view(delta: float) -> void:
+	_goal_seconds = _goal_seconds + delta if _target_finished() else 0.0
+
+
+func _target_finished() -> bool:
+	return _target != null and _target.has_method("is_finished") and bool(_target.call("is_finished"))
+
+
+## ゴール後、走者のまわりを回る角度（ラジアン。0が真後ろ、PI が真正面）。
+## 少し待ってから、前へ回り込み、そのあとは同じ向きへ、ゆっくり回り続ける。
+static func goal_orbit_angle(seconds_since_goal: float) -> float:
+	var swing := seconds_since_goal - GOAL_VIEW_DELAY_S
+	if swing <= 0.0:
+		return 0.0
+	if swing < GOAL_SWING_SECONDS:
+		return PI * smoothstep(0.0, 1.0, swing / GOAL_SWING_SECONDS)
+	return PI + deg_to_rad(GOAL_ORBIT_DEG_PER_S) * (swing - GOAL_SWING_SECONDS)
 
 
 func _process_keyboard_adjustment(delta: float) -> void:
@@ -129,6 +158,10 @@ func _apply_look_around(forward: Vector3, stick: Vector2) -> void:
 
 func _apply_view(forward: Vector3, look_yaw: float = 0.0) -> void:
 	var settings: Dictionary = VIEW_SETTINGS[view]
+	# ゴール後は、走者のまわりを回る（一人称は、そのまま）。
+	var orbit := 0.0 if bool(settings["look_ahead"]) else goal_orbit_angle(_goal_seconds)
+	if orbit != 0.0:
+		forward = (Basis(Vector3.UP, orbit) * forward).normalized()
 	var back := clampf(float(settings["back"]) + _back_offset, BACK_MIN_M, BACK_MAX_M)
 	# 微調整は、限度を超えて溜めない。
 	_back_offset = back - float(settings["back"])

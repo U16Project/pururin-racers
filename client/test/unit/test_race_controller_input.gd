@@ -13,7 +13,10 @@ func _button_event(button: JoyButton) -> InputEventJoypadButton:
 func test_start_and_b_buttons_have_distinct_menu_roles() -> void:
 	assert_true(RaceControllerInput.is_menu_pressed(_button_event(JOY_BUTTON_START)))
 	assert_false(RaceControllerInput.is_cancel_pressed(_button_event(JOY_BUTTON_START)))
-	assert_true(RaceControllerInput.is_cancel_pressed(_button_event(JOY_BUTTON_B)))
+	assert_true(RaceControllerInput.is_cancel_pressed(_button_event(JOY_BUTTON_B)), "戻る・閉じるは B")
+	assert_false(RaceControllerInput.is_cancel_pressed(_button_event(JOY_BUTTON_A)))
+	assert_true(RaceControllerInput.is_accept_pressed(_button_event(JOY_BUTTON_A)), "決定は A")
+	assert_false(RaceControllerInput.is_accept_pressed(_button_event(JOY_BUTTON_B)))
 
 
 func test_y_and_right_stick_events_are_identifiable_for_camera_controls() -> void:

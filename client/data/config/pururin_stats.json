@@ -28,21 +28,45 @@
     "earth": {
       "label": "地",
       "color": "#b8894a",
+      "primary_colors": [
+        {"color": "#D8AD5C", "outline": "#7A5524"},
+        {"color": "#A8743A", "outline": "#5A3716"},
+        {"color": "#E3CFA0", "outline": "#8A7446"},
+        {"color": "#9A9388", "outline": "#4F4A42"}
+      ],
       "bonus_stats": ["stamina", "contact_resistance"]
     },
     "water": {
       "label": "水",
       "color": "#4aa9e8",
+      "primary_colors": [
+        {"color": "#6BB8FA", "outline": "#215CC7"},
+        {"color": "#3380EB", "outline": "#143899"},
+        {"color": "#5FD6E8", "outline": "#17808F"},
+        {"color": "#5A6FE0", "outline": "#2A2F99"}
+      ],
       "bonus_stats": ["handling", "pack"]
     },
     "fire": {
       "label": "火",
       "color": "#e6533c",
+      "primary_colors": [
+        {"color": "#E5553A", "outline": "#8F1F14"},
+        {"color": "#F5923E", "outline": "#A84A12"},
+        {"color": "#D93A5E", "outline": "#7F1433"},
+        {"color": "#F2C23A", "outline": "#9C6D0C"}
+      ],
       "bonus_stats": ["acceleration", "cardio"]
     },
     "wind": {
       "label": "風",
       "color": "#64c878",
+      "primary_colors": [
+        {"color": "#3FBFB0", "outline": "#14756C"},
+        {"color": "#62CF7C", "outline": "#1F7A3A"},
+        {"color": "#B4DE5A", "outline": "#5E8A1C"},
+        {"color": "#8FE3C8", "outline": "#2F8F74"}
+      ],
       "bonus_stats": ["top_speed", "aero"]
     }
   },

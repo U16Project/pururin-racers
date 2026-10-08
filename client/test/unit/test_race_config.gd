@@ -172,20 +172,66 @@ func test_goal_repositions_without_duplicate_nodes_and_supports_width() -> void:
 	add_child_autofree(track)
 	var visual := GoalVisual.new()
 	visual.place(track, 10.0, 15.0)
-	var sign := track.get_node("GoalSign")
-	var glow := track.get_node("GoalGlowLine") as MeshInstance3D
-	assert_eq(track.get_child_count(), 4)
-	assert_eq(glow.mesh.size.x, 15.0)
-	var first_position := glow.position
+	var gate := track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	assert_eq(track.get_child_count(), 1)
+	assert_almost_eq(visual.span_m(), 15.0 + GoalVisual.POST_MARGIN_M * 2.0, 0.0001)
+	assert_eq((gate.get_node("GroundLine") as MeshInstance3D).mesh.size.x, 15.0)
+	var first_position := gate.position
 	visual.place(track, 40.0, 20.0)
-	assert_eq(track.get_child_count(), 4)
-	assert_same(track.get_node("GoalSign"), sign)
-	assert_same(track.get_node("GoalGlowLine"), glow)
-	assert_eq(track.get_node("GoalPanelFrame").get_child_count(), 4)
-	assert_eq(glow.mesh.size.x, 20.0)
-	assert_eq(track.get_node("GoalPanel").mesh.size.x, 24.0)
-	assert_gt(first_position.distance_to(glow.position), 29.0)
-	assert_almost_eq(sign.pixel_size, 0.008 * 20.0 / 15.0, 0.00001)
+	# 置き直しても、門は1つだけ。
+	assert_eq(track.get_child_count(), 1)
+	var moved := track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	assert_almost_eq(visual.span_m(), 20.0 + GoalVisual.POST_MARGIN_M * 2.0, 0.0001)
+	assert_eq((moved.get_node("GroundLine") as MeshInstance3D).mesh.size.x, 20.0)
+	assert_gt(first_position.distance_to(moved.position), 29.0)
+
+func test_goal_counts_the_passes_left_before_the_finish_for_every_route() -> void:
+	var lap := float(M5CourseBuilder.load_layout()["track_length_m"])
+	var margin := GoalVisual.SWITCH_AFTER_PASS_M
+	for route: Dictionary in M5CourseBuilder.load_layout()["routes"]:
+		var distance := float(route["distance_m"])
+		# 門をくぐるのは、ゴールの1周前、2周前…。スタートより後ろにあるものだけ。
+		var passes := 0
+		while distance - lap * float(passes + 1) > 0.0:
+			passes += 1
+		assert_eq(GoalVisual.laps_to_go(distance, lap, 0.0), passes)
+		assert_eq(GoalVisual.laps_to_go(distance, lap, distance), 0)
+		if passes > 0:
+			var last_pass := distance - lap
+			# 通りすぎて少し走るまでは「あと1周」のまま。そのあと、ゴールの札に替わる。
+			assert_eq(GoalVisual.laps_to_go(distance, lap, last_pass + margin * 0.5), 1)
+			assert_eq(GoalVisual.laps_to_go(distance, lap, last_pass + margin * 1.5), 0)
+
+
+func test_goal_shows_the_lap_plate_until_the_final_lap() -> void:
+	var track := Path3D.new()
+	track.curve = Curve3D.new()
+	track.curve.add_point(Vector3.ZERO)
+	track.curve.add_point(Vector3(0, 0, -100))
+	add_child_autofree(track)
+	var visual := GoalVisual.new()
+	visual.place(track, 10.0, 15.0)
+	var gate := track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	var goal_text := gate.get_node("PlateTextFront") as Label3D
+	var lap_text := gate.get_node("LapTextFront") as Label3D
+	var line := gate.get_node("GroundLine") as Node3D
+	# 最初は、ゴールの札と、地面の市松の線。
+	assert_true(goal_text.visible and line.visible)
+	assert_false(lap_text.visible)
+	visual.set_laps_to_go(1)
+	assert_false(goal_text.visible or line.visible)
+	assert_true(lap_text.visible)
+	assert_eq(lap_text.text, GoalVisual.LAP_TEXT_FORMAT % 1)
+	# 置き直しても、残りの周の表示は引きつぐ。
+	visual.place(track, 40.0, 15.0)
+	gate = track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	assert_true((gate.get_node("LapTextBack") as Label3D).visible)
+	assert_false((gate.get_node("GroundLine") as Node3D).visible)
+	visual.set_laps_to_go(0)
+	assert_true((gate.get_node("PlateTextBack") as Label3D).visible)
+	assert_true((gate.get_node("GroundLine") as Node3D).visible)
+	assert_false((gate.get_node("LapTextBack") as Label3D).visible)
+
 
 func test_invalid_configuration_prevents_race_start_and_displays_error() -> void:
 	var saved := Config.values()

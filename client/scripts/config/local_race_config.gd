@@ -14,6 +14,10 @@ const NUMBER_RANGES := {
 	"cpu_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_duration_seconds": [0.0, 30.0],
 	"min_speed_kmh": [0.0, 75.0],
+	# ゴール後：ゴールから start の距離で速さを落とし始め、end の距離からは、ゆっくりの速さで進む。
+	"finish_slowdown_start_m": [0.0, 1000.0],
+	"finish_slowdown_end_m": [0.0, 1000.0],
+	"finish_cruise_speed_kmh": [1.0, 75.0],
 	"rolling_resistance_kmh_per_s": [0.0, 100.0],
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
 	"aero_air_resistance_reference_stat": [1.0, 15.0],
@@ -67,6 +71,8 @@ const NUMBER_RANGES := {
 	"pack_draft_effective_multiplier_per_stat": [0.0, 0.20],
 	"brake_deceleration_kmh_per_s": [0.001, 100.0],
 	"course_marker_sign_interval_m": [10.0, 1000.0],
+	# 1周（2083.1m）より短くする。長いと、同じ場所に、1周目用と2周目用の標識が並ぶ。
+	"course_marker_sign_max_remaining_m": [100.0, 2000.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],

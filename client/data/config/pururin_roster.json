@@ -7,7 +7,6 @@
       "control_kind": "player",
       "trainer_profile_id": "balanced",
       "attribute": "wind",
-      "visual_color": "#55c77a",
       "running_style": "pace",
       "allocation": {"top_speed": 6, "acceleration": 5, "stamina": 5, "cardio": 5, "aero": 5, "pack": 5, "contact_resistance": 4, "handling": 5}
     },
@@ -17,7 +16,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "front",
       "attribute": "fire",
-      "visual_color": "#d94a32",
       "running_style": "escape",
       "allocation": {"top_speed": 5, "acceleration": 7, "stamina": 4, "cardio": 6, "aero": 4, "pack": 4, "contact_resistance": 5, "handling": 5}
     },
@@ -27,7 +25,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "balanced",
       "attribute": "water",
-      "visual_color": "#69c9ef",
       "running_style": "pace",
       "allocation": {"top_speed": 5, "acceleration": 5, "stamina": 5, "cardio": 5, "aero": 5, "pack": 6, "contact_resistance": 4, "handling": 5}
     },
@@ -37,7 +34,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "draft",
       "attribute": "earth",
-      "visual_color": "#d8ad5c",
       "running_style": "stalk",
       "allocation": {"top_speed": 4, "acceleration": 4, "stamina": 7, "cardio": 5, "aero": 4, "pack": 6, "contact_resistance": 6, "handling": 4}
     },
@@ -47,7 +43,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "late",
       "attribute": "wind",
-      "visual_color": "#2aa6a1",
       "running_style": "closer",
       "allocation": {"top_speed": 7, "acceleration": 5, "stamina": 5, "cardio": 4, "aero": 6, "pack": 4, "contact_resistance": 4, "handling": 5}
     },
@@ -57,7 +52,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "balanced",
       "attribute": "fire",
-      "visual_color": "#f38a3d",
       "running_style": "pace",
       "allocation": {"top_speed": 5, "acceleration": 6, "stamina": 5, "cardio": 6, "aero": 4, "pack": 4, "contact_resistance": 5, "handling": 5}
     },
@@ -67,7 +61,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "draft",
       "attribute": "water",
-      "visual_color": "#236bb5",
       "running_style": "stalk",
       "allocation": {"top_speed": 4, "acceleration": 4, "stamina": 6, "cardio": 5, "aero": 5, "pack": 7, "contact_resistance": 4, "handling": 5}
     },
@@ -77,7 +70,6 @@
       "control_kind": "cpu",
       "trainer_profile_id": "front",
       "attribute": "earth",
-      "visual_color": "#9b6a32",
       "running_style": "escape",
       "allocation": {"top_speed": 5, "acceleration": 5, "stamina": 6, "cardio": 5, "aero": 4, "pack": 4, "contact_resistance": 7, "handling": 4}
     }

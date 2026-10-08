@@ -44,9 +44,9 @@ func _ready() -> void:
 	_free_race_button.grab_focus()
 
 
-## ゲームパッドのAで、選んでいるボタンを押す（Godotの標準では、Aは「決定」に割り当てられていない）。
+## ゲームパッドの決定（A）で、選んでいるボタンを押す（Godotの標準では、ゲームパッドのボタンは「決定」に割り当てられていない）。
 func _unhandled_input(event: InputEvent) -> void:
-	if not RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A):
+	if not RaceControllerInput.is_accept_pressed(event):
 		return
 	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 	var viewport := get_viewport()

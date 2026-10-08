@@ -6,6 +6,7 @@ signal force_requested
 
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const Portrait := preload("res://scripts/menu/pururin_portrait.gd")
+const FitLabel := preload("res://scripts/menu/fit_label.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
@@ -14,7 +15,8 @@ const EMPTY_TEXT := "ー未選択ー"
 const EMPTY_HINT_TEXT := "◀ キャラを選択してください ▶"
 const FORCE_TEXT := "強制選択"
 const FORCE_LOCKED_TEXT := "施錠中"
-const PORTRAIT_SIZE := 178.0
+const PORTRAIT_SIZE := 148.0
+const NAME_FONT_SIZE := 34
 ## パネルの枠と、中身までの余白。
 const PANEL_MARGIN := 16.0
 const COLOR_PANEL_BACK := Color(1.0, 1.0, 1.0, 0.05)
@@ -24,6 +26,8 @@ const COLOR_PANEL_BACK_TAKEN := Color(1.0, 0.6, 0.2, 0.1)
 const COLOR_PANEL_BORDER_TAKEN := Color(1.0, 0.6, 0.2, 0.75)
 const MARK_SIZE := 28.0
 const CHEVRON_SCALE := 1.15
+## 属性・脚質の行の文字の大きさ。
+const INFO_FONT_SIZE := 20
 ## 能力の表示名（画面用の短い名前）。
 const STAT_LABELS := {
 	"top_speed": "最高速",
@@ -43,7 +47,7 @@ const COLOR_BAR := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_BAR_TRACK := Color(1.0, 1.0, 1.0, 0.16)
 
 var _portrait: Control
-var _name_label: Label
+var _name_label: Control
 var _attribute_row: HBoxContainer
 var _attribute_label: Label
 var _attribute_mark: Control
@@ -81,26 +85,30 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 6)
 	add_child(column)
 	_filled_box = column
+	# 一番上に、名前を横いっぱいの1行で出す（全角9文字が、そのままの大きさで入る）。
+	_name_label = FitLabel.new()
+	_name_label.name = "NameLabel"
+	_name_label.call("setup", NAME_FONT_SIZE)
+	column.add_child(_name_label)
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 14)
 	column.add_child(top)
 	_portrait = Portrait.new()
 	_portrait.name = "Portrait"
+	# 大きい絵は、体をゆっくり回して、表情も替える。
+	_portrait.set("live", true)
 	_portrait.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
 	top.add_child(_portrait)
-	# 画像の右に3段：名前、属性（印つき）、脚質（印つき）。
+	# 画像の右に2段：属性（印つき）、脚質（印つき）。
 	var texts := VBoxContainer.new()
 	texts.alignment = BoxContainer.ALIGNMENT_CENTER
 	texts.add_theme_constant_override("separation", 10)
 	texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(texts)
-	_name_label = MenuStyle.label("", 34)
-	_name_label.name = "NameLabel"
-	texts.add_child(_name_label)
 	_attribute_row = HBoxContainer.new()
 	_attribute_row.add_theme_constant_override("separation", 6)
 	texts.add_child(_attribute_row)
-	_attribute_label = MenuStyle.label("", 20)
+	_attribute_label = MenuStyle.label("", INFO_FONT_SIZE)
 	_attribute_row.add_child(_attribute_label)
 	_attribute_mark = Control.new()
 	_attribute_mark.custom_minimum_size = Vector2(MARK_SIZE, MARK_SIZE)
@@ -109,11 +117,13 @@ func _ready() -> void:
 	_style_row = HBoxContainer.new()
 	_style_row.add_theme_constant_override("separation", 4)
 	texts.add_child(_style_row)
-	_style_row.add_child(MenuStyle.label("脚質：", 20))
+	_style_row.add_child(MenuStyle.label("脚質：", INFO_FONT_SIZE))
 	_style_chevrons = Control.new()
 	_style_chevrons.draw.connect(_draw_style_chevrons)
 	_style_row.add_child(_style_chevrons)
-	_style_label = MenuStyle.label("", 20)
+	_style_label = MenuStyle.label("", INFO_FONT_SIZE)
+	_style_label.clip_text = true
+	_style_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_style_row.add_child(_style_label)
 	# 他のスロットで使っている個体を見ているときだけ出す帯。
 	var taken_panel := PanelContainer.new()
@@ -216,7 +226,7 @@ func show_pururin(pururin_id: String, taken_by: String = "", holder_locked: bool
 	# 押せないときは、Yのマークも暗くする。
 	_force_mark.modulate = Color(0.45, 0.45, 0.5, 0.45) if holder_locked else Color.WHITE
 	if not _preview.is_empty():
-		_name_label.text = str(_preview["display_name"])
+		_name_label.call("set_text", str(_preview["display_name"]))
 		_attribute_label.text = "属性：%s" % _preview["attribute"]
 		_style_label.text = str(_preview["running_style"])
 		_style_chevrons.custom_minimum_size = Vector2(
@@ -236,15 +246,16 @@ func shown_pururin_id() -> String:
 	return str(_preview["id"]) if not _preview.is_empty() else ""
 
 
-## 属性の印（地＝岩、水＝しずく、火＝炎、風＝流れる線）。色は、設定の属性の色。
 func _draw_attribute_mark() -> void:
 	if _preview.is_empty():
 		return
-	var canvas := _attribute_mark
-	var color: Color = _preview["attribute_color"]
-	var c := canvas.size * 0.5
-	var r := MARK_SIZE * 0.44
-	match str(_preview["attribute_id"]):
+	draw_attribute_mark(_attribute_mark, _attribute_mark.size * 0.5, MARK_SIZE, str(_preview["attribute_id"]), _preview["attribute_color"])
+
+
+## 属性の印（地＝岩、水＝しずく、火＝炎、風＝流れる線）を、指定の描画先に描く。色は、設定の属性の色。
+static func draw_attribute_mark(canvas: CanvasItem, c: Vector2, mark_size: float, attribute_id: String, color: Color) -> void:
+	var r := mark_size * 0.44
+	match attribute_id:
 		"earth":
 			var rock := PackedVector2Array()
 			for point: Vector2 in [Vector2(-0.95, 0.75), Vector2(-0.7, -0.2), Vector2(-0.15, -0.85), Vector2(0.55, -0.6), Vector2(1.0, 0.1), Vector2(0.8, 0.75)]:
@@ -276,10 +287,10 @@ func _draw_attribute_mark() -> void:
 				canvas.draw_polyline(line, MenuStyle.COLOR_OUTLINE, 5.0, true)
 				canvas.draw_polyline(line, color, 2.6, true)
 		_:
-			push_error("属性の印がありません: %s" % _preview["attribute_id"])
+			push_error("属性の印がありません: %s" % attribute_id)
 
 
-func _fill_with_outline(canvas: CanvasItem, points: PackedVector2Array, color: Color) -> void:
+static func _fill_with_outline(canvas: CanvasItem, points: PackedVector2Array, color: Color) -> void:
 	var closed := points.duplicate()
 	closed.append(points[0])
 	canvas.draw_polyline(closed, MenuStyle.COLOR_OUTLINE, 4.0, true)

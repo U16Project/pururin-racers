@@ -142,6 +142,15 @@ static func _validate_attributes(data: Dictionary, stat_ids: Array, errors: Pack
 		for stat_id in definition.bonus_stats:
 			if not stat_id in stat_ids:
 				errors.append("attributes.%s.bonus_stats: 未知のステータスです" % attribute_id)
+		# 第一カラーの選択肢（体の色と、ふちの線の色の組）。
+		var primary_colors: Variant = definition.get("primary_colors")
+		if not primary_colors is Array or primary_colors.is_empty():
+			errors.append("attributes.%s.primary_colors: 第一カラーの選択肢が1つ以上必要です" % attribute_id)
+			continue
+		for index in primary_colors.size():
+			var choice: Variant = primary_colors[index]
+			if not choice is Dictionary or not choice.get("color") is String or not Color.html_is_valid(choice["color"]) or not choice.get("outline") is String or not Color.html_is_valid(choice["outline"]):
+				errors.append("attributes.%s.primary_colors[%d]: color と outline（どちらも色）が必要です" % [attribute_id, index])
 
 
 static func _validate_running_styles(data: Dictionary, stat_ids: Array, errors: PackedStringArray) -> void:

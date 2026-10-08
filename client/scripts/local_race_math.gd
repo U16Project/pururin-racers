@@ -378,13 +378,14 @@ static func limit_offset_by_stronger_neighbors(
 ## 接触耐性が高い方は動かず、低い方が重なり全部ぶん横へ押し出される。同じなら、両方が半分ずつ離れる。
 ## 壁で押し出せなかった分は、相手が逆向きに動いて解く。
 ## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。
-## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID}
+## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID, "lost_ids": 接触耐性で負けて押し出された走者のID}
 static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 	var count := entries.size()
 	var pos: Array[float] = []
 	for entry in entries:
 		pos.append(float(entry["offset"]))
 	var contest := {}
+	var lost := {}
 	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
 	for pass_index in PUSH_PASSES:
 		var correction: Array[float] = []
@@ -410,8 +411,10 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 				var share_i := 0.5
 				if stat_i > stat_j:
 					share_i = 0.0
+					lost[str(entries[j]["id"])] = true
 				elif stat_i < stat_j:
 					share_i = 1.0
+					lost[str(entries[i]["id"])] = true
 				var want_i := -direction * overlap * share_i
 				var want_j := direction * overlap * (1.0 - share_i)
 				var moved_i := clampf(pos[i] + correction[i] + want_i, -max_abs, max_abs) - pos[i] - correction[i]
@@ -432,7 +435,7 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 	var offsets := {}
 	for k in count:
 		offsets[str(entries[k]["id"])] = pos[k]
-	return {"offsets": offsets, "contest_ids": contest.keys()}
+	return {"offsets": offsets, "contest_ids": contest.keys(), "lost_ids": lost.keys()}
 
 
 ## 操作性による、左右に動く負荷の倍率（基準値で1.0、高いほど小さい）。
@@ -1433,6 +1436,20 @@ static func add_race_progress(progress: float, delta_centerline: float) -> float
 
 static func has_finished(progress: float, race_distance: float = RACE_DISTANCE_M) -> bool:
 	return progress >= race_distance
+
+
+## ゴールしたあとの、進む速さ（km/h）。meters_past_goal は、ゴールを過ぎてから進んだ距離。
+## 速さを落とし始める距離までは、そのまま。そこから、ゆっくり進み始める距離までで、ゆっくりの速さへ落とし、
+## その先は、ゆっくりの速さで進む（ほかの走者が来るのを待つ）。ここでは、最低の速さ（min_speed_kmh）より下がってよい。
+static func post_finish_speed_kmh(speed_kmh: float, meters_past_goal: float) -> float:
+	var start := Config.number("finish_slowdown_start_m")
+	var end := maxf(Config.number("finish_slowdown_end_m"), start)
+	var cruise := Config.number("finish_cruise_speed_kmh")
+	if meters_past_goal <= start:
+		return speed_kmh
+	if meters_past_goal >= end:
+		return minf(speed_kmh, cruise)
+	return minf(speed_kmh, lerpf(speed_kmh, cruise, (meters_past_goal - start) / (end - start)))
 
 
 ## 「1分23秒44」形式。小数点2位（1/100秒）まで、切り捨てで表示する。

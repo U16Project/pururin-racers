@@ -6,7 +6,7 @@
 [ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="4_font"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_track"]
-albedo_color = Color(0.45, 0.38, 0.32, 1)
+albedo_color = Color(0.8, 0.63, 0.43, 1)
 roughness = 0.9
 
 [sub_resource type="StandardMaterial3D" id="Mat_ground"]
@@ -52,8 +52,8 @@ surface_material_override/0 = SubResource("Mat_ground")
 
 [node name="TrackPath" type="Path3D" parent="."]
 script = ExtResource("2_track")
-straight_len = 526.0
-turn_radius = 164.0
+straight_len = 680.0
+turn_radius = 115.085
 bake_interval = 1.0
 ribbon_path = NodePath("TrackRibbon")
 

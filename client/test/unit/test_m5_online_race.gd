@@ -2,6 +2,7 @@ extends GutTest
 
 const M5Scene := preload("res://scenes/m5_online_race.tscn")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 
 func test_m5_scene_exists_and_has_online_controller() -> void:
 	assert_true(ResourceLoader.exists("res://scenes/m5_online_race.tscn"))
@@ -111,34 +112,19 @@ func test_m5_places_start_and_goal_markers() -> void:
 	assert_true(goal_marker.mesh is BoxMesh)
 	assert_almost_eq(start_marker.position.y, 0.14, 0.001)
 	assert_almost_eq(goal_marker.position.y, 0.14, 0.001)
-	var goal_sign: Label3D = race.get_node("TrackPath/GoalSign")
-	assert_eq(goal_sign.font_size, 720)
-	assert_almost_eq(goal_sign.pixel_size, 0.008, 0.0001)
-	assert_eq(goal_sign.billboard, BaseMaterial3D.BILLBOARD_DISABLED)
-	assert_almost_eq(goal_sign.global_position.y, 8.4, 0.001)
-	assert_eq(goal_sign.outline_size, 160)
-	var goal_panel: MeshInstance3D = race.get_node("TrackPath/GoalPanel")
-	assert_true(goal_panel.mesh is BoxMesh)
-	assert_almost_eq((goal_panel.mesh as BoxMesh).size.x, 19.0, 0.001)
-	assert_almost_eq((goal_panel.mesh as BoxMesh).size.y, 4.0, 0.001)
-	assert_almost_eq(goal_panel.global_position.y, 2.0, 0.001)
-	assert_true(goal_sign.global_basis.is_equal_approx(goal_panel.global_basis))
-	var panel_material := goal_panel.material_override as StandardMaterial3D
-	assert_eq(panel_material.transparency, BaseMaterial3D.TRANSPARENCY_ALPHA)
-	assert_almost_eq(panel_material.albedo_color.a, 0.055, 0.001)
-	assert_true(panel_material.emission_enabled)
-	assert_almost_eq(panel_material.emission_energy_multiplier, 5.5, 0.001)
-	var panel_frame: Node3D = race.get_node("TrackPath/GoalPanelFrame")
-	assert_eq(panel_frame.get_child_count(), 4)
-	var frame_bar: MeshInstance3D = panel_frame.get_child(0)
-	assert_true(frame_bar.mesh is BoxMesh)
-	var frame_material := frame_bar.material_override as StandardMaterial3D
-	assert_eq(frame_material.transparency, BaseMaterial3D.TRANSPARENCY_ALPHA)
-	assert_true(frame_material.emission_enabled)
-	assert_almost_eq(frame_material.emission_energy_multiplier, 7.0, 0.001)
-	var goal_glow: MeshInstance3D = race.get_node("TrackPath/GoalGlowLine")
-	assert_true(goal_glow.mesh is BoxMesh)
-	assert_almost_eq((goal_glow.mesh as BoxMesh).size.z, 0.7, 0.001)
+	# ゴールの門は、ゴールの線の真上に立ち、地面の市松の線は、コースの幅いっぱい。
+	var goal_visual := preload("res://scripts/presentation/goal_visual.gd")
+	var goal_gate: Node3D = race.get_node("TrackPath/%s" % goal_visual.ROOT_NAME)
+	var gate_from_line := goal_gate.global_position - goal_marker.global_position
+	assert_almost_eq(Vector2(gate_from_line.x, gate_from_line.z).length(), 0.0, 0.01)
+	var goal_line: MeshInstance3D = goal_gate.get_node("GroundLine")
+	assert_almost_eq((goal_line.mesh as PlaneMesh).size.x, 15.0, 0.001)
+	assert_almost_eq((goal_line.mesh as PlaneMesh).size.y, goal_visual.LINE_DEPTH_M, 0.001)
+	assert_gt(goal_line.global_position.y, goal_marker.global_position.y)
+	for label_name: String in ["PlateTextFront", "PlateTextBack"]:
+		var plate_text: Label3D = goal_gate.get_node(label_name)
+		assert_eq(plate_text.text, goal_visual.PLATE_TEXT)
+		assert_eq(plate_text.billboard, BaseMaterial3D.BILLBOARD_DISABLED)
 	race.free()
 
 func test_m5_uses_shared_course_layout_and_680m_straights() -> void:
@@ -168,19 +154,20 @@ func test_m5_route_progress_maps_1600_launch_and_goal_deterministically() -> voi
 func test_all_finished_visuals_keep_their_server_pose() -> void:
 	var race := M5Scene.instantiate()
 	add_child(race)
+	# サーバーは、個体一覧と同じ名前（player-1、cpu-1〜）で走者を送ってくる。
 	var racers: Array = []
-	for index in 8:
+	for pururin: Dictionary in PururinRosterConfig.values()["roster"]:
 		racers.append({
-			"id": "racer-%d" % index,
+			"id": str(pururin["id"]),
 			"distance": 526.0,
 			"offset": 0.0,
 			"finished": true,
 		})
 	race.call("_on_race_tick", {"racers": racers})
 	var visuals: Node3D = race.get_node("Runners")
-	assert_eq(visuals.get_child_count(), 8)
+	assert_eq(visuals.get_child_count(), racers.size())
 	var finished: Dictionary = race.get("_visual_finished")
-	assert_eq(finished.size(), 8)
+	assert_eq(finished.size(), racers.size())
 	for racer_id in finished:
 		assert_true(finished[racer_id])
 	race.free()

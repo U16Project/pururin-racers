@@ -4,6 +4,8 @@ extends Node3D
 
 
 const ContactFeedback := preload("res://scripts/presentation/contact_feedback.gd")
+const RaceExpression := preload("res://scripts/presentation/race_expression.gd")
+const RaceAction := preload("res://scripts/presentation/race_action.gd")
 const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
@@ -71,8 +73,15 @@ var _boost_uses: int = 0
 var _previous_selected_drive_level: float = -1.0
 ## 接触の見た目の強さ（0〜1）。接触中は0.5、押し合い中は1へ向かう。
 var _contact_level: float = 0.0
-var _body_mesh: MeshInstance3D
-var _body_base_y: float = 0.0
+var _body: Node3D
+## 押し合いで、接触耐性で負けて押し出されているか。
+var _lost_push: bool = false
+## 前のフレームの位置と向き（体の傾きを決めるのに使う）。
+var _previous_position := Vector3.ZERO
+var _previous_forward := Vector3.FORWARD
+var _has_previous_pose := false
+## 今の表情を出してからの秒数。
+var _expression_seconds: float = 0.0
 var _heart_overage_exposure: float = 0.0
 var _stamina: float = 0.0
 var _stamina_capacity_l: float = 0.0
@@ -336,9 +345,10 @@ func get_push_entry() -> Dictionary:
 	}
 
 
-## 押し合いの結果を反映する。横位置を更新して、姿勢を取り直す。
-func apply_push_result(offset: float, in_contest: bool) -> void:
+## 押し合いの結果を反映する。横位置を更新して、姿勢を取り直す。lost は、接触耐性で負けて押し出されたか。
+func apply_push_result(offset: float, in_contest: bool, lost: bool) -> void:
 	_in_push_contest = in_contest
+	_lost_push = lost
 	if not is_equal_approx(offset, _offset):
 		_offset = M2TrackMath.clamp_offset(offset)
 		_apply_pose()
@@ -348,26 +358,76 @@ func is_in_push_contest() -> bool:
 	return _in_push_contest
 
 
-## 接触・押し合い中の見た目（光る・つぶれる・震える）を、体に反映する。
+## 走者の体（コントローラが付けた "Body"）。まだ付いていなければ null。
+func _find_body() -> Node3D:
+	if _body == null:
+		_body = get_node_or_null("Body") as Node3D
+	return _body
+
+
+## 接触・押し合い中に、体を白く光らせる。
+## つぶれる・震えるのは、体の動き（アクションの contact・push）のほうで出す。
 func _update_contact_visual(delta: float) -> void:
-	if _body_mesh == null:
-		_body_mesh = get_node_or_null("Body") as MeshInstance3D
-		if _body_mesh == null:
-			return
-		_body_base_y = _body_mesh.position.y
-		var material := _body_mesh.material_override as StandardMaterial3D
-		if material != null:
-			material.emission_enabled = true
-			material.emission = Color(1.0, 1.0, 1.0)
-			material.emission_energy_multiplier = 0.0
+	if _find_body() == null:
+		return
 	_contact_level = ContactFeedback.next_level(_contact_level, ContactFeedback.target_level(_contact_count, _in_push_contest), delta)
-	var scale_now := ContactFeedback.body_scale(_contact_level, Time.get_ticks_msec() / 1000.0)
-	_body_mesh.scale = scale_now
-	# 上下に縮んだり伸びたりしても、地面から浮かない。
-	_body_mesh.position.y = _body_base_y * scale_now.y
-	var body_material := _body_mesh.material_override as StandardMaterial3D
-	if body_material != null:
-		body_material.emission_energy_multiplier = ContactFeedback.glow_energy(_contact_level)
+	_body.call("set_glow", ContactFeedback.glow_energy(_contact_level))
+
+
+## レース中の表情（押し合い・接触・疲れ・ドラフト・ゴール）を、体の顔に反映する。
+func _update_expression(delta: float) -> void:
+	if _find_body() == null:
+		return
+	_expression_seconds += delta
+	var current := str(_body.call("expression"))
+	var wanted := RaceExpression.wanted({
+		"finished": _finished,
+		"finish_order": _finish_order,
+		"in_push_contest": _in_push_contest,
+		"lost_push": _lost_push,
+		"contact_count": _contact_count,
+		"stamina": _stamina,
+		"heart_bpm": _heart_rate_bpm,
+		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+		"draft_reduction": float(get_air_reduction_breakdown()["draft"]),
+	})
+	var next := RaceExpression.next(current, wanted, _expression_seconds, _finished)
+	if next != current:
+		_body.call("set_expression", next)
+		_expression_seconds = 0.0
+
+
+## レース中のアクション（スタート前・走る・ダッシュ・ブレーキ・接触・押し合い・疲れ・ゴール）と、
+## 左右への傾きを、体の動きに反映する。動きは見た目だけ。
+func _update_action(delta: float) -> void:
+	if _find_body() == null:
+		return
+	var previous := str(_body.call("action"))
+	var action := RaceAction.wanted({
+		"race_active": _race_active,
+		"finished": _finished,
+		"finish_order": _finish_order,
+		"in_push_contest": _in_push_contest,
+		"contact_count": _contact_count,
+		"braking": _braking,
+		"dashing": is_dash_active() or is_boost_active(),
+		"tired": _stamina < 0.0 or _heart_rate_bpm > LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+	})
+	if action != previous:
+		_body.call("set_action", action)
+		# スタート前の構えから走り出した瞬間に、飛び出しの動きを1回出す。
+		if previous == "ready" and _race_active and not _finished:
+			_body.call("play_once", RaceAction.LAUNCH_ONE_SHOT)
+	_body.call("set_motion_rate", RaceAction.rate(action, _actual_speed_kmh))
+	# 体の傾き：横へ動く速さと、向きが変わる速さから。
+	var forward := -global_transform.basis.z
+	if delta > 0.0 and _has_previous_pose:
+		var lateral_mps := (global_position - _previous_position).dot(global_transform.basis.x) / delta
+		var turn_rad_per_s := _previous_forward.signed_angle_to(forward, Vector3.UP) / delta
+		_body.call("set_steer", RaceAction.steer(lateral_mps, turn_rad_per_s) if _race_active and not _finished else 0.0)
+	_previous_position = global_position
+	_previous_forward = forward
+	_has_previous_pose = true
 
 
 func get_contact_count() -> int:
@@ -705,6 +765,8 @@ func _process(delta: float) -> void:
 	if _paused:
 		return
 	_update_contact_visual(delta)
+	_update_expression(delta)
+	_update_action(delta)
 	if _path == null or _path.curve == null:
 		return
 	if not _race_active:
@@ -788,8 +850,12 @@ func _process(delta: float) -> void:
 	var line_multiplier := LocalRaceMath.line_speed_multiplier(
 		_offset, curvature, _current_speed_kmh, int(_effective_stats.get("handling", 5))
 	)
+	# ゴールしたあとは、少し進んでから速さを落とし、ゆっくり進んで、ほかの走者を待つ。
+	var move_speed_kmh := _current_speed_kmh
+	if _finished:
+		move_speed_kmh = LocalRaceMath.post_finish_speed_kmh(_current_speed_kmh, _race_progress - _race_distance_m)
 	var d_center := LocalRaceMath.centerline_delta_from_kmh(
-		_current_speed_kmh * line_multiplier, delta, _offset, curvature
+		move_speed_kmh * line_multiplier, delta, _offset, curvature
 	)
 	var proposed_progress := LocalRaceMath.add_race_progress(_race_progress, d_center)
 	var allowed_progress := LocalRaceMath.allowed_race_progress(

@@ -1,23 +1,13 @@
 extends RefCounted
-## 属性ごとの表示色。個体の配列順・ゲート・順位には依存させない。
+## 個体の表示色。体の色（見た目の設定の第一カラー）を、操作盤・順位表・着順の丸などにも使う。
+## 個体の配列順・ゲート・順位には依存させない。
 
-const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
-const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
+const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd")
+
 
 static func color_for_pururin(pururin: Dictionary) -> Color:
-	var attribute_id := str(pururin.get("attribute", ""))
-	var attributes: Dictionary = PururinStatsConfig.values().get("attributes", {})
-	var definition: Variant = attributes.get(attribute_id, {})
-	var fallback := Color.WHITE
-	if definition is Dictionary:
-		var color_value := str(definition.get("color", ""))
-		if not color_value.is_empty():
-			fallback = Color.from_string(color_value, Color.WHITE)
-	var individual_color := str(pururin.get("visual_color", ""))
-	if not individual_color.is_empty():
-		return Color.from_string(individual_color, fallback)
-	return fallback
+	return PururinLookConfig.primary_color_for(str(pururin["id"]))
+
 
 static func color_for_racer_id(racer_id: String) -> Color:
-	var pururin := PururinRosterConfig.pururin_by_id(racer_id)
-	return color_for_pururin(pururin) if not pururin.is_empty() else Color.WHITE
+	return PururinLookConfig.primary_color_for(racer_id)

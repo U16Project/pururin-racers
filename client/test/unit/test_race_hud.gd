@@ -93,17 +93,6 @@ func test_style_state_color_follows_the_rank_bonus_sign() -> void:
 	assert_eq(RaceHud.style_state_color(-1), RaceHud.COLOR_STYLE_FAR)
 
 
-func test_fit_text_shrinks_then_truncates_to_stay_within_the_width() -> void:
-	var font := ThemeDB.fallback_font
-	var short := RaceHud.fit_text(font, "イワ", 200.0, 16, 11)
-	assert_eq(short["text"], "イワ")
-	assert_eq(int(short["font_size"]), 16)
-	var long := RaceHud.fit_text(font, "とてもながいなまえのぷるりん", 60.0, 16, 11)
-	assert_lte(float(long["width"]), 60.0)
-	assert_eq(int(long["font_size"]), 11)
-	assert_true(str(long["text"]).ends_with("…"))
-
-
 func test_confirmed_count_counts_the_finished_rows_at_the_top() -> void:
 	assert_eq(RaceHud.confirmed_count([]), 0)
 	assert_eq(RaceHud.confirmed_count([{"finished": false}, {"finished": false}]), 0)
@@ -129,3 +118,45 @@ func test_standings_sit_midway_between_the_race_info_and_the_panel() -> void:
 func test_standings_start_at_the_same_height_whatever_the_field_size() -> void:
 	# 表の位置は、満員の行の数で決める。人数が少ないレースでも、上から詰めて並ぶ。
 	assert_eq(RaceHud.STANDINGS_FULL_ROWS, preload("res://scripts/local_race_math.gd").FIELD_SIZE)
+
+
+## 全角9文字の名前。
+func _nine_characters() -> String:
+	return "ア".repeat(9)
+
+
+func test_a_nine_character_name_is_never_cut_in_the_race_hud_or_the_result_board() -> void:
+	var FitText := preload("res://scripts/presentation/fit_text.gd")
+	var Board := preload("res://scripts/presentation/race_result_board.gd")
+	var probe := Control.new()
+	add_child_autofree(probe)
+	var font := probe.get_theme_default_font()
+	var bold := FontVariation.new()
+	bold.base_font = font
+	bold.variation_embolden = 0.8
+	var name := _nine_characters()
+	# 操作盤の名札：そのままの大きさで入る。
+	var tab := FitText.fit(font, name, RaceHud.NAME_TAB_MAX_TEXT_WIDTH, RaceHud.NAME_TAB_FONT_SIZE)
+	assert_eq(tab["text"], name)
+	assert_eq(tab["x_scale"], 1.0)
+	assert_eq(tab["font_size"], RaceHud.NAME_TAB_FONT_SIZE)
+	# 順位表：ふつうの行も、確定した行（太字で大きい）も、削られない。
+	var normal := FitText.fit(font, name, RaceHud.STANDINGS_NAME_WIDTH, RaceHud.STANDINGS_FONT_SIZE)
+	assert_eq(normal["text"], name)
+	var confirmed := FitText.fit(bold, name, RaceHud.STANDINGS_NAME_WIDTH, RaceHud.STANDINGS_CONFIRMED_FONT_SIZE)
+	assert_eq(confirmed["text"], name)
+	# 着順の板：ユーザーの行（太字）でも、そのままの大きさで入る。
+	var time_width := font.get_string_size("9分59秒99", HORIZONTAL_ALIGNMENT_LEFT, -1, Board.FONT_SIZE).x
+	var board_width: float = Board.BOARD_WIDTH - Board.TIME_RIGHT_MARGIN - time_width - Board.NAME_TIME_GAP - Board.NAME_X
+	var board := FitText.fit(bold, name, board_width, Board.FONT_SIZE)
+	assert_eq(board["text"], name)
+	assert_eq(board["x_scale"], 1.0)
+
+
+func test_the_name_tab_sits_between_the_standings_and_the_panel() -> void:
+	var screen_height := 648.0
+	var panel_top := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT
+	var standings_bottom := RaceHud.standings_top(screen_height, RaceHud.STANDINGS_FULL_ROWS) + RaceHud.STANDINGS_FULL_ROWS * RaceHud.STANDINGS_ROW_HEIGHT
+	assert_gte(panel_top - RaceHud.NAME_TAB_HEIGHT, standings_bottom, "名札は、順位表の一番下の行に重ならない")
+	# 順位表の右端は、操作盤の右端までに収まる。
+	assert_lte(RaceHud.STANDINGS_LEFT + RaceHud.STANDINGS_WIDTH, RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH)

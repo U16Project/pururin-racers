@@ -1,22 +1,31 @@
 extends RefCounted
-## コース脇の目印。標識と標識の中間のコーン（スピード感）と、一定間隔の距離標識（残り距離）。
+## コース脇の目印。一定間隔の距離標識（残り距離）。
+## 距離標識は、内側の柵の上に掲げる、紺の板（金のふち、白い数字）。大きい標識は、赤い板。
+## 板は、コースの上にはみ出さないように、柵の線から芝のほうへずらして立てる。
 ## 置く距離と標識の数字は静的関数で決め、ここのノードの寿命は配置先Pathが持つ。
 
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const Parts := preload("res://scripts/presentation/venue_parts.gd")
+const M2TrackMath := preload("res://scripts/m2_track_math.gd")
 
-## コース幅15mの端（7.5m）の外側。
-const CONE_SIDE_OFFSET_M := 8.6
-const SIGN_SIDE_OFFSET_M := 9.2
-const CONE_HEIGHT_M := 0.6
-const CONE_BOTTOM_RADIUS_M := 0.22
-const CONE_TOP_RADIUS_M := 0.04
+## 標識は、柵の上（コース幅15mの端の、少し外）。
+const SIGN_SIDE_OFFSET_M := Parts.FENCE_SIDE_OFFSET_M
 ## 地面の高さ（シーンの Ground と同じ）。目印は、ここに接して立てる。
 const GROUND_Y_M := -0.05
 ## 標識の板の大きさ（横×縦）。残りがLARGE_SIGN_REMAINING_Mの標識は、ひと回り大きい。
 const SIGN_SIZE_M := Vector2(1.4, 1.0)
 const SIGN_LARGE_SIZE_M := Vector2(1.9, 1.35)
-const SIGN_CENTER_HEIGHT_M := 2.0
+## 板の下のふちと、柵の上とのすき間。
+const SIGN_GAP_ABOVE_FENCE_M := 0.2
 const SIGN_FRAME_M := 0.07
+## 板の上に載せる、金の横木の、板からのはみ出し（左右それぞれ）と、厚み。
+const SIGN_CAP_OVERHANG_M := 0.12
+const SIGN_CAP_THICKNESS_M := 0.1
+const SIGN_KNOB_RADIUS_M := 0.11
+## 板の、コース側の端と、コースの端とのすき間。
+const SIGN_TRACK_EDGE_MARGIN_M := 0.05
+## 板を支える、2本の柱の太さ。
+const SIGN_POST_THICKNESS_M := 0.1
 const SIGN_FONT_SIZE := 64
 const SIGN_FONT_PATH := "res://fonts/NotoSansCJK-Regular.ttc"
 ## 数字の高さ（フォントの大きさに対する割合。Noto Sans CJKの数字）。
@@ -33,35 +42,25 @@ const SIGN_NUMBER_OUTLINE := 8
 const SIGN_GLYPH_WIDTH_RATIO := 0.55
 ## 残りがこの距離の標識は、ひと回り大きくする。
 const LARGE_SIGN_REMAINING_M := [500, 200, 100]
-const COLOR_CONE := Color(1.0, 0.45, 0.1, 1.0)
-const COLOR_SIGN_FACE := Color(0.98, 0.98, 0.98, 1.0)
-const COLOR_SIGN_FRAME := Color(0.7, 0.05, 0.08, 1.0)
-const COLOR_SIGN_NUMBER := Color(0.85, 0.05, 0.08, 1.0)
-const COLOR_SIGN_POST := Color(0.55, 0.57, 0.6, 1.0)
+const COLOR_SIGN_FACE := Parts.COLOR_NAVY
+const COLOR_SIGN_FACE_LARGE := Parts.COLOR_CRIMSON
+const COLOR_SIGN_FRAME := Parts.COLOR_GOLD
+const COLOR_SIGN_NUMBER := Parts.COLOR_WHITE
+const COLOR_SIGN_POST := Parts.COLOR_WOOD
 
 var _root: Node3D
 
 
-## スタート(0m)の次から、ゴールまでに収まる間隔ごとの距離。
-static func marker_distances(total_m: float, interval_m: float) -> Array[float]:
+## スタート(0m)の次から、ゴールまでに収まる間隔ごとの距離。残りが max_remaining_m より長い所には、立てない
+## （同じ場所を2回通るレースで、1周目用と2周目用の標識が並ばないように）。
+static func marker_distances(total_m: float, interval_m: float, max_remaining_m: float) -> Array[float]:
 	var result: Array[float] = []
 	if interval_m <= 0.0:
 		return result
 	var index := 1
 	while float(index) * interval_m < total_m - 0.001:
-		result.append(float(index) * interval_m)
-		index += 1
-	return result
-
-
-## 標識と標識の中間の距離（スタートと最初の標識の中間から）。ゴールまでに収まるもの。
-static func midpoint_distances(total_m: float, interval_m: float) -> Array[float]:
-	var result: Array[float] = []
-	if interval_m <= 0.0:
-		return result
-	var index := 0
-	while (float(index) + 0.5) * interval_m < total_m - 0.001:
-		result.append((float(index) + 0.5) * interval_m)
+		if total_m - float(index) * interval_m <= max_remaining_m + 0.001:
+			result.append(float(index) * interval_m)
 		index += 1
 	return result
 
@@ -82,7 +81,23 @@ static func is_large_sign(remaining_m: int) -> bool:
 	return remaining_m in LARGE_SIGN_REMAINING_M
 
 
-func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, sign_interval_m: float) -> void:
+## 板の、横幅の半分（金のふちと、上の横木のはみ出しをふくむ）。
+static func sign_half_width_m(size: Vector2) -> float:
+	return size.x * 0.5 + SIGN_FRAME_M + SIGN_CAP_OVERHANG_M
+
+
+## 板を、柵の線から、コースの内側（芝のほう）へずらす量。板が、コースの上にはみ出さないようにする。
+static func sign_side_shift_m(size: Vector2) -> float:
+	var room := SIGN_SIDE_OFFSET_M - M2TrackMath.HALF_WIDTH_M - SIGN_TRACK_EDGE_MARGIN_M
+	return maxf(sign_half_width_m(size) - room, 0.0)
+
+
+## 板のまん中の高さ（地面から）。板の下のふちが、柵の上に来る。
+static func sign_center_height_m(size: Vector2) -> float:
+	return Parts.FENCE_HEIGHT_M + SIGN_GAP_ABOVE_FENCE_M + SIGN_FRAME_M + size.y * 0.5
+
+
+func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, sign_interval_m: float, sign_max_remaining_m: float) -> void:
 	if track == null or track.curve == null or route.is_empty():
 		return
 	if _root != null:
@@ -90,44 +105,7 @@ func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_
 	_root = Node3D.new()
 	_root.name = "CourseMarkers"
 	track.add_child(_root)
-	_place_cones(track, route, race_distance_m, lap_length_m, sign_interval_m)
-	_place_signs(track, route, race_distance_m, lap_length_m, sign_interval_m)
-
-
-func _place_cones(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, interval_m: float) -> void:
-	var distances := midpoint_distances(race_distance_m, interval_m)
-	if distances.is_empty():
-		return
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = CONE_TOP_RADIUS_M
-	mesh.bottom_radius = CONE_BOTTOM_RADIUS_M
-	mesh.height = CONE_HEIGHT_M
-	mesh.radial_segments = 12
-	mesh.rings = 1
-	var material := StandardMaterial3D.new()
-	material.albedo_color = COLOR_CONE
-	material.roughness = 0.7
-	mesh.material = material
-	var multi := MultiMesh.new()
-	multi.transform_format = MultiMesh.TRANSFORM_3D
-	multi.mesh = mesh
-	multi.instance_count = distances.size() * 2
-	var slot := 0
-	for distance in distances:
-		var pose := M5CourseBuilder.route_pose(track.curve, route, distance, lap_length_m)
-		if pose.is_empty():
-			continue
-		var travel: Vector3 = pose["travel"]
-		var right := Vector3(-travel.z, 0.0, travel.x).normalized()
-		var base: Vector3 = pose["position"] + Vector3.UP * (GROUND_Y_M + CONE_HEIGHT_M * 0.5)
-		multi.set_instance_transform(slot, Transform3D(Basis.IDENTITY, base + right * CONE_SIDE_OFFSET_M))
-		multi.set_instance_transform(slot + 1, Transform3D(Basis.IDENTITY, base - right * CONE_SIDE_OFFSET_M))
-		slot += 2
-	multi.visible_instance_count = slot
-	var instance := MultiMeshInstance3D.new()
-	instance.name = "Cones"
-	instance.multimesh = multi
-	_root.add_child(instance)
+	_place_signs(track, route, race_distance_m, lap_length_m, sign_interval_m, sign_max_remaining_m)
 
 
 ## コースの内側（周回の中心側）の向き。標識はこちら側に立てる。
@@ -146,28 +124,41 @@ func _course_center(track: Path3D) -> Vector3:
 	return sum / maxf(float(points.size()), 1.0)
 
 
-func _place_signs(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, interval_m: float) -> void:
+func _place_signs(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, interval_m: float, max_remaining_m: float) -> void:
 	var center := _course_center(track)
-	for distance in marker_distances(race_distance_m, interval_m):
+	for distance in marker_distances(race_distance_m, interval_m, max_remaining_m):
 		var pose := M5CourseBuilder.route_pose(track.curve, route, distance, lap_length_m)
 		if pose.is_empty():
 			continue
 		var travel: Vector3 = pose["travel"]
 		var right := inner_side(pose["position"], travel, center)
 		var remaining := sign_number(race_distance_m, distance)
-		var size := SIGN_SIZE_M if not is_large_sign(remaining) else SIGN_LARGE_SIZE_M
+		var large := is_large_sign(remaining)
+		var size := SIGN_SIZE_M if not large else SIGN_LARGE_SIZE_M
+		var center_height := sign_center_height_m(size)
 		var node := Node3D.new()
 		node.name = "Sign%d" % remaining
 		_root.add_child(node)
-		# 板の表（+Z）を、向かってくる走者の側（進行方向の逆）へ向ける。
+		# 板の表（+Z）を、向かってくる走者の側（進行方向の逆）へ向ける。柵の線の上に立てる。
 		node.transform = Transform3D(
 			Basis.looking_at(travel, Vector3.UP),
 			pose["position"] + right * SIGN_SIDE_OFFSET_M + Vector3.UP * GROUND_Y_M
 		)
-		_add_box(node, Vector3(0.1, SIGN_CENTER_HEIGHT_M, 0.1), Vector3(0.0, SIGN_CENTER_HEIGHT_M * 0.5, -0.07), COLOR_SIGN_POST)
-		_add_box(node, Vector3(size.x + SIGN_FRAME_M * 2.0, size.y + SIGN_FRAME_M * 2.0, 0.05), Vector3(0.0, SIGN_CENTER_HEIGHT_M, 0.0), COLOR_SIGN_FRAME)
-		_add_box(node, Vector3(size.x, size.y, 0.05), Vector3(0.0, SIGN_CENTER_HEIGHT_M, 0.012), COLOR_SIGN_FACE)
-		_add_number(node, remaining, size)
+		var top := center_height + size.y * 0.5 + SIGN_FRAME_M
+		# 板は、柵の線から、コースの内側（芝のほう）へずらす。柱は2本。1本は柵の線の上、もう1本は芝の上。
+		var shift := sign_side_shift_m(size)
+		var board := Node3D.new()
+		board.name = "Board"
+		board.position = Vector3(signf(right.dot(node.basis.x)) * shift, 0.0, 0.0)
+		node.add_child(board)
+		for leg: float in ([-shift, shift] if shift > 0.0 else [0.0]):
+			_add_box(board, Vector3(SIGN_POST_THICKNESS_M, top, SIGN_POST_THICKNESS_M), Vector3(leg, top * 0.5, -0.08), COLOR_SIGN_POST)
+		_add_box(board, Vector3(size.x + SIGN_FRAME_M * 2.0, size.y + SIGN_FRAME_M * 2.0, 0.05), Vector3(0.0, center_height, 0.0), COLOR_SIGN_FRAME)
+		_add_box(board, Vector3(size.x, size.y, 0.05), Vector3(0.0, center_height, 0.012), COLOR_SIGN_FACE if not large else COLOR_SIGN_FACE_LARGE)
+		# 板の上に、金の横木と、丸い飾り。
+		_add_box(board, Vector3(sign_half_width_m(size) * 2.0, SIGN_CAP_THICKNESS_M, 0.14), Vector3(0.0, top + SIGN_CAP_THICKNESS_M * 0.5, -0.02), COLOR_SIGN_FRAME)
+		Parts.mesh(board, Parts.sphere_mesh(SIGN_KNOB_RADIUS_M, 12), Parts.gold(), Vector3(0.0, top + SIGN_CAP_THICKNESS_M + SIGN_KNOB_RADIUS_M * 0.8, -0.02))
+		_add_number(board, remaining, size, center_height)
 
 
 func _add_box(parent: Node3D, size: Vector3, position: Vector3, color: Color) -> void:
@@ -185,7 +176,7 @@ func _add_box(parent: Node3D, size: Vector3, position: Vector3, color: Color) ->
 
 ## 数字は、主な部分（例：「19」）を大きく、末尾の「00」を小さく、ベースライン（文字の下の線）をそろえ、
 ## 数字全体を板の中央（左右・上下とも）に置く。
-func _add_number(parent: Node3D, remaining: int, size: Vector2) -> void:
+func _add_number(parent: Node3D, remaining: int, size: Vector2, center_height: float) -> void:
 	var parts := sign_number_parts(remaining)
 	var font := _sign_font()
 	var main_pixel := size.y * SIGN_DIGIT_HEIGHT_RATIO / (SIGN_DIGIT_HEIGHT_EM * float(SIGN_FONT_SIZE))
@@ -194,7 +185,7 @@ func _add_number(parent: Node3D, remaining: int, size: Vector2) -> void:
 	var suffix_width := float(parts[1].length()) * SIGN_GLYPH_WIDTH_RATIO * float(SIGN_FONT_SIZE) * suffix_pixel * SIGN_NUMBER_WIDTH_SCALE
 	var left := -(main_width + suffix_width) * 0.5
 	# ベースラインの高さ。数字の高さ（主な部分）が、板の中央に来るようにする。
-	var baseline := SIGN_CENTER_HEIGHT_M - SIGN_DIGIT_HEIGHT_EM * float(SIGN_FONT_SIZE) * main_pixel * 0.5
+	var baseline := center_height - SIGN_DIGIT_HEIGHT_EM * float(SIGN_FONT_SIZE) * main_pixel * 0.5
 	# ラベルの下端からベースラインまでは、フォントの下側の余白（descent）ぶん。ラベルの大きさ（pixel_size）に比例する。
 	var descent := font.get_descent(SIGN_FONT_SIZE) if font != null else 0.0
 	_add_label(parent, parts[0], font, main_pixel, Vector3(left, baseline - descent * main_pixel, 0.045))

@@ -1,7 +1,7 @@
 extends Control
 ## キャラ選択のスロット1行。札（ユーザー／CPU）、◀、小さい画像、名前、▶、南京錠。
 ## 左右（キー・十字キー・スティック・◀▶のクリック）で中の個体を切り替える依頼、Xで未選択、Yで強制選択、
-## SELECTで施錠・解錠、L2・R2で枠の移動の依頼を出す。何が入っているかは、画面側が set_* で渡す。
+## SELECTで施錠・解錠、L2・R2で枠の移動、決定（A）でキャラの一覧を開く依頼を出す。何が入っているかは、画面側が set_* で渡す。
 
 signal cycle_requested(slot: int, direction: int)
 signal slot_focused(slot: int)
@@ -10,17 +10,23 @@ signal clear_requested(slot: int)
 signal force_requested(slot: int)
 signal lock_requested(slot: int)
 signal move_requested(slot: int, direction: int)
+## 決定（A・Enter・クリック）。キャラの一覧の窓を開く依頼。
+signal pick_requested(slot: int)
 
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const Portrait := preload("res://scripts/menu/pururin_portrait.gd")
+const FitLabel := preload("res://scripts/menu/fit_label.gd")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
-const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const EMPTY_TEXT := "ー未選択ー"
 const TAKEN_TEXT := "選択済み"
 const USER_TAG := "ユーザー"
 const CPU_TAG := "CPU"
 const ROW_HEIGHT := 34.0
-const TAG_WIDTH := 60.0
+const TAG_WIDTH := 58.0
+const NAME_FONT_SIZE := 16
+const CHEVRON_SCALE := 0.9
 const ARROW_WIDTH := 26.0
 const LOCK_WIDTH := 28.0
 const COLOR_USER := Color(0.45, 0.92, 1.0, 1.0)
@@ -29,7 +35,9 @@ const COLOR_LOCK := Color(1.0, 0.82, 0.3, 1.0)
 ## このスロットがある枠（0〜7）。
 var slot := 0
 var _tag_label: Label
-var _name_label: Label
+var _name_label: Control
+var _style_mark: Control
+var _style_id := ""
 var _portrait: Control
 var _lock_button: Button
 var _pururin_id := ""
@@ -60,11 +68,19 @@ func setup(slot_index: int) -> void:
 	_portrait.custom_minimum_size = Vector2(ROW_HEIGHT - 6.0, ROW_HEIGHT - 6.0)
 	_portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_portrait)
-	_name_label = MenuStyle.label(EMPTY_TEXT, 16)
+	_name_label = FitLabel.new()
+	_name_label.call("setup", NAME_FONT_SIZE)
 	_name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_name_label.clip_text = true
+	_name_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_name_label.call("set_text", EMPTY_TEXT)
 	row.add_child(_name_label)
+	# 脚質の印（操作盤と同じ「〈」。得意な順位の組だけ光る）。
+	_style_mark = Control.new()
+	_style_mark.custom_minimum_size = Vector2(RaceHud.STYLE_CHEVRON_STEP * CHEVRON_SCALE * PururinStatsMath.rank_group_count() + 4.0, 0.0)
+	_style_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_style_mark.draw.connect(_draw_style_mark)
+	_style_mark.visible = false
+	row.add_child(_style_mark)
 	# 他のスロットで使っているキャラを出しているときの札。
 	_taken_badge = Label.new()
 	_taken_badge.text = TAKEN_TEXT
@@ -140,18 +156,25 @@ func set_pururin(pururin: Dictionary, taken: bool = false) -> void:
 	_portrait.call("set_pururin", pururin)
 	_portrait.modulate.a = 0.45 if _taken else 1.0
 	queue_redraw()
-	if pururin.is_empty():
-		_name_label.text = EMPTY_TEXT
-		_name_label.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
+	_style_id = str(pururin["running_style"]) if not pururin.is_empty() else ""
+	# 脚質の印は、決まっているキャラのときだけ（未選択と「選択済み」のときは出さない）。
+	_style_mark.visible = not pururin.is_empty() and not _taken
+	_style_mark.queue_redraw()
+	_name_label.call("set_text", EMPTY_TEXT if pururin.is_empty() else str(pururin["display_name"]))
+	_name_label.call("set_color", MenuStyle.COLOR_DIM if pururin.is_empty() or _taken else MenuStyle.COLOR_TEXT)
+
+
+func _draw_style_mark() -> void:
+	if _style_id.is_empty():
 		return
-	if _taken:
-		_name_label.text = str(pururin["display_name"])
-		_name_label.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
-		return
-	var style_id := str(pururin["running_style"])
-	var style_label := str(PururinStatsConfig.values()["running_styles"][style_id]["label"])
-	_name_label.text = "%s（%s）" % [str(pururin["display_name"]), style_label]
-	_name_label.add_theme_color_override("font_color", MenuStyle.COLOR_TEXT)
+	RaceHud.draw_style_chevrons(
+		_style_mark,
+		Vector2(2.0, _style_mark.size.y * 0.5),
+		RaceHud.COLOR_STYLE_MATCH,
+		PururinStatsMath.rank_group_count(),
+		PururinStatsMath.style_rank_group_index(_style_id),
+		CHEVRON_SCALE
+	)
 
 
 ## 「選択済み」の表示になっているか。
@@ -163,8 +186,14 @@ func pururin_id() -> String:
 	return _pururin_id
 
 
+## 出している名前（未選択なら EMPTY_TEXT）。縮める前の、元の文字。
 func shown_text() -> String:
-	return _name_label.text
+	return str(_name_label.get("text"))
+
+
+## 名前を、今の幅で収めた結果（text・font_size・x_scale・width）。
+func fitted_name() -> Dictionary:
+	return _name_label.call("fitted")
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -186,6 +215,16 @@ func _gui_input(event: InputEvent) -> void:
 	elif RaceControllerInput.is_slot_lock_pressed(event):
 		accept_event()
 		lock_requested.emit(slot)
+	elif is_pick_event(event):
+		accept_event()
+		pick_requested.emit(slot)
+
+
+## 決定の入力か（ゲームパッドのA、キーボードのEnter・スペース、マウスの左クリック）。
+static func is_pick_event(event: InputEvent) -> bool:
+	if RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept"):
+		return true
+	return event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
 
 
 ## 左右の入力なら、-1（前）か 1（次）。それ以外は 0。

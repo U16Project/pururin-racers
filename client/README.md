@@ -39,10 +39,12 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 起動すると、U16-Projectのロゴ（約2秒。どのボタンでも飛ばせる）のあと、タイトルが出ます。「オフラインフリー対戦」でレース選択へ進み、距離と、枠ごとのキャラを選んで「レース開始」（ゲームパッドは START）でローカル簡易レースを始めます。オンラインレース（M5）と控室の場面は残してありますが、タイトルからは入れません。
 
 - main_scene: `scenes/logo.tscn`（→ `scenes/title.tscn` → `scenes/race_select.tscn`）
-- 導入: `←→`／左スティックでライン、`C`／`Y` でカメラ、`Esc`／Start でメニュー。上下／十字キーはローカルが出力ノッチ、M5 は目標スピード。右スティック左右は追随カメラの向き、押し込みはリセット。A は決定、B はメニューを閉じる。X は将来のブースト用に予約
-- **ローカルの操作**: `↑↓`／十字キーで出力ノッチ（0〜6）、`Space`／A／左トリガーを押している間ブレーキ（ノッチ設定は保持）、`F3` で詳細表示（診断数値と操作ガイド）の切替
-- **ローカルのHUD**: 画面下中央に速度、縦ゲージ3本（ノッチ・心拍・体力）、30段の空気抵抗ゲージ（緑＝空力と後方支援、青＝ドラフト。1段＝2%、満タンは空気抵抗が60%減る状態）。左上に順位・残り距離・タイム。速度の大きな数字は「実際に進んでいる速さ」（前の走者にふさがれた分を引いた値）で、出力上の速度は F3 の詳細表示に併記する。描画は `scripts/presentation/race_hud.gd`（値を受け取って描くだけ）。診断用の数値は F3 の詳細表示に分けている
-- **レース開始**: `scenes/local_race.tscn`（サーバー不要。8プル・2000 m・標準コース）
+- メニュー（タイトル・レース選択）: 十字キー／左スティックで移動、A（`Enter`）で決定、B（`Esc`）で戻る、START でレース開始、L1・R1 で距離、SELECT（`L`）で施錠、X で選択解除、Y で強制選択、L2・R2（`PageUp`・`PageDown`）で枠の移動
+- レース中: `←→`／左スティックでライン、`C`／`Y` で視点の切り替え、右スティックで見回し（押し込みでリセット）、`Esc`／START で一時停止。M5 は、上下／十字キーが目標スピード
+- **ローカルの操作**: `↑↓`／十字キーで出力ノッチ（0〜6）、`Space`／A／左トリガーを押している間ブレーキ（ノッチ設定は保持）、`Z`／B でダッシュ、`X`／X でブースト、`F3` で詳細表示（診断数値と操作ガイド）の切替
+- **ローカルのHUD**: 画面の左の列に、上から、自分の順位・残り距離・タイム、順位表（全走者）、操作盤。操作盤には、速度、縦ゲージ3本（ノッチ・心拍・体力）、30段の空気抵抗ゲージ（緑＝空力と後方支援、青＝ドラフト。1段＝2%、満タンは空気抵抗が60%減る状態）、ブーストとダッシュの残り。速度の大きな数字は「実際に進んでいる速さ」（前の走者にふさがれた分を引いた値）で、出力上の速度は F3 の詳細表示に併記する。描画は `scripts/presentation/race_hud.gd`（値を受け取って描くだけ）。診断用の数値は F3 の詳細表示に分けている
+- **レース開始**: `scenes/local_race.tscn`（サーバー不要。レース選択画面で選んだ2〜8プル・1200〜3000 m・標準コース。コースの寸法の正本は `shared/course_layout_m5.json` で、場面ファイルの中の数字は、起動時に作り直す）
+- **ぷるりんの見た目**: 体は、`data/config/pururin_parts.json`（部品の一覧）と `data/config/pururin_looks.json`（個体ごとの見た目）から、プログラムで形を作って組み立てる（`scripts/presentation/pururin_body_builder.gd`）。部品は、用意したメッシュ（`.glb`）や画像（`.png`）に取り替えられる。項目は [`docs/設定管理.md`](../docs/設定管理.md) の「ぷるりんの見た目」
 - **控室へ進む**: サーバー起動時 `接続しています…` → `接続できました` → 控室入室結果
 - サーバー停止時（控室）: `接続できませんでした。サーバーを起動してください`
 - 契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)、ローカルレース [`shared/protocol_local_race.md`](../shared/protocol_local_race.md)
@@ -109,7 +111,9 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
   --headless --path client -s addons/gut/gut_cmdln.gd -gexit
 ```
 
-M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd` でカバーする。
+M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd`、メニューの流れは `test/unit/test_menu_flow.gd`、ぷるりんの見た目は `test/unit/test_pururin_look.gd`、レース中の表情とアクションは `test/unit/test_race_expression.gd` でカバーする。全部で約4分かかる。1つのファイルだけ回すときは、末尾に `-gselect=test_pururin_look.gd` のように足す。
+
+見た目のテストで使う、取り替えの確認用の素材（仮のメッシュ1つ・仮の画像1枚・設定2つ）は、`test/fixtures/pururin/` にある。ゲーム本体では使わない。
 
 ## ローカルレースのヘッドレス統合シミュレーション
 

@@ -59,7 +59,7 @@ static func validate(data: Variant) -> PackedStringArray:
 
 static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dictionary, styles: Dictionary, trainer_profile_ids: Dictionary, ids: Dictionary, errors: PackedStringArray) -> void:
 	for key in pururin:
-		if key not in ["id", "display_name", "control_kind", "trainer_profile_id", "attribute", "visual_color", "running_style", "allocation"]:
+		if key not in ["id", "display_name", "control_kind", "trainer_profile_id", "attribute", "running_style", "allocation"]:
 			errors.append("roster[%d].%s: 未知の項目です" % [index, key])
 	var identifier := str(pururin.get("id", ""))
 	if identifier.is_empty() or ids.has(identifier):
@@ -75,9 +75,6 @@ static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dicti
 		errors.append("roster[%d].attribute: 定義済み属性が必要です" % index)
 	if not styles.has(str(pururin.get("running_style", ""))):
 		errors.append("roster[%d].running_style: 定義済み脚質が必要です" % index)
-	var visual_color := str(pururin.get("visual_color", ""))
-	if not visual_color.begins_with("#") or (visual_color.length() != 7 and visual_color.length() != 9):
-		errors.append("roster[%d].visual_color: 有効な色が必要です" % index)
 	var allocation: Variant = pururin.get("allocation")
 	var allocation_errors := StatsMath.validate_allocation(allocation)
 	for allocation_error in allocation_errors:

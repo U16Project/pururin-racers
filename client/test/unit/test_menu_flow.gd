@@ -9,6 +9,8 @@ const RaceSelectScene := preload("res://scenes/race_select.tscn")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
+const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
+const PururinTile := preload("res://scripts/menu/pururin_tile.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 
@@ -72,7 +74,7 @@ func test_race_select_offers_every_supported_distance_and_remembers_the_choice()
 	screen.free()
 
 
-func test_title_button_can_be_pressed_with_gamepad_a() -> void:
+func test_title_button_can_be_pressed_with_the_gamepad_accept_button() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
 	var button: Button = title.get_node("FreeRaceButton")
@@ -384,12 +386,12 @@ func test_buttons_with_a_fixed_gamepad_button_show_its_mark() -> void:
 	assert_eq((screen.get("_back_button") as Button).get_node("ButtonMark").get("kind"), "B")
 	assert_eq((screen.get("_race_button") as Button).get_node("ButtonMark").get("kind"), "START")
 	assert_eq((screen.get("_detail").find_child("ForceButton", true, false) as Button).get_node("ButtonMark").get("kind"), "Y")
-	var first_note: Node = screen.find_child("ButtonNote1", true, false)
-	assert_eq(first_note.get_child(0).get("kind"), "X")
-	assert_eq(first_note.get_child(2).get("kind"), "SELECT")
-	var second_note: Node = screen.find_child("ButtonNote2", true, false)
-	assert_eq(second_note.get_child(0).get("kind"), "L2")
-	assert_eq(second_note.get_child(2).get("kind"), "R2")
+	var kinds := []
+	for row_name in ["ButtonNote1", "ButtonNote2"]:
+		for mark in screen.find_child(row_name, true, false).find_children("*", "Control", true, false):
+			if mark.get("kind") != null and str(mark.get("kind")) != "":
+				kinds.append(str(mark.get("kind")))
+	assert_eq(kinds, ["A", "X", "SELECT", "L2", "R2"])
 	screen.free()
 
 
@@ -482,3 +484,177 @@ func test_every_focusable_part_has_explicit_neighbours_so_left_and_right_never_j
 		for path: NodePath in [node.focus_neighbor_left, node.focus_neighbor_right, node.focus_neighbor_top, node.focus_neighbor_bottom]:
 			assert_false(path.is_empty(), str(node.name))
 	screen.free()
+
+
+func test_accepting_a_slot_opens_the_picker_with_the_cursor_on_its_pururin() -> void:
+	var ids := RaceSession.roster_ids()
+	RaceSession.set_slot(0, ids[2])
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var slots: Array = screen.get("_slots")
+	var picker: Control = screen.get("_picker")
+	assert_false(picker.call("is_open"))
+	slots[0].grab_focus()
+	slots[0]._gui_input(_pad_button(JOY_BUTTON_A))
+	assert_true(picker.call("is_open"))
+	assert_eq(picker.call("slot"), 0)
+	var tiles: Array = picker.call("tiles")
+	assert_eq(tiles.size(), ids.size() + 1, "未選択のタイルと、全部の個体")
+	assert_eq(tiles[0].call("pururin_id"), RaceSession.EMPTY)
+	assert_eq((picker.find_child("Grid", true, false) as GridContainer).columns, PururinPicker.COLUMNS)
+	assert_eq(PururinPicker.COLUMNS, 4)
+	var focused := get_viewport().gui_get_focus_owner()
+	assert_eq(focused.call("pururin_id"), ids[2], "カーソルは、今入っているキャラ")
+	assert_eq(focused.call("state"), PururinTile.State.CURRENT)
+	# 空のスロットで開くと、カーソルは「未選択」。
+	screen._unhandled_input(_pad_button(JOY_BUTTON_B))
+	assert_false(picker.call("is_open"))
+	assert_eq(get_viewport().gui_get_focus_owner(), slots[0], "閉じると、元のスロットに戻る")
+	slots[1].grab_focus()
+	slots[1]._gui_input(_action("ui_accept"))
+	assert_true(picker.call("is_open"))
+	assert_eq(get_viewport().gui_get_focus_owner().call("pururin_id"), RaceSession.EMPTY)
+	screen.free()
+
+
+func test_picker_puts_a_free_pururin_into_the_slot_and_the_detail_follows_the_cursor() -> void:
+	var ids := RaceSession.roster_ids()
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var slots: Array = screen.get("_slots")
+	var picker: Control = screen.get("_picker")
+	var detail: Control = screen.get("_detail")
+	slots[3].grab_focus()
+	slots[3]._gui_input(_pad_button(JOY_BUTTON_A))
+	var tile: Button = picker.call("tile_for", ids[5])
+	tile.grab_focus()
+	assert_eq(detail.call("shown_pururin_id"), ids[5], "カーソルのキャラが、右側に出る")
+	screen._unhandled_input(_pad_button(JOY_BUTTON_A))
+	assert_eq(RaceSession.slot_pururin_id(3), ids[5])
+	assert_false(picker.call("is_open"))
+	assert_eq(slots[3].call("pururin_id"), ids[5])
+	assert_eq(get_viewport().gui_get_focus_owner(), slots[3])
+	# 「未選択」のタイルを決定すると、スロットが空になる。
+	slots[3]._gui_input(_pad_button(JOY_BUTTON_A))
+	(picker.call("tile_for", RaceSession.EMPTY) as Button).grab_focus()
+	screen._unhandled_input(_pad_button(JOY_BUTTON_A))
+	assert_eq(RaceSession.slot_pururin_id(3), RaceSession.EMPTY)
+	screen.free()
+
+
+func test_picker_marks_taken_and_locked_pururin_and_only_y_takes_an_unlocked_one() -> void:
+	var ids := RaceSession.roster_ids()
+	RaceSession.set_slot(0, ids[0])
+	RaceSession.set_slot(1, ids[1])
+	RaceSession.toggle_lock(1)
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var slots: Array = screen.get("_slots")
+	var picker: Control = screen.get("_picker")
+	var detail: Control = screen.get("_detail")
+	slots[4].grab_focus()
+	slots[4]._gui_input(_pad_button(JOY_BUTTON_A))
+	var taken: Button = picker.call("tile_for", ids[0])
+	var locked: Button = picker.call("tile_for", ids[1])
+	var free: Button = picker.call("tile_for", ids[2])
+	assert_eq(taken.call("state"), PururinTile.State.TAKEN)
+	assert_eq(taken.call("holder_slot"), 0)
+	assert_eq(locked.call("state"), PururinTile.State.LOCKED)
+	assert_eq(locked.call("holder_slot"), 1)
+	assert_eq(free.call("state"), PururinTile.State.FREE)
+	# 施錠済み：決定も強制選択も効かない。右側のボタンは「施錠中」。
+	locked.grab_focus()
+	assert_true(detail.call("is_showing_taken"))
+	assert_true((detail.find_child("ForceButton", true, false) as Button).disabled)
+	screen._unhandled_input(_pad_button(JOY_BUTTON_A))
+	locked._gui_input(_pad_button(JOY_BUTTON_Y))
+	assert_true(picker.call("is_open"))
+	assert_eq(RaceSession.slot_pururin_id(1), ids[1])
+	assert_eq(RaceSession.slot_pururin_id(4), RaceSession.EMPTY)
+	# 選択済み：決定は効かない。Yで奪って閉じる。
+	taken.grab_focus()
+	assert_false((detail.find_child("ForceButton", true, false) as Button).disabled)
+	screen._unhandled_input(_pad_button(JOY_BUTTON_A))
+	assert_true(picker.call("is_open"))
+	assert_eq(RaceSession.slot_pururin_id(4), RaceSession.EMPTY)
+	taken._gui_input(_pad_button(JOY_BUTTON_Y))
+	assert_false(picker.call("is_open"))
+	assert_eq(RaceSession.slot_pururin_id(4), ids[0])
+	assert_eq(RaceSession.slot_pururin_id(0), RaceSession.EMPTY)
+	screen.free()
+
+
+func test_a_locked_slot_does_not_open_the_picker_and_the_open_picker_blocks_the_screen_behind() -> void:
+	var ids := RaceSession.roster_ids()
+	RaceSession.set_slot(0, ids[0])
+	RaceSession.set_slot(1, ids[1])
+	RaceSession.toggle_lock(0)
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var slots: Array = screen.get("_slots")
+	var picker: Control = screen.get("_picker")
+	slots[0].grab_focus()
+	slots[0]._gui_input(_pad_button(JOY_BUTTON_A))
+	assert_false(picker.call("is_open"), "施錠中のスロットでは開かない")
+	slots[1].grab_focus()
+	slots[1]._gui_input(_pad_button(JOY_BUTTON_A))
+	assert_true(picker.call("is_open"))
+	# 窓が開いている間は、STARTでも L1・R1 でも、後ろは動かない。
+	var distance := RaceSession.selected_distance_m()
+	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
+	screen._unhandled_input(_pad_button(JOY_BUTTON_RIGHT_SHOULDER))
+	assert_true(picker.call("is_open"))
+	assert_eq(RaceSession.selected_distance_m(), distance)
+	assert_true((screen.get("_picker_cover") as Control).visible)
+	screen._unhandled_input(_pad_button(JOY_BUTTON_B))
+	assert_false((screen.get("_picker_cover") as Control).visible)
+	screen.free()
+
+
+func test_picker_tiles_keep_the_cursor_inside_the_window() -> void:
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	var slots: Array = screen.get("_slots")
+	var picker: Control = screen.get("_picker")
+	slots[0].grab_focus()
+	slots[0]._gui_input(_pad_button(JOY_BUTTON_A))
+	var tiles: Array = picker.call("tiles")
+	for index in tiles.size():
+		var tile: Button = tiles[index]
+		for path: NodePath in [tile.focus_neighbor_left, tile.focus_neighbor_right, tile.focus_neighbor_top, tile.focus_neighbor_bottom]:
+			assert_true(tiles.has(tile.get_node(path)), "行き先は、必ず窓の中のタイル")
+		if index + PururinPicker.COLUMNS < tiles.size():
+			assert_eq(tile.get_node(tile.focus_neighbor_bottom), tiles[index + PururinPicker.COLUMNS])
+		else:
+			assert_eq(tile.get_node(tile.focus_neighbor_bottom), tile)
+	screen.free()
+
+
+func test_a_nine_character_name_is_never_cut_on_the_race_select_screen() -> void:
+	var ids := RaceSession.roster_ids()
+	var pururin := PururinRosterConfig.pururin_by_id(ids[0])
+	var original := str(pururin["display_name"])
+	var nine := "ア".repeat(9)
+	pururin["display_name"] = nine
+	RaceSession.set_slot(0, ids[0])
+	var screen := RaceSelectScene.instantiate()
+	add_child(screen)
+	await wait_process_frames(2)
+	var slots: Array = screen.get("_slots")
+	# スロット：そのままの大きさで入る。
+	var in_slot: Dictionary = slots[0].call("fitted_name")
+	assert_eq(in_slot["text"], nine)
+	assert_eq(in_slot["x_scale"], 1.0)
+	# 右側の詳細：そのままの大きさで入る。
+	slots[0].grab_focus()
+	var in_detail: Dictionary = screen.get("_detail").find_child("NameLabel", true, false).call("fitted")
+	assert_eq(in_detail["text"], nine)
+	assert_eq(in_detail["x_scale"], 1.0)
+	# 一覧の窓のタイル：縮むが、削られない。
+	slots[1].grab_focus()
+	slots[1]._gui_input(_pad_button(JOY_BUTTON_A))
+	await wait_process_frames(2)
+	var in_tile: Dictionary = (screen.get("_picker").call("tile_for", ids[0]) as Button).call("fitted_name")
+	assert_eq(in_tile["text"], nine)
+	screen.free()
+	pururin["display_name"] = original

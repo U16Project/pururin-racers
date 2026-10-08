@@ -2,6 +2,8 @@ extends Node3D
 
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
+const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
+const StartGate := preload("res://scripts/presentation/start_gate.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
@@ -15,11 +17,16 @@ const RaceResultBoard := preload("res://scripts/presentation/race_result_board.g
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
+const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd")
+const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
+## 結果の板を出すまでの待ち。最後の走者がゴールしてからの秒数と、ユーザーがゴールしてからの秒数（長いほうを待つ）。
+const RESULT_WAIT_AFTER_LAST_S := 2.0
+const RESULT_WAIT_AFTER_PLAYER_S := 5.0
 @onready var _track: Path3D = $TrackPath
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
@@ -38,6 +45,8 @@ var _result_board: Control
 
 var _goal_visual := GoalVisual.new()
 var _course_markers := CourseMarkers.new()
+var _venue := RaceVenue.new()
+var _start_gate := StartGate.new()
 
 var _runners: Array[Node3D] = []
 var _paused: bool = false
@@ -46,6 +55,10 @@ var _finish_count: int = 0
 var _race_elapsed: float = 0.0
 var _results_pending: bool = false
 var _results_wait_remaining: float = 0.0
+## ユーザーがゴールした時点の、操作盤の表示（ゴール後は、これを出し続ける）。
+var _finish_hud_state: Dictionary = {}
+## ゴールした走者の、ゴールした時点の心拍と体力（順位表の、その行に出し続ける）。走者 → {heart_bpm, fuel_ratio}。
+var _finish_standing_values: Dictionary = {}
 var _player: Node3D = null
 var _race_started: bool = false
 var _start_countdown_remaining: float = 0.0
@@ -135,8 +148,10 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A) and RaceControllerInput.activate_focused_control(get_viewport()):
-		get_viewport().set_input_as_handled()
+	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
+	var viewport := get_viewport()
+	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+		viewport.set_input_as_handled()
 		return
 	if _race_over:
 		return
@@ -171,19 +186,31 @@ func _process(_delta: float) -> void:
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
 	if not _paused and not _race_started:
 		_update_start_countdown(_delta)
-	elif not _paused and not _race_over:
+	elif not _paused:
+		# 結果の板を出したあとも、走者は止めない（時計と記録だけ止める）。
 		_update_start_signal(_delta)
-		_race_elapsed += _delta
+		if not _race_over:
+			_race_elapsed += _delta
 		# ランナーは前tickに確定したドラフト値を使って移動する。
 		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
 		_share_snapshots()
+		_update_goal_gate()
 		call_deferred("_finalize_draft_tick")
-		_telemetry_recorder.record_sample(_race_elapsed, _runners)
+		if not _race_over:
+			_telemetry_recorder.record_sample(_race_elapsed, _runners)
 	if _results_pending and not _race_over and not _paused:
 		_results_wait_remaining -= _delta
 		if _results_wait_remaining <= 0.0:
 			_show_results()
 	_update_hud()
+
+
+## ゴールの門の札を、いちばん後ろの走者に合わせる（全員が通りすぎるまでは「あと◯周」のまま）。
+func _update_goal_gate() -> void:
+	var last_progress := INF
+	for runner in _runners:
+		last_progress = minf(last_progress, float(runner.call("get_race_progress")))
+	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), last_progress))
 
 
 func _update_start_countdown(delta: float) -> void:
@@ -192,6 +219,7 @@ func _update_start_countdown(delta: float) -> void:
 		_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
 		return
 	_race_started = true
+	_start_gate.clear_after_start()
 	_telemetry_recorder.start(_race_distance_m)
 	_countdown_label.text = "START!"
 	_start_signal_remaining = 0.8
@@ -208,7 +236,7 @@ func _update_start_signal(delta: float) -> void:
 
 
 func _finalize_draft_tick() -> void:
-	if _paused or _race_over or _runners.is_empty():
+	if _paused or _runners.is_empty():
 		return
 	# M5オンラインと同じく、移動後のゴール判定を先に確定する。
 	# 着順とタイムを確定した後も、結果表示までは全員が接触・ドラフトを続ける。
@@ -232,9 +260,10 @@ func _resolve_pushes() -> void:
 	var result: Dictionary = LocalRaceMath.resolve_lateral_pushes(entries)
 	var offsets: Dictionary = result["offsets"]
 	var contest: Array = result["contest_ids"]
+	var lost: Array = result["lost_ids"]
 	for index in _runners.size():
 		var identifier := str(entries[index]["id"])
-		_runners[index].call("apply_push_result", float(offsets.get(identifier, entries[index]["offset"])), identifier in contest)
+		_runners[index].call("apply_push_result", float(offsets.get(identifier, entries[index]["offset"])), identifier in contest, identifier in lost)
 
 
 func _spawn_field() -> void:
@@ -242,9 +271,6 @@ func _spawn_field() -> void:
 		child.queue_free()
 	_runners.clear()
 	_player = null
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.75
-	sphere.height = 1.5
 	# 出るのは、キャラが入っている枠だけ。スタートの位置は、枠の番号どおり（未選択の枠は、空けたまま）。
 	var entries := RaceSession.field_entries()
 	var field_size := entries.size()
@@ -254,14 +280,9 @@ func _spawn_field() -> void:
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
-		var body := MeshInstance3D.new()
+		# 体は、個体の見た目の設定から組み立てる（足元が走者の位置、正面が進む向き）。
+		var body := PururinBodyBuilder.build(PururinLookConfig.look_for(str(entry["id"])), PururinLookConfig.values())
 		body.name = "Body"
-		body.mesh = sphere
-		body.position = Vector3(0.0, 0.75, 0.0)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = PururinVisualStyle.color_for_pururin(pururin)
-		mat.roughness = 0.4
-		body.material_override = mat
 		runner.add_child(body)
 		_runners_root.add_child(runner)
 		var is_player := bool(entry["player"])
@@ -306,12 +327,16 @@ func _place_markers() -> void:
 		Color(0.95, 0.95, 0.95)
 	)
 	_goal_visual.place(_track, goal_path, 15.0)
+	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), 0.0))
 	_place_route_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
 	_course_markers.place(
 		_track, _race_route, _race_distance_m, LocalRaceMath.lap_length_m(),
-		LocalRaceMath.Config.number("course_marker_sign_interval_m")
+		LocalRaceMath.Config.number("course_marker_sign_interval_m"),
+		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m")
 	)
 	_update_launch_visual()
+	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route)
+	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
 
 
 func _place_route_marker(node: MeshInstance3D, route_distance_m: float, color: Color) -> void:
@@ -349,10 +374,8 @@ func _update_launch_visual() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(15.0, 0.12, launch_length)
 	_launch_visual.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.45, 0.38, 0.32, 1.0)
-	mat.roughness = 0.9
-	_launch_visual.material_override = mat
+	# 助走の直線は、コースと同じ土の素材で塗る。
+	_launch_visual.material_override = ($TrackPath/TrackRibbon as CSGPolygon3D).material
 	_launch_visual.visible = true
 	var travel: Vector3 = join_pose["travel"]
 	var center: Vector3 = join_pose["position"] - travel * (launch_length * 0.5)
@@ -428,7 +451,13 @@ func _check_finishes() -> void:
 			break
 	if all_done and not _results_pending:
 		_results_pending = true
-		_results_wait_remaining = 2.0
+		_results_wait_remaining = result_wait_seconds(_race_elapsed - float(_player.call("get_finish_time")) if _player != null else RESULT_WAIT_AFTER_PLAYER_S)
+
+
+## 全員がゴールしてから、結果の板を出すまでの秒数。seconds_since_player_finish は、ユーザーがゴールしてからの秒数。
+## 最後の走者のゴールから RESULT_WAIT_AFTER_LAST_S、ユーザーのゴールから RESULT_WAIT_AFTER_PLAYER_S の、遅いほうまで待つ。
+static func result_wait_seconds(seconds_since_player_finish: float) -> float:
+	return maxf(RESULT_WAIT_AFTER_LAST_S, RESULT_WAIT_AFTER_PLAYER_S - seconds_since_player_finish)
 
 
 func _update_hud() -> void:
@@ -541,7 +570,7 @@ func _update_race_hud() -> void:
 	var place := _live_place(_player) if _race_started else 0
 	var style_id := str(_player.call("get_running_style_id"))
 	var has_style := not style_id.is_empty()
-	_race_hud.call("update_state", {
+	var state := {
 		"place": place,
 		"player_name": str(_player.get("display_name")),
 		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
@@ -570,7 +599,16 @@ func _update_race_hud() -> void:
 		"air_green": float(air_breakdown["aero_rear"]),
 		"air_blue": float(air_breakdown["draft"]),
 		"countdown": not _race_started,
-	})
+	}
+	if bool(_player.call("is_finished")):
+		# 操作盤は、ゴールした時点の表示で止める（あとで見返せるように）。順位表だけは、動かし続ける。
+		if _finish_hud_state.is_empty():
+			state["time_text"] = LocalRaceMath.format_race_time(float(_player.call("get_finish_time")))
+			_finish_hud_state = state
+		var frozen := _finish_hud_state.duplicate()
+		frozen["standings"] = state["standings"]
+		state = frozen
+	_race_hud.call("update_state", state)
 
 
 ## 進行バーに出す全走者の位置（割合）・自分かどうか・色。
@@ -592,18 +630,25 @@ func _hud_standings() -> Array:
 		var place := _live_place(runner)
 		var style_id := str(runner.call("get_running_style_id"))
 		var has_style := not style_id.is_empty()
+		var finished := bool(runner.call("is_finished"))
+		var condition := {"heart_bpm": float(runner.call("get_heart_rate_bpm")), "fuel_ratio": float(runner.call("get_stamina_ratio"))}
+		if finished:
+			# ゴールした行の心拍と体力は、ゴールした時点の数字で止める。
+			if not _finish_standing_values.has(runner):
+				_finish_standing_values[runner] = condition
+			condition = _finish_standing_values[runner]
 		rows.append({
 			"place": place,
 			"name": str(runner.get("display_name")),
 			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
 			"player": runner == _player,
-			"finished": bool(runner.call("is_finished")),
+			"finished": finished,
 			"finish_time": float(runner.call("get_finish_time")),
 			"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 			"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
 			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style else 0,
-			"heart_bpm": float(runner.call("get_heart_rate_bpm")),
-			"fuel_ratio": float(runner.call("get_stamina_ratio")),
+			"heart_bpm": float(condition["heart_bpm"]),
+			"fuel_ratio": float(condition["fuel_ratio"]),
 		})
 	# 同じ順位（横並び）は、元の並びのままにする。
 	for index in rows.size():
@@ -649,8 +694,8 @@ func _live_place(runner: Node3D) -> int:
 
 func _show_results() -> void:
 	_telemetry_recorder.finalize(_race_elapsed, _runners)
+	# 結果の板を出しても、走者は止めない。
 	_race_over = true
-	_set_paused(true)
 	_pause_panel.visible = false
 	_result_panel.visible = true
 	_result_board.call("set_rows", _result_rows())
@@ -719,7 +764,7 @@ func _build_result_board() -> void:
 func _set_paused(paused: bool) -> void:
 	_paused = paused
 	for r in _runners:
-		r.call("set_paused", paused or _race_over)
+		r.call("set_paused", paused)
 	if _race_over:
 		_pause_panel.visible = false
 		return

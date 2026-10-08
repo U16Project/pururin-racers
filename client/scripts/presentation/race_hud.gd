@@ -4,6 +4,7 @@ extends Control
 ## 値は update_state() で受け取り、計算はここでは行わない（表示用の割合と色だけ）。
 
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
+const FitText := preload("res://scripts/presentation/fit_text.gd")
 const PANEL_WIDTH := 440.0
 ## BOOST・DASH の文字の左に付ける、ボタンのマークの大きさ。
 const DRIVE_ACTION_MARK_SIZE := 13.0
@@ -18,8 +19,11 @@ const PANEL_TOP_STRIP := 52.0
 const PANEL_HEIGHT := PANEL_BODY_HEIGHT + PANEL_TOP_STRIP
 const PROGRESS_BAR_HEIGHT := 10.0
 const PROGRESS_SIDE_MARGIN := 24.0
-## 順位とタイムの間。
-const PROGRESS_RANK_GAP := 12.0
+## 操作盤の左上の角の上に付ける、名前の札。全角9文字が、そのままの大きさで入る。
+const NAME_TAB_HEIGHT := 24.0
+const NAME_TAB_FONT_SIZE := 17
+const NAME_TAB_PADDING := 14.0
+const NAME_TAB_MAX_TEXT_WIDTH := 170.0
 ## 脚質の印「〈」の間隔。
 const STYLE_CHEVRON_STEP := 10.0
 ## 左上の順位表。行の高さは、確定した行も、まだの行も同じ。
@@ -30,13 +34,13 @@ const STANDINGS_LEFT := 54.0
 const STANDINGS_ROW_HEIGHT := 26.0
 ## 順位表の、満員のときの行の数。表の位置は、この行の数で決める（人数が少なくても、上の位置は同じ）。
 const STANDINGS_FULL_ROWS := 8
-const STANDINGS_WIDTH := 412.0
-const STANDINGS_TIME_X := 344.0
+const STANDINGS_WIDTH := 432.0
+const STANDINGS_TIME_X := 368.0
 const STANDINGS_NAME_X := 50.0
-const STANDINGS_NAME_WIDTH := 96.0
-const STANDINGS_STYLE_X := 154.0
-const STANDINGS_HEART_X := 200.0
-const STANDINGS_FUEL_X := 254.0
+const STANDINGS_NAME_WIDTH := 120.0
+const STANDINGS_STYLE_X := 178.0
+const STANDINGS_HEART_X := 224.0
+const STANDINGS_FUEL_X := 278.0
 const STANDINGS_BATTERY_SIZE := Vector2(36.0, 12.0)
 const STANDINGS_FONT_SIZE := 16
 const STANDINGS_CONFIRMED_FONT_SIZE := 20
@@ -152,23 +156,6 @@ static func standings_top(screen_height: float, row_count: int) -> float:
 static func standings_time_text(seconds: float) -> String:
 	var total_centiseconds := int(floorf(maxf(seconds, 0.0) * 100.0 + 0.0001))
 	return "%d:%02d:%02d" % [total_centiseconds / 6000, (total_centiseconds / 100) % 60, total_centiseconds % 100]
-
-
-## 文字を、決めた幅に収める。まず文字を小さくし（下限まで）、それでも長ければ末尾を「…」にする。
-## 戻り値: {text, font_size, width}
-static func fit_text(font: Font, text: String, max_width: float, font_size: int, min_font_size: int) -> Dictionary:
-	var size := font_size
-	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	while width > max_width and size > min_font_size:
-		size -= 1
-		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	var shown := text
-	while width > max_width and shown.length() > 1:
-		shown = shown.substr(0, shown.length() - 1)
-		width = font.get_string_size(shown + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-	if shown != text:
-		shown += "…"
-	return {"text": shown, "font_size": size, "width": width}
 
 
 ## 進行バー上の位置（0〜1）。
@@ -298,6 +285,7 @@ func _draw_main_panel(font: Font) -> void:
 		Vector2(PANEL_WIDTH, PANEL_HEIGHT)
 	)
 	draw_rect(panel, COLOR_PANEL)
+	_draw_name_tab(font, panel)
 	var braking := bool(_state["braking"])
 	# 左：速度とドラフト
 	_draw_progress_bar(font, panel)
@@ -356,27 +344,41 @@ func _draw_ratio_bar(position: Vector2, width: float, ratio: float, color: Color
 
 
 ## パネル上部の進行バー。上にレース距離（左）と残り距離（右）、下に全走者の位置。
+## 名札。操作盤の左上の角の上に、名前を出す。札の幅は、名前の長さに合わせる。
+func _draw_name_tab(font: Font, panel: Rect2) -> void:
+	var player_name := str(_state["player_name"])
+	if player_name.is_empty():
+		return
+	var fitted := FitText.fit(font, player_name, NAME_TAB_MAX_TEXT_WIDTH, NAME_TAB_FONT_SIZE)
+	var tab := Rect2(
+		Vector2(panel.position.x, panel.position.y - NAME_TAB_HEIGHT),
+		Vector2(float(fitted["width"]) + NAME_TAB_PADDING * 2.0, NAME_TAB_HEIGHT)
+	)
+	var box := StyleBoxFlat.new()
+	box.bg_color = COLOR_PANEL
+	box.corner_radius_top_left = 8
+	box.corner_radius_top_right = 8
+	draw_style_box(box, tab)
+	FitText.draw(
+		self, font, Vector2(tab.position.x + NAME_TAB_PADDING, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
+		player_name, NAME_TAB_MAX_TEXT_WIDTH, NAME_TAB_FONT_SIZE, COLOR_TEXT, 0.0, 6, COLOR_OUTLINE
+	)
+
+
 func _draw_progress_bar(font: Font, panel: Rect2) -> void:
 	var left := panel.position.x + PROGRESS_SIDE_MARGIN
 	var width := PANEL_WIDTH - PROGRESS_SIDE_MARGIN * 2.0
 	var text_y := panel.position.y + 28.0
-	# 左：名前。中央：順位・脚質の印・タイム。右：残り距離とレース距離。
+	# 左：順位と脚質の印。中央：タイム。右：残り距離とレース距離。名前は、操作盤の上の名札に出す。
 	var state_color := style_state_color(int(_state["style_rank_bonus"]))
-	var time_text := str(_state["time_text"])
-	var time_width := font.get_string_size(time_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	var time_x := left + (width - time_width) * 0.5 + 18.0
-	_draw_text(font, time_text, Vector2(time_x, text_y), 16, COLOR_TEXT)
-	# 順位と脚質の印は、タイムのすぐ左に、少し間をあけて右寄せで置く（順位、印の順）。
-	var chevrons_width := float(int(_state["style_group_count"])) * STYLE_CHEVRON_STEP
-	var chevrons_x := time_x - PROGRESS_RANK_GAP - chevrons_width
-	_draw_style_chevrons(Vector2(chevrons_x, text_y - 6.0), state_color, int(_state["style_group_count"]), int(_state["style_group_index"]))
 	var place := int(_state["place"])
 	var place_text := "%s/%d位" % [str(place) if place > 0 else "-", int(_state["field_size"])]
-	var place_x := chevrons_x - 6.0 - font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
-	_draw_text(font, place_text, Vector2(place_x, text_y), 16, state_color)
-	# 名前は、単独で左寄せ。長い名前は、順位に重ならない幅に収める（小さくし、それでも長ければ末尾を省く）。
-	var fitted := fit_text(font, str(_state["player_name"]), maxf(place_x - 10.0 - left, 0.0), 16, 11)
-	_draw_text(font, str(fitted["text"]), Vector2(left, text_y), int(fitted["font_size"]), COLOR_TEXT)
+	_draw_text(font, place_text, Vector2(left, text_y), 16, state_color)
+	var chevrons_x := left + font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 6.0
+	_draw_style_chevrons(Vector2(chevrons_x, text_y - 6.0), state_color, int(_state["style_group_count"]), int(_state["style_group_index"]))
+	var time_text := str(_state["time_text"])
+	var time_width := font.get_string_size(time_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x
+	_draw_text(font, time_text, Vector2(left + (width - time_width) * 0.5, text_y), 16, COLOR_TEXT)
 	var total_text := " / %d m" % int(roundf(float(_state["race_distance_m"])))
 	var total_width := font.get_string_size(total_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
 	var remaining_text := "残り %d" % int(roundf(float(_state["remaining_m"])))
@@ -459,8 +461,8 @@ func _draw_standings(font: Font) -> void:
 		_draw_standings_rank(row_font, Vector2(x + 12.0, center_y), index + 1, is_confirmed, text_size, text_color)
 		draw_circle(Vector2(x + 36.0, center_y), 6.5, COLOR_OUTLINE)
 		draw_circle(Vector2(x + 36.0, center_y), 5.0, row["color"])
-		var fitted := fit_text(row_font, str(row["name"]), STANDINGS_NAME_WIDTH, text_size, 11)
-		_draw_text(row_font, str(fitted["text"]), Vector2(x + STANDINGS_NAME_X, center_y + int(fitted["font_size"]) * 0.36), int(fitted["font_size"]), text_color)
+		# 長い名前は、欄の幅に収める（少し小さく・少し細く。それでも入らなければ末尾を「…」に）。
+		FitText.draw(self, row_font, Vector2(x + STANDINGS_NAME_X, baseline), str(row["name"]), STANDINGS_NAME_WIDTH, text_size, text_color, 0.0, 6, COLOR_OUTLINE)
 		_draw_style_chevrons(Vector2(x + STANDINGS_STYLE_X, center_y), style_state_color(int(row["style_rank_bonus"])), int(row["style_group_count"]), int(row["style_group_index"]), 0.85)
 		var value_baseline := center_y + STANDINGS_VALUE_FONT_SIZE * 0.36
 		_draw_heart(Vector2(x + STANDINGS_HEART_X + 7.0, center_y), COLOR_DANGER)

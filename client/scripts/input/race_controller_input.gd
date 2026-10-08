@@ -72,6 +72,12 @@ static func is_menu_pressed(event: InputEvent) -> bool:
 	return is_button_pressed(event, JOY_BUTTON_START)
 
 
+## メニューの決定（選んでいるボタンを押す）。ゲームパッドは A。
+static func is_accept_pressed(event: InputEvent) -> bool:
+	return is_button_pressed(event, JOY_BUTTON_A)
+
+
+## メニューの戻る・閉じる。ゲームパッドは B。
 static func is_cancel_pressed(event: InputEvent) -> bool:
 	return is_button_pressed(event, JOY_BUTTON_B)
 
@@ -122,7 +128,7 @@ static func activate_focused_control(viewport: Viewport) -> bool:
 	return activate_control(focused)
 
 
-## ゲームパッドのAで、選んでいるボタンを押す。切り替え式のボタンは、入・切を切り替える
+## ゲームパッドの決定（A）で、選んでいるボタンを押す。切り替え式のボタンは、入・切を切り替える
 ## （どれか1つを選ぶ組のボタンは、入にするだけ）。
 static func activate_control(control: Control) -> bool:
 	if not control is BaseButton or not control.is_visible_in_tree() or control.disabled:

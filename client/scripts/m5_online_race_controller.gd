@@ -94,8 +94,10 @@ func _ready() -> void:
 	_hud_label.text = "M5 オンラインレース　接続しています…"
 
 func _unhandled_input(event: InputEvent) -> void:
-	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A) and RaceControllerInput.activate_focused_control(get_viewport()):
-		get_viewport().set_input_as_handled()
+	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
+	var viewport := get_viewport()
+	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+		viewport.set_input_as_handled()
 		return
 	if _race_result_received:
 		return

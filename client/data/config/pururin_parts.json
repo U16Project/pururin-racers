@@ -1,0 +1,587 @@
+{
+  "schema_version": 1,
+  "action_names": [ "idle", "ready", "run", "dash", "brake", "contact", "push", "tired", "goal_win", "goal_place", "goal" ],
+  "body_motions": {
+    "standard": {
+      "steer_lean_deg": 10.0,
+      "actions": {
+        "idle": [
+          { "type": "stretch", "axis": "y", "amount": 0.035, "hz": 0.45 }
+        ],
+        "ready": [
+          { "type": "stretch", "axis": "y", "amount": -0.12, "hz": 0.0 },
+          { "type": "stretch", "axis": "y", "amount": 0.02, "hz": 3.0 }
+        ],
+        "run": [
+          { "type": "hop", "height": 0.06, "hz": 2.6, "squash": 0.12 },
+          { "type": "lean", "axis": "x", "angle_deg": -5.0 }
+        ],
+        "dash": [
+          { "type": "stretch", "axis": "z", "amount": 0.22, "hz": 0.0 },
+          { "type": "lean", "axis": "x", "angle_deg": -10.0 },
+          { "type": "hop", "height": 0.03, "hz": 4.0, "squash": 0.05 }
+        ],
+        "brake": [
+          { "type": "stretch", "axis": "z", "amount": -0.15, "hz": 0.0 },
+          { "type": "lean", "axis": "x", "angle_deg": 10.0 }
+        ],
+        "contact": [
+          { "type": "stretch", "axis": "x", "amount": -0.07, "hz": 0.0 },
+          { "type": "hop", "height": 0.03, "hz": 2.6, "squash": 0.06 }
+        ],
+        "push": [
+          { "type": "stretch", "axis": "x", "amount": -0.14, "hz": 0.0 },
+          { "type": "stretch", "axis": "x", "amount": 0.05, "hz": 14.0 }
+        ],
+        "tired": [
+          { "type": "stretch", "axis": "y", "amount": -0.1, "hz": 0.0 },
+          { "type": "hop", "height": 0.025, "hz": 1.6, "squash": 0.08 },
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 0.8 }
+        ],
+        "goal_win": [
+          { "type": "hop", "height": 0.45, "hz": 1.6, "squash": 0.22 },
+          { "type": "sway", "axis": "y", "angle_deg": 28.0, "hz": 0.8 },
+          { "type": "circle", "radius": 0.25, "hz": 0.4 }
+        ],
+        "goal_place": [
+          { "type": "hop", "height": 0.2, "hz": 1.5, "squash": 0.15 }
+        ],
+        "goal": [
+          { "type": "stretch", "axis": "y", "amount": 0.035, "hz": 0.45 }
+        ]
+      },
+      "one_shots": {
+        "launch": {
+          "seconds": 0.5,
+          "motions": [
+            { "type": "stretch", "axis": "z", "amount": 0.3, "hz": 0.0 },
+            { "type": "lean", "axis": "x", "angle_deg": -8.0 }
+          ]
+        },
+        "pick": {
+          "seconds": 0.55,
+          "motions": [
+            { "type": "lift", "height": 0.3 },
+            { "type": "stretch", "axis": "y", "amount": 0.18, "hz": 0.0 }
+          ]
+        }
+      }
+    }
+  },
+  "finishes": {
+    "gloss": {
+      "roughness": 0.16,
+      "specular": 0.65,
+      "clearcoat": 0.6,
+      "clearcoat_roughness": 0.12,
+      "rim_strength": 0.45,
+      "rim_power": 2.4,
+      "self_light": 0.1,
+      "core_color": "#FFFFFF",
+      "core_strength": 0.0,
+      "grain": 0.0
+    },
+    "matte": {
+      "roughness": 0.85,
+      "specular": 0.25,
+      "clearcoat": 0.0,
+      "clearcoat_roughness": 0.12,
+      "rim_strength": 0.18,
+      "rim_power": 2.4,
+      "self_light": 0.08,
+      "core_color": "#FFFFFF",
+      "core_strength": 0.0,
+      "grain": 0.22
+    },
+    "ember": {
+      "roughness": 0.3,
+      "specular": 0.5,
+      "clearcoat": 0.35,
+      "clearcoat_roughness": 0.12,
+      "rim_strength": 0.5,
+      "rim_power": 2.0,
+      "self_light": 0.3,
+      "core_color": "#FFD24A",
+      "core_strength": 0.22,
+      "grain": 0.0
+    },
+    "sheer": {
+      "roughness": 0.1,
+      "specular": 0.7,
+      "clearcoat": 0.8,
+      "clearcoat_roughness": 0.08,
+      "rim_strength": 0.95,
+      "rim_power": 1.5,
+      "self_light": 0.16,
+      "core_color": "#FFFFFF",
+      "core_strength": 0.0,
+      "grain": 0.0
+    }
+  },
+  "parts": {
+    "nub_drop": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": { "type": "builtin", "shape": "nub", "height": 0.36, "lean": 0.2, "base_radius": 0.15, "tip_radius": 0.12 },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 0.5 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 0.8 }
+        ],
+        "run": [
+          { "type": "lean", "axis": "x", "angle_deg": 14.0 },
+          { "type": "sway", "axis": "x", "angle_deg": 4.0, "hz": 2.2 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "x", "angle_deg": 24.0 },
+          { "type": "sway", "axis": "x", "angle_deg": 3.0, "hz": 5.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 0.5 }
+        ],
+        "contact": [
+          { "type": "lean", "axis": "x", "angle_deg": 14.0 },
+          { "type": "sway", "axis": "x", "angle_deg": 4.0, "hz": 2.2 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 9.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 0.35 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "z", "angle_deg": 12.0, "hz": 1.6 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "z", "angle_deg": 7.2, "hz": 1.6 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 0.5 }
+        ]
+      }
+    },
+    "fin_flipper": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": { "type": "builtin", "shape": "flipper", "length": 0.24, "tilt_deg": -18.0 },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 8.0, "hz": 0.8 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.8, "hz": 1.28 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "z", "angle_deg": 16.0, "hz": 2.4 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "y", "angle_deg": -35.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 4.0, "hz": 6.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 8.0, "hz": 0.8 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "z", "angle_deg": 16.0, "hz": 2.4 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.8, "hz": 0.56 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "z", "angle_deg": 30.0, "hz": 2.5 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "z", "angle_deg": 18.0, "hz": 2.5 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 8.0, "hz": 0.8 }
+        ]
+      }
+    },
+    "tail_flipper": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": { "type": "builtin", "shape": "flipper", "length": 0.2, "tilt_deg": 22.0 },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.7 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "y", "angle_deg": 6.0, "hz": 1.12 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "y", "angle_deg": 18.0, "hz": 2.6 }
+        ],
+        "dash": [
+          { "type": "sway", "axis": "y", "angle_deg": 8.0, "hz": 6.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.7 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "y", "angle_deg": 18.0, "hz": 2.6 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "y", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "y", "angle_deg": 6.0, "hz": 0.49 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "y", "angle_deg": 25.0, "hz": 2.5 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "y", "angle_deg": 15.0, "hz": 2.5 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.7 }
+        ]
+      }
+    },
+    "rock_crown": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": { "type": "builtin", "shape": "rocks", "size": 0.2, "count": 4, "spread": 0.22, "seed": 3, "color": "#8A6B45" },
+      "motions": {}
+    },
+    "rock_side": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": { "type": "builtin", "shape": "rock", "size": 0.16, "seed": 11, "color": "#8A6B45" },
+      "motions": {}
+    },
+    "rock_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": { "type": "builtin", "shape": "rock", "size": 0.12, "seed": 5, "color": "#8A6B45" },
+      "motions": {}
+    },
+    "flame_crest": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": { "type": "builtin", "shape": "flames", "length": 0.5, "width": 0.14, "lean": 0.12, "side_scale": 0.55, "tip_color": "#FFE066" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 1.3 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.1 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 2.08 },
+          { "type": "pulse", "amount": 0.03, "hz": 3.36 }
+        ],
+        "run": [
+          { "type": "lean", "axis": "x", "angle_deg": 16.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 3.0 },
+          { "type": "pulse", "amount": 0.08, "hz": 4.0 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "x", "angle_deg": 26.0 },
+          { "type": "grow", "amount": 0.3 },
+          { "type": "pulse", "amount": 0.08, "hz": 7.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 1.3 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.1 }
+        ],
+        "contact": [
+          { "type": "lean", "axis": "x", "angle_deg": 16.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 3.0 },
+          { "type": "pulse", "amount": 0.08, "hz": 4.0 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.0, "hz": 9.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.0, "hz": 0.91 },
+          { "type": "pulse", "amount": 0.03, "hz": 1.47 }
+        ],
+        "goal_win": [
+          { "type": "grow", "amount": 0.2 },
+          { "type": "sway", "axis": "z", "angle_deg": 10.0, "hz": 2.0 },
+          { "type": "pulse", "amount": 0.1, "hz": 3.0 }
+        ],
+        "goal_place": [
+          { "type": "grow", "amount": 0.12 },
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 2.0 },
+          { "type": "pulse", "amount": 0.06, "hz": 3.0 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 1.3 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.1 }
+        ]
+      }
+    },
+    "flame_fin": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": { "type": "builtin", "shape": "flame", "length": 0.36, "width": 0.1, "lean": 0.1, "tilt_deg": 18.0, "roll_deg": 25.0, "tip_color": "#FFE066" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 1.1 },
+          { "type": "pulse", "amount": 0.04, "hz": 1.9 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.6, "hz": 1.76 },
+          { "type": "pulse", "amount": 0.024, "hz": 3.04 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "z", "angle_deg": 12.0, "hz": 2.6 },
+          { "type": "pulse", "amount": 0.06, "hz": 4.0 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "y", "angle_deg": -30.0 },
+          { "type": "grow", "amount": 0.25 },
+          { "type": "pulse", "amount": 0.06, "hz": 7.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 1.1 },
+          { "type": "pulse", "amount": 0.04, "hz": 1.9 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "z", "angle_deg": 12.0, "hz": 2.6 },
+          { "type": "pulse", "amount": 0.06, "hz": 4.0 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.6, "hz": 0.77 },
+          { "type": "pulse", "amount": 0.024, "hz": 1.33 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "z", "angle_deg": 28.0, "hz": 2.5 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "z", "angle_deg": 16.8, "hz": 2.5 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 1.1 },
+          { "type": "pulse", "amount": 0.04, "hz": 1.9 }
+        ]
+      }
+    },
+    "flame_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": { "type": "builtin", "shape": "flame", "length": 0.32, "width": 0.09, "lean": 0.05, "tilt_deg": 62.0, "roll_deg": 0.0, "tip_color": "#FFE066" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "y", "angle_deg": 8.0, "hz": 1.2 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.0 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "y", "angle_deg": 4.8, "hz": 1.92 },
+          { "type": "pulse", "amount": 0.03, "hz": 3.2 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "y", "angle_deg": 14.0, "hz": 3.0 },
+          { "type": "pulse", "amount": 0.08, "hz": 4.0 }
+        ],
+        "dash": [
+          { "type": "grow", "amount": 0.35 },
+          { "type": "pulse", "amount": 0.08, "hz": 7.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "y", "angle_deg": 8.0, "hz": 1.2 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.0 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "y", "angle_deg": 14.0, "hz": 3.0 },
+          { "type": "pulse", "amount": 0.08, "hz": 4.0 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "y", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "y", "angle_deg": 4.8, "hz": 0.84 },
+          { "type": "pulse", "amount": 0.03, "hz": 1.4 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "y", "angle_deg": 20.0, "hz": 2.5 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "y", "angle_deg": 12.0, "hz": 2.5 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "y", "angle_deg": 8.0, "hz": 1.2 },
+          { "type": "pulse", "amount": 0.05, "hz": 2.0 }
+        ]
+      }
+    },
+    "leaf_sprout": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": { "type": "builtin", "shape": "sprout", "length": 0.34, "width": 0.1, "spread_deg": 40.0, "color": "#7BD65A" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 0.6 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.6, "hz": 0.96 }
+        ],
+        "run": [
+          { "type": "lean", "axis": "x", "angle_deg": 12.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 2.4 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "x", "angle_deg": 24.0 },
+          { "type": "sway", "axis": "x", "angle_deg": 3.0, "hz": 6.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 0.6 }
+        ],
+        "contact": [
+          { "type": "lean", "axis": "x", "angle_deg": 12.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 2.4 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.0, "hz": 9.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 3.6, "hz": 0.42 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "z", "angle_deg": 14.0, "hz": 1.8 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "z", "angle_deg": 8.4, "hz": 1.8 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 6.0, "hz": 0.6 }
+        ]
+      }
+    },
+    "leaf_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": { "type": "builtin", "shape": "leaf", "length": 0.42, "width": 0.11, "tilt_deg": 16.0, "roll_deg": 32.0, "sweep_deg": 24.0, "feathers": 3, "color": "#7BD65A" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "z", "angle_deg": 7.0, "hz": 0.9 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.2, "hz": 1.44 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "z", "angle_deg": 20.0, "hz": 2.8 }
+        ],
+        "dash": [
+          { "type": "lean", "axis": "y", "angle_deg": -32.0 },
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 7.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "z", "angle_deg": 7.0, "hz": 0.9 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "z", "angle_deg": 20.0, "hz": 2.8 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "z", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "z", "angle_deg": 4.2, "hz": 0.63 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "z", "angle_deg": 32.0, "hz": 2.6 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "z", "angle_deg": 19.2, "hz": 2.6 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "z", "angle_deg": 7.0, "hz": 0.9 }
+        ]
+      }
+    },
+    "leaf_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": { "type": "builtin", "shape": "leaf", "length": 0.3, "width": 0.085, "tilt_deg": 42.0, "roll_deg": 0.0, "sweep_deg": 0.0, "feathers": 1, "color": "#7BD65A" },
+      "motions": {
+        "idle": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.8 }
+        ],
+        "ready": [
+          { "type": "sway", "axis": "y", "angle_deg": 6.0, "hz": 1.28 }
+        ],
+        "run": [
+          { "type": "sway", "axis": "y", "angle_deg": 16.0, "hz": 2.8 }
+        ],
+        "dash": [
+          { "type": "sway", "axis": "y", "angle_deg": 6.0, "hz": 6.0 }
+        ],
+        "brake": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.8 }
+        ],
+        "contact": [
+          { "type": "sway", "axis": "y", "angle_deg": 16.0, "hz": 2.8 }
+        ],
+        "push": [
+          { "type": "sway", "axis": "y", "angle_deg": 5.0, "hz": 10.0 }
+        ],
+        "tired": [
+          { "type": "sway", "axis": "y", "angle_deg": 6.0, "hz": 0.56 }
+        ],
+        "goal_win": [
+          { "type": "sway", "axis": "y", "angle_deg": 24.0, "hz": 2.5 }
+        ],
+        "goal_place": [
+          { "type": "sway", "axis": "y", "angle_deg": 14.4, "hz": 2.5 }
+        ],
+        "goal": [
+          { "type": "sway", "axis": "y", "angle_deg": 10.0, "hz": 0.8 }
+        ]
+      }
+    },
+    "eyes_round": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_open", "scale": 1.0, "sparkle": 0 } },
+    "eyes_sparkle": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_open", "scale": 1.12, "sparkle": 1 } },
+    "eyes_half": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_lidded", "level": 0.3, "slope": 0.0, "lower": 0.0, "line": 1.0 } },
+    "eyes_calm": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_lidded", "level": 0.55, "slope": 0.0, "lower": 0.0, "line": 1.0 } },
+    "eyes_anger": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_lidded", "level": 0.55, "slope": -0.45, "lower": 0.0, "line": 1.0 } },
+    "eyes_sorrow": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_lidded", "level": 0.12, "slope": 0.18, "lower": 0.0, "line": 1.0 } },
+    "eyes_effort": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_lidded", "level": 0.5, "slope": -0.4, "lower": 0.35, "line": 1.2 } },
+    "eyes_dot": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_dot", "scale": 0.6 } },
+    "eyes_joy": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_arc", "bend": 1.0 } },
+    "eyes_relax": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_arc", "bend": -1.0 } },
+    "eyes_line": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_arc", "bend": 0.0 } },
+    "eyes_squeeze": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_squeeze" } },
+    "eyes_dizzy": { "kind": "face", "slot": "eyes", "source": { "type": "builtin", "shape": "eyes_dizzy" } },
+    "brow_thick": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 1.25, "thickness": 0.3, "tilt_deg": 0.0, "lift": 1.55, "curve": 0.0 } },
+    "brow_thick_angry": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 1.25, "thickness": 0.3, "tilt_deg": 22.0, "lift": 1.5, "curve": 0.0 } },
+    "brow_thick_sad": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 1.25, "thickness": 0.3, "tilt_deg": -18.0, "lift": 1.55, "curve": 0.0 } },
+    "brow_angry": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 0.85, "thickness": 0.13, "tilt_deg": 24.0, "lift": 1.3, "curve": 0.0 } },
+    "brow_sad": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 0.85, "thickness": 0.12, "tilt_deg": -18.0, "lift": 1.5, "curve": 0.0 } },
+    "brow_raise": { "kind": "face", "slot": "brows", "source": { "type": "builtin", "shape": "brow", "length": 0.85, "thickness": 0.12, "tilt_deg": 0.0, "lift": 1.6, "curve": 0.3 } },
+    "mouth_omega": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_omega", "width": 0.085 } },
+    "mouth_smile": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_smile", "width": 0.095, "fang": 0, "fang_color": "#FFFFFF" } },
+    "mouth_fang": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_smile", "width": 0.12, "fang": 1, "fang_color": "#FFFFFF" } },
+    "mouth_open": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_open", "width": 0.13, "fang": 0, "inside_color": "#6B1F2A", "tongue_color": "#FF8FA0", "fang_color": "#FFFFFF" } },
+    "mouth_open_big": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_open", "width": 0.18, "fang": 0, "inside_color": "#6B1F2A", "tongue_color": "#FF8FA0", "fang_color": "#FFFFFF" } },
+    "mouth_open_fang": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_open", "width": 0.14, "fang": 1, "inside_color": "#6B1F2A", "tongue_color": "#FF8FA0", "fang_color": "#FFFFFF" } },
+    "mouth_flat": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_flat", "width": 0.07 } },
+    "mouth_frown": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_frown", "width": 0.085 } },
+    "mouth_wavy": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_wavy", "width": 0.1 } },
+    "mouth_o": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_o", "width": 0.06, "inside_color": "#6B1F2A" } },
+    "mouth_grit": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_grit", "width": 0.13, "teeth_color": "#FFFFFF" } },
+    "mouth_triangle": { "kind": "face", "slot": "mouth", "source": { "type": "builtin", "shape": "mouth_triangle", "width": 0.075, "inside_color": "#6B1F2A" } },
+    "cheek_blush": { "kind": "face", "slot": "cheeks", "source": { "type": "builtin", "shape": "cheek_ellipse", "width": 0.06, "height": 0.034 } },
+    "cheek_lines": { "kind": "face", "slot": "cheeks", "source": { "type": "builtin", "shape": "cheek_lines", "width": 0.06, "height": 0.04 } },
+    "effect_sweat": { "kind": "face", "slot": "effect", "source": { "type": "builtin", "shape": "effect_sweat", "size": 0.045, "color": "#BFE6FF" } },
+    "effect_tears": { "kind": "face", "slot": "effect", "source": { "type": "builtin", "shape": "effect_tears", "size": 0.032, "color": "#9FDCFF" } },
+    "effect_sparkle": { "kind": "face", "slot": "effect", "source": { "type": "builtin", "shape": "effect_sparkle", "size": 0.065, "color": "#FFE566" } },
+    "effect_anger": { "kind": "face", "slot": "effect", "source": { "type": "builtin", "shape": "effect_anger", "size": 0.07, "color": "#E8352B" } },
+    "effect_anger_white": { "kind": "face", "slot": "effect", "source": { "type": "builtin", "shape": "effect_anger", "size": 0.07, "color": "#FFFFFF" } },
+    "mark_star": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "star" } },
+    "mark_heart": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "heart" } },
+    "mark_drop": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "drop" } },
+    "mark_bolt": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "bolt" } },
+    "mark_flower": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "flower" } },
+    "mark_diamond": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "diamond" } },
+    "mark_moon": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "moon" } },
+    "mark_swirl": { "kind": "decoration", "slot": "mark", "source": { "type": "builtin", "shape": "swirl" } }
+  }
+}

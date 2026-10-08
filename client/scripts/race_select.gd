@@ -13,6 +13,7 @@ const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const GateBadge := preload("res://scripts/menu/gate_badge.gd")
+const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const PANEL_SIZE := Vector2(880.0, 616.0)
 const SLOT_COLUMN_WIDTH := 436.0
@@ -20,6 +21,9 @@ const GATE_BADGE_SIZE := 28.0
 const DISTANCE_STEP_BUTTON_WIDTH := 70.0
 const DISTANCE_MARK_SIZE := 20.0
 const NOTE_MARK_SIZE := 18.0
+const NOTE_ITEM_WIDTH := 190.0
+## キャラの一覧の窓と、板の端との間。
+const PICKER_MARGIN := 12.0
 ## 距離を動かすボタン（L1・R1）の色。茶色系。
 const COLOR_STEP_BUTTON := Color(0.36, 0.23, 0.13, 1.0)
 const COLOR_STEP_BUTTON_BORDER := Color(0.62, 0.43, 0.25, 1.0)
@@ -43,6 +47,10 @@ var _viewed_slot := 0
 var _hint_label: Label
 var _race_button: Button
 var _back_button: Button
+var _panel: PanelContainer
+## キャラの一覧の窓と、窓が開いている間、後ろの部品を押せなくする覆い。
+var _picker: Control
+var _picker_cover: Control
 
 
 func _ready() -> void:
@@ -64,6 +72,7 @@ func _ready() -> void:
 	panel.offset_top = -PANEL_SIZE.y * 0.5
 	panel.offset_bottom = PANEL_SIZE.y * 0.5
 	add_child(panel)
+	_panel = panel
 	var content := VBoxContainer.new()
 	content.name = "Content"
 	content.add_theme_constant_override("separation", 8)
@@ -104,6 +113,7 @@ func _ready() -> void:
 	MenuStyle.add_mark(_race_button, "START")
 	buttons.add_child(_race_button)
 	_detail.connect("force_requested", _on_force_requested)
+	_build_picker()
 	_viewed_slot = RaceSession.user_slot()
 	_refresh_slots()
 	_refresh_focus_links()
@@ -225,10 +235,11 @@ func _build_slot_column() -> VBoxContainer:
 		row.connect("force_requested", _on_slot_force_requested)
 		row.connect("lock_requested", _on_slot_lock_requested)
 		row.connect("move_requested", _on_slot_move_requested)
+		row.connect("pick_requested", _on_slot_pick_requested)
 		line.add_child(row)
 		_slots.append(row)
-	column.add_child(_note_row("ButtonNote1", [["X", "選択解除"], ["SELECT", "施錠・解錠"]]))
-	column.add_child(_note_row("ButtonNote2", [["L2", "上の枠へ"], ["R2", "下の枠へ"]]))
+	column.add_child(_note_row("ButtonNote1", [[["A"], "一覧から選ぶ"], [["X"], "選択解除"]]))
+	column.add_child(_note_row("ButtonNote2", [[["SELECT"], "施錠・解錠"], [["L2", "R2"], "枠を上下へ"]]))
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 5)
 	column.add_child(buttons)
@@ -240,17 +251,20 @@ func _build_slot_column() -> VBoxContainer:
 	return column
 
 
-## ボタンの説明の1行。items は [マークの種類, 説明] の並び。
+## ボタンの説明の1行。items は [マークの種類の並び, 説明] の並び。
 func _note_row(row_name: String, items: Array) -> HBoxContainer:
 	var note := HBoxContainer.new()
 	note.name = row_name
 	note.add_theme_constant_override("separation", 5)
 	note.custom_minimum_size = Vector2(0.0, 22.0)
 	for item: Array in items:
-		note.add_child(MenuStyle.mark(str(item[0]), NOTE_MARK_SIZE))
-		var text := MenuStyle.label(str(item[1]), 14, MenuStyle.COLOR_DIM)
-		text.custom_minimum_size = Vector2(110.0, 0.0)
-		note.add_child(text)
+		var group := HBoxContainer.new()
+		group.add_theme_constant_override("separation", 4)
+		group.custom_minimum_size = Vector2(NOTE_ITEM_WIDTH, 0.0)
+		for kind: String in item[0]:
+			group.add_child(MenuStyle.mark(kind, NOTE_MARK_SIZE))
+		group.add_child(MenuStyle.label(str(item[1]), 14, MenuStyle.COLOR_DIM))
+		note.add_child(group)
 	return note
 
 
@@ -338,8 +352,18 @@ func _refresh_detail() -> void:
 
 
 ## ゲームパッドは、Aで決定、Bで戻る、STARTでレース開始、L1・R1で距離
-## （Godotの標準では、AとBは「決定」「戻る」に割り当てられていない）。
+## （Godotの標準では、ゲームパッドのボタンは「決定」「戻る」に割り当てられていない）。
 func _unhandled_input(event: InputEvent) -> void:
+	if _picker.call("is_open"):
+		# 一覧の窓が開いている間は、窓の操作だけ（決定と閉じる）。後ろの操作は受け付けない。
+		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+			get_viewport().set_input_as_handled()
+			_picker.call("close")
+		elif RaceControllerInput.is_accept_pressed(event):
+			var picker_viewport := get_viewport()
+			if RaceControllerInput.activate_focused_control(picker_viewport):
+				picker_viewport.set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		get_viewport().set_input_as_handled()
 		go_to_title()
@@ -349,7 +373,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif RaceControllerInput.distance_step(event) != 0:
 		get_viewport().set_input_as_handled()
 		step_distance(RaceControllerInput.distance_step(event))
-	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A):
+	elif RaceControllerInput.is_accept_pressed(event):
 		# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 		var viewport := get_viewport()
 		if RaceControllerInput.activate_focused_control(viewport):
@@ -432,7 +456,77 @@ func _on_slot_force_requested(slot: int) -> void:
 
 
 func _on_force_requested() -> void:
+	if _picker.call("is_open"):
+		var focused := get_viewport().gui_get_focus_owner()
+		if focused != null and focused.has_method("pururin_id"):
+			_on_picker_force_requested(str(focused.call("pururin_id")))
+		return
 	_on_slot_force_requested(_preview_slot)
+
+
+## キャラの一覧の窓を作る（最初は閉じている）。窓の後ろに、板の左側を押せなくする覆いを置く。
+func _build_picker() -> void:
+	_picker_cover = Control.new()
+	_picker_cover.name = "PickerCover"
+	_picker_cover.mouse_filter = Control.MOUSE_FILTER_STOP
+	_picker_cover.visible = false
+	add_child(_picker_cover)
+	_picker = PururinPicker.new()
+	_picker.name = "Picker"
+	add_child(_picker)
+	_picker.connect("picked", _on_picker_picked)
+	_picker.connect("force_requested", _on_picker_force_requested)
+	_picker.connect("tile_focused", _on_picker_tile_focused)
+	_picker.connect("closed", _on_picker_closed)
+
+
+## スロットで決定：キャラの一覧の窓を開く。施錠中のスロットでは開かない。
+func _on_slot_pick_requested(slot: int) -> void:
+	if RaceSession.is_locked(slot):
+		return
+	_clear_preview()
+	_refresh_slots()
+	_viewed_slot = slot
+	# 窓は、板の左側に重ねる。右側の詳細パネルは隠さない。
+	var panel_rect := _panel.get_global_rect()
+	var detail_left := _detail.get_global_rect().position.x
+	var left := panel_rect.position.x + PICKER_MARGIN
+	_picker.global_position = Vector2(left, panel_rect.position.y + PICKER_MARGIN)
+	_picker.size = Vector2(minf(float(PururinPicker.window_width()), detail_left - PICKER_MARGIN - left), panel_rect.size.y - PICKER_MARGIN * 2.0)
+	# 覆いは、板の左側（詳細パネルより左）だけ。詳細パネルの「強制選択」は押せるままにする。
+	_picker_cover.global_position = Vector2.ZERO
+	_picker_cover.size = Vector2(detail_left, get_viewport_rect().size.y)
+	_picker_cover.visible = true
+	_picker.call("open", slot, "%s（%s）のキャラを選ぶ" % [slot_tag(slot), PururinSlot.USER_TAG if RaceSession.is_user_slot(slot) else PururinSlot.CPU_TAG])
+
+
+## 窓で決定：そのキャラ（空なら未選択）をスロットに入れて、閉じる。
+func _on_picker_picked(pururin_id: String) -> void:
+	RaceSession.set_slot(int(_picker.call("slot")), pururin_id)
+	_picker.call("close")
+
+
+## 窓で強制選択：先に使っていたスロットを空にして、このスロットに入れて、閉じる。施錠中なら、何もしない。
+func _on_picker_force_requested(pururin_id: String) -> void:
+	if RaceSession.take_slot(int(_picker.call("slot")), pururin_id):
+		_picker.call("close")
+
+
+## 窓のカーソルが動いた：右側の詳細を、そのキャラに変える。他のスロットが使っていれば、その表示も出す。
+func _on_picker_tile_focused(pururin_id: String) -> void:
+	var holder := RaceSession.slot_holding(pururin_id)
+	if holder >= 0 and holder != int(_picker.call("slot")):
+		_detail.call("show_pururin", pururin_id, slot_tag(holder), RaceSession.is_locked(holder))
+	else:
+		_detail.call("show_pururin", pururin_id)
+
+
+## 窓が閉じた：選択の枠を元のスロットに戻し、表示を今の選択に合わせる。
+func _on_picker_closed() -> void:
+	_picker_cover.visible = false
+	_refresh_slots()
+	_slots[_viewed_slot].grab_focus()
+	_refresh_detail()
 
 
 ## SELECT：施錠・解錠を切り替える。
