@@ -84,33 +84,36 @@ static func rank_reference_size() -> int:
 	return int(groups[groups.size() - 1][1])
 
 
-## 出る人数が少ない（多い）レースの順位を、順位の組の判定に使う順位に置き換える。
-## 先頭は1位、最後尾は最後の順位（現行8位）として、間を均等に割り当てる。
-static func scaled_rank(live_rank: int, field_size: int) -> int:
-	var reference := rank_reference_size()
-	if field_size == reference or field_size <= 1:
-		return live_rank
-	var rank := clampi(live_rank, 1, field_size)
-	return 1 + roundi(float(reference - 1) * float(rank - 1) / float(field_size - 1))
+## 脚質の「得意な順位」が、いくつ続くか。満員（現行8人）のときの1組の幅（現行2）が最小で、
+## 出る人数が多いときは「人数 ÷ 脚質の組の数」の切り上げまで広げる（9〜12人なら3、13〜16人なら4）。
+static func rank_window_width(field_size: int) -> int:
+	var groups: Array = Config.values()["rank_groups"]
+	var base_width := int(groups[0][1]) - int(groups[0][0]) + 1
+	return maxi(base_width, ceili(float(field_size) / float(groups.size())))
 
 
+## その脚質の「得意な順位」の範囲（x が最初の順位、y が最後の順位）。
+## 逃げ（組0）はいつも上から、追込（最後の組）はいつも下から。間の脚質は、その間を均等に割った位置（四捨五入）。
+## 満員（現行8人）のときは、設定の rank_groups と同じ範囲になる。
+static func style_rank_window(style_id: String, field_size: int) -> Vector2i:
+	var width := rank_window_width(field_size)
+	var last_group := rank_group_count() - 1
+	var span := maxi(field_size - width, 0)
+	var first := 1 + roundi(float(style_rank_group_index(style_id)) * float(span) / float(maxi(last_group, 1)))
+	return Vector2i(first, first + width - 1)
+
+
+## 順位による補正。得意な順位の中なら matching、そこから「得意な順位の幅」以内なら adjacent、それより離れたら distant。
 static func rank_bonus(style_id: String, live_rank: int, field_size: int = rank_reference_size()) -> int:
-	var styles: Dictionary = Config.values()["running_styles"]
-	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)
-	var group_index := _rank_group_index(scaled_rank(live_rank, field_size))
-	var desired_group := int(styles[style_id]["rank_group_index"])
-	var distance: int = abs(group_index - desired_group)
+	var window := style_rank_window(style_id, field_size)
+	var distance := 0
+	if live_rank < window.x:
+		distance = window.x - live_rank
+	elif live_rank > window.y:
+		distance = live_rank - window.y
 	var bonus: Dictionary = Config.values()["rank_bonus"]
 	if distance == 0:
 		return int(bonus["matching"])
-	if distance == 1:
+	if distance <= rank_window_width(field_size):
 		return int(bonus["adjacent"])
 	return int(bonus["distant"])
-
-
-static func _rank_group_index(live_rank: int) -> int:
-	for index in Config.values()["rank_groups"].size():
-		var group: Array = Config.values()["rank_groups"][index]
-		if live_rank >= int(group[0]) and live_rank <= int(group[1]):
-			return index
-	return Config.values()["rank_groups"].size() - 1 if live_rank > 0 else 0

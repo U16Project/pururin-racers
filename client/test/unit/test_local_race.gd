@@ -15,8 +15,7 @@ const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)
-	RaceSession.select_player_pururin(RaceSession.default_player_pururin_id())
-	RaceSession.select_all_opponents()
+	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
 
 
 func test_cpu_heart_safety_uses_the_highest_notch_that_lowers_an_overheated_heart() -> void:
@@ -157,7 +156,6 @@ func _expected_speed_after_one_second(speed_kmh: float, level: int) -> float:
 
 func test_player_speeds_are_kmh() -> void:
 	assert_eq(LocalRaceMath.PLAYER_MAX_SPEED_KMH, LocalRaceMath.Config.number("top_speed_natural_max_kmh"))
-	assert_eq(LocalRaceMath.Config.number("player_start_gate_index"), 0.0)
 
 
 func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> void:

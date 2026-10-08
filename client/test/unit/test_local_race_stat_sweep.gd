@@ -3,6 +3,14 @@ extends GutTest
 const Simulator := preload("res://scripts/local_race_simulator.gd")
 const Sweep := preload("res://scripts/local_race_stat_sweep.gd")
 
+const _RaceSessionForSetup := preload("res://scripts/race_session.gd")
+
+
+## レースの場面は、ユーザーと相手が選ばれていないと走らないので、全員で出る状態にしておく。
+func before_each() -> void:
+	_RaceSessionForSetup.select_full_field(_RaceSessionForSetup.default_player_pururin_id())
+
+
 
 func test_stat_sweep_config_has_60_valid_variants() -> void:
 	var loaded := Sweep.load_config()

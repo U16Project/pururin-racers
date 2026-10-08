@@ -9,6 +9,9 @@ const COLOR_BUTTON := Color(0.18, 0.42, 0.58, 1.0)
 const COLOR_BUTTON_QUIET := Color(0.2, 0.25, 0.33, 1.0)
 const COLOR_BUTTON_ON := Color(0.2, 0.62, 0.42, 1.0)
 const COLOR_FOCUS := Color(1.0, 0.86, 0.3, 1.0)
+## 「選択済み」（他のスロットで使っている）の色。
+const COLOR_TAKEN := Color(1.0, 0.6, 0.2, 1.0)
+const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 
 
 static func box(color: Color, radius: int = 10, margin_x: float = 22.0, margin_y: float = 10.0) -> StyleBoxFlat:
@@ -51,6 +54,9 @@ static func style_button(button: BaseButton, font_size: int, color: Color = COLO
 	button.add_theme_stylebox_override("hover", box(color.lightened(0.12)))
 	button.add_theme_stylebox_override("pressed", box(COLOR_BUTTON_ON))
 	button.add_theme_stylebox_override("hover_pressed", box(COLOR_BUTTON_ON.lightened(0.12)))
+	# 押せないときは、暗くする。
+	button.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT, 0.4))
+	button.add_theme_stylebox_override("disabled", box(Color(color.darkened(0.45), 0.8)))
 	button.add_theme_stylebox_override("focus", focus_box())
 
 
@@ -58,4 +64,24 @@ static func button(text: String, font_size: int, color: Color = COLOR_BUTTON) ->
 	var node := Button.new()
 	node.text = text
 	style_button(node, font_size, color)
+	return node
+
+
+## ゲームパッドのボタンのマークを作る（文字の横に並べる用）。
+static func mark(kind: String, diameter: float) -> Control:
+	var node: Control = ButtonMark.new()
+	node.call("setup", kind, diameter)
+	return node
+
+
+## ボタンの左端に、ゲームパッドのボタンのマークを付ける（そのボタンを押すと、この動きになる、の印）。
+static func add_mark(target: Button, kind: String, diameter: float = 26.0) -> Control:
+	var node := mark(kind, diameter)
+	node.name = "ButtonMark"
+	target.add_child(node)
+	node.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	node.offset_left = 14.0
+	node.offset_right = 14.0 + ButtonMark.mark_width(kind, diameter)
+	node.offset_top = -diameter * 0.5
+	node.offset_bottom = diameter * 0.5
 	return node

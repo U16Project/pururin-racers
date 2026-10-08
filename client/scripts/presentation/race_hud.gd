@@ -3,7 +3,10 @@ extends Control
 ## （速度・ノッチ・心拍・体力）を画面左下に大きく描く。詳細な診断はデバッグ表示（F3）へ分ける。
 ## 値は update_state() で受け取り、計算はここでは行わない（表示用の割合と色だけ）。
 
+const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const PANEL_WIDTH := 440.0
+## BOOST・DASH の文字の左に付ける、ボタンのマークの大きさ。
+const DRIVE_ACTION_MARK_SIZE := 13.0
 ## 操作盤は画面の左下（順位表の下）。画面の左端からの余白。
 const PANEL_LEFT_MARGIN := 46.0
 const GAUGE_BAR_HEIGHT := 110.0
@@ -25,6 +28,8 @@ const RACE_INFO_ORIGIN := Vector2(54.0, 34.0)
 const RACE_INFO_HEIGHT := 64.0
 const STANDINGS_LEFT := 54.0
 const STANDINGS_ROW_HEIGHT := 26.0
+## 順位表の、満員のときの行の数。表の位置は、この行の数で決める（人数が少なくても、上の位置は同じ）。
+const STANDINGS_FULL_ROWS := 8
 const STANDINGS_WIDTH := 412.0
 const STANDINGS_TIME_X := 344.0
 const STANDINGS_NAME_X := 50.0
@@ -136,7 +141,7 @@ static func confirmed_count(standings: Array) -> int:
 	return count
 
 
-## 順位表のいちばん上の縦の位置。上の項目（順位・残り距離・タイム）と、操作盤の、ちょうど中間に置く。
+## 順位表のいちばん上の縦の位置。row_count 行の表が、上の項目（順位・残り距離・タイム）と操作盤の、ちょうど中間に来る位置。
 static func standings_top(screen_height: float, row_count: int) -> float:
 	var info_bottom := RACE_INFO_ORIGIN.y + RACE_INFO_HEIGHT
 	var panel_top := screen_height - PANEL_BOTTOM_MARGIN - PANEL_HEIGHT
@@ -324,7 +329,11 @@ func _draw_main_panel(font: Font) -> void:
 ## ダッシュは、効いている間だけ光るバー。
 func _draw_drive_actions(font: Font, origin: Vector2) -> void:
 	var width := 78.0
-	_draw_text(font, "BOOST", origin, 12, COLOR_DIM)
+	# 文字の左に、ゲームパッドのボタンのマーク（ブーストはX、ダッシュはB）。
+	var mark_offset := Vector2(DRIVE_ACTION_MARK_SIZE * 0.5, -4.5)
+	var text_offset := Vector2(DRIVE_ACTION_MARK_SIZE + 4.0, 0.0)
+	ButtonMark.draw_mark(self, font, origin + mark_offset, "X", DRIVE_ACTION_MARK_SIZE)
+	_draw_text(font, "BOOST", origin + text_offset, 12, COLOR_DIM)
 	var uses_left := int(_state["boost_uses_left"])
 	for index in int(_state["boost_max_uses"]):
 		var center := Vector2(origin.x + 6.0 + index * 15.0, origin.y + 12.0)
@@ -333,7 +342,8 @@ func _draw_drive_actions(font: Font, origin: Vector2) -> void:
 		else:
 			draw_arc(center, 4.5, 0.0, TAU, 20, COLOR_DIM, 1.0)
 	_draw_ratio_bar(Vector2(origin.x, origin.y + 22.0), width, float(_state["boost_ratio"]), COLOR_BOOST)
-	_draw_text(font, "DASH", origin + Vector2(0.0, 46.0), 12, COLOR_DIM)
+	ButtonMark.draw_mark(self, font, origin + Vector2(0.0, 46.0) + mark_offset, "B", DRIVE_ACTION_MARK_SIZE)
+	_draw_text(font, "DASH", origin + Vector2(0.0, 46.0) + text_offset, 12, COLOR_DIM)
 	_draw_ratio_bar(Vector2(origin.x, origin.y + 51.0), width, float(_state["dash_ratio"]), COLOR_PROGRESS)
 
 
@@ -401,6 +411,11 @@ func _draw_progress_bar(font: Font, panel: Rect2) -> void:
 ## 脚質の印。順位の組の数だけ「〈」を並べ、左が先頭の組。得意な組だけ、はっきり太く描く。
 ## center_left は、印の並びの左端・縦の中央。色は、今の順位との関係（青・白・赤）。
 func _draw_style_chevrons(center_left: Vector2, color: Color, count: int, own: int, size_scale: float = 1.0) -> void:
+	draw_style_chevrons(self, center_left, color, count, own, size_scale)
+
+
+## 脚質の印を、指定の描画先に描く（操作盤・順位表・レース選択で共通）。
+static func draw_style_chevrons(canvas: CanvasItem, center_left: Vector2, color: Color, count: int, own: int, size_scale: float = 1.0) -> void:
 	var step := STYLE_CHEVRON_STEP * size_scale
 	var half_height := 6.5 * size_scale
 	var depth := 5.0 * size_scale
@@ -411,10 +426,10 @@ func _draw_style_chevrons(center_left: Vector2, color: Color, count: int, own: i
 		])
 		if index == own:
 			# 光っているように、外側を薄く太く、内側を濃く描く。
-			draw_polyline(points, Color(color, 0.28), 6.0 * size_scale, true)
-			draw_polyline(points, color, 2.6 * size_scale, true)
+			canvas.draw_polyline(points, Color(color, 0.28), 6.0 * size_scale, true)
+			canvas.draw_polyline(points, color, 2.6 * size_scale, true)
 		else:
-			draw_polyline(points, Color(color, 0.38), 1.6, true)
+			canvas.draw_polyline(points, Color(color, 0.38), 1.6, true)
 
 
 ## 左上の順位表。上から今の順位の順。ゴールして確定した行は、太く・大きく・明るくし、印を王冠・メダルにする。
@@ -427,7 +442,8 @@ func _draw_standings(font: Font) -> void:
 		_bold_font.variation_embolden = 0.8
 	_bold_font.base_font = font
 	var confirmed := confirmed_count(standings)
-	var table_top := standings_top(get_viewport_rect().size.y, standings.size())
+	# 人数が少ないときも、満員のときと同じ高さから、上に詰めて並べる。
+	var table_top := standings_top(get_viewport_rect().size.y, STANDINGS_FULL_ROWS)
 	for index in standings.size():
 		var row: Dictionary = standings[index]
 		var top := table_top + index * STANDINGS_ROW_HEIGHT
@@ -479,35 +495,46 @@ func _draw_standings_rank(font: Font, center: Vector2, place: int, is_confirmed:
 
 
 func _draw_crown(center: Vector2) -> void:
+	draw_crown(self, center)
+
+
+func _draw_medal(font: Font, center: Vector2, place: int, color: Color) -> void:
+	draw_medal(self, font, center, place, color)
+
+
+## 金の王冠を、指定の描画先に描く（順位表と、着順の板で共通）。
+static func draw_crown(canvas: CanvasItem, center: Vector2, size_scale: float = 1.0) -> void:
 	var shape := PackedVector2Array([
 		Vector2(-11.0, 8.0), Vector2(-11.0, -5.0), Vector2(-5.0, 1.0), Vector2(0.0, -9.0),
 		Vector2(5.0, 1.0), Vector2(11.0, -5.0), Vector2(11.0, 8.0),
 	])
 	var points := PackedVector2Array()
 	for point in shape:
-		points.append(center + point)
+		points.append(center + point * size_scale)
 	var outline := points.duplicate()
 	outline.append(points[0])
-	draw_polyline(outline, COLOR_OUTLINE, 4.0, true)
-	draw_colored_polygon(points, COLOR_GOLD)
-	draw_line(center + Vector2(-11.0, 4.5), center + Vector2(11.0, 4.5), Color(0.72, 0.46, 0.05), 1.5)
+	canvas.draw_polyline(outline, COLOR_OUTLINE, 4.0 * size_scale, true)
+	canvas.draw_colored_polygon(points, COLOR_GOLD)
+	canvas.draw_line(center + Vector2(-11.0, 4.5) * size_scale, center + Vector2(11.0, 4.5) * size_scale, Color(0.72, 0.46, 0.05), 1.5 * size_scale)
 	for tip: Vector2 in [Vector2(-11.0, -5.0), Vector2(0.0, -9.0), Vector2(11.0, -5.0)]:
-		draw_circle(center + tip, 2.2, COLOR_GOLD)
+		canvas.draw_circle(center + tip * size_scale, 2.2 * size_scale, COLOR_GOLD)
 
 
-func _draw_medal(font: Font, center: Vector2, place: int, color: Color) -> void:
-	# リボン（上）と、丸いメダル（下）。
+## メダル（リボンと丸）を、指定の描画先に描く。
+static func draw_medal(canvas: CanvasItem, font: Font, center: Vector2, place: int, color: Color, size_scale: float = 1.0) -> void:
 	var ribbon := PackedVector2Array([
-		center + Vector2(-7.0, -12.0), center + Vector2(7.0, -12.0), center + Vector2(3.0, -3.0), center + Vector2(-3.0, -3.0),
+		center + Vector2(-7.0, -12.0) * size_scale, center + Vector2(7.0, -12.0) * size_scale,
+		center + Vector2(3.0, -3.0) * size_scale, center + Vector2(-3.0, -3.0) * size_scale,
 	])
-	draw_colored_polygon(ribbon, COLOR_COOL)
-	var medal_center := center + Vector2(0.0, 2.5)
-	draw_circle(medal_center, 9.5, COLOR_OUTLINE)
-	draw_circle(medal_center, 8.0, color)
-	draw_arc(medal_center, 5.8, 0.0, TAU, 24, color.darkened(0.3), 1.0, true)
+	canvas.draw_colored_polygon(ribbon, COLOR_COOL)
+	var medal_center := center + Vector2(0.0, 2.5) * size_scale
+	canvas.draw_circle(medal_center, 9.5 * size_scale, COLOR_OUTLINE)
+	canvas.draw_circle(medal_center, 8.0 * size_scale, color)
+	canvas.draw_arc(medal_center, 5.8 * size_scale, 0.0, TAU, 24, color.darkened(0.3), 1.0 * size_scale, true)
 	var text := "%d" % place
-	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, 11).x
-	draw_string(font, medal_center + Vector2(-width * 0.5, 4.0), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 11, color.darkened(0.6))
+	var font_size := int(roundf(11.0 * size_scale))
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	canvas.draw_string(font, medal_center + Vector2(-width * 0.5, 4.0 * size_scale), text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color.darkened(0.6))
 
 
 func _draw_heart(center: Vector2, color: Color) -> void:

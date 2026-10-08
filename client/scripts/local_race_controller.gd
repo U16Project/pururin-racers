@@ -11,6 +11,8 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
+const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
@@ -25,7 +27,8 @@ const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
 @onready var _countdown_label: Label = %CountdownLabel
 @onready var _pause_panel: Control = %PausePanel
 @onready var _result_panel: Control = %ResultPanel
-@onready var _result_label: Label = %ResultLabel
+## 着順の表（結果の板の中に、コードで足す）。
+var _result_board: Control
 @onready var _pause_return_button: Button = %PauseReturnButton
 @onready var _result_return_button: Button = %ResultReturnButton
 @onready var _resume_button: Button = %ResumeButton
@@ -74,6 +77,8 @@ func _ready() -> void:
 	_hud_label_right.visible = false
 	_guide_label.visible = false
 	_layout_overlay_labels()
+	_build_result_board()
+	_add_pause_marks()
 	_pause_return_button.pressed.connect(_return_to_race_select)
 	_result_return_button.pressed.connect(_return_to_race_select)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -100,6 +105,13 @@ func _ready() -> void:
 		return
 	if PururinRosterConfig.values().is_empty():
 		_hud_label.text = "ぷるりん設定を確認してください：" + PururinRosterConfig.last_error
+		set_process(false)
+		return
+	# ユーザーのぷるりんが選ばれていないときは、別の個体で走らせず、止める。
+	var start_problem := RaceSession.race_start_problem()
+	if not start_problem.is_empty():
+		_hud_label.text = "レース選択で、ユーザーのぷるりんと対戦相手を選んでください（%s）" % start_problem
+		_hud_label.visible = true
 		set_process(false)
 		return
 	_place_markers()
@@ -233,23 +245,12 @@ func _spawn_field() -> void:
 	var sphere := SphereMesh.new()
 	sphere.radius = 0.75
 	sphere.height = 1.5
-	var selected_player_id := RaceSession.selected_player_pururin_id()
-	var roster: Array = PururinRosterConfig.values()["roster"]
-	var opponent_ids := RaceSession.selected_opponent_ids()
-	var field_roster: Array = []
-	# 選択した操作個体の開始ゲートは設定で変更できる。CPUには残りのゲートを順番に割り当てる。
-	# 出る人数が少ないときは、内側の枠から詰めて使う（枠の間は、満員のときと同じ）。
-	for pururin: Dictionary in roster:
-		if str(pururin.get("id", "")) == selected_player_id:
-			field_roster.append(pururin)
-	for pururin: Dictionary in roster:
-		if str(pururin.get("id", "")) in opponent_ids:
-			field_roster.append(pururin)
-	var field_size := field_roster.size()
-	var player_gate := clampi(int(LocalRaceMath.Config.number("player_start_gate_index")), 0, field_size - 1)
-	var next_cpu_gate := 0
-	for i in field_roster.size():
-		var pururin: Dictionary = field_roster[i]
+	# 出るのは、キャラが入っている枠だけ。スタートの位置は、枠の番号どおり（未選択の枠は、空けたまま）。
+	var entries := RaceSession.field_entries()
+	var field_size := entries.size()
+	for i in entries.size():
+		var entry: Dictionary = entries[i]
+		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"]))
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
@@ -263,13 +264,8 @@ func _spawn_field() -> void:
 		body.material_override = mat
 		runner.add_child(body)
 		_runners_root.add_child(runner)
-		var is_player: bool = str(pururin.get("id", "")) == selected_player_id
-		var start_gate := player_gate if is_player else next_cpu_gate
-		if not is_player:
-			while next_cpu_gate == player_gate:
-				next_cpu_gate += 1
-			start_gate = next_cpu_gate
-			next_cpu_gate += 1
+		var is_player := bool(entry["player"])
+		var start_gate := int(entry["gate"])
 		var label: String = pururin["display_name"]
 		runner.call(
 			"setup_for_race",
@@ -657,22 +653,67 @@ func _show_results() -> void:
 	_set_paused(true)
 	_pause_panel.visible = false
 	_result_panel.visible = true
-	var lines: PackedStringArray = []
+	_result_board.call("set_rows", _result_rows())
+	_result_return_button.grab_focus()
+
+
+## 着順の表の中身。着順の順に、着順・名前・色・ユーザーかどうか・タイム。
+func _result_rows() -> Array:
 	var ordered: Array = _runners.duplicate()
 	ordered.sort_custom(func(a, b): return a.call("get_finish_order") < b.call("get_finish_order"))
+	var rows: Array = []
 	for r in ordered:
-		var ord: int = r.call("get_finish_order")
-		var nm: String = r.get("display_name")
-		var finish_time: float = r.call("get_finish_time")
-		lines.append(
-			"%d着　%s　%s" % [
-				ord,
-				nm,
-				LocalRaceMath.format_race_time(finish_time),
-			]
-		)
-	_result_label.text = "\n".join(lines)
-	_result_return_button.grab_focus()
+		rows.append({
+			"place": int(r.call("get_finish_order")),
+			"name": str(r.get("display_name")),
+			"color": PururinVisualStyle.color_for_racer_id(str(r.call("get_snapshot")["id"])),
+			"player": r == _player,
+			"time_text": LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),
+		})
+	return rows
+
+
+## 一時停止の板に、ゲームパッドのボタンのマークを付ける：STARTで開く・閉じる、Bでレースに戻る。
+func _add_pause_marks() -> void:
+	var title: Label = _pause_panel.get_node("PauseBox/PauseTitle")
+	var font := title.get_theme_font("font")
+	var text_width := font.get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, title.get_theme_font_size("font_size")).x
+	var start_mark := MenuStyle.mark("START", 22.0)
+	start_mark.name = "StartMark"
+	title.add_child(start_mark)
+	start_mark.set_anchors_preset(Control.PRESET_CENTER)
+	start_mark.offset_left = text_width * 0.5 + 12.0
+	start_mark.offset_right = start_mark.offset_left + start_mark.custom_minimum_size.x
+	start_mark.offset_top = -11.0
+	start_mark.offset_bottom = 11.0
+	MenuStyle.add_mark(_resume_button, "B", 24.0)
+
+
+## 結果の板の中身を組む：見出しの下に飾りの線、着順の表、戻るボタン。
+func _build_result_board() -> void:
+	var box: VBoxContainer = _result_panel.get_node("ResultBox")
+	var title: Label = box.get_node("ResultTitle")
+	# 文字だけの着順（ResultLabel）は、この場面を土台にしているオンライン用の場面が使う。ローカルでは表を出すので隠す。
+	(box.get_node("ResultLabel") as Label).visible = false
+	title.add_theme_color_override("font_color", RaceHud.COLOR_GOLD)
+	var line := ColorRect.new()
+	line.color = Color(RaceHud.COLOR_GOLD, 0.7)
+	line.custom_minimum_size = Vector2(0.0, 2.0)
+	box.add_child(line)
+	box.move_child(line, title.get_index() + 1)
+	_result_board = RaceResultBoard.new()
+	_result_board.name = "ResultBoard"
+	box.add_child(_result_board)
+	box.move_child(_result_board, line.get_index() + 1)
+	# 板の大きさは固定。表は上から並べ、戻るボタンは、板の一番下に置く。
+	var spacer := Control.new()
+	spacer.name = "ResultSpacer"
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(spacer)
+	box.move_child(spacer, _result_return_button.get_index())
+	MenuStyle.style_button(_result_return_button, 22)
+	_result_return_button.custom_minimum_size = Vector2(0.0, 56.0)
 
 
 func _set_paused(paused: bool) -> void:
@@ -688,4 +729,5 @@ func _set_paused(paused: bool) -> void:
 
 
 func _return_to_race_select() -> void:
+	RaceSession.mark_returning_from_race()
 	get_tree().change_scene_to_file(RACE_SELECT_SCENE)

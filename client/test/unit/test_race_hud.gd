@@ -3,6 +3,14 @@ extends GutTest
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 
+const _RaceSessionForSetup := preload("res://scripts/race_session.gd")
+
+
+## レースの場面は、ユーザーと相手が選ばれていないと走らないので、全員で出る状態にしておく。
+func before_each() -> void:
+	_RaceSessionForSetup.select_full_field(_RaceSessionForSetup.default_player_pururin_id())
+
+
 func _state(heart: float = 150.0, fuel: float = 0.5) -> Dictionary:
 	return {
 		"heart_bpm": heart, "heart_min_bpm": 100.0, "heart_normal_max_bpm": 200.0, "heart_max_bpm": 230.0,
@@ -116,3 +124,8 @@ func test_standings_sit_midway_between_the_race_info_and_the_panel() -> void:
 	var gap_below := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT - (top + rows * RaceHud.STANDINGS_ROW_HEIGHT)
 	assert_almost_eq(gap_above, gap_below, 0.0001)
 	assert_gt(gap_above, 0.0)
+
+
+func test_standings_start_at_the_same_height_whatever_the_field_size() -> void:
+	# 表の位置は、満員の行の数で決める。人数が少ないレースでも、上から詰めて並ぶ。
+	assert_eq(RaceHud.STANDINGS_FULL_ROWS, preload("res://scripts/local_race_math.gd").FIELD_SIZE)

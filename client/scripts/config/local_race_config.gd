@@ -11,7 +11,6 @@ const NUMBER_RANGES := {
 	"drive_level_step": [1.0, 1.0],
 	"start_countdown_seconds": [0.0, 30.0],
 	"player_start_drive_level": [-100.0, 100.0],
-	"player_start_gate_index": [0.0, 7.0],
 	"cpu_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_duration_seconds": [0.0, 30.0],
 	"min_speed_kmh": [0.0, 75.0],
@@ -177,8 +176,6 @@ static func validate(data: Variant) -> PackedStringArray:
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
-	if float(data.player_start_gate_index) != floorf(float(data.player_start_gate_index)):
-		errors.append("player_start_gate_index: 整数が必要です")
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
 		if float(data[key]) < 0.0 or float(data[key]) > float(data.drive_level_max):
 			errors.append("%s: 0〜drive_level_max の範囲にしてください" % key)

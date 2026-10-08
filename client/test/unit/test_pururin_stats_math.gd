@@ -104,33 +104,61 @@ func test_style_rank_group_matches_the_group_that_gives_the_matching_bonus() -> 
 		assert_eq(Stats.rank_bonus(style_id, rank_in_group), int(config["rank_bonus"]["matching"]), style_id)
 
 
-func test_a_full_field_uses_the_actual_rank_for_the_rank_groups() -> void:
-	var reference := Stats.rank_reference_size()
-	for rank in range(1, reference + 1):
-		assert_eq(Stats.scaled_rank(rank, reference), rank)
-
-
-func test_a_smaller_field_spreads_its_ranks_evenly_from_first_to_last_of_the_full_field() -> void:
-	var reference := Stats.rank_reference_size()
-	for field_size in range(2, reference):
-		assert_eq(Stats.scaled_rank(1, field_size), 1, "先頭は1位（%d人）" % field_size)
-		assert_eq(Stats.scaled_rank(field_size, field_size), reference, "最後尾は最後の順位（%d人）" % field_size)
-		for rank in range(2, field_size + 1):
-			assert_gt(Stats.scaled_rank(rank, field_size), Stats.scaled_rank(rank - 1, field_size), "順位の前後は入れ替わらない")
-	# 4人なら、4つの順位の組に1人ずつ入る。
-	var groups := {}
-	for rank in range(1, 5):
-		groups[Stats._rank_group_index(Stats.scaled_rank(rank, 4))] = true
-	assert_eq(groups.size(), Stats.rank_group_count())
-
-
-func test_every_running_style_can_reach_its_matching_rank_bonus_in_a_small_field() -> void:
+func test_a_full_field_gives_each_style_exactly_its_configured_rank_group() -> void:
 	var config := Config.values()
-	for field_size in [2, 4, 6]:
-		for style_id: String in config["running_styles"]:
-			var best := -99
+	var reference := Stats.rank_reference_size()
+	for style_id: String in config["running_styles"]:
+		var group: Array = config["rank_groups"][Stats.style_rank_group_index(style_id)]
+		assert_eq(Stats.style_rank_window(style_id, reference), Vector2i(int(group[0]), int(group[1])), style_id)
+
+
+func test_every_style_has_a_full_width_matching_window_inside_the_field_at_any_size() -> void:
+	var config := Config.values()
+	var last_group := Stats.rank_group_count() - 1
+	for field_size in range(2, 17):
+		var width := Stats.rank_window_width(field_size)
+		var previous_first := 0
+		for group_index in Stats.rank_group_count():
+			var style_id := ""
+			for candidate: String in config["running_styles"]:
+				if Stats.style_rank_group_index(candidate) == group_index:
+					style_id = candidate
+			var window := Stats.style_rank_window(style_id, field_size)
+			assert_eq(window.y - window.x + 1, width, "%s（%d人）の幅" % [style_id, field_size])
+			assert_gte(window.x, 1)
+			assert_lte(window.y, maxi(field_size, width))
+			assert_gte(window.x, previous_first, "先頭の脚質ほど、得意な順位が前")
+			previous_first = window.x
+			# 得意な順位の数だけ、matching の補正が付く。
+			var matching := 0
 			for rank in range(1, field_size + 1):
-				best = maxi(best, Stats.rank_bonus(style_id, rank, field_size))
-			# 2人のレースは、順位の組が2つしか使えないので、4人以上で全脚質が得意な順位を持つ。
-			if field_size >= Stats.rank_group_count():
-				assert_eq(best, int(config["rank_bonus"]["matching"]), "%s（%d人）" % [style_id, field_size])
+				if Stats.rank_bonus(style_id, rank, field_size) == int(config["rank_bonus"]["matching"]):
+					matching += 1
+			assert_eq(matching, mini(width, field_size), "%s（%d人）" % [style_id, field_size])
+			if group_index == 0:
+				assert_eq(window.x, 1, "先頭の脚質は、いつも1位から")
+			if group_index == last_group and field_size >= width:
+				assert_eq(window.y, field_size, "最後の脚質は、いつも最後尾まで")
+
+
+func test_matching_window_is_two_ranks_up_to_a_full_field_and_grows_beyond_it() -> void:
+	var reference := Stats.rank_reference_size()
+	var base_width := Stats.rank_window_width(reference)
+	for field_size in range(2, reference + 1):
+		assert_eq(Stats.rank_window_width(field_size), base_width)
+	assert_eq(Stats.rank_window_width(reference + 1), base_width + 1)
+	assert_eq(Stats.rank_window_width(reference + Stats.rank_group_count()), base_width + 1)
+	assert_eq(Stats.rank_window_width(reference + Stats.rank_group_count() + 1), base_width + 2)
+
+
+func test_rank_bonus_falls_from_matching_to_adjacent_to_distant_with_distance() -> void:
+	var config := Config.values()
+	var bonus: Dictionary = config["rank_bonus"]
+	for field_size in [5, 8, 12]:
+		for style_id: String in config["running_styles"]:
+			var window := Stats.style_rank_window(style_id, field_size)
+			var width := Stats.rank_window_width(field_size)
+			for rank in range(1, field_size + 1):
+				var distance := maxi(maxi(window.x - rank, rank - window.y), 0)
+				var expected := int(bonus["matching"]) if distance == 0 else (int(bonus["adjacent"]) if distance <= width else int(bonus["distant"]))
+				assert_eq(Stats.rank_bonus(style_id, rank, field_size), expected, "%s %d位（%d人）" % [style_id, rank, field_size])

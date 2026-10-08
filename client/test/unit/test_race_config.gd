@@ -6,6 +6,14 @@ const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 
+const _RaceSessionForSetup := preload("res://scripts/race_session.gd")
+
+
+## レースの場面は、ユーザーと相手が選ばれていないと走らないので、全員で出る状態にしておく。
+func before_each() -> void:
+	_RaceSessionForSetup.select_full_field(_RaceSessionForSetup.default_player_pururin_id())
+
+
 func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	var result := Config.load_file()
 	assert_true(result.has("data"))

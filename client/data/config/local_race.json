@@ -4,7 +4,6 @@
   "drive_level_step": 1,
   "start_countdown_seconds": 3.0,
   "player_start_drive_level": 4,
-  "player_start_gate_index": 0,
   "cpu_start_drive_level": 5,
   "cpu_start_drive_duration_seconds": 1.0,
   "min_speed_kmh": 40.0,

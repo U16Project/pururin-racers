@@ -52,7 +52,7 @@ static func session_snapshot() -> Dictionary:
 	return {
 		"distance_m": LocalRaceMath.RaceSession.selected_distance_m(),
 		"player_id": LocalRaceMath.RaceSession.selected_player_pururin_id(),
-		"excluded_opponent_ids": LocalRaceMath.RaceSession.excluded_opponent_ids(),
+		"slots": LocalRaceMath.RaceSession.slots_snapshot(),
 	}
 
 
@@ -79,13 +79,10 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 		return {"error": "config_overrides: %s" % "; ".join(errors)}
 	var previous_session := session_snapshot()
 	LocalRaceMath.Config._cached = candidate
-	# 測定は、いつも全員で走る。実機用の選択状態は終了後に戻す。
-	LocalRaceMath.RaceSession.select_all_opponents()
+	# 実機用の選択状態は終了後に戻す（出走する個体は、run_scenario が入れて、戻す）。
 	var scenario: Dictionary = condition.get("scenario", {}).duplicate(true)
 	if scenario.has("distance_m"):
 		LocalRaceMath.RaceSession.select_distance(float(scenario.distance_m))
-	if scenario.has("player_id"):
-		LocalRaceMath.RaceSession.select_player_pururin(str(scenario.player_id))
 	var result: Dictionary
 	match str(condition.get("mode", "race")):
 		"isolated":
@@ -96,8 +93,6 @@ func run_case(parent: Node, condition: Dictionary) -> Dictionary:
 			result = {"error": "mode は race または isolated が必要です"}
 	LocalRaceMath.Config._cached = original_config
 	LocalRaceMath.RaceSession.select_distance(float(previous_session.distance_m))
-	LocalRaceMath.RaceSession.select_player_pururin(str(previous_session.player_id))
-	LocalRaceMath.RaceSession.restore_excluded_opponent_ids(previous_session.excluded_opponent_ids)
 	result["case_id"] = str(condition.get("id", scenario.get("id", "unnamed")))
 	result["condition"] = condition.duplicate(true)
 	return result
@@ -271,7 +266,20 @@ static func schedule_level(schedule: Array, elapsed: float) -> float:
 	return level
 
 
+## 測定は、いつも全員で走る。ユーザーは scenario.player_id の個体（指定が無ければ、一覧の最初の操作個体）で1枠、
+## 相手は残りの個体を一覧の順で2〜8枠。実機用の選択は、終わったら戻す。
 func run_scenario(parent: Node, scenario: Dictionary) -> Dictionary:
+	var session := LocalRaceMath.RaceSession
+	var previous_slots := session.slots_snapshot()
+	var player_id := str(scenario.get("player_id", session.default_player_pururin_id()))
+	if not session.select_full_field(player_id):
+		return {"error": "scenario: player_id が個体の一覧にありません: %s" % player_id}
+	var result := _run_scenario_with_current_session(parent, scenario)
+	session.restore_slots(previous_slots)
+	return result
+
+
+func _run_scenario_with_current_session(parent: Node, scenario: Dictionary) -> Dictionary:
 	var scenario_errors := validate_scenario(scenario)
 	if not scenario_errors.is_empty():
 		return {"error": "scenario: %s" % "; ".join(scenario_errors)}

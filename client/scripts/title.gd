@@ -4,6 +4,10 @@ extends Control
 const RACE_SELECT_SCENE_PATH := "res://scenes/race_select.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_background.png"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
+## ボタンの下の余白と、ボタンの濃さ（1で不透明）。
+const BUTTON_BOTTOM_MARGIN := 56.0
+const BUTTON_OPACITY := 0.7
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 var _free_race_button: Button
 
@@ -27,17 +31,27 @@ func _ready() -> void:
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	_free_race_button = MenuStyle.button("オフラインフリー対戦", 28)
+	# ボタンは少し透けさせて、背景の絵が見えるようにする。
+	_free_race_button = MenuStyle.button("オフラインフリー対戦", 28, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
 	_free_race_button.name = "FreeRaceButton"
-	# 仮の画像に描かれているボタンの上に、本物のボタンを重ねる。
 	_free_race_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_free_race_button.offset_left = -182.0
 	_free_race_button.offset_right = 182.0
-	_free_race_button.offset_top = -82.0
-	_free_race_button.offset_bottom = -6.0
+	_free_race_button.offset_top = -BUTTON_BOTTOM_MARGIN - 76.0
+	_free_race_button.offset_bottom = -BUTTON_BOTTOM_MARGIN
 	_free_race_button.pressed.connect(go_to_race_select)
 	add_child(_free_race_button)
 	_free_race_button.grab_focus()
+
+
+## ゲームパッドのAで、選んでいるボタンを押す（Godotの標準では、Aは「決定」に割り当てられていない）。
+func _unhandled_input(event: InputEvent) -> void:
+	if not RaceControllerInput.is_button_pressed(event, JOY_BUTTON_A):
+		return
+	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
+	var viewport := get_viewport()
+	if RaceControllerInput.activate_focused_control(viewport):
+		viewport.set_input_as_handled()
 
 
 func next_scene_path() -> String:
