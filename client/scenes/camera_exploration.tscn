@@ -1,0 +1,97 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/camera_exploration.gd" id="1_controller"]
+[ext_resource type="Script" path="res://scripts/m2_track_path.gd" id="2_track"]
+[ext_resource type="Script" path="res://scripts/exploration_camera.gd" id="3_camera"]
+[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="4_font"]
+
+[sub_resource type="StandardMaterial3D" id="Mat_track"]
+albedo_color = Color(0.8, 0.63, 0.43, 1)
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Mat_ground"]
+albedo_color = Color(0.55, 0.7, 0.48, 1)
+roughness = 1.0
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_ground"]
+size = Vector2(1100, 700)
+
+[sub_resource type="Environment" id="Env_main"]
+background_mode = 1
+background_color = Color(0.55, 0.72, 0.9, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.8, 0.85, 0.95, 1)
+ambient_light_energy = 0.65
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_guide"]
+bg_color = Color(0.07, 0.1, 0.15, 0.78)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 16.0
+content_margin_top = 12.0
+content_margin_right = 16.0
+content_margin_bottom = 12.0
+
+[node name="CameraExploration" type="Node3D"]
+script = ExtResource("1_controller")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_main")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 8, 200, 10)
+shadow_enabled = true
+light_energy = 1.15
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.05, 0)
+mesh = SubResource("PlaneMesh_ground")
+surface_material_override/0 = SubResource("Mat_ground")
+
+[node name="TrackPath" type="Path3D" parent="."]
+script = ExtResource("2_track")
+straight_len = 680.0
+turn_radius = 115.085
+bake_interval = 1.0
+ribbon_path = NodePath("TrackRibbon")
+
+[node name="TrackRibbon" type="CSGPolygon3D" parent="TrackPath"]
+polygon = PackedVector2Array(-7.5, 0, 7.5, 0, 7.5, 0.12, -7.5, 0.12)
+mode = 2
+path_node = NodePath("..")
+path_interval_type = 0
+path_interval = 4.0
+path_joined = true
+path_local = true
+material = SubResource("Mat_track")
+
+[node name="RouteLaunchStraight" type="MeshInstance3D" parent="TrackPath"]
+
+[node name="ExplorationCamera" type="Camera3D" parent="."]
+position = Vector3(0, 700, 1100)
+rotation_degrees = Vector3(-33, 0, 0)
+fov = 55.0
+far = 5000.0
+script = ExtResource("3_camera")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="GuidePanel" type="PanelContainer" parent="UI"]
+anchors_preset = 3
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -180.0
+offset_right = 510.0
+offset_bottom = -16.0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBox_guide")
+
+[node name="GuideLabel" type="Label" parent="UI/GuidePanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.97, 1, 1)
+theme_override_fonts/font = ExtResource("4_font")
+theme_override_font_sizes/font_size = 17
+text = "レース場を準備しています…"

@@ -43,14 +43,22 @@ func test_logo_is_skipped_by_pressing_any_key_or_button_but_not_by_releasing() -
 	assert_false(Logo.is_skip_event(InputEventJoypadMotion.new()))
 
 
-func test_title_shows_a_background_image_and_only_the_free_race_button() -> void:
+func test_title_offers_free_race_and_camera_exploration() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
 	assert_not_null((title.get_node("Background") as TextureRect).texture)
-	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 1)
-	assert_not_null(title.get_node_or_null("FreeRaceButton"))
+	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 2)
+	var free_race := title.get_node_or_null("FreeRaceButton") as Button
+	var exploration := title.get_node_or_null("CameraExplorationButton") as Button
+	assert_not_null(free_race)
+	assert_not_null(exploration)
+	assert_eq(exploration.text, "カメラで探検")
 	assert_eq(title.next_scene_path(), "res://scenes/race_select.tscn")
 	assert_true(ResourceLoader.exists(title.next_scene_path()))
+	assert_eq(title.camera_exploration_scene_path(), "res://scenes/camera_exploration.tscn")
+	assert_true(ResourceLoader.exists(title.camera_exploration_scene_path()))
+	assert_eq(free_race.find_valid_focus_neighbor(SIDE_BOTTOM), exploration)
+	assert_eq(exploration.find_valid_focus_neighbor(SIDE_TOP), free_race)
 	title.free()
 
 
@@ -680,4 +688,3 @@ func test_every_running_style_name_fits_in_the_detail_panel_at_full_size() -> vo
 	for style_id: String in styles:
 		assert_true(seen.has(style_id), style_id)
 	screen.free()
-
