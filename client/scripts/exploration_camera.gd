@@ -1,4 +1,5 @@
 extends Camera3D
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 ## レース場を自由に見て回るカメラ。レースの走者や進行状態には依存しない。
 
 signal move_speed_changed(speed_mps: float)
@@ -79,13 +80,13 @@ func movement_input() -> Vector2:
 	var move := Vector2.ZERO
 	move.x += float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A))
 	move.y += float(Input.is_physical_key_pressed(KEY_W)) - float(Input.is_physical_key_pressed(KEY_S))
-	move.x += float(Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_RIGHT)) \
-		- float(Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_LEFT))
-	move.y += float(Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_UP)) \
-		- float(Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_DOWN))
+	move.x += float(RaceControllerInput.button_down(JOY_BUTTON_DPAD_RIGHT)) \
+		- float(RaceControllerInput.button_down(JOY_BUTTON_DPAD_LEFT))
+	move.y += float(RaceControllerInput.button_down(JOY_BUTTON_DPAD_UP)) \
+		- float(RaceControllerInput.button_down(JOY_BUTTON_DPAD_DOWN))
 	var stick := Vector2(
-		Input.get_joy_axis(DEVICE, JOY_AXIS_LEFT_X),
-		-Input.get_joy_axis(DEVICE, JOY_AXIS_LEFT_Y)
+		RaceControllerInput.axis_value(JOY_AXIS_LEFT_X),
+		-RaceControllerInput.axis_value(JOY_AXIS_LEFT_Y)
 	)
 	if stick.length() >= STICK_DEADZONE:
 		move += stick
@@ -114,14 +115,14 @@ func _apply_look(delta_angles: Vector2) -> void:
 
 func _right_stick() -> Vector2:
 	var stick := Vector2(
-		Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_X),
-		Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_Y)
+		RaceControllerInput.axis_value(JOY_AXIS_RIGHT_X),
+		RaceControllerInput.axis_value(JOY_AXIS_RIGHT_Y)
 	)
 	return stick if stick.length() >= STICK_DEADZONE else Vector2.ZERO
 
 
 static func trigger_strength(axis: JoyAxis) -> float:
-	return clampf(Input.get_joy_axis(DEVICE, axis), 0.0, 1.0)
+	return clampf(RaceControllerInput.axis_value(axis), 0.0, 1.0)
 
 
 static func _is_return_event(event: InputEvent) -> bool:

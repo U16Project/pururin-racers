@@ -1,4 +1,4 @@
-# server/.venv を用意する（Windows 用）
+﻿# server/.venv を用意する（Windows 用）
 $ErrorActionPreference = "Stop"
 
 $server = Resolve-Path (Join-Path $PSScriptRoot "..\..\server")

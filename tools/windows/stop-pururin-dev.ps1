@@ -1,4 +1,4 @@
-# このワークスペースで起動した Pururin 開発用プロセスだけを停止する（Windows 用）。
+﻿# このワークスペースで起動した Pururin 開発用プロセスだけを停止する（Windows 用）。
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path.TrimEnd("\")

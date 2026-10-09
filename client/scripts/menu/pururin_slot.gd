@@ -233,7 +233,7 @@ static func cycle_direction(event: InputEvent) -> int:
 	for pair: Array in [["ui_left", -1], ["ui_right", 1]]:
 		if not event.is_action_pressed(pair[0], true):
 			continue
-		if event is InputEventJoypadMotion and not Input.is_action_just_pressed(pair[0]):
+		if event is InputEventJoypadMotion and not event.has_meta("pad_corrected") and not Input.is_action_just_pressed(pair[0]):
 			continue
 		return pair[1]
 	return 0

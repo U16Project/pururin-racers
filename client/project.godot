@@ -14,6 +14,10 @@ config/name="ぷるりんレーサーズ"
 run/main_scene="res://scenes/logo.tscn"
 config/features=PackedStringArray("4.7")
 
+[autoload]
+
+PadInputOptions="*res://scripts/input/pad_input_options.gd"
+
 [display]
 
 window/stretch/mode="canvas_items"

@@ -7,24 +7,37 @@ const TRIGGER_THRESHOLD := 0.5
 
 ## 引き金（L2・R2）が、今引かれているか。「引いた瞬間」を数えるために覚えておく。
 static var _trigger_down := {}
+static var _trigger_generation := -1
+
+static func _options() -> Node:
+	var tree := Engine.get_main_loop() as SceneTree
+	return tree.root.get_node_or_null("PadInputOptions") if tree != null else null
+
+static func button_down(button: int) -> bool:
+	var options := _options()
+	return options.button_down(button) if options != null else Input.is_joy_button_pressed(DEVICE, button)
+
+static func axis_value(axis: int) -> float:
+	var options := _options()
+	return options.axis_value(axis) if options != null else Input.get_joy_axis(DEVICE, axis)
 
 
 static func line_axis() -> float:
 	var axis := 0.0
-	if Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_LEFT):
+	if button_down(JOY_BUTTON_DPAD_LEFT):
 		axis -= 1.0
-	if Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_RIGHT):
+	if button_down(JOY_BUTTON_DPAD_RIGHT):
 		axis += 1.0
 	if not is_zero_approx(axis):
 		return axis
-	return _deadzone(Input.get_joy_axis(DEVICE, JOY_AXIS_LEFT_X))
+	return _deadzone(axis_value(JOY_AXIS_LEFT_X))
 
 
 static func notch_axis() -> float:
 	var axis := 0.0
-	if Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_UP):
+	if button_down(JOY_BUTTON_DPAD_UP):
 		axis += 1.0
-	if Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_DPAD_DOWN):
+	if button_down(JOY_BUTTON_DPAD_DOWN):
 		axis -= 1.0
 	return axis
 
@@ -34,8 +47,8 @@ static func notch_axis() -> float:
 static func brake_pressed() -> bool:
 	return (
 		Input.is_physical_key_pressed(KEY_SPACE)
-		or Input.is_joy_button_pressed(DEVICE, JOY_BUTTON_A)
-		or Input.get_joy_axis(DEVICE, JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
+		or button_down(JOY_BUTTON_A)
+		or axis_value(JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
 	)
 
 
@@ -56,12 +69,12 @@ static func _is_key_just_pressed(event: InputEvent, keycode: Key) -> bool:
 
 ## 見回し（右スティック）。倒していなければゼロ。倒した向きと量を、そのまま返す。
 static func look_vector() -> Vector2:
-	var stick := Vector2(Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_X), Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_Y))
+	var stick := Vector2(axis_value(JOY_AXIS_RIGHT_X), axis_value(JOY_AXIS_RIGHT_Y))
 	return stick if stick.length() >= STICK_DEADZONE else Vector2.ZERO
 
 
 static func chase_yaw_axis() -> float:
-	return _deadzone(Input.get_joy_axis(DEVICE, JOY_AXIS_RIGHT_X))
+	return _deadzone(axis_value(JOY_AXIS_RIGHT_X))
 
 
 static func is_button_pressed(event: InputEvent, button: JoyButton) -> bool:
@@ -100,6 +113,10 @@ static func is_slot_lock_pressed(event: InputEvent) -> bool:
 ## ゲームパッドは L2・R2（引いた瞬間だけ数える）、キーボードは PageUp・PageDown。
 ## 引き金の状態を覚えるので、1つの入力につき1回だけ呼ぶ。
 static func slot_move_direction(event: InputEvent) -> int:
+	var options := _options()
+	if options != null and _trigger_generation != options.generation:
+		_trigger_down.clear()
+		_trigger_generation = options.generation
 	if _is_key_just_pressed(event, KEY_PAGEUP):
 		return -1
 	if _is_key_just_pressed(event, KEY_PAGEDOWN):

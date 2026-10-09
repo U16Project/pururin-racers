@@ -1,4 +1,4 @@
-# Godot 4.7 系で client/ を起動する（Windows 用）
+﻿# Godot 4.7 系で client/ を起動する（Windows 用）
 $ErrorActionPreference = "Stop"
 
 $root = Resolve-Path (Join-Path $PSScriptRoot "..\..")

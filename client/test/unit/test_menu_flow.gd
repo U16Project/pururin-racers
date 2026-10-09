@@ -4,6 +4,7 @@ extends GutTest
 const Logo := preload("res://scripts/logo.gd")
 const LogoScene := preload("res://scenes/logo.tscn")
 const TitleScene := preload("res://scenes/title.tscn")
+const Title := preload("res://scripts/title.gd")
 const RaceSelect := preload("res://scripts/race_select.gd")
 const RaceSelectScene := preload("res://scenes/race_select.tscn")
 const RaceSession := preload("res://scripts/race_session.gd")
@@ -13,6 +14,12 @@ const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const PururinTile := preload("res://scripts/menu/pururin_tile.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+
+## ヘッドレスではOSの窓モードが変わらないため、入力が要求した切替を記録する。
+class TitleInputProbe extends "res://scripts/title.gd":
+	var requested_steps: Array = []
+	func _cycle_screen_mode(direction: int) -> void:
+		requested_steps.append(direction)
 
 
 func before_each() -> void:
@@ -47,18 +54,111 @@ func test_title_offers_free_race_and_camera_exploration() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
 	assert_not_null((title.get_node("Background") as TextureRect).texture)
-	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 2)
+	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 5)
 	var free_race := title.get_node_or_null("FreeRaceButton") as Button
 	var exploration := title.get_node_or_null("CameraExplorationButton") as Button
 	assert_not_null(free_race)
 	assert_not_null(exploration)
 	assert_eq(exploration.text, "カメラで探検")
+	assert_true(ResourceLoader.exists(title.pad_diagnostics_scene_path()))
+	assert_not_null(title.get_node_or_null("PadDiagnosticsButton"))
 	assert_eq(title.next_scene_path(), "res://scenes/race_select.tscn")
 	assert_true(ResourceLoader.exists(title.next_scene_path()))
 	assert_eq(title.camera_exploration_scene_path(), "res://scenes/camera_exploration.tscn")
 	assert_true(ResourceLoader.exists(title.camera_exploration_scene_path()))
 	assert_eq(free_race.find_valid_focus_neighbor(SIDE_BOTTOM), exploration)
 	assert_eq(exploration.find_valid_focus_neighbor(SIDE_TOP), free_race)
+	title.free()
+
+
+func test_title_screen_modes_cycle_both_directions() -> void:
+	assert_eq(Title.SCREEN_MODE_LABELS, ["通常ウィンドウ", "最大化", "全画面"])
+	var windowed := DisplayServer.WINDOW_MODE_WINDOWED
+	var maximized := DisplayServer.WINDOW_MODE_MAXIMIZED
+	var fullscreen := DisplayServer.WINDOW_MODE_FULLSCREEN
+	assert_eq(Title.cycled_screen_mode(windowed, 1), maximized)
+	assert_eq(Title.cycled_screen_mode(maximized, 1), fullscreen)
+	assert_eq(Title.cycled_screen_mode(fullscreen, 1), windowed)
+	assert_eq(Title.cycled_screen_mode(windowed, -1), fullscreen)
+	assert_eq(Title.cycled_screen_mode(fullscreen, -1), maximized)
+	assert_eq(Title.cycled_screen_mode(maximized, -1), windowed)
+	assert_eq(Title.screen_mode_index(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN), 2)
+
+
+func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> void:
+	var title := TitleScene.instantiate()
+	add_child(title)
+	var row := title.get_node("ScreenModeSelector") as HBoxContainer
+	var label := row.get_node("ModeLabel") as Label
+	var previous := row.get_node("PreviousModeButton") as Button
+	var next := row.get_node("NextModeButton") as Button
+	var exploration := title.get_node("CameraExplorationButton") as Button
+	assert_eq(label.text, Title.SCREEN_MODE_LABELS[Title.screen_mode_index(DisplayServer.window_get_mode())])
+	assert_eq(previous.text, "◀")
+	assert_eq(next.text, "▶")
+	assert_lt(row.offset_top, row.offset_bottom)
+	assert_gt(row.offset_top, exploration.offset_bottom)
+	assert_eq(exploration.find_valid_focus_neighbor(SIDE_BOTTOM), row)
+	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), exploration)
+	assert_eq(row.focus_mode, Control.FOCUS_ALL)
+	assert_eq(previous.focus_mode, Control.FOCUS_NONE)
+	assert_eq(next.focus_mode, Control.FOCUS_NONE)
+	title.free()
+
+
+func test_screen_mode_row_cycles_directly_on_left_right_without_moving_focus() -> void:
+	var title := TitleInputProbe.new()
+	add_child(title)
+	var row := title.get_node("ScreenModeSelector") as Control
+	row.grab_focus()
+	get_viewport().push_input(_action("ui_right"))
+	get_viewport().push_input(_action("ui_right"))
+	assert_eq(title.requested_steps, [1], "押しっぱなしは1回だけ")
+	var released := _action("ui_right")
+	released.pressed = false
+	get_viewport().push_input(released)
+	assert_eq(title.requested_steps, [1], "離したときは切り替えない")
+	get_viewport().push_input(_action("ui_right"))
+	get_viewport().push_input(_action("ui_left"))
+	assert_eq(title.requested_steps, [1, 1, -1])
+	assert_eq(get_viewport().gui_get_focus_owner(), row)
+	(title.get_node("FreeRaceButton") as Control).grab_focus()
+	get_viewport().push_input(_action("ui_left"))
+	assert_eq(title.requested_steps, [1, 1, -1], "別の項目では切り替えない")
+	title.free()
+
+
+func test_screen_mode_row_accepts_corrected_pad_and_keyboard_left_right() -> void:
+	var title := TitleInputProbe.new()
+	add_child(title)
+	var row := title.get_node("ScreenModeSelector") as Control
+	row.grab_focus()
+	var pad := _pad_button(JOY_BUTTON_DPAD_RIGHT)
+	pad.device = 15
+	pad.set_meta("pad_corrected", true)
+	get_viewport().push_input(pad)
+	pad.pressed = false
+	get_viewport().push_input(pad)
+	var key := InputEventKey.new()
+	key.keycode = KEY_LEFT
+	key.pressed = true
+	get_viewport().push_input(key)
+	key.echo = true
+	get_viewport().push_input(key)
+	assert_eq(title.requested_steps, [1, -1])
+	assert_eq(get_viewport().gui_get_focus_owner(), row)
+	title.free()
+
+
+func test_screen_mode_row_stick_motion_changes_once_until_returned_to_center() -> void:
+	var title := TitleInputProbe.new()
+	add_child(title)
+	var row := title.get_node("ScreenModeSelector") as Control
+	row.grab_focus()
+	for value in [0.8, 0.9, 1.0, 0.0, -0.8, -1.0, 0.0, 0.8]:
+		get_viewport().push_input(_trigger(JOY_AXIS_LEFT_X, value))
+	assert_eq(title.requested_steps, [1, -1, 1])
+	assert_eq(get_viewport().gui_get_focus_owner(), row)
 	title.free()
 
 

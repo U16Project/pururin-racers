@@ -1,4 +1,4 @@
-# サーバーの待受を確認してから、Godot クライアントを起動する（Windows 用）。
+﻿# サーバーの待受を確認してから、Godot クライアントを起動する（Windows 用）。
 $ErrorActionPreference = "Stop"
 
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path.TrimEnd("\")

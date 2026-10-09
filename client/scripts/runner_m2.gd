@@ -1,4 +1,5 @@
 extends Node3D
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 ## M2: distance + offset 走行。左右キー／十字左右で offset。
 ## Path3D.sample_baked_with_rotation / Curve3D（Godot 4.7）。
 ## 実測: bake 進行方向は -basis.z。向きは looking_at で揃える。
@@ -67,9 +68,9 @@ func _read_steer_axis() -> float:
 		v -= 1.0
 	if Input.is_physical_key_pressed(KEY_RIGHT):
 		v += 1.0
-	if Input.is_joy_button_pressed(0, JOY_BUTTON_DPAD_LEFT):
+	if RaceControllerInput.button_down(JOY_BUTTON_DPAD_LEFT):
 		v -= 1.0
-	if Input.is_joy_button_pressed(0, JOY_BUTTON_DPAD_RIGHT):
+	if RaceControllerInput.button_down(JOY_BUTTON_DPAD_RIGHT):
 		v += 1.0
 	return clampf(v, -1.0, 1.0)
 
