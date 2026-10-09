@@ -59,13 +59,15 @@ static func validate(data: Variant) -> PackedStringArray:
 
 static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dictionary, styles: Dictionary, trainer_profile_ids: Dictionary, ids: Dictionary, errors: PackedStringArray) -> void:
 	for key in pururin:
-		if key not in ["id", "display_name", "control_kind", "trainer_profile_id", "attribute", "running_style", "allocation"]:
+		if key not in ["id", "display_name", "trainer_name", "control_kind", "trainer_profile_id", "attribute", "running_style", "allocation"]:
 			errors.append("roster[%d].%s: 未知の項目です" % [index, key])
 	var identifier := str(pururin.get("id", ""))
 	if identifier.is_empty() or ids.has(identifier):
 		errors.append("roster[%d].id: 空または重複です" % index)
 	else:
 		ids[identifier] = true
+	if str(pururin.get("trainer_name", "")).strip_edges().is_empty():
+		errors.append("roster[%d].trainer_name: CPUが操作するときのトレーナー名が必要です" % index)
 	if str(pururin.get("display_name", "")).strip_edges().is_empty():
 		errors.append("roster[%d].display_name: 表示名が必要です" % index)
 	var control_kind := str(pururin.get("control_kind", ""))

@@ -93,7 +93,7 @@
       "label": "追い込み",
       "rank_group_index": 3,
       "phase_index": 3,
-      "phase_bonus": {"stat": "acceleration", "amount": 2}
+      "phase_bonus": {"stat": "top_speed", "amount": 2}
     }
   }
 }

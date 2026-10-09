@@ -24,6 +24,10 @@ const NAME_TAB_HEIGHT := 24.0
 const NAME_TAB_FONT_SIZE := 17
 const NAME_TAB_PADDING := 14.0
 const NAME_TAB_MAX_TEXT_WIDTH := 170.0
+## 名札の、トレーナー名（名前の右に、小さく出す）。
+const NAME_TAB_TRAINER_FONT_SIZE := 13
+const NAME_TAB_TRAINER_GAP := 10.0
+const NAME_TAB_TRAINER_MAX_WIDTH := 120.0
 ## 脚質の印「〈」の間隔。
 const STYLE_CHEVRON_STEP := 10.0
 ## 左上の順位表。行の高さは、確定した行も、まだの行も同じ。
@@ -80,6 +84,7 @@ var _state := {
 	"remaining_m": 0.0,
 	"race_distance_m": 0.0,
 	"player_name": "",
+	"trainer_name": "",
 	"style_group_index": -1,
 	"style_group_count": 0,
 	"style_rank_bonus": 0,
@@ -350,9 +355,12 @@ func _draw_name_tab(font: Font, panel: Rect2) -> void:
 	if player_name.is_empty():
 		return
 	var fitted := FitText.fit(font, player_name, NAME_TAB_MAX_TEXT_WIDTH, NAME_TAB_FONT_SIZE)
+	var trainer_name := str(_state["trainer_name"])
+	var trainer_fitted := FitText.fit(font, trainer_name, NAME_TAB_TRAINER_MAX_WIDTH, NAME_TAB_TRAINER_FONT_SIZE)
+	var trainer_space := 0.0 if trainer_name.is_empty() else NAME_TAB_TRAINER_GAP + float(trainer_fitted["width"])
 	var tab := Rect2(
 		Vector2(panel.position.x, panel.position.y - NAME_TAB_HEIGHT),
-		Vector2(float(fitted["width"]) + NAME_TAB_PADDING * 2.0, NAME_TAB_HEIGHT)
+		Vector2(float(fitted["width"]) + trainer_space + NAME_TAB_PADDING * 2.0, NAME_TAB_HEIGHT)
 	)
 	var box := StyleBoxFlat.new()
 	box.bg_color = COLOR_PANEL
@@ -363,6 +371,11 @@ func _draw_name_tab(font: Font, panel: Rect2) -> void:
 		self, font, Vector2(tab.position.x + NAME_TAB_PADDING, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
 		player_name, NAME_TAB_MAX_TEXT_WIDTH, NAME_TAB_FONT_SIZE, COLOR_TEXT, 0.0, 6, COLOR_OUTLINE
 	)
+	if not trainer_name.is_empty():
+		FitText.draw(
+			self, font, Vector2(tab.position.x + NAME_TAB_PADDING + float(fitted["width"]) + NAME_TAB_TRAINER_GAP, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
+			trainer_name, NAME_TAB_TRAINER_MAX_WIDTH, NAME_TAB_TRAINER_FONT_SIZE, COLOR_PROGRESS, 0.0, 6, COLOR_OUTLINE
+		)
 
 
 func _draw_progress_bar(font: Font, panel: Rect2) -> void:

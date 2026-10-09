@@ -19,12 +19,13 @@ const FitLabel := preload("res://scripts/menu/fit_label.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
 const EMPTY_TEXT := "ー未選択ー"
 const TAKEN_TEXT := "選択済み"
 const USER_TAG := "ユーザー"
 const CPU_TAG := "CPU"
 const ROW_HEIGHT := 34.0
-const TAG_WIDTH := 58.0
+const TAG_WIDTH := 66.0
 const NAME_FONT_SIZE := 16
 const CHEVRON_SCALE := 0.9
 const ARROW_WIDTH := 26.0
@@ -34,7 +35,7 @@ const COLOR_LOCK := Color(1.0, 0.82, 0.3, 1.0)
 
 ## このスロットがある枠（0〜7）。
 var slot := 0
-var _tag_label: Label
+var _tag_label: Control
 var _name_label: Control
 var _style_mark: Control
 var _style_id := ""
@@ -59,9 +60,12 @@ func setup(slot_index: int) -> void:
 	row.add_theme_constant_override("separation", 3)
 	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(row)
-	_tag_label = MenuStyle.label(CPU_TAG, 14, MenuStyle.COLOR_DIM)
-	_tag_label.custom_minimum_size = Vector2(TAG_WIDTH, 0.0)
-	_tag_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# トレーナー名（ユーザーは登録した名前、CPUはそのキャラのトレーナー名。未選択のCPUは「CPU」）。長い名前は、縮めて出す。
+	_tag_label = FitLabel.new()
+	_tag_label.name = "TrainerLabel"
+	_tag_label.call("setup", 14)
+	_tag_label.custom_minimum_size = Vector2(TAG_WIDTH, ROW_HEIGHT - 6.0)
+	_tag_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(_tag_label)
 	row.add_child(_arrow("◀", -1))
 	_portrait = Portrait.new()
@@ -128,9 +132,21 @@ func _arrow(text: String, direction: int) -> Button:
 ## ユーザーのスロットか、CPUのスロットか。
 func set_role(is_user: bool) -> void:
 	_is_user = is_user
-	_tag_label.text = USER_TAG if is_user else CPU_TAG
-	_tag_label.add_theme_color_override("font_color", COLOR_USER if is_user else MenuStyle.COLOR_DIM)
+	_refresh_trainer()
 	queue_redraw()
+
+
+## トレーナー名の表示を、今の役（ユーザーかCPUか）とキャラに合わせる。
+func _refresh_trainer() -> void:
+	_tag_label.call("set_text", trainer_text())
+	_tag_label.call("set_color", COLOR_USER if _is_user else MenuStyle.COLOR_DIM)
+
+
+## このスロットに出すトレーナー名。
+func trainer_text() -> String:
+	if _is_user:
+		return RaceSession.trainer_name_for(_pururin_id, true)
+	return CPU_TAG if _pururin_id.is_empty() or _taken else RaceSession.trainer_name_for(_pururin_id, false)
 
 
 func is_user() -> bool:
@@ -162,6 +178,7 @@ func set_pururin(pururin: Dictionary, taken: bool = false) -> void:
 	_style_mark.queue_redraw()
 	_name_label.call("set_text", EMPTY_TEXT if pururin.is_empty() else str(pururin["display_name"]))
 	_name_label.call("set_color", MenuStyle.COLOR_DIM if pururin.is_empty() or _taken else MenuStyle.COLOR_TEXT)
+	_refresh_trainer()
 
 
 func _draw_style_mark() -> void:

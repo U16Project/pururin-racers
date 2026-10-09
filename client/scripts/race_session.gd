@@ -4,6 +4,7 @@ extends RefCounted
 const SUPPORTED_DISTANCE_M := [1200.0, 1600.0, 2000.0, 2400.0, 3000.0]
 const DEFAULT_DISTANCE_M := 2000.0
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 
 ## キャラスロットの数。スロットの番号（0〜7）は、そのままスタートの枠（1〜8枠）になる。
 const SLOT_COUNT := 8
@@ -73,6 +74,13 @@ static func take_returning_from_race() -> bool:
 ## ユーザーのスロットがある枠（0〜7）。
 static func user_slot() -> int:
 	return _user_slot
+
+
+## その個体のトレーナー名。ユーザーが操作するなら、登録したユーザーの名前。CPUなら、個体一覧に書いた名前。
+static func trainer_name_for(pururin_id: String, user_controlled: bool) -> String:
+	if user_controlled:
+		return TrainerProfile.trainer_name()
+	return str(PururinRosterConfig.pururin_by_id(pururin_id)["trainer_name"])
 
 
 static func is_user_slot(slot: int) -> bool:

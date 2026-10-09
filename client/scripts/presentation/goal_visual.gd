@@ -31,6 +31,13 @@ const LINE_DEPTH_M := 1.0
 const LINE_CHECKER_COLUMNS := 30
 ## 地面の線を、コースの面から浮かせる量（コントローラーが引く白い線の上に出す）。
 const LINE_LIFT_M := 0.045
+## ゴールの線の先（走り抜ける側）に敷く、赤いじゅうたん。長さ（m）、色、へりの金の帯の幅（m）。
+## 遠くからでもゴールの場所が分かるように、市松の線の向こうを、広く赤くする。
+const CARPET_LENGTH_M := 30.0
+const CARPET_COLOR := Color(0.70, 0.11, 0.16)
+const CARPET_EDGE_WIDTH_M := 0.4
+## じゅうたんを、コースの面から浮かせる量（市松の線より下にして、線が上に出るようにする）。
+const CARPET_LIFT_M := 0.02
 
 var _track: Path3D
 var _root: Node3D
@@ -66,6 +73,7 @@ func place(track: Path3D, path_distance: float, width_m: float) -> void:
 	_lap_labels.clear()
 	_build_posts()
 	_build_cloth()
+	_build_carpet()
 	_build_ground_line()
 	_show_for_laps()
 
@@ -148,6 +156,24 @@ func _build_cloth() -> void:
 		_lap_labels.append(lap_text)
 
 
+## ゴールの線の先に敷く、赤いじゅうたん（へりは金）。市松の線と同じく、最後の周だけ出す。
+func _build_carpet() -> void:
+	var carpet := PlaneMesh.new()
+	carpet.size = Vector2(_width, CARPET_LENGTH_M)
+	# 門の中の向きは、x＝外側、z＝手前（走者が来る側）。走り抜ける先は、マイナスZ。
+	var center := Vector3(0.0, Parts.TRACK_TOP_Y_M + CARPET_LIFT_M, -CARPET_LENGTH_M * 0.5)
+	var node := Parts.mesh(_root, carpet, Parts.material(CARPET_COLOR, 0.9), center)
+	node.name = "Carpet"
+	_goal_nodes.append(node)
+	var edge := PlaneMesh.new()
+	edge.size = Vector2(CARPET_EDGE_WIDTH_M, CARPET_LENGTH_M)
+	for side: float in [-1.0, 1.0]:
+		var at := center + Vector3(side * (_width - CARPET_EDGE_WIDTH_M) * 0.5, 0.001, 0.0)
+		var line := Parts.mesh(_root, edge, Parts.material(Parts.COLOR_GOLD, 0.8), at)
+		line.name = "CarpetEdge%s" % ("L" if side < 0.0 else "R")
+		_goal_nodes.append(line)
+
+
 func _build_ground_line() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(_width, LINE_DEPTH_M)
@@ -155,3 +181,5 @@ func _build_ground_line() -> void:
 	var line := Parts.mesh(_root, plane, checker, Vector3(0.0, Parts.TRACK_TOP_Y_M + LINE_LIFT_M, 0.0))
 	line.name = "GroundLine"
 	_goal_nodes.append(line)
+
+

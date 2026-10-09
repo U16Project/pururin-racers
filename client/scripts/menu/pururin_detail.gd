@@ -45,6 +45,9 @@ const BAR_BOTTOM_MARGIN := 22.0
 const BAR_SEGMENT_GAP := 2.0
 const COLOR_BAR := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_BAR_TRACK := Color(1.0, 1.0, 1.0, 0.16)
+## 配分できない段（属性のボーナスが無い能力の、配分の上限より上）の色と、斜めの線の色。
+const COLOR_BAR_LOCKED := Color(0.0, 0.0, 0.0, 0.42)
+const COLOR_BAR_LOCKED_LINE := Color(1.0, 1.0, 1.0, 0.14)
 
 var _portrait: Control
 var _name_label: Control
@@ -199,6 +202,7 @@ static func preview_for(pururin_id: String) -> Dictionary:
 		"style_id": style_id,
 		"running_style": str(definitions["running_styles"][style_id]["label"]),
 		"pre_race_stats": PururinStatsMath.pre_race_stats(attribute_id, pururin["allocation"]),
+		"bonus_stats": (definitions["attributes"][attribute_id]["bonus_stats"] as Array).duplicate(),
 	}
 
 
@@ -314,12 +318,26 @@ func _draw_style_chevrons() -> void:
 
 
 ## 能力のバー8本を、横に並べて描く。1本は、上に数字、中に段つきの縦のバー、下に項目名。
+## バーの1段の種類。segment は、下から数えた段（0から）。
+## bonus＝属性のボーナスのぶん（下から、ボーナスの数だけ。属性の色で塗る）、filled＝配分したぶん、
+## empty＝空き、locked＝配分できない段（ボーナスが無い能力の、配分の上限より上）。
+static func bar_segment_kind(has_bonus: bool, filled: int, segment: int) -> String:
+	var config := PururinStatsConfig.values()
+	if has_bonus:
+		if segment < mini(int(config["attribute_bonus_per_stat"]), filled):
+			return "bonus"
+	elif segment >= int(config["allocation_max"]):
+		return "locked"
+	return "filled" if segment < filled else "empty"
+
+
 func _draw_bars() -> void:
 	if _preview.is_empty():
 		return
 	var font := get_theme_default_font()
 	var stats: Dictionary = _preview["pre_race_stats"]
 	var stat_ids: Array = PururinStatsConfig.values()["stat_ids"]
+	var bonus_stats: Array = _preview["bonus_stats"]
 	var column_width := _bars.size.x / float(stat_ids.size())
 	var bar_height := maxf(_bars.size.y - BAR_TOP - BAR_BOTTOM_MARGIN, 0.0)
 	var segments := bar_segment_count()
@@ -336,7 +354,16 @@ func _draw_bars() -> void:
 			# 下から数えて、値の数だけ色を付ける。
 			var top := BAR_TOP + bar_height - segment_height * float(segment + 1) - BAR_SEGMENT_GAP * float(segment)
 			var rect := Rect2(Vector2(center_x - BAR_WIDTH * 0.5, top), Vector2(BAR_WIDTH, segment_height))
-			_bars.draw_rect(rect, COLOR_BAR if segment < filled else COLOR_BAR_TRACK)
+			match bar_segment_kind(stat_id in bonus_stats, filled, segment):
+				"bonus":
+					_bars.draw_rect(rect, _preview["attribute_color"])
+				"filled":
+					_bars.draw_rect(rect, COLOR_BAR)
+				"locked":
+					_bars.draw_rect(rect, COLOR_BAR_LOCKED)
+					_bars.draw_line(rect.position + Vector2(0.0, rect.size.y), rect.position + Vector2(rect.size.x, 0.0), COLOR_BAR_LOCKED_LINE, 1.0)
+				_:
+					_bars.draw_rect(rect, COLOR_BAR_TRACK)
 		var label := str(STAT_LABELS[stat_id])
 		var label_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
 		_draw_outlined(font, label, Vector2(center_x - label_width * 0.5, _bars.size.y - 4.0), 13, MenuStyle.COLOR_DIM)

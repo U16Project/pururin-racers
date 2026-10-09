@@ -4,6 +4,7 @@
     {
       "id": "player-1",
       "display_name": "ヒカリ",
+      "trainer_name": "ユウ",
       "control_kind": "player",
       "trainer_profile_id": "balanced",
       "attribute": "wind",
@@ -13,6 +14,7 @@
     {
       "id": "cpu-1",
       "display_name": "アカネ",
+      "trainer_name": "ホムラ",
       "control_kind": "cpu",
       "trainer_profile_id": "front",
       "attribute": "fire",
@@ -22,6 +24,7 @@
     {
       "id": "cpu-2",
       "display_name": "ミント",
+      "trainer_name": "シズク",
       "control_kind": "cpu",
       "trainer_profile_id": "balanced",
       "attribute": "water",
@@ -31,6 +34,7 @@
     {
       "id": "cpu-3",
       "display_name": "コハク",
+      "trainer_name": "ダイチ",
       "control_kind": "cpu",
       "trainer_profile_id": "draft",
       "attribute": "earth",
@@ -40,6 +44,7 @@
     {
       "id": "cpu-4",
       "display_name": "ソラ",
+      "trainer_name": "ハヤテ",
       "control_kind": "cpu",
       "trainer_profile_id": "late",
       "attribute": "wind",
@@ -49,6 +54,7 @@
     {
       "id": "cpu-5",
       "display_name": "モモ",
+      "trainer_name": "アカリ",
       "control_kind": "cpu",
       "trainer_profile_id": "balanced",
       "attribute": "fire",
@@ -58,6 +64,7 @@
     {
       "id": "cpu-6",
       "display_name": "ナギ",
+      "trainer_name": "ミナト",
       "control_kind": "cpu",
       "trainer_profile_id": "draft",
       "attribute": "water",
@@ -67,6 +74,7 @@
     {
       "id": "cpu-7",
       "display_name": "イワ",
+      "trainer_name": "ガンテツ",
       "control_kind": "cpu",
       "trainer_profile_id": "front",
       "attribute": "earth",

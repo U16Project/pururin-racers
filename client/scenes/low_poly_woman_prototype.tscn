@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/prototype/low_poly_woman_prototype.gd" id="1_prototype"]
+
+[node name="LowPolyWomanPrototype" type="Node3D"]
+script = ExtResource("1_prototype")

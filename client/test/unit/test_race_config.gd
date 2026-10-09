@@ -233,6 +233,37 @@ func test_goal_shows_the_lap_plate_until_the_final_lap() -> void:
 	assert_false((gate.get_node("LapTextBack") as Label3D).visible)
 
 
+func test_red_carpet_lies_past_the_goal_line_only_on_the_final_lap() -> void:
+	var track := Path3D.new()
+	track.curve = Curve3D.new()
+	track.curve.add_point(Vector3.ZERO)
+	track.curve.add_point(Vector3(0, 0, -100))
+	add_child_autofree(track)
+	var visual := GoalVisual.new()
+	visual.place(track, 10.0, 15.0)
+	var gate := track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	var carpet := gate.get_node("Carpet") as MeshInstance3D
+	var mesh := carpet.mesh as PlaneMesh
+	# コースの幅いっぱい、長さは決めたぶん。
+	assert_almost_eq(mesh.size.x, 15.0, 0.001)
+	assert_almost_eq(mesh.size.y, GoalVisual.CARPET_LENGTH_M, 0.001)
+	# 門の中では、手前（走者が来る側）がプラスZ。じゅうたんは、その反対（走り抜ける先）に敷く。
+	assert_almost_eq(carpet.position.z, -GoalVisual.CARPET_LENGTH_M * 0.5, 0.001)
+	# 市松の線より下にして、線が上に見えるようにする。
+	var line := gate.get_node("GroundLine") as Node3D
+	assert_lt(carpet.position.y, line.position.y)
+	# へりの金の帯は、じゅうたんの左右の端に沿う。
+	for tag: String in ["CarpetEdgeL", "CarpetEdgeR"]:
+		var edge := gate.get_node(tag) as MeshInstance3D
+		assert_almost_eq((edge.mesh as PlaneMesh).size.y, GoalVisual.CARPET_LENGTH_M, 0.001)
+		assert_almost_eq(absf(edge.position.x), (15.0 - GoalVisual.CARPET_EDGE_WIDTH_M) * 0.5, 0.001)
+	# 周回が残っているあいだは、市松の線と同じように、出さない。
+	visual.set_laps_to_go(1)
+	assert_false(carpet.visible)
+	visual.set_laps_to_go(0)
+	assert_true(carpet.visible)
+
+
 func test_invalid_configuration_prevents_race_start_and_displays_error() -> void:
 	var saved := Config.values()
 	var saved_error := Config.last_error

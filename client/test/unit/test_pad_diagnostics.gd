@@ -2,6 +2,40 @@ extends GutTest
 const Record := preload("res://scripts/input/pad_diagnostic_record.gd")
 const Scene := preload("res://scenes/pad_diagnostics.tscn")
 
+class DiagnosticProbe extends "res://scripts/pad_diagnostics.gd":
+	var back_requests := 0
+	func _back() -> void:
+		back_requests += 1
+
+func test_b_returns_only_when_pressed_and_not_armed() -> void:
+	var screen := DiagnosticProbe.new()
+	add_child_autofree(screen)
+	screen.record.select_device(3)
+	var event := button(3, false)
+	event.button_index = JOY_BUTTON_B
+	screen._input(event)
+	assert_eq(screen.back_requests, 0, "Bを離しただけでは戻らない")
+	event.pressed = true
+	screen._input(event)
+	assert_eq(screen.back_requests, 1, "採取待ちでなければBで戻る")
+
+func test_armed_b_is_recorded_without_returning() -> void:
+	var screen := DiagnosticProbe.new()
+	add_child_autofree(screen)
+	screen.record.select_device(3)
+	assert_true(screen.record.start_guide())
+	assert_true(screen.record.arm())
+	var event := button(3, true)
+	event.button_index = JOY_BUTTON_B
+	screen._input(event)
+	assert_eq(screen.back_requests, 0)
+	assert_eq(screen.record.candidate.index, JOY_BUTTON_B)
+	assert_true(screen.record.buttons[JOY_BUTTON_B])
+	assert_false(screen.record.armed)
+	event.pressed = false
+	screen._input(event)
+	assert_eq(screen.back_requests, 0, "採取直後のBリリースでも戻らない")
+
 func button(device: int, pressed: bool) -> InputEventJoypadButton:
 	var event := InputEventJoypadButton.new()
 	event.device = device

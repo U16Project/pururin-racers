@@ -57,17 +57,30 @@ func test_title_offers_free_race_and_camera_exploration() -> void:
 	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 5)
 	var free_race := title.get_node_or_null("FreeRaceButton") as Button
 	var exploration := title.get_node_or_null("CameraExplorationButton") as Button
+	var diagnostics := title.get_node("PadDiagnosticsButton") as Button
 	assert_not_null(free_race)
 	assert_not_null(exploration)
 	assert_eq(exploration.text, "カメラで探検")
 	assert_true(ResourceLoader.exists(title.pad_diagnostics_scene_path()))
 	assert_not_null(title.get_node_or_null("PadDiagnosticsButton"))
-	assert_eq(title.next_scene_path(), "res://scenes/race_select.tscn")
+	# ゲーム開始の次は、トレーナーの画面（そこから、レース選択へ）。
+	assert_eq(title.next_scene_path(), "res://scenes/trainer_profile.tscn")
 	assert_true(ResourceLoader.exists(title.next_scene_path()))
 	assert_eq(title.camera_exploration_scene_path(), "res://scenes/camera_exploration.tscn")
 	assert_true(ResourceLoader.exists(title.camera_exploration_scene_path()))
 	assert_eq(free_race.find_valid_focus_neighbor(SIDE_BOTTOM), exploration)
 	assert_eq(exploration.find_valid_focus_neighbor(SIDE_TOP), free_race)
+	await get_tree().process_frame
+	for current: Button in [free_race, exploration, diagnostics]:
+		assert_eq(current.size, Vector2(364, 64))
+		assert_eq(current.anchor_left, 0.5)
+		assert_eq(current.anchor_top, 1.0)
+		assert_eq(current.offset_left, -182.0)
+		assert_eq(current.offset_right, 182.0)
+	assert_eq(exploration.offset_top - free_race.offset_bottom, 12.0)
+	assert_eq(diagnostics.offset_top - exploration.offset_bottom, 12.0)
+	assert_eq(exploration.find_valid_focus_neighbor(SIDE_BOTTOM), diagnostics)
+	assert_eq(diagnostics.find_valid_focus_neighbor(SIDE_TOP), exploration)
 	title.free()
 
 
@@ -88,18 +101,31 @@ func test_title_screen_modes_cycle_both_directions() -> void:
 func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
+	await get_tree().process_frame
 	var row := title.get_node("ScreenModeSelector") as HBoxContainer
+	assert_eq(row.get_node("ModeCaption").text, "ウィンドウサイズ")
+	assert_eq(row.get_children().map(func(child): return child.name), [&"ModeCaption", &"PreviousModeButton", &"ModeLabel", &"NextModeButton"])
 	var label := row.get_node("ModeLabel") as Label
 	var previous := row.get_node("PreviousModeButton") as Button
 	var next := row.get_node("NextModeButton") as Button
 	var exploration := title.get_node("CameraExplorationButton") as Button
+	assert_eq(row.offset_left, exploration.offset_left)
+	assert_eq(row.offset_right, exploration.offset_right)
+	for child: Control in row.get_children():
+		assert_gte(child.position.x, 0.0, child.name)
+		assert_lte(child.position.x + child.size.x, row.size.x, child.name)
+	assert_eq(next.position.x + next.size.x, row.size.x)
 	assert_eq(label.text, Title.SCREEN_MODE_LABELS[Title.screen_mode_index(DisplayServer.window_get_mode())])
 	assert_eq(previous.text, "◀")
 	assert_eq(next.text, "▶")
 	assert_lt(row.offset_top, row.offset_bottom)
 	assert_gt(row.offset_top, exploration.offset_bottom)
-	assert_eq(exploration.find_valid_focus_neighbor(SIDE_BOTTOM), row)
-	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), exploration)
+	var diagnostics := title.get_node("PadDiagnosticsButton") as Button
+	assert_eq(row.size.x, 364.0)
+	assert_eq(row.offset_bottom, -24.0)
+	assert_eq(row.offset_top - diagnostics.offset_bottom, 12.0)
+	assert_eq(diagnostics.find_valid_focus_neighbor(SIDE_BOTTOM), row)
+	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), diagnostics)
 	assert_eq(row.focus_mode, Control.FOCUS_ALL)
 	assert_eq(previous.focus_mode, Control.FOCUS_NONE)
 	assert_eq(next.focus_mode, Control.FOCUS_NONE)
@@ -788,3 +814,32 @@ func test_every_running_style_name_fits_in_the_detail_panel_at_full_size() -> vo
 	for style_id: String in styles:
 		assert_true(seen.has(style_id), style_id)
 	screen.free()
+
+
+func test_stat_bars_show_the_attribute_bonus_and_the_steps_that_cannot_be_used() -> void:
+	var config := PururinStatsConfig.values()
+	var bonus := int(config["attribute_bonus_per_stat"])
+	var allocation_max := int(config["allocation_max"])
+	var maximum := int(config["attribute_stat_max"])
+	assert_gt(maximum, allocation_max)
+	# ボーナスのある能力：下から、ボーナスの数だけ属性の色。その上は、配分したぶん。一番上の段まで使える。
+	var filled := bonus + 5
+	for segment in maximum:
+		var kind := PururinDetail.bar_segment_kind(true, filled, segment)
+		if segment < bonus:
+			assert_eq(kind, "bonus", str(segment))
+		elif segment < filled:
+			assert_eq(kind, "filled", str(segment))
+		else:
+			assert_eq(kind, "empty", str(segment))
+	# ボーナスの無い能力：配分の上限より上の段は、使えない段。
+	for segment in maximum:
+		var kind := PururinDetail.bar_segment_kind(false, 4, segment)
+		if segment >= allocation_max:
+			assert_eq(kind, "locked", str(segment))
+		else:
+			assert_eq(kind, "filled" if segment < 4 else "empty", str(segment))
+	# 個体の表示用の情報に、その属性のボーナスの能力が入る。
+	for id: String in RaceSession.roster_ids():
+		var pururin := PururinRosterConfig.pururin_by_id(id)
+		assert_eq(PururinDetail.preview_for(id)["bonus_stats"], config["attributes"][str(pururin["attribute"])]["bonus_stats"], id)

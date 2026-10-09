@@ -11,6 +11,10 @@ const DOT_X := 76.0
 const NAME_X := 96.0
 const TIME_RIGHT_MARGIN := 16.0
 const NAME_TIME_GAP := 12.0
+## トレーナー名（名前の右に、小さく出す）。名前との間、文字の大きさ、これより狭い所には出さない幅。
+const TRAINER_GAP := 10.0
+const TRAINER_FONT_SIZE := 15
+const TRAINER_MIN_WIDTH := 44.0
 const FONT_SIZE := 24
 const MARK_SCALE := 1.35
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -67,6 +71,11 @@ func _draw() -> void:
 		# 名前は、タイムの手前までの幅に収める（全角9文字は、そのままの大きさで入る）。
 		var name_width := size.x - TIME_RIGHT_MARGIN - time_width - NAME_TIME_GAP - NAME_X
 		FitText.draw(self, name_font, Vector2(NAME_X, baseline), str(row["name"]), name_width, FONT_SIZE, COLOR_PLAYER if is_player else COLOR_TEXT)
+		# 名前の右の、タイムまでの空きに、トレーナー名を小さく出す（長いときは縮める）。
+		var trainer_x := NAME_X + float(FitText.fit(name_font, str(row["name"]), name_width, FONT_SIZE)["width"]) + TRAINER_GAP
+		var trainer_width := NAME_X + name_width - trainer_x
+		if trainer_width >= TRAINER_MIN_WIDTH:
+			FitText.draw(self, font, Vector2(trainer_x, baseline), str(row["trainer"]), trainer_width, TRAINER_FONT_SIZE, COLOR_PLAYER if is_player else COLOR_DIM)
 		draw_string(font, Vector2(size.x - TIME_RIGHT_MARGIN - time_width, baseline), time_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, RaceHud.COLOR_GOLD if place == 1 else COLOR_TEXT)
 
 

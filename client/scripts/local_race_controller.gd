@@ -4,6 +4,7 @@ const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
 const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
 const StartGate := preload("res://scripts/presentation/start_gate.gd")
+const FinishCelebration := preload("res://scripts/presentation/finish_celebration.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
@@ -47,6 +48,7 @@ var _goal_visual := GoalVisual.new()
 var _course_markers := CourseMarkers.new()
 var _venue := RaceVenue.new()
 var _start_gate := StartGate.new()
+var _celebration := FinishCelebration.new()
 
 var _runners: Array[Node3D] = []
 var _paused: bool = false
@@ -182,6 +184,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
+	# ゆっくりの戻しは、一時停止中でも進める（止めたまま、ゆっくりが残らないように）。
+	_celebration.advance(_delta)
 	if _player != null:
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
 	if not _paused and not _race_started:
@@ -220,6 +224,8 @@ func _update_start_countdown(delta: float) -> void:
 		return
 	_race_started = true
 	_start_gate.clear_after_start()
+	# スタートの線も、ゲートと同じときに消す（周回でもう一度通る所に、残さない）。
+	create_tween().tween_callback(_start_marker.hide).set_delay(StartGate.CLEAR_DELAY_S)
 	_telemetry_recorder.start(_race_distance_m)
 	_countdown_label.text = "START!"
 	_start_signal_remaining = 0.8
@@ -329,6 +335,7 @@ func _place_markers() -> void:
 	_goal_visual.place(_track, goal_path, 15.0)
 	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), 0.0))
 	_place_route_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
+	_start_marker.visible = true
 	_course_markers.place(
 		_track, _race_route, _race_distance_m, LocalRaceMath.lap_length_m(),
 		LocalRaceMath.Config.number("course_marker_sign_interval_m"),
@@ -444,6 +451,9 @@ func _check_finishes() -> void:
 	for crossing: Dictionary in crossings:
 		_finish_count += 1
 		crossing["runner"].call("mark_finished", _finish_count, float(crossing["time"]))
+		# 紙吹雪とスローは、ユーザーのぷるりんが1位でゴールしたときだけ出す。
+		if _finish_count == 1 and crossing["runner"] == _player:
+			_celebration.play(_track, _goal_marker.global_position, 15.0)
 	var all_done := true
 	for r in _runners:
 		if not r.call("is_finished"):
@@ -573,6 +583,7 @@ func _update_race_hud() -> void:
 	var state := {
 		"place": place,
 		"player_name": str(_player.get("display_name")),
+		"trainer_name": RaceSession.trainer_name_for(str(_player.call("get_snapshot")["id"]), true),
 		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
 		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,
@@ -693,6 +704,7 @@ func _live_place(runner: Node3D) -> int:
 
 
 func _show_results() -> void:
+	_celebration.stop()
 	_telemetry_recorder.finalize(_race_elapsed, _runners)
 	# 結果の板を出しても、走者は止めない。
 	_race_over = true
@@ -711,6 +723,7 @@ func _result_rows() -> Array:
 		rows.append({
 			"place": int(r.call("get_finish_order")),
 			"name": str(r.get("display_name")),
+			"trainer": RaceSession.trainer_name_for(str(r.call("get_snapshot")["id"]), r == _player),
 			"color": PururinVisualStyle.color_for_racer_id(str(r.call("get_snapshot")["id"])),
 			"player": r == _player,
 			"time_text": LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),
@@ -773,6 +786,12 @@ func _set_paused(paused: bool) -> void:
 		_resume_button.grab_focus()
 
 
+## 場面を抜けるときは、必ず速さをふつうに戻す（スローの最中にメニューへ戻っても、残さない）。
+func _exit_tree() -> void:
+	_celebration.stop()
+
+
 func _return_to_race_select() -> void:
+	_celebration.stop()
 	RaceSession.mark_returning_from_race()
 	get_tree().change_scene_to_file(RACE_SELECT_SCENE)

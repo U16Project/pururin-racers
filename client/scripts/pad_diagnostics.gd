@@ -33,7 +33,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 8)
 	scroll.add_child(column)
 	column.add_child(MenuStyle.label("ゲームパッド設定・入力確認", 28))
-	column.add_child(MenuStyle.label("MODEは固定。操作はマウス／キーボード。戻る：Esc\n設定は保存され、タイトルへ戻ると適用します。下の診断は補正前の入力です。", 18))
+	column.add_child(MenuStyle.label("MODEは固定。操作はマウス／キーボード。戻る：Esc／B\n設定は保存され、タイトルへ戻ると適用します。下の診断は補正前の入力です。", 18))
 	_device_picker = OptionButton.new()
 	_device_picker.item_selected.connect(_select_device)
 	column.add_child(_device_picker)
@@ -116,8 +116,11 @@ func _connection_changed(id: int, connected: bool) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
-		record.record(event)
 		get_viewport().set_input_as_handled()
+		if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B and not record.armed:
+			_back()
+		else:
+			record.record(event)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
 		get_viewport().set_input_as_handled()
 		_back()
