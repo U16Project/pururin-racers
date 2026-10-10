@@ -5,6 +5,25 @@ const SUPPORTED_DISTANCE_M := [1200.0, 1600.0, 2000.0, 2400.0, 3000.0]
 const DEFAULT_DISTANCE_M := 2000.0
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
+const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
+static var _trainer_ids: Array[String] = _empty_slots()
+
+static func slot_trainer_id(slot: int) -> String:
+	if not _trainer_ids[slot].is_empty():
+		return _trainer_ids[slot]
+	return str(PururinRosterConfig.pururin_by_id(_slots[slot]).get("trainer_id", ""))
+
+static func set_slot_trainer(slot: int, identifier: String) -> bool:
+	if slot < 0 or slot >= SLOT_COUNT or is_user_slot(slot) or _locked[slot] or CpuTrainers.by_id(identifier).is_empty():
+		return false
+	_trainer_ids[slot] = identifier
+	return true
+
+static func trainer_for_slot(slot: int) -> Dictionary:
+	return CpuTrainers.by_id(slot_trainer_id(slot))
+
+static func is_default_trainer(slot: int, identifier: String) -> bool:
+	return identifier == str(PururinRosterConfig.pururin_by_id(_slots[slot]).get("trainer_id", "")) and not identifier.is_empty()
 
 ## キャラスロットの数。スロットの番号（0〜7）は、そのままスタートの枠（1〜8枠）になる。
 const SLOT_COUNT := 8
@@ -80,7 +99,9 @@ static func user_slot() -> int:
 static func trainer_name_for(pururin_id: String, user_controlled: bool) -> String:
 	if user_controlled:
 		return TrainerProfile.trainer_name()
-	return str(PururinRosterConfig.pururin_by_id(pururin_id)["trainer_name"])
+	var slot := slot_holding(pururin_id)
+	var trainer := trainer_for_slot(slot) if slot >= 0 else CpuTrainers.by_id(str(PururinRosterConfig.pururin_by_id(pururin_id).get("trainer_id", "")))
+	return str(trainer.get("name", "CPU"))
 
 
 static func is_user_slot(slot: int) -> bool:
@@ -107,7 +128,7 @@ static func field_entries() -> Array:
 	var entries: Array = []
 	for slot in SLOT_COUNT:
 		if _slots[slot] != EMPTY:
-			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot})
+			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot, "trainer_id": slot_trainer_id(slot), "trainer_profile_id": trainer_for_slot(slot).get("profile_id", "")})
 	return entries
 
 
@@ -180,6 +201,9 @@ static func move_slot(slot: int, direction: int) -> int:
 	_slots[slot] = _slots[target]
 	_slots[target] = identifier
 	var locked := _locked[slot]
+	var trainer := _trainer_ids[slot]
+	_trainer_ids[slot] = _trainer_ids[target]
+	_trainer_ids[target] = trainer
 	_locked[slot] = _locked[target]
 	_locked[target] = locked
 	if _user_slot == slot:
@@ -189,43 +213,62 @@ static func move_slot(slot: int, direction: int) -> int:
 	return target
 
 
-## 枠順ランダム。8つのスロット全部（施錠中・未選択も含む）を、でたらめに並べ替える。
+## 枠順ランダム。施錠枠はその位置に固定し、解錠枠の中身だけ並べ替える。
 static func shuffle_gate_order() -> void:
-	var order: Array = range(SLOT_COUNT)
+	var positions: Array[int] = []
+	for slot in SLOT_COUNT:
+		if not _locked[slot]:
+			positions.append(slot)
+	var order: Array = positions.duplicate()
 	order.shuffle()
 	var slots := _slots.duplicate()
 	var locks := _locked.duplicate()
+	var trainers := _trainer_ids.duplicate()
 	var user := _user_slot
-	for position in SLOT_COUNT:
-		var source: int = order[position]
+	for index in positions.size():
+		var position: int = positions[index]
+		var source: int = order[index]
 		_slots[position] = slots[source]
 		_locked[position] = locks[source]
+		_trainer_ids[position] = trainers[source]
 		if source == user:
 			_user_slot = position
 
 
 ## キャラ選択ランダム。施錠していないスロット全部（ユーザーも含む）に、でたらめに個体を入れる。
 ## 施錠中のスロットが使っている個体は選ばない。重複なし。個体が足りなければ、残りは未選択。
-static func randomize_unlocked() -> void:
+static func randomize_unlocked(fill_only: bool = false) -> void:
 	var pool: Array[String] = []
 	for identifier in roster_ids():
 		var holder := slot_holding(identifier)
-		if holder < 0 or not _locked[holder]:
+		if holder < 0 or (not _locked[holder] and not fill_only):
 			pool.append(identifier)
 	pool.shuffle()
 	var next := 0
 	for slot in SLOT_COUNT:
-		if _locked[slot]:
+		if _locked[slot] or (fill_only and _slots[slot] != EMPTY):
 			continue
 		_slots[slot] = pool[next] if next < pool.size() else EMPTY
 		next += 1
 
 
-## キャラ選択全解除。施錠していないスロット全部（ユーザーも含む）を、未選択にする。
+static func randomize_trainers_unlocked(fill_only: bool = false) -> void:
+	var trainers: Array = CpuTrainers.values()
+	for slot in SLOT_COUNT:
+		if _locked[slot] or is_user_slot(slot):
+			continue
+		# 個体の既定担当も、すでに選ばれている人物として扱う。
+		if fill_only and not slot_trainer_id(slot).is_empty():
+			continue
+		_trainer_ids[slot] = str(trainers.pick_random().get("id", ""))
+
+
+## 選択全解除。解錠枠のプルと手動担当を解除する（登録プロフィールは変更しない）。
 static func clear_unlocked() -> void:
 	for slot in SLOT_COUNT:
 		if not _locked[slot]:
 			_slots[slot] = EMPTY
+			_trainer_ids[slot] = EMPTY
 
 
 ## レースを始められない理由。始められるなら空。"no_player"＝ユーザーが未選択、"no_opponent"＝相手が1体もいない。
@@ -241,6 +284,7 @@ static func race_start_problem() -> String:
 static func clear_slots() -> void:
 	_slots = _empty_slots()
 	_locked = _no_locks()
+	_trainer_ids = _empty_slots()
 	_user_slot = 0
 
 
@@ -261,7 +305,7 @@ static func select_full_field(player_id: String) -> bool:
 
 ## 選択を一時的に変えて、あとで戻すための控え（個体・施錠・ユーザーの枠）。
 static func slots_snapshot() -> Dictionary:
-	return {"slots": _slots.duplicate(), "locked": _locked.duplicate(), "user_slot": _user_slot}
+	return {"slots": _slots.duplicate(), "locked": _locked.duplicate(), "user_slot": _user_slot, "trainers": _trainer_ids.duplicate()}
 
 
 static func restore_slots(snapshot: Dictionary) -> void:
@@ -269,6 +313,7 @@ static func restore_slots(snapshot: Dictionary) -> void:
 	for slot in SLOT_COUNT:
 		_slots[slot] = str(snapshot["slots"][slot])
 		_locked[slot] = bool(snapshot["locked"][slot])
+		_trainer_ids[slot] = str(snapshot.get("trainers", _empty_slots())[slot])
 	_user_slot = int(snapshot["user_slot"])
 
 

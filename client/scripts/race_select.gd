@@ -4,8 +4,8 @@ extends Control
 ## 右が、今見ているスロットの個体の詳細。
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
-const RACE_SCENE_PATH := "res://scenes/local_race.tscn"
-const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_background.png"
+const RACE_SCENE_PATH := "res://scenes/race_entries.tscn"
+const BACKGROUND_IMAGE_PATH := "res://assets/ui/race_select_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
@@ -14,6 +14,8 @@ const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
+const TrainerPicker := preload("res://scripts/menu/cpu_trainer_picker.gd")
+var _trainer_picker: PanelContainer
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const PANEL_SIZE := Vector2(880.0, 616.0)
 const SLOT_COLUMN_WIDTH := 436.0
@@ -39,6 +41,8 @@ var _detail: Control
 var _order_button: Button
 var _random_button: Button
 var _clear_button: Button
+var _trainer_random_button: Button
+var _fill_only: CheckBox
 ## 他のスロットで使っているキャラを「見ているだけ」のスロットと、そのキャラ。無ければ -1 と空。
 var _preview_slot := -1
 var _preview_id := ""
@@ -65,7 +69,7 @@ func _ready() -> void:
 	add_child(background)
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(Color(MenuStyle.COLOR_PANEL, 0.93), 16, 30.0, 14.0))
+	panel.add_theme_stylebox_override("panel", MenuStyle.box(Color(MenuStyle.COLOR_PANEL, 0.93), 16, 30.0, 6.0))
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -PANEL_SIZE.x * 0.5
 	panel.offset_right = PANEL_SIZE.x * 0.5
@@ -75,9 +79,9 @@ func _ready() -> void:
 	_panel = panel
 	var content := VBoxContainer.new()
 	content.name = "Content"
-	content.add_theme_constant_override("separation", 8)
+	content.add_theme_constant_override("separation", 4)
 	panel.add_child(content)
-	var heading := MenuStyle.label("オフラインフリー対戦", 28)
+	var heading := MenuStyle.label("オフラインフリー対戦", 24)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(heading)
 	content.add_child(_build_distance_row())
@@ -101,17 +105,26 @@ func _ready() -> void:
 	content.add_child(buttons)
 	_back_button = MenuStyle.button("タイトルへ戻る", 22, MenuStyle.COLOR_BUTTON_QUIET)
 	_back_button.name = "BackButton"
-	_back_button.custom_minimum_size = Vector2(260.0, 56.0)
+	_back_button.custom_minimum_size = Vector2(260.0, 44.0)
 	_back_button.pressed.connect(go_to_title)
+	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	buttons.add_child(_back_button)
-	_race_button = MenuStyle.button("レース開始", 26)
+	_race_button = MenuStyle.button("出走表へ", 22)
 	_race_button.name = "RaceButton"
-	_race_button.custom_minimum_size = Vector2(0.0, 56.0)
+	_race_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_race_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_race_button.pressed.connect(go_to_race)
+	UIAudio.bind_button_sound(_race_button, "confirmation")
+	UIAudio.bind_disabled_button_error(_race_button)
 	MenuStyle.add_mark(_race_button, "START")
 	buttons.add_child(_race_button)
+	for button: Button in [_back_button, _race_button]:
+		for state in ["normal", "hover", "pressed", "hover_pressed"]:
+			var compact: StyleBoxFlat = button.get_theme_stylebox(state).duplicate()
+			compact.content_margin_top = 5.0
+			compact.content_margin_bottom = 5.0
+			button.add_theme_stylebox_override(state, compact)
 	_detail.connect("force_requested", _on_force_requested)
 	_build_picker()
 	_viewed_slot = RaceSession.user_slot()
@@ -144,10 +157,19 @@ func _build_distance_row() -> HBoxContainer:
 		button.toggle_mode = true
 		button.button_group = group
 		button.custom_minimum_size = Vector2(0.0, 46.0)
+		for state in ["normal", "hover", "pressed", "hover_pressed"]:
+			var compact: StyleBoxFlat = button.get_theme_stylebox(state).duplicate()
+			compact.content_margin_top = 5.0
+			compact.content_margin_bottom = 5.0
+			button.add_theme_stylebox_override(state, compact)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.button_pressed = is_equal_approx(distance_m, selected)
+		button.set_meta("ui_audio_focus_sound", "selection_cycle")
 		button.focus_entered.connect(func() -> void: button.button_pressed = true)
-		button.toggled.connect(_on_distance_toggled.bind(distance_m))
+		button.gui_input.connect(func(event: InputEvent) -> void:
+			if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				button.set_meta("distance_mouse_pending", true))
+		button.toggled.connect(_on_distance_toggled.bind(distance_m, button))
 		row.add_child(button)
 		_distance_buttons.append(button)
 	row.add_child(_distance_step_button(1))
@@ -180,7 +202,7 @@ func _distance_step_button(direction: int) -> Button:
 	mark.offset_right = mark.offset_left + mark_width
 	mark.offset_top = -DISTANCE_MARK_SIZE * 0.5
 	mark.offset_bottom = DISTANCE_MARK_SIZE * 0.5
-	button.pressed.connect(step_distance.bind(direction))
+	button.pressed.connect(func() -> void: step_distance(direction, "mouse"))
 	return button
 
 
@@ -198,13 +220,20 @@ static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
 
 
 ## 距離を、1つ前（-1）か次（1）へ動かす。端では止まる。
-func step_distance(direction: int) -> void:
+func step_distance(direction: int, source: String = "gamepad") -> void:
 	var index := 0
 	for position in _distance_buttons.size():
 		if _distance_buttons[position].button_pressed:
 			index = position
 	var next := clampi(index + direction, 0, _distance_buttons.size() - 1)
+	if next == index:
+		UIAudio.play_error()
+		return
 	_distance_buttons[next].button_pressed = true
+	if source == "mouse":
+		UIAudio.play_arrow_click()
+	else:
+		UIAudio.play_selection_cycle()
 	# 距離の段を選んでいるときは、選択の枠も、動かした先の距離へ付いていく
 	# （枠だけ元の距離に残ると、そのあとの左右が、ずれた場所から動いてしまう）。
 	var focused := get_viewport().gui_get_focus_owner()
@@ -217,7 +246,7 @@ func _build_slot_column() -> VBoxContainer:
 	var column := VBoxContainer.new()
 	column.name = "SlotColumn"
 	column.custom_minimum_size = Vector2(SLOT_COLUMN_WIDTH, 0.0)
-	column.add_theme_constant_override("separation", 3)
+	column.add_theme_constant_override("separation", 1)
 	for slot in RaceSession.SLOT_COUNT:
 		var line := HBoxContainer.new()
 		line.add_theme_constant_override("separation", 6)
@@ -236,19 +265,48 @@ func _build_slot_column() -> VBoxContainer:
 		row.connect("lock_requested", _on_slot_lock_requested)
 		row.connect("move_requested", _on_slot_move_requested)
 		row.connect("pick_requested", _on_slot_pick_requested)
+		row.connect("trainer_requested", _on_trainer_requested)
 		line.add_child(row)
 		_slots.append(row)
-	column.add_child(_note_row("ButtonNote1", [[["A"], "一覧から選ぶ"], [["X"], "選択解除"]]))
-	column.add_child(_note_row("ButtonNote2", [[["SELECT"], "施錠・解錠"], [["L2", "R2"], "枠を上下へ"]]))
+	var controls_box := VBoxContainer.new()
+	controls_box.name = "SelectionControls"
+	controls_box.add_theme_constant_override("separation", 6)
+	var controls_margin := MarginContainer.new()
+	controls_margin.add_theme_constant_override("margin_top", 6)
+	controls_margin.add_child(controls_box)
+	column.add_child(controls_margin)
+	controls_box.add_child(_note_row("ButtonNote1", [[["Y"], "トレーナー（CPU）変更"], [["A"], "プルの選択"], [["X"], "選択解除"]]))
+	var controls := _note_row("ButtonNote2", [[["SELECT"], "施錠/解錠"], [["L2", "R2"], "枠を上下"]])
+	controls_box.add_child(controls)
+	_clear_button = _column_button("ClearButton", "選択全解除", _on_clear_all_pressed)
+	controls.add_child(_clear_button)
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 5)
-	column.add_child(buttons)
-	_order_button = _column_button("OrderButton", "枠順ランダム", _on_order_random_pressed)
-	_random_button = _column_button("RandomButton", "キャラ選択ランダム", _on_random_pressed)
-	_clear_button = _column_button("ClearButton", "キャラ選択全解除", _on_clear_all_pressed)
-	for button: Button in [_order_button, _random_button, _clear_button]:
+	controls_box.add_child(buttons)
+	buttons.add_child(MenuStyle.label("ランダム選択", 14, MenuStyle.COLOR_DIM))
+	_order_button = _column_button("OrderButton", "枠順", _on_order_random_pressed)
+	_trainer_random_button = _column_button("TrainerRandomButton", "トレーナー", _on_trainer_random_pressed)
+	_random_button = _column_button("RandomButton", "ぷるりん", _on_random_pressed)
+	for button: Button in [_order_button, _trainer_random_button, _random_button]:
+		UIAudio.bind_button_sound(button, "confirmation")
 		buttons.add_child(button)
+	controls_box.add_child(MenuStyle.label("☑ 施錠中の枠は変更しない", 14, MenuStyle.COLOR_DIM))
+	_fill_only = CheckBox.new()
+	_fill_only.name = "FillOnlyCheckBox"
+	_fill_only.text = "空いている項目だけランダムに埋める"
+	_fill_only.add_theme_font_size_override("font_size", 14)
+	_fill_only.add_theme_icon_override("unchecked", _fill_only_icon(false))
+	_fill_only.add_theme_icon_override("checked", _fill_only_icon(true))
+	_fill_only.toggled.connect(func(_pressed: bool) -> void: UIAudio.play_checkbox_toggle())
+	controls_box.add_child(_fill_only)
 	return column
+
+
+static func _fill_only_icon(checked: bool) -> ImageTexture:
+	var tick := '<path d="M4 9 L8 13 L14 5" fill="none" stroke="#ffffff" stroke-width="2"/>' if checked else ""
+	var image := Image.new()
+	image.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18"><rect x="1" y="1" width="16" height="16" rx="2" fill="#263344" stroke="#ffffff" stroke-width="2"/>%s</svg>' % tick)
+	return ImageTexture.create_from_image(image)
 
 
 ## ボタンの説明の1行。items は [マークの種類の並び, 説明] の並び。
@@ -260,7 +318,6 @@ func _note_row(row_name: String, items: Array) -> HBoxContainer:
 	for item: Array in items:
 		var group := HBoxContainer.new()
 		group.add_theme_constant_override("separation", 4)
-		group.custom_minimum_size = Vector2(NOTE_ITEM_WIDTH, 0.0)
 		for kind: String in item[0]:
 			group.add_child(MenuStyle.mark(kind, NOTE_MARK_SIZE))
 		group.add_child(MenuStyle.label(str(item[1]), 14, MenuStyle.COLOR_DIM))
@@ -271,12 +328,14 @@ func _note_row(row_name: String, items: Array) -> HBoxContainer:
 func _column_button(button_name: String, text: String, handler: Callable) -> Button:
 	var button := MenuStyle.button(text, 13, MenuStyle.COLOR_BUTTON_QUIET)
 	button.name = button_name
-	button.custom_minimum_size = Vector2(0.0, 38.0)
+	button.custom_minimum_size = Vector2(0.0, 25.0)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	for state in ["normal", "hover", "pressed", "hover_pressed"]:
 		var compact: StyleBoxFlat = button.get_theme_stylebox(state).duplicate()
 		compact.content_margin_left = 6.0
 		compact.content_margin_right = 6.0
+		compact.content_margin_top = 3.0
+		compact.content_margin_bottom = 3.0
 		button.add_theme_stylebox_override(state, compact)
 	button.pressed.connect(handler)
 	return button
@@ -307,18 +366,20 @@ func _refresh_focus_links() -> void:
 			"left": _slots[slot],
 			"right": _slots[slot],
 			"top": selected_distance if slot == 0 else _slots[slot - 1],
-			"bottom": _random_button if slot == _slots.size() - 1 else _slots[slot + 1],
+			"bottom": _clear_button if slot == _slots.size() - 1 else _slots[slot + 1],
 		})
-	var column_buttons: Array[Button] = [_order_button, _random_button, _clear_button]
+	var column_buttons: Array[Button] = [_order_button, _trainer_random_button, _random_button]
 	for index in column_buttons.size():
 		_link(column_buttons[index], {
 			"left": column_buttons[maxi(index - 1, 0)],
 			"right": column_buttons[mini(index + 1, column_buttons.size() - 1)],
-			"top": _slots[_slots.size() - 1],
-			"bottom": _race_button,
+			"top": _clear_button,
+			"bottom": _fill_only,
 		})
-	_link(_back_button, {"left": _back_button, "right": _race_button, "top": _order_button, "bottom": _back_button})
-	_link(_race_button, {"left": _back_button, "right": _race_button, "top": _random_button, "bottom": _race_button})
+	_link(_clear_button, {"left": _clear_button, "right": _clear_button, "top": _slots.back(), "bottom": _order_button})
+	_link(_fill_only, {"left": _fill_only, "right": _fill_only, "top": _random_button, "bottom": _race_button})
+	_link(_back_button, {"left": _back_button, "right": _race_button, "top": _fill_only, "bottom": _back_button})
+	_link(_race_button, {"left": _back_button, "right": _race_button, "top": _fill_only, "bottom": _race_button})
 
 
 ## 1つの部品の、上下左右の行き先を決める。
@@ -354,9 +415,19 @@ func _refresh_detail() -> void:
 ## ゲームパッドは、Aで決定、Bで戻る、STARTでレース開始、L1・R1で距離
 ## （Godotの標準では、ゲームパッドのボタンは「決定」「戻る」に割り当てられていない）。
 func _unhandled_input(event: InputEvent) -> void:
+	if _trainer_picker.visible:
+		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+			UIAudio.play_back()
+			get_viewport().set_input_as_handled()
+			_trainer_picker.close()
+		elif RaceControllerInput.is_accept_pressed(event):
+			if RaceControllerInput.activate_focused_control(get_viewport()):
+				get_viewport().set_input_as_handled()
+		return
 	if _picker.call("is_open"):
 		# 一覧の窓が開いている間は、窓の操作だけ（決定と閉じる）。後ろの操作は受け付けない。
 		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+			UIAudio.play_back()
 			get_viewport().set_input_as_handled()
 			_picker.call("close")
 		elif RaceControllerInput.is_accept_pressed(event):
@@ -365,14 +436,20 @@ func _unhandled_input(event: InputEvent) -> void:
 				picker_viewport.set_input_as_handled()
 		return
 	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+		UIAudio.play_back()
 		get_viewport().set_input_as_handled()
 		go_to_title()
 	elif RaceControllerInput.is_menu_pressed(event):
-		get_viewport().set_input_as_handled()
-		go_to_race()
+		if RaceSession.race_start_problem().is_empty():
+			UIAudio.play_confirmation()
+			get_viewport().set_input_as_handled()
+			go_to_race()
+		else:
+			UIAudio.play_error()
+			get_viewport().set_input_as_handled()
 	elif RaceControllerInput.distance_step(event) != 0:
 		get_viewport().set_input_as_handled()
-		step_distance(RaceControllerInput.distance_step(event))
+		step_distance(RaceControllerInput.distance_step(event), "gamepad")
 	elif RaceControllerInput.is_accept_pressed(event):
 		# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 		var viewport := get_viewport()
@@ -387,20 +464,28 @@ func go_to_title() -> void:
 func go_to_race() -> void:
 	if RaceSession.race_start_problem().is_empty():
 		get_tree().change_scene_to_file(RACE_SCENE_PATH)
+	else:
+		UIAudio.play_error()
 
 
-func _on_distance_toggled(pressed: bool, distance_m: float) -> void:
+func _on_distance_toggled(pressed: bool, distance_m: float, button: Button) -> void:
 	if pressed:
 		RaceSession.select_distance(distance_m)
 		_refresh_focus_links()
+		if bool(button.get_meta("distance_mouse_pending", false)):
+			button.set_meta("distance_mouse_pending", false)
+			UIAudio.play_arrow_click()
 
 
 ## 左右：次（前）のキャラを出す。どのスロットも使っていなければ、そのキャラで決まり。
 ## 他のスロットが使っていれば、このスロットは空のまま、「選択済み」として見せるだけにする。
-func _on_slot_cycle_requested(slot: int, direction: int) -> void:
+func _on_slot_cycle_requested(slot: int, direction: int, source: String = "keyboard") -> void:
 	if RaceSession.is_locked(slot):
+		UIAudio.play_error()
 		return
-	var candidate := RaceSession.cycle_candidate(str(_slots[slot].call("pururin_id")), direction)
+	var current := str(_slots[slot].call("pururin_id"))
+	var candidate := RaceSession.cycle_candidate(current, direction)
+	var changed := candidate != current
 	var holder := RaceSession.slot_holding(candidate)
 	if holder >= 0 and holder != slot:
 		RaceSession.set_slot(slot, RaceSession.EMPTY)
@@ -412,6 +497,22 @@ func _on_slot_cycle_requested(slot: int, direction: int) -> void:
 	_viewed_slot = slot
 	_refresh_slots()
 	_refresh_detail()
+	match cycle_sound_key(source, changed):
+		"selection_cycle": UIAudio.play_selection_cycle()
+		"arrow_click": UIAudio.play_arrow_click()
+		"":
+			if not changed:
+				UIAudio.play_error()
+
+
+static func cycle_sound_key(source: String, changed: bool) -> String:
+	if not changed:
+		return ""
+	if source == "gamepad":
+		return "selection_cycle"
+	if source == "mouse":
+		return "arrow_click"
+	return ""
 
 
 func _clear_preview() -> void:
@@ -435,8 +536,13 @@ func _on_slot_unfocused(slot: int) -> void:
 ## X：そのスロットを未選択にする。
 func _on_slot_clear_requested(slot: int) -> void:
 	if RaceSession.is_locked(slot):
+		UIAudio.play_error()
+		return
+	if RaceSession.slot_pururin_id(slot).is_empty():
+		UIAudio.play_error()
 		return
 	RaceSession.set_slot(slot, RaceSession.EMPTY)
+	UIAudio.play_clear_selection()
 	if slot == _preview_slot:
 		_clear_preview()
 	_refresh_slots()
@@ -446,9 +552,11 @@ func _on_slot_clear_requested(slot: int) -> void:
 ## Y：「見ているだけ」のキャラを、先に使っていたスロットから奪う。
 func _on_slot_force_requested(slot: int) -> void:
 	if slot != _preview_slot:
+		_on_trainer_requested(slot)
 		return
 	# 先に使っているスロットが施錠中なら、奪えない（表示はそのまま）。
 	if not RaceSession.take_slot(slot, _preview_id):
+		UIAudio.play_error()
 		return
 	_clear_preview()
 	_refresh_slots()
@@ -478,12 +586,36 @@ func _build_picker() -> void:
 	_picker.connect("force_requested", _on_picker_force_requested)
 	_picker.connect("tile_focused", _on_picker_tile_focused)
 	_picker.connect("closed", _on_picker_closed)
+	_trainer_picker = TrainerPicker.new()
+	_trainer_picker.name = "TrainerPicker"
+	add_child(_trainer_picker)
+	_trainer_picker.picked.connect(func(identifier: String) -> void:
+		UIAudio.play_confirmation()
+		RaceSession.set_slot_trainer(_trainer_picker.selected_slot, identifier)
+		_trainer_picker.close())
+	_trainer_picker.closed.connect(func() -> void:
+		_picker_cover.visible = false
+		_refresh_slots()
+		_slots[_trainer_picker.selected_slot].grab_focus())
+
+func _on_trainer_requested(slot: int) -> void:
+	if slot < 0 or slot >= RaceSession.SLOT_COUNT or RaceSession.is_user_slot(slot) or RaceSession.is_locked(slot):
+		UIAudio.play_error()
+		return
+	_viewed_slot = slot
+	_picker_cover.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_picker_cover.visible = true
+	_trainer_picker.size = Vector2(680, 540)
+	_trainer_picker.position = (get_viewport_rect().size - _trainer_picker.size) * 0.5
+	_trainer_picker.open(slot, RaceSession.slot_trainer_id(slot))
 
 
 ## スロットで決定：キャラの一覧の窓を開く。施錠中のスロットでは開かない。
 func _on_slot_pick_requested(slot: int) -> void:
 	if RaceSession.is_locked(slot):
+		UIAudio.play_error()
 		return
+	UIAudio.play_confirmation()
 	_clear_preview()
 	_refresh_slots()
 	_viewed_slot = slot
@@ -502,6 +634,7 @@ func _on_slot_pick_requested(slot: int) -> void:
 
 ## 窓で決定：そのキャラ（空なら未選択）をスロットに入れて、閉じる。
 func _on_picker_picked(pururin_id: String) -> void:
+	UIAudio.play_confirmation()
 	RaceSession.set_slot(int(_picker.call("slot")), pururin_id)
 	_picker.call("close")
 
@@ -510,6 +643,8 @@ func _on_picker_picked(pururin_id: String) -> void:
 func _on_picker_force_requested(pururin_id: String) -> void:
 	if RaceSession.take_slot(int(_picker.call("slot")), pururin_id):
 		_picker.call("close")
+	else:
+		UIAudio.play_error()
 
 
 ## 窓のカーソルが動いた：右側の詳細を、そのキャラに変える。他のスロットが使っていれば、その表示も出す。
@@ -557,14 +692,28 @@ func _on_order_random_pressed() -> void:
 
 
 func _on_random_pressed() -> void:
-	RaceSession.randomize_unlocked()
+	RaceSession.randomize_unlocked(_fill_only.button_pressed)
 	_clear_preview()
 	_refresh_slots()
 	_refresh_detail()
 
 
+func _on_trainer_random_pressed() -> void:
+	RaceSession.randomize_trainers_unlocked(_fill_only.button_pressed)
+	_refresh_slots()
+	_refresh_detail()
+
+
 func _on_clear_all_pressed() -> void:
+	var changed := false
+	for slot in RaceSession.SLOT_COUNT:
+		if not RaceSession.is_locked(slot) and not RaceSession.slot_pururin_id(slot).is_empty():
+			changed = true
 	RaceSession.clear_unlocked()
+	if changed:
+		UIAudio.play_clear_selection()
+	else:
+		UIAudio.play_error()
 	_clear_preview()
 	_refresh_slots()
 	_refresh_detail()

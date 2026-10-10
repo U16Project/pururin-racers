@@ -1033,12 +1033,32 @@ func _update_drive_level_input(delta: float) -> void:
 	if not is_equal_approx(direction, _drive_hold_direction):
 		_drive_hold_direction = direction
 		_drive_repeat_remaining = LocalRaceMath.DRIVE_REPEAT_INITIAL_S
-		_drive_level = LocalRaceMath.step_drive_level(_drive_level, direction)
+		_step_player_drive_level(direction)
 		return
 	_drive_repeat_remaining -= delta
 	while _drive_repeat_remaining <= 0.0:
-		_drive_level = LocalRaceMath.step_drive_level(_drive_level, direction)
+		_step_player_drive_level(direction)
 		_drive_repeat_remaining += LocalRaceMath.DRIVE_REPEAT_INTERVAL_S
+
+
+func _step_player_drive_level(direction: float) -> bool:
+	var previous := _drive_level
+	var next := LocalRaceMath.step_drive_level(previous, direction)
+	if is_equal_approx(next, previous):
+		return false
+	_drive_level = next
+	match notch_sound_key(previous, next):
+		"notch_up": UIAudio.play_notch_up()
+		"notch_down": UIAudio.play_notch_down()
+	return true
+
+
+static func notch_sound_key(previous: float, next: float) -> String:
+	if next > previous:
+		return "notch_up"
+	if next < previous:
+		return "notch_down"
+	return ""
 
 
 func _read_drive_axis() -> float:

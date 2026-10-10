@@ -1,5 +1,5 @@
 extends Control
-## キャラの一覧の窓。スロットで決定すると開き、タイル（1段4つ、下へスクロール）からキャラを直接選ぶ。
+## キャラの一覧の窓。スロットで決定すると開き、タイル（1段3つ、下へスクロール）からキャラを直接選ぶ。
 ## 決定で picked、選択済みのタイルで強制選択すると force_requested、閉じると closed を出す。
 ## どのスロットに何を入れるかは、画面側（レース選択）が決める。
 
@@ -11,10 +11,11 @@ signal closed
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const Tile := preload("res://scripts/menu/pururin_tile.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
-const COLUMNS := 4
+const COLUMNS := 3
 const MARGIN := 14.0
 const TILE_GAP := 6
-const GRID_MARGIN := 4
+const GRID_MARGIN := 5
+const TILE_FOCUS_MARGIN := 4
 const COLOR_WINDOW := Color(0.07, 0.1, 0.16, 0.98)
 const COLOR_BORDER := Color(1.0, 1.0, 1.0, 0.35)
 
@@ -47,13 +48,14 @@ func _ready() -> void:
 	close_button.focus_mode = Control.FOCUS_NONE
 	close_button.custom_minimum_size = Vector2(36.0, 30.0)
 	close_button.pressed.connect(close)
+	UIAudio.bind_button_sound(close_button, "back")
 	header.add_child(close_button)
 	_scroll = ScrollContainer.new()
 	_scroll.name = "Scroll"
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# カーソルを動かすと、見える位置まで自動でスクロールする。
-	_scroll.follow_focus = true
+	_scroll.follow_focus = false
 	column.add_child(_scroll)
 	# タイルのまわりに少し余白を取る（選択の枠が、スクロールの端で切れないように）。
 	var grid_margin := MarginContainer.new()
@@ -77,9 +79,9 @@ func _ready() -> void:
 	column.add_child(note)
 
 
-## 窓の幅（タイル4つと、すき間と、余白と、スクロールの棒のぶん）。
+## 窓の幅（タイルの列数と、すき間と、余白と、スクロールの棒のぶん）。
 static func window_width() -> float:
-	return Tile.TILE_SIZE.x * COLUMNS + TILE_GAP * (COLUMNS - 1) + GRID_MARGIN * 2.0 + MARGIN * 2.0 + 14.0
+	return (Tile.TILE_SIZE.x + TILE_FOCUS_MARGIN * 2.0) * COLUMNS + TILE_GAP * (COLUMNS - 1) + GRID_MARGIN * 2.0 + MARGIN * 2.0 + 14.0
 
 
 func _draw() -> void:
@@ -152,7 +154,15 @@ func _rebuild() -> void:
 		tile.pressed.connect(_on_tile_pressed.bind(tile))
 		tile.connect("tile_focused", func(pururin_id: String) -> void: tile_focused.emit(pururin_id))
 		tile.connect("force_requested", _on_tile_force_requested.bind(tile))
-		_grid.add_child(tile)
+		var margin := MarginContainer.new()
+		for side in ["left", "right", "top", "bottom"]:
+			margin.add_theme_constant_override("margin_" + side, TILE_FOCUS_MARGIN)
+		_grid.add_child(margin)
+		margin.add_child(tile)
+		tile.focus_entered.connect(func() -> void:
+			await get_tree().process_frame
+			if is_instance_valid(tile) and tile.has_focus():
+				_scroll.ensure_control_visible(margin))
 		_tiles.append(tile)
 	_link_tiles()
 
@@ -178,9 +188,13 @@ func _link_tiles() -> void:
 func _on_tile_pressed(tile: Button) -> void:
 	if bool(tile.call("can_pick")):
 		picked.emit(str(tile.call("pururin_id")))
+	else:
+		UIAudio.play_error()
 
 
 ## 強制選択：他のスロットが使っていて、施錠していないタイルだけ、奪える。
 func _on_tile_force_requested(_pururin_id: String, tile: Button) -> void:
 	if int(tile.call("state")) == Tile.State.TAKEN:
 		force_requested.emit(str(tile.call("pururin_id")))
+	else:
+		UIAudio.play_error()

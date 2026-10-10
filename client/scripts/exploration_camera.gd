@@ -38,6 +38,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _is_return_event(event):
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		get_viewport().set_input_as_handled()
+		UIAudio.play_back()
 		get_tree().change_scene_to_file(TITLE_SCENE_PATH)
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:

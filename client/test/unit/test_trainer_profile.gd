@@ -10,6 +10,39 @@ const ICON := "user://test_trainer_icon.png"
 const ProfileScene := preload("res://scenes/trainer_profile.tscn")
 const TitleScene := preload("res://scenes/title.tscn")
 
+class ProfileWithoutNavigation extends "res://scripts/trainer_profile_screen.gd":
+	var transitions := 0
+	func go_to_race_select() -> void:
+		transitions += 1
+
+
+func test_start_uses_registration_validation_and_only_transitions_once() -> void:
+	var screen := ProfileWithoutNavigation.new()
+	add_child_autofree(screen)
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var start := InputEventJoypadButton.new()
+	start.button_index = JOY_BUTTON_START
+	start.pressed = true
+	var edit: LineEdit = screen.find_child("NameEdit", true, false)
+	if OS.has_environment("PURURIN_CAPTURE_DIR"):
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		screen.get_viewport().get_texture().get_image().save_png(OS.get_environment("PURURIN_CAPTURE_DIR").path_join("pururin-trainer-registration-start.png"))
+	edit.text = ""
+	screen._unhandled_input(start)
+	assert_eq(screen.transitions, 0)
+	edit.text = "テスト"
+	screen.set("_file_dialog_open", true)
+	screen._unhandled_input(start)
+	assert_eq(screen.transitions, 0)
+	screen.set("_file_dialog_open", false)
+	screen._unhandled_input(start)
+	screen._unhandled_input(start)
+	assert_eq(screen.transitions, 1)
+	TrainerProfile.reload_profile()
+	assert_eq(TrainerProfile.trainer_name(), "テスト")
+	assert_eq(screen.find_child("RegisterButton", true, false).get_node("ButtonMark").get("kind"), "START")
+
 
 ## 本物の登録内容に触らないように、テスト用の保存場所を使う。
 func before_each() -> void:
@@ -215,3 +248,42 @@ func test_the_gamepad_accept_button_chooses_the_focused_picture() -> void:
 	assert_true(RaceControllerInput.activate_control(screen.find_child("Choice_none", true, false)))
 	assert_eq(screen.call("pending_icon")["kind"], "none")
 
+
+func test_the_introduction_is_saved_and_a_too_long_one_is_refused() -> void:
+	var limit := int(TrainerProfile.config()["introduction_max_length"])
+	assert_eq(TrainerProfile.introduction(), str(TrainerProfile.config()["default_introduction"]))
+	# 改行は空白に直し、前後の空白は取る。空でもよい。
+	assert_eq(TrainerProfile.set_introduction("  ぷるりんが\n大好き。  "), "")
+	TrainerProfile.reload_profile()
+	assert_eq(TrainerProfile.introduction(), "ぷるりんが 大好き。")
+	assert_ne(TrainerProfile.set_introduction("あ".repeat(limit + 1)), "")
+	assert_eq(TrainerProfile.introduction(), "ぷるりんが 大好き。", "長すぎるものは、登録しない")
+	assert_eq(TrainerProfile.set_introduction("あ".repeat(limit)), "")
+	assert_eq(TrainerProfile.set_introduction(""), "")
+	assert_eq(TrainerProfile.introduction(), "")
+
+
+func test_a_profile_saved_before_the_introduction_existed_still_loads() -> void:
+	var file := FileAccess.open(SAVE, FileAccess.WRITE)
+	file.store_string(JSON.stringify({"name": "ゆうじろう", "icon": {"kind": "none", "id": ""}}))
+	file.close()
+	TrainerProfile.reload_profile()
+	assert_eq(TrainerProfile.trainer_name(), "ゆうじろう")
+	assert_eq(TrainerProfile.introduction(), str(TrainerProfile.config()["default_introduction"]))
+
+
+func test_the_screen_edits_the_introduction_and_refuses_a_too_long_one() -> void:
+	TrainerProfile.set_introduction("はじめまして。")
+	var screen := _screen()
+	var edit := screen.find_child("IntroductionEdit", true, false) as TextEdit
+	var count := screen.find_child("IntroductionCount", true, false) as Label
+	var limit := int(TrainerProfile.config()["introduction_max_length"])
+	assert_eq(edit.text, "はじめまして。")
+	assert_eq(count.text, "%d／%d" % ["はじめまして。".length(), limit])
+	# 長すぎる紹介文では、登録できない。理由を出して、何も変えない。
+	edit.text = "あ".repeat(limit + 5)
+	screen.call("_refresh_introduction_count")
+	assert_eq(count.text, "%d／%d" % [limit + 5, limit])
+	screen.call("register")
+	assert_ne((screen.find_child("ProblemLabel", true, false) as Label).text, "")
+	assert_eq(TrainerProfile.introduction(), "はじめまして。")

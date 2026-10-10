@@ -4,9 +4,8 @@
     {
       "id": "player-1",
       "display_name": "ヒカリ",
-      "trainer_name": "ユウ",
+      "trainer_id": "yuu",
       "control_kind": "player",
-      "trainer_profile_id": "balanced",
       "attribute": "wind",
       "running_style": "pace",
       "allocation": {"top_speed": 6, "acceleration": 5, "stamina": 5, "cardio": 5, "aero": 5, "pack": 5, "contact_resistance": 4, "handling": 5}
@@ -14,9 +13,8 @@
     {
       "id": "cpu-1",
       "display_name": "アカネ",
-      "trainer_name": "ホムラ",
+      "trainer_id": "homura",
       "control_kind": "cpu",
-      "trainer_profile_id": "front",
       "attribute": "fire",
       "running_style": "escape",
       "allocation": {"top_speed": 5, "acceleration": 7, "stamina": 4, "cardio": 6, "aero": 4, "pack": 4, "contact_resistance": 5, "handling": 5}
@@ -24,9 +22,8 @@
     {
       "id": "cpu-2",
       "display_name": "ミント",
-      "trainer_name": "シズク",
+      "trainer_id": "shizuku",
       "control_kind": "cpu",
-      "trainer_profile_id": "balanced",
       "attribute": "water",
       "running_style": "pace",
       "allocation": {"top_speed": 5, "acceleration": 5, "stamina": 5, "cardio": 5, "aero": 5, "pack": 6, "contact_resistance": 4, "handling": 5}
@@ -34,9 +31,8 @@
     {
       "id": "cpu-3",
       "display_name": "コハク",
-      "trainer_name": "ダイチ",
+      "trainer_id": "daichi",
       "control_kind": "cpu",
-      "trainer_profile_id": "draft",
       "attribute": "earth",
       "running_style": "stalk",
       "allocation": {"top_speed": 4, "acceleration": 4, "stamina": 7, "cardio": 5, "aero": 4, "pack": 6, "contact_resistance": 6, "handling": 4}
@@ -44,9 +40,8 @@
     {
       "id": "cpu-4",
       "display_name": "ソラ",
-      "trainer_name": "ハヤテ",
+      "trainer_id": "hayate",
       "control_kind": "cpu",
-      "trainer_profile_id": "late",
       "attribute": "wind",
       "running_style": "closer",
       "allocation": {"top_speed": 7, "acceleration": 5, "stamina": 5, "cardio": 4, "aero": 6, "pack": 4, "contact_resistance": 4, "handling": 5}
@@ -54,9 +49,8 @@
     {
       "id": "cpu-5",
       "display_name": "モモ",
-      "trainer_name": "アカリ",
+      "trainer_id": "akari",
       "control_kind": "cpu",
-      "trainer_profile_id": "balanced",
       "attribute": "fire",
       "running_style": "pace",
       "allocation": {"top_speed": 5, "acceleration": 6, "stamina": 5, "cardio": 6, "aero": 4, "pack": 4, "contact_resistance": 5, "handling": 5}
@@ -64,9 +58,8 @@
     {
       "id": "cpu-6",
       "display_name": "ナギ",
-      "trainer_name": "ミナト",
+      "trainer_id": "minato",
       "control_kind": "cpu",
-      "trainer_profile_id": "draft",
       "attribute": "water",
       "running_style": "stalk",
       "allocation": {"top_speed": 4, "acceleration": 4, "stamina": 6, "cardio": 5, "aero": 5, "pack": 7, "contact_resistance": 4, "handling": 5}
@@ -74,12 +67,13 @@
     {
       "id": "cpu-7",
       "display_name": "イワ",
-      "trainer_name": "ガンテツ",
+      "trainer_id": "gantetsu",
       "control_kind": "cpu",
-      "trainer_profile_id": "front",
       "attribute": "earth",
       "running_style": "escape",
       "allocation": {"top_speed": 5, "acceleration": 5, "stamina": 6, "cardio": 5, "aero": 4, "pack": 4, "contact_resistance": 7, "handling": 4}
     }
+    ,{"id":"cpu-8","display_name":"ルリ","trainer_id":"kaede","control_kind":"cpu","attribute":"water","running_style":"stalk","allocation":{"top_speed":5,"acceleration":4,"stamina":6,"cardio":5,"aero":5,"pack":7,"contact_resistance":4,"handling":4}}
+    ,{"id":"cpu-9","display_name":"ワカバ","trainer_id":"ibuki","control_kind":"cpu","attribute":"wind","running_style":"closer","allocation":{"top_speed":6,"acceleration":6,"stamina":4,"cardio":4,"aero":6,"pack":4,"contact_resistance":4,"handling":6}}
   ]
 }

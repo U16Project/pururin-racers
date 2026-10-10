@@ -5,12 +5,12 @@ extends Control
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
 const RACE_SELECT_SCENE_PATH := "res://scenes/race_select.tscn"
-const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_background.png"
+const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
-const PANEL_SIZE := Vector2(760.0, 520.0)
+const PANEL_SIZE := Vector2(760.0, 620.0)
 const PREVIEW_SIZE := 132.0
 const CHOICE_SIZE := 62.0
 const FILE_FILTERS := ["*.png, *.jpg, *.jpeg, *.webp ; 画像"]
@@ -18,11 +18,15 @@ const FILE_FILTERS := ["*.png, *.jpg, *.jpeg, *.webp ; 画像"]
 var _name_edit: LineEdit
 var _preview: Control
 var _problem_label: Label
+var _introduction_edit: TextEdit
+var _introduction_count: Label
 var _choice_buttons: Array[Button] = []
 var _file_button: Button
 var _register_button: Button
 var _back_button: Button
 var _file_dialog: FileDialog
+var _file_dialog_open := false
+var _registering := false
 ## 選びかけの画像（登録するまでは、保存しない）。kind・id・path（file のときの、元のファイル）。
 var _pending := {"kind": "none", "id": "", "path": ""}
 
@@ -77,6 +81,25 @@ func _ready() -> void:
 	_problem_label.name = "ProblemLabel"
 	name_box.add_child(_problem_label)
 	# 画像の選択：なし、ぷるりんの絵、画像ファイル。
+	# 紹介文（出走表の、トレーナーの所に出る）。
+	var introduction_head := HBoxContainer.new()
+	column.add_child(introduction_head)
+	var introduction_title := MenuStyle.label("紹介文（%d文字まで）" % int(rules["introduction_max_length"]), 18, MenuStyle.COLOR_DIM)
+	introduction_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	introduction_head.add_child(introduction_title)
+	_introduction_count = MenuStyle.label("", 16, MenuStyle.COLOR_DIM)
+	_introduction_count.name = "IntroductionCount"
+	introduction_head.add_child(_introduction_count)
+	_introduction_edit = TextEdit.new()
+	_introduction_edit.name = "IntroductionEdit"
+	_introduction_edit.text = TrainerProfile.introduction()
+	_introduction_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_introduction_edit.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_introduction_edit.add_theme_font_size_override("font_size", 18)
+	_introduction_edit.custom_minimum_size = Vector2(0.0, 84.0)
+	_introduction_edit.text_changed.connect(_refresh_introduction_count)
+	column.add_child(_introduction_edit)
+	_refresh_introduction_count()
 	column.add_child(MenuStyle.label("画像", 18, MenuStyle.COLOR_DIM))
 	var choices := HBoxContainer.new()
 	choices.add_theme_constant_override("separation", 8)
@@ -98,6 +121,7 @@ func _ready() -> void:
 	_back_button.name = "BackButton"
 	_back_button.custom_minimum_size = Vector2(220.0, 58.0)
 	_back_button.pressed.connect(go_to_title)
+	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	buttons.add_child(_back_button)
 	_register_button = MenuStyle.button("OK（レース選択へ）", 22)
@@ -105,6 +129,7 @@ func _ready() -> void:
 	_register_button.custom_minimum_size = Vector2(0.0, 58.0)
 	_register_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_register_button.pressed.connect(register)
+	MenuStyle.add_mark(_register_button, "START")
 	buttons.add_child(_register_button)
 	_file_dialog = FileDialog.new()
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -112,6 +137,7 @@ func _ready() -> void:
 	_file_dialog.use_native_dialog = true
 	_file_dialog.filters = PackedStringArray(FILE_FILTERS)
 	_file_dialog.file_selected.connect(choose_file)
+	_file_dialog.canceled.connect(func() -> void: _file_dialog_open = false)
 	add_child(_file_dialog)
 	# 登録してある画像から始める。
 	var icon := TrainerProfile.icon()
@@ -138,6 +164,7 @@ func _choice_button(kind: String, id: String) -> Button:
 	icon.call("show_icon", kind, id)
 	button.add_child(icon)
 	button.pressed.connect(choose_icon.bind(kind, id))
+	UIAudio.bind_button_sound(button, "confirmation")
 	_choice_buttons.append(button)
 	return button
 
@@ -150,6 +177,7 @@ func choose_icon(kind: String, id: String = "") -> void:
 
 ## 画像ファイルを選ぶ。読めないファイルなら、理由を出して、選びかけの画像は変えない。
 func choose_file(path: String) -> void:
+	_file_dialog_open = false
 	var image: Image = Image.load_from_file(path) if FileAccess.file_exists(path) else null
 	if image == null or image.is_empty():
 		_problem_label.text = "画像を読めません"
@@ -161,6 +189,7 @@ func choose_file(path: String) -> void:
 
 
 func _open_file_dialog() -> void:
+	_file_dialog_open = true
 	_file_dialog.popup_centered_ratio(0.7)
 
 
@@ -185,7 +214,11 @@ func pending_icon() -> Dictionary:
 
 ## 名前と画像を保存して、レース選択へ進む。名前が決まりに合わないときは、理由を出して、何も保存しない。
 func register() -> void:
+	if _registering or _file_dialog_open or _file_dialog.visible:
+		return
 	var problem := TrainerProfile.name_problem(_name_edit.text)
+	if problem.is_empty():
+		problem = TrainerProfile.introduction_problem(_introduction_edit.text)
 	if problem.is_empty() and str(_pending["kind"]) == "file" and not str(_pending["path"]).is_empty():
 		problem = TrainerProfile.set_icon_file(str(_pending["path"]))
 	if not problem.is_empty():
@@ -193,9 +226,12 @@ func register() -> void:
 		_name_edit.grab_focus()
 		return
 	TrainerProfile.set_trainer_name(_name_edit.text)
+	TrainerProfile.set_introduction(_introduction_edit.text)
+	_registering = true
 	match str(_pending["kind"]):
 		"none": TrainerProfile.clear_icon()
 		"avatar": TrainerProfile.set_icon_avatar(str(_pending["id"]))
+	UIAudio.play_confirmation()
 	go_to_race_select()
 
 
@@ -209,8 +245,21 @@ func go_to_title() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
-	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+	if RaceControllerInput.is_menu_pressed(event):
 		viewport.set_input_as_handled()
-	elif RaceControllerInput.is_cancel_pressed(event) or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE):
+		register()
+	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+		viewport.set_input_as_handled()
+	elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event) or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE):
+		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_to_title()
+
+
+## 紹介文の、今の文字数を出す。決まりより長いときは、色を変える。
+func _refresh_introduction_count() -> void:
+	var limit := int(TrainerProfile.config()["introduction_max_length"])
+	var length := TrainerProfile.clean_introduction(_introduction_edit.text).length()
+	_introduction_count.text = "%d／%d" % [length, limit]
+	_introduction_count.add_theme_color_override("font_color", MenuStyle.COLOR_TAKEN if length > limit else MenuStyle.COLOR_DIM)
+

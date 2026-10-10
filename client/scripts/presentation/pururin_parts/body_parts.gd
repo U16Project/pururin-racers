@@ -8,9 +8,9 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"top": ["nub", "rocks", "flames", "sprout"],
-	"side": ["flipper", "rock", "flame", "leaf"],
-	"tail": ["flipper", "rock", "flame", "leaf"],
+	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring"],
+	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal"],
+	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal"],
 }
 ## 形ごとに、必ず要る数字。
 const REQUIRED_PARAMS := {
@@ -22,6 +22,12 @@ const REQUIRED_PARAMS := {
 	"flame": ["length", "width", "lean", "tilt_deg", "roll_deg"],
 	"sprout": ["length", "width", "spread_deg"],
 	"leaf": ["length", "width", "tilt_deg", "roll_deg", "sweep_deg", "feathers"],
+	"bubbles": ["size", "count", "spread", "seed"],
+	"bubble": ["size", "count", "seed"],
+	"crystals": ["length", "width", "count", "spread", "seed"],
+	"crystal": ["length", "width", "tilt_deg", "seed"],
+	"horns": ["length", "width", "spread_deg", "curve"],
+	"ring": ["radius", "thickness", "height", "tilt_deg"],
 }
 ## 形ごとに、必ず要る色。
 const REQUIRED_COLORS := {
@@ -31,6 +37,12 @@ const REQUIRED_COLORS := {
 	"flame": ["tip_color"],
 	"sprout": ["color"],
 	"leaf": ["color"],
+	"bubbles": ["color"],
+	"bubble": ["color"],
+	"crystals": ["color"],
+	"crystal": ["color"],
+	"horns": ["color"],
+	"ring": ["color"],
 }
 ## メッシュの部品に、必ず要る項目。material は "body"（体と同じ素材で塗る）か "own"（メッシュの素材のまま）。
 const REQUIRED_MESH_PARAMS := ["path", "scale", "material"]
@@ -60,7 +72,11 @@ static func build_top(shape: Dictionary, source: Dictionary, body_material: Mate
 			"rocks": _add_rocks(bits, shape, source)
 			"flames": _add_flames(bits, source)
 			"sprout": _add_sprout(bits, source)
-		node = _builtin_node(bits, body_material, str(source["shape"]) == "rocks")
+			"bubbles": _add_bubbles(bits, shape, source)
+			"crystals": _add_crystals(bits, shape, source)
+			"horns": _add_horns(bits, source)
+			"ring": _add_ring(bits, source)
+		node = _builtin_node(bits, body_material, str(source["shape"]) in ["rocks", "crystals"])
 	node.position = Vector3(0.0, float(shape["height"]), 0.0)
 	node.name = "Top"
 	return [node]
@@ -102,7 +118,9 @@ static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_mat
 		"rock": _add_side_rocks(bits, source)
 		"flame": _add_side_flame(bits, source)
 		"leaf": _add_leaves(bits, source)
-	node = _builtin_node(bits, body_material, str(source["shape"]) == "rock")
+		"bubble": _add_side_bubbles(bits, source)
+		"crystal": _add_side_crystal(bits, source)
+	node = _builtin_node(bits, body_material, str(source["shape"]) in ["rock", "crystal"])
 	node.transform = Transform3D(basis, point)
 	return node
 
@@ -358,3 +376,142 @@ static func _add_rock(bits: Bits, center: Vector3, size: Vector3, rng: RandomNum
 		bits.colors.append(_tint(color.lightened(shade) if shade > 0.0 else color.darkened(-shade), 1.0))
 	for index in range(0, faces.size(), 3):
 		Surface.push_triangle(bits.indices, bits.vertices, bits.normals, first + faces[index], first + faces[index + 1], first + faces[index + 2])
+
+
+## 水の泡（頭の上）：大きい玉1つと、まわりの小さい玉。体の丸みに沿って置く。
+static func _add_bubbles(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var color := Color(str(source["color"]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	_add_ellipsoid(bits, Vector3(0.0, size * 0.75, 0.0), Vector3.ONE * size, _tint(color, 0.8), Transform3D.IDENTITY)
+	var count := int(source["count"])
+	for index in count - 1:
+		var angle := TAU * (float(index) + rng.randf_range(-0.2, 0.2)) / float(maxi(count - 1, 1)) + 0.4
+		var distance := float(source["spread"]) * rng.randf_range(0.85, 1.15)
+		var small := size * rng.randf_range(0.42, 0.72)
+		# その場所の、体の表面の高さ（頭のてっぺんからの差）に合わせて、少し埋める。
+		var drop := Surface.height_at_radius(shape, distance) - float(shape["height"])
+		_add_ellipsoid(bits, Vector3(cos(angle) * distance, drop + small * 0.85, sin(angle) * distance), Vector3.ONE * small, _tint(color, 0.8), Transform3D.IDENTITY)
+
+
+## 水の泡（左右・尾）：外へ向かって、だんだん小さくなる玉を並べる。
+static func _add_side_bubbles(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var color := Color(str(source["color"]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	var count := int(source["count"])
+	for index in count:
+		var t := float(index) / float(maxi(count - 1, 1))
+		var small := size * lerpf(1.0, 0.45, t)
+		var outward := size * (0.25 + 1.6 * t)
+		var wobble := Vector3(0.0, size * rng.randf_range(-0.22, 0.42), size * rng.randf_range(-0.35, 0.35))
+		_add_ellipsoid(bits, Vector3(outward, 0.0, 0.0) + wobble, Vector3.ONE * small, _tint(color, 0.8), Transform3D.IDENTITY)
+
+
+## 地の結晶（頭の上）：まん中の大きい柱と、まわりの小さい柱。外へ少し傾けて立てる。
+static func _add_crystals(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var color := Color(str(source["color"]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	_add_shard(bits, Vector3(0.0, -0.05, 0.0), Vector3.UP, length, width, color)
+	var count := int(source["count"])
+	for index in count - 1:
+		var angle := TAU * (float(index) + rng.randf_range(-0.18, 0.18)) / float(maxi(count - 1, 1)) + 0.7
+		var distance := float(source["spread"]) * rng.randf_range(0.85, 1.15)
+		var small := length * rng.randf_range(0.42, 0.72)
+		var drop := Surface.height_at_radius(shape, distance) - float(shape["height"])
+		var base := Vector3(cos(angle) * distance, drop, sin(angle) * distance)
+		# 外へ少し開くように、先を傾ける。
+		var lean := (Vector3(cos(angle), 0.0, sin(angle)) * 0.45 + Vector3.UP).normalized()
+		_add_shard(bits, base, lean, small, width * rng.randf_range(0.6, 0.85), color)
+
+
+## 地の結晶（左右・尾）：外へ伸びる柱1本と、その根元の小さい柱。
+static func _add_side_crystal(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var color := Color(str(source["color"]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	var tilt := deg_to_rad(float(source["tilt_deg"]))
+	var main := Vector3(cos(tilt), sin(tilt), 0.0).normalized()
+	_add_shard(bits, Vector3(-0.02, 0.0, 0.0), main, length, width, color)
+	var aside := Vector3(cos(tilt - 0.5), sin(tilt - 0.5), rng.randf_range(-0.25, 0.25)).normalized()
+	_add_shard(bits, Vector3(0.0, -width * 0.6, width * 0.5), aside, length * 0.55, width * 0.7, color)
+
+
+## 結晶を1本。四角い柱が、先でとがる。base が根元、direction が伸びる向き。
+static func _add_shard(bits: Bits, base: Vector3, direction: Vector3, length: float, width: float, color: Color) -> void:
+	var up := direction.normalized()
+	var side := (Vector3.BACK if absf(up.z) < 0.9 else Vector3.RIGHT).cross(up).normalized()
+	var other := up.cross(side).normalized()
+	var first := bits.vertices.size()
+	# 根元・途中・先の、3つの輪切り（先は1点にすぼめる）。
+	var rings := [[0.0, 1.0], [0.55, 0.78], [1.0, 0.0]]
+	var tint := _tint(color, 1.0)
+	for ring: Array in rings:
+		var at := base + up * (length * float(ring[0]))
+		var radius := width * float(ring[1])
+		for corner in 4:
+			var angle := TAU * float(corner) / 4.0 + PI * 0.25
+			var outward := (side * cos(angle) + other * sin(angle)).normalized()
+			bits.vertices.append(at + outward * radius)
+			bits.normals.append(outward if radius > 0.0001 else up)
+			bits.colors.append(tint)
+	for ring in rings.size() - 1:
+		for corner in 4:
+			var next := (corner + 1) % 4
+			var a := first + ring * 4 + corner
+			var b := first + ring * 4 + next
+			var c := first + (ring + 1) * 4 + corner
+			var d := first + (ring + 1) * 4 + next
+			Surface.push_triangle(bits.indices, bits.vertices, bits.normals, a, b, c)
+			Surface.push_triangle(bits.indices, bits.vertices, bits.normals, b, d, c)
+
+
+## 角（頭の上）：左右に1本ずつ。根元が太く、外へ反りながら、先がとがる。
+static func _add_horns(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var spread := float(source["spread_deg"])
+	var curve := float(source["curve"])
+	var color := Color(str(source["color"]))
+	var steps := 16
+	for side: float in [1.0, -1.0]:
+		var centers: Array[Vector3] = []
+		var radii: Array[float] = []
+		var colors: Array[Color] = []
+		for index in steps + 1:
+			var t := float(index) / float(steps)
+			# 上へ伸びながら、外へ反る。
+			centers.append(Vector3(curve * t * t * side, length * t, 0.0))
+			radii.append(width * pow(1.0 - t, 0.8))
+			colors.append(_tint(color.darkened(0.12).lerp(color.lightened(0.22), t), 1.0))
+		var lean := Basis(Vector3.BACK, deg_to_rad(-spread * side))
+		_add_tube(bits, centers, radii, 0.9, colors, Transform3D(lean, Vector3(width * 0.7 * side, -0.06, 0.0)))
+
+
+## 輪（頭の上）：頭の上に浮かぶ、細い輪。少し傾けて置く。
+static func _add_ring(bits: Bits, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var thickness := float(source["thickness"])
+	var color := Color(str(source["color"]))
+	var steps := 28
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	var tint := _tint(color, 1.0)
+	for index in steps + 1:
+		var angle := TAU * float(index) / float(steps)
+		# 背骨はXY平面に置く（_add_tube は、XY平面の曲線に沿って輪切りを並べる）。
+		centers.append(Vector3(cos(angle) * radius, sin(angle) * radius, 0.0))
+		radii.append(thickness)
+		colors.append(tint)
+	# 立った輪を寝かせてから、少し傾ける。
+	var lay := Basis(Vector3.RIGHT, deg_to_rad(90.0))
+	var tilt := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D(tilt * lay, Vector3(0.0, float(source["height"]), 0.0)))

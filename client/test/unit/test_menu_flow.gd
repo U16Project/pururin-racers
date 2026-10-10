@@ -54,7 +54,7 @@ func test_title_offers_free_race_and_camera_exploration() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
 	assert_not_null((title.get_node("Background") as TextureRect).texture)
-	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 5)
+	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 6)
 	var free_race := title.get_node_or_null("FreeRaceButton") as Button
 	var exploration := title.get_node_or_null("CameraExplorationButton") as Button
 	var diagnostics := title.get_node("PadDiagnosticsButton") as Button
@@ -72,13 +72,13 @@ func test_title_offers_free_race_and_camera_exploration() -> void:
 	assert_eq(exploration.find_valid_focus_neighbor(SIDE_TOP), free_race)
 	await get_tree().process_frame
 	for current: Button in [free_race, exploration, diagnostics]:
-		assert_eq(current.size, Vector2(364, 64))
+		assert_eq(current.size, Vector2(364, 54))
 		assert_eq(current.anchor_left, 0.5)
 		assert_eq(current.anchor_top, 1.0)
 		assert_eq(current.offset_left, -182.0)
 		assert_eq(current.offset_right, 182.0)
-	assert_eq(exploration.offset_top - free_race.offset_bottom, 12.0)
-	assert_eq(diagnostics.offset_top - exploration.offset_bottom, 12.0)
+	assert_eq(exploration.offset_top - free_race.offset_bottom, 8.0)
+	assert_eq(diagnostics.offset_top - exploration.offset_bottom, 8.0)
 	assert_eq(exploration.find_valid_focus_neighbor(SIDE_BOTTOM), diagnostics)
 	assert_eq(diagnostics.find_valid_focus_neighbor(SIDE_TOP), exploration)
 	title.free()
@@ -122,8 +122,15 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	assert_gt(row.offset_top, exploration.offset_bottom)
 	var diagnostics := title.get_node("PadDiagnosticsButton") as Button
 	assert_eq(row.size.x, 364.0)
-	assert_eq(row.offset_bottom, -24.0)
-	assert_eq(row.offset_top - diagnostics.offset_bottom, 12.0)
+	assert_eq(row.offset_bottom, -86.0)
+	assert_eq(row.offset_top - diagnostics.offset_bottom, 8.0)
+	var quit_button := title.get_node("QuitButton") as Button
+	assert_eq(quit_button.text, "ゲームを終了")
+	assert_eq(quit_button.size, Vector2(364, 54))
+	assert_eq(quit_button.offset_bottom, -24.0)
+	assert_eq(quit_button.offset_top - row.offset_bottom, 8.0)
+	assert_eq(row.find_valid_focus_neighbor(SIDE_BOTTOM), quit_button)
+	assert_eq(quit_button.find_valid_focus_neighbor(SIDE_TOP), row)
 	assert_eq(diagnostics.find_valid_focus_neighbor(SIDE_BOTTOM), row)
 	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), diagnostics)
 	assert_eq(row.focus_mode, Control.FOCUS_ALL)
@@ -525,7 +532,7 @@ func test_buttons_with_a_fixed_gamepad_button_show_its_mark() -> void:
 		for mark in screen.find_child(row_name, true, false).find_children("*", "Control", true, false):
 			if mark.get("kind") != null and str(mark.get("kind")) != "":
 				kinds.append(str(mark.get("kind")))
-	assert_eq(kinds, ["A", "X", "SELECT", "L2", "R2"])
+	assert_eq(kinds, ["Y", "A", "X", "SELECT", "L2", "R2"])
 	screen.free()
 
 
@@ -636,7 +643,7 @@ func test_accepting_a_slot_opens_the_picker_with_the_cursor_on_its_pururin() -> 
 	assert_eq(tiles.size(), ids.size() + 1, "未選択のタイルと、全部の個体")
 	assert_eq(tiles[0].call("pururin_id"), RaceSession.EMPTY)
 	assert_eq((picker.find_child("Grid", true, false) as GridContainer).columns, PururinPicker.COLUMNS)
-	assert_eq(PururinPicker.COLUMNS, 4)
+	assert_eq(PururinPicker.COLUMNS, 3)
 	var focused := get_viewport().gui_get_focus_owner()
 	assert_eq(focused.call("pururin_id"), ids[2], "カーソルは、今入っているキャラ")
 	assert_eq(focused.call("state"), PururinTile.State.CURRENT)
@@ -839,6 +846,9 @@ func test_stat_bars_show_the_attribute_bonus_and_the_steps_that_cannot_be_used()
 			assert_eq(kind, "locked", str(segment))
 		else:
 			assert_eq(kind, "filled" if segment < 4 else "empty", str(segment))
+	# 水属性は通常バーと近い色なので、ボーナス段だけ濃い青にする。
+	var water_color := Color.from_string(str(config["attributes"]["water"]["color"]), Color.WHITE)
+	assert_ne(PururinDetail.bonus_bar_color("water", water_color), PururinDetail.COLOR_BAR)
 	# 個体の表示用の情報に、その属性のボーナスの能力が入る。
 	for id: String in RaceSession.roster_ids():
 		var pururin := PururinRosterConfig.pururin_by_id(id)

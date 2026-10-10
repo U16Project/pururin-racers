@@ -9,7 +9,7 @@ func test_shipped_roster_has_eight_cpu_capable_entries_with_valid_allocations() 
 	assert_true(result.has("data"))
 	assert_true(RosterConfig.validate(result.data).is_empty())
 	var roster: Array = result.data["roster"]
-	assert_eq(roster.size(), 8)
+	assert_eq(roster.size(), 10)
 	for pururin in roster:
 		assert_true(StatsMath.validate_allocation(pururin["allocation"]).is_empty())
 		assert_ne(str(pururin.get("trainer_profile_id", "")), "")

@@ -10,13 +10,20 @@ config_version=5
 
 [application]
 
-config/name="ぷるりんレーサーズ"
+config/name="PURURIN-RACERS"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/ぷるりんレーサーズ"
+config/custom_user_dir_name.linux="godot/app_userdata/ぷるりんレーサーズ"
+config/icon="res://assets/ui/pururin_app_icon.png"
+config/windows_native_icon="res://assets/ui/pururin_app_icon.ico"
 run/main_scene="res://scenes/logo.tscn"
 config/features=PackedStringArray("4.7")
 
 [autoload]
 
 PadInputOptions="*res://scripts/input/pad_input_options.gd"
+UIAudio="*res://scripts/ui_audio.gd"
+RaceAudio="*res://scripts/race_audio.gd"
 
 [display]
 

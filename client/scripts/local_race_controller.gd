@@ -24,10 +24,15 @@ const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
+const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
+const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 ## 結果の板を出すまでの待ち。最後の走者がゴールしてからの秒数と、ユーザーがゴールしてからの秒数（長いほうを待つ）。
 const RESULT_WAIT_AFTER_LAST_S := 2.0
 const RESULT_WAIT_AFTER_PLAYER_S := 5.0
+const FINAL_STRETCH_DISTANCE_M := 400.0
+## 先頭がゴールしてから、観客のざわめきが消えるまでの秒数。
+const FINAL_STRETCH_FADE_OUT_S := 10.0
 @onready var _track: Path3D = $TrackPath
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
@@ -59,12 +64,15 @@ var _results_pending: bool = false
 var _results_wait_remaining: float = 0.0
 ## ユーザーがゴールした時点の、操作盤の表示（ゴール後は、これを出し続ける）。
 var _finish_hud_state: Dictionary = {}
+var _result_retry_button: Button
 ## ゴールした走者の、ゴールした時点の心拍と体力（順位表の、その行に出し続ける）。走者 → {heart_bpm, fuel_ratio}。
 var _finish_standing_values: Dictionary = {}
 var _player: Node3D = null
 var _race_started: bool = false
 var _start_countdown_remaining: float = 0.0
 var _start_signal_remaining: float = 0.0
+var _final_stretch_ambience_started := false
+var _final_stretch_ambience_fading := false
 var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 var _race_route: Dictionary = {}
 var _launch_visual: MeshInstance3D
@@ -97,6 +105,10 @@ func _ready() -> void:
 	_pause_return_button.pressed.connect(_return_to_race_select)
 	_result_return_button.pressed.connect(_return_to_race_select)
 	_resume_button.pressed.connect(_set_paused.bind(false))
+	UIAudio.bind_button_sound(_pause_return_button, "back")
+	# 着順の板のボタンは、どちらも決定の音。
+	UIAudio.bind_button_sound(_result_return_button, "confirmation")
+	UIAudio.bind_button_sound(_resume_button, "back")
 	var course_result := M5CourseBuilder.load_layout_result()
 	if course_result.has("error"):
 		_hud_label.text = "コース設定を確認してください：" + str(course_result.error)
@@ -132,6 +144,7 @@ func _ready() -> void:
 	_place_markers()
 	_spawn_field()
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
+	RaceAudio.play_countdown_start()
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
 	_guide_label.text = "\n".join(PackedStringArray([
@@ -160,14 +173,17 @@ func _unhandled_input(event: InputEvent) -> void:
 	if RaceControllerInput.is_menu_pressed(event):
 		_set_paused(not _paused)
 		get_viewport().set_input_as_handled()
-	elif RaceControllerInput.is_cancel_pressed(event) and _paused:
+	elif (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)) and _paused:
+		UIAudio.play_back()
 		_set_paused(false)
 		get_viewport().set_input_as_handled()
 	elif not _paused and _race_started and _player != null and RaceControllerInput.is_dash_pressed(event):
-		_player.call("trigger_dash")
+		if bool(_player.call("trigger_dash")):
+			RaceAudio.play_dash()
 		get_viewport().set_input_as_handled()
 	elif not _paused and _race_started and _player != null and RaceControllerInput.is_boost_pressed(event):
-		_player.call("trigger_boost")
+		if bool(_player.call("trigger_boost")):
+			RaceAudio.play_boost()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_ESCAPE:
@@ -198,6 +214,8 @@ func _process(_delta: float) -> void:
 		# ランナーは前tickに確定したドラフト値を使って移動する。
 		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
 		_share_snapshots()
+		_update_final_stretch_audio()
+		_update_heartbeat_audio(_delta)
 		_update_goal_gate()
 		call_deferred("_finalize_draft_tick")
 		if not _race_over:
@@ -215,6 +233,41 @@ func _update_goal_gate() -> void:
 	for runner in _runners:
 		last_progress = minf(last_progress, float(runner.call("get_race_progress")))
 	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), last_progress))
+
+
+## 先頭走者が残り400mへ入ったら、ゴールに近づくほど観客のざわめきを大きくする。
+## 先頭がゴールしたあとは下げるだけなので、ここでは触らない。
+func _update_final_stretch_audio() -> void:
+	if _final_stretch_ambience_fading:
+		return
+	var leader_progress := 0.0
+	for runner in _runners:
+		leader_progress = maxf(leader_progress, float(runner.call("get_race_progress")))
+	var remaining := _race_distance_m - leader_progress
+	if remaining > FINAL_STRETCH_DISTANCE_M:
+		return
+	if not _final_stretch_ambience_started:
+		_final_stretch_ambience_started = true
+		RaceAudio.start_final_stretch_ambience()
+	RaceAudio.set_final_stretch_level(1.0 - remaining / FINAL_STRETCH_DISTANCE_M)
+
+
+## ユーザーのぷるりんの心拍に合わせて音を鳴らす。ゴールしたら止める。
+func _update_heartbeat_audio(delta: float) -> void:
+	if _player == null:
+		return
+	if bool(_player.call("is_finished")):
+		RaceAudio.stop_heartbeat()
+		return
+	RaceAudio.update_heartbeat(float(_player.call("get_heart_rate_bpm")), delta)
+
+
+## 先頭がゴールした瞬間から、ざわめきをじわじわ下げ始める。
+func _start_final_stretch_fade_out() -> void:
+	if _final_stretch_ambience_fading:
+		return
+	_final_stretch_ambience_fading = true
+	RaceAudio.fade_out_final_stretch_ambience(FINAL_STRETCH_FADE_OUT_S)
 
 
 func _update_start_countdown(delta: float) -> void:
@@ -282,7 +335,9 @@ func _spawn_field() -> void:
 	var field_size := entries.size()
 	for i in entries.size():
 		var entry: Dictionary = entries[i]
-		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"]))
+		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"])).duplicate(true)
+		pururin["trainer_profile_id"] = entry["trainer_profile_id"]
+		pururin["trainer_name"] = RaceSession.trainer_name_for(str(entry["id"]), bool(entry["player"]))
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
@@ -308,6 +363,10 @@ func _spawn_field() -> void:
 		_runners.append(runner)
 		if is_player:
 			_player = runner
+			# 自分のぷるりんの足元に、光る目印を付ける（集団の中でも、自分が分かるように）。
+			var marker := MeshInstance3D.new()
+			marker.set_script(PlayerGroundMarker)
+			runner.add_child(marker)
 			if _camera:
 				if _camera.has_method("set_follow_target"):
 					_camera.call("set_follow_target", runner)
@@ -451,9 +510,12 @@ func _check_finishes() -> void:
 	for crossing: Dictionary in crossings:
 		_finish_count += 1
 		crossing["runner"].call("mark_finished", _finish_count, float(crossing["time"]))
+		if _finish_count == 1:
+			_start_final_stretch_fade_out()
 		# 紙吹雪とスローは、ユーザーのぷるりんが1位でゴールしたときだけ出す。
 		if _finish_count == 1 and crossing["runner"] == _player:
 			_celebration.play(_track, _goal_marker.global_position, 15.0)
+			RaceAudio.play_player_first_cheer()
 	var all_done := true
 	for r in _runners:
 		if not r.call("is_finished"):
@@ -705,13 +767,15 @@ func _live_place(runner: Node3D) -> int:
 
 func _show_results() -> void:
 	_celebration.stop()
+	RaceAudio.stop_final_stretch_ambience()
+	RaceAudio.stop_heartbeat()
 	_telemetry_recorder.finalize(_race_elapsed, _runners)
 	# 結果の板を出しても、走者は止めない。
 	_race_over = true
 	_pause_panel.visible = false
 	_result_panel.visible = true
 	_result_board.call("set_rows", _result_rows())
-	_result_return_button.grab_focus()
+	_result_retry_button.grab_focus()
 
 
 ## 着順の表の中身。着順の順に、着順・名前・色・ユーザーかどうか・タイム。
@@ -770,8 +834,24 @@ func _build_result_board() -> void:
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(spacer)
 	box.move_child(spacer, _result_return_button.get_index())
-	MenuStyle.style_button(_result_return_button, 22)
+	# 一番下に、ボタンを2つ横に並べる：「もう1回 同条件で」と「レース選択へ戻る」。
+	var buttons := HBoxContainer.new()
+	buttons.name = "ResultButtons"
+	buttons.add_theme_constant_override("separation", 12)
+	box.add_child(buttons)
+	_result_retry_button = MenuStyle.button("もう1回 同条件で", 20)
+	_result_retry_button.name = "ResultRetryButton"
+	_result_retry_button.custom_minimum_size = Vector2(0.0, 56.0)
+	_result_retry_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_result_retry_button.pressed.connect(_retry_same_race)
+	UIAudio.bind_button_sound(_result_retry_button, "confirmation")
+	buttons.add_child(_result_retry_button)
+	_result_return_button.reparent(buttons)
+	MenuStyle.style_button(_result_return_button, 20, MenuStyle.COLOR_BUTTON_QUIET)
 	_result_return_button.custom_minimum_size = Vector2(0.0, 56.0)
+	_result_return_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_result_retry_button.focus_neighbor_right = _result_retry_button.get_path_to(_result_return_button)
+	_result_return_button.focus_neighbor_left = _result_return_button.get_path_to(_result_retry_button)
 
 
 func _set_paused(paused: bool) -> void:
@@ -789,6 +869,14 @@ func _set_paused(paused: bool) -> void:
 ## 場面を抜けるときは、必ず速さをふつうに戻す（スローの最中にメニューへ戻っても、残さない）。
 func _exit_tree() -> void:
 	_celebration.stop()
+	RaceAudio.stop_final_stretch_ambience()
+	RaceAudio.stop_heartbeat()
+
+
+## 同じ距離・同じ枠順・同じ顔ぶれで、もう1回走る（レース選択で決めた内容は、そのまま）。
+func _retry_same_race() -> void:
+	_celebration.stop()
+	get_tree().change_scene_to_file(LOCAL_RACE_SCENE)
 
 
 func _return_to_race_select() -> void:

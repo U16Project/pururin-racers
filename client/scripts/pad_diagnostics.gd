@@ -160,7 +160,10 @@ func _arm() -> void:
 	_result.text = "採取待ちです。" if record.arm() else "全操作を離して開始時の位置に戻してください。"
 
 func _confirm() -> void:
-	_result.text = "確定しました。操作を元に戻してください。" if record.confirm() else "先に指定の操作を採取してください。"
+	var confirmed := record.confirm()
+	if confirmed:
+		UIAudio.play_confirmation()
+	_result.text = "確定しました。操作を元に戻してください。" if confirmed else "先に指定の操作を採取してください。"
 
 func _skip() -> void:
 	record.skip()
@@ -182,6 +185,7 @@ func _save() -> void:
 	_result.text = "保存しました：\n%s" % ProjectSettings.globalize_path(path)
 
 func _back() -> void:
+	UIAudio.play_back()
 	get_tree().change_scene_to_file("res://scenes/title.tscn")
 
 func _exit_tree() -> void:

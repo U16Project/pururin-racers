@@ -7,9 +7,9 @@ const TRAINER_PROFILE_SCENE_PATH := "res://scenes/trainer_profile.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_screen_background.png"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 ## ボタンの下の余白と、ボタンの濃さ（1で不透明）。
-const BUTTON_BOTTOM_MARGIN := 76.0
-const BUTTON_HEIGHT := 64.0
-const BUTTON_GAP := 12.0
+const BUTTON_BOTTOM_MARGIN := 124.0
+const BUTTON_HEIGHT := 54.0
+const BUTTON_GAP := 8.0
 const BUTTON_OPACITY := 0.7
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
@@ -44,7 +44,7 @@ func _ready() -> void:
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
 	# ボタンは少し透けさせて、背景の絵が見えるようにする。
-	_free_race_button = MenuStyle.button("ゲーム開始", 28, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
+	_free_race_button = MenuStyle.button("ゲーム開始", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
 	_free_race_button.name = "FreeRaceButton"
 	_free_race_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_free_race_button.offset_left = -182.0
@@ -52,8 +52,9 @@ func _ready() -> void:
 	_free_race_button.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 3.0 - BUTTON_GAP * 2.0
 	_free_race_button.offset_bottom = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 2.0 - BUTTON_GAP * 2.0
 	_free_race_button.pressed.connect(go_to_race_select)
+	UIAudio.bind_button_sound(_free_race_button, "confirmation")
 	add_child(_free_race_button)
-	_camera_exploration_button = MenuStyle.button("カメラで探検", 28, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
+	_camera_exploration_button = MenuStyle.button("カメラで探検", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
 	_camera_exploration_button.name = "CameraExplorationButton"
 	_camera_exploration_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_camera_exploration_button.offset_left = -182.0
@@ -61,10 +62,11 @@ func _ready() -> void:
 	_camera_exploration_button.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 2.0 - BUTTON_GAP
 	_camera_exploration_button.offset_bottom = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT - BUTTON_GAP
 	_camera_exploration_button.pressed.connect(go_to_camera_exploration)
+	UIAudio.bind_button_sound(_camera_exploration_button, "confirmation")
 	add_child(_camera_exploration_button)
 	_free_race_button.focus_neighbor_bottom = _free_race_button.get_path_to(_camera_exploration_button)
 	_camera_exploration_button.focus_neighbor_top = _camera_exploration_button.get_path_to(_free_race_button)
-	var diagnostics := MenuStyle.button("ゲームパッド設定・入力確認", 18, MenuStyle.COLOR_BUTTON_QUIET)
+	var diagnostics := MenuStyle.button("ゲームパッド設定・入力確認", 16, MenuStyle.COLOR_BUTTON_QUIET)
 	_pad_diagnostics_button = diagnostics
 	diagnostics.name = "PadDiagnosticsButton"
 	diagnostics.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
@@ -73,10 +75,23 @@ func _ready() -> void:
 	diagnostics.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT
 	diagnostics.offset_bottom = -BUTTON_BOTTOM_MARGIN
 	diagnostics.pressed.connect(go_to_pad_diagnostics)
+	UIAudio.bind_button_sound(diagnostics, "confirmation")
 	add_child(diagnostics)
 	_camera_exploration_button.focus_neighbor_bottom = _camera_exploration_button.get_path_to(diagnostics)
 	diagnostics.focus_neighbor_top = diagnostics.get_path_to(_camera_exploration_button)
 	_build_screen_mode_selector()
+	var quit_button := MenuStyle.button("ゲームを終了", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
+	quit_button.name = "QuitButton"
+	quit_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	quit_button.offset_left = -182.0
+	quit_button.offset_right = 182.0
+	quit_button.offset_top = -78.0
+	quit_button.offset_bottom = -24.0
+	quit_button.pressed.connect(func(): get_tree().quit())
+	UIAudio.bind_button_sound(quit_button, "confirmation")
+	add_child(quit_button)
+	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(quit_button)
+	quit_button.focus_neighbor_top = quit_button.get_path_to(_screen_mode_row)
 	_free_race_button.grab_focus()
 
 
@@ -96,18 +111,18 @@ func _build_screen_mode_selector() -> void:
 	row.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	row.offset_left = -182.0
 	row.offset_right = 182.0
-	row.offset_top = -64.0
-	row.offset_bottom = -24.0
+	row.offset_top = -116.0
+	row.offset_bottom = -86.0
 	row.add_theme_constant_override("separation", 4)
 	add_child(row)
-	var caption := MenuStyle.label("ウィンドウサイズ", 16)
+	var caption := MenuStyle.label("ウィンドウサイズ", 14)
 	caption.name = "ModeCaption"
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	var previous := _screen_mode_button("◀", "PreviousModeButton", -1)
 	row.add_child(previous)
-	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 16)
+	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 14)
 	_screen_mode_label.name = "ModeLabel"
 	_screen_mode_label.custom_minimum_size.x = 140.0
 	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -123,10 +138,10 @@ func _build_screen_mode_selector() -> void:
 
 
 func _screen_mode_button(text: String, node_name: String, direction: int) -> Button:
-	var button := MenuStyle.button(text, 16, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
+	var button := MenuStyle.button(text, 14, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
 	button.name = node_name
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(36, 40)
+	button.custom_minimum_size = Vector2(36, 30)
 	# 通常のメニューボタンより薄い、画面最下部の操作行。
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
@@ -135,7 +150,11 @@ func _screen_mode_button(text: String, node_name: String, direction: int) -> But
 		style.content_margin_top = 3.0
 		style.content_margin_bottom = 3.0
 		button.add_theme_stylebox_override(state, style)
-	button.pressed.connect(_cycle_screen_mode.bind(direction))
+	button.pressed.connect(func() -> void:
+		var previous := _screen_mode_index
+		_cycle_screen_mode(direction)
+		if _screen_mode_index != previous:
+			UIAudio.play_arrow_click())
 	return button
 
 
@@ -148,7 +167,11 @@ func _screen_mode_gui_input(event: InputEvent) -> void:
 			continue
 		var down := event.is_action_pressed(action, true, true)
 		if down and not _screen_direction_down[action] and not event.is_echo():
+			var previous := _screen_mode_index
 			_cycle_screen_mode(-1 if action == "ui_left" else 1)
+			var sound_key := screen_mode_sound_key(event is InputEventJoypadButton or event is InputEventJoypadMotion, _screen_mode_index != previous)
+			if sound_key == "selection_cycle":
+				UIAudio.play_selection_cycle()
 		_screen_direction_down[action] = down
 		_screen_mode_row.accept_event()
 
@@ -173,6 +196,10 @@ static func screen_mode_index(mode: int) -> int:
 		return 2
 	var index := SCREEN_MODES.find(mode)
 	return maxi(index, 0)
+
+
+static func screen_mode_sound_key(is_gamepad: bool, changed: bool) -> String:
+	return "selection_cycle" if is_gamepad and changed else ""
 
 
 static func cycled_screen_mode(mode: int, direction: int) -> int:

@@ -3,7 +3,7 @@ extends Control
 ## 左右（キー・十字キー・スティック・◀▶のクリック）で中の個体を切り替える依頼、Xで未選択、Yで強制選択、
 ## SELECTで施錠・解錠、L2・R2で枠の移動、決定（A）でキャラの一覧を開く依頼を出す。何が入っているかは、画面側が set_* で渡す。
 
-signal cycle_requested(slot: int, direction: int)
+signal cycle_requested(slot: int, direction: int, source: String)
 signal slot_focused(slot: int)
 signal slot_unfocused(slot: int)
 signal clear_requested(slot: int)
@@ -12,6 +12,7 @@ signal lock_requested(slot: int)
 signal move_requested(slot: int, direction: int)
 ## 決定（A・Enter・クリック）。キャラの一覧の窓を開く依頼。
 signal pick_requested(slot: int)
+signal trainer_requested(slot: int)
 
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const Portrait := preload("res://scripts/menu/pururin_portrait.gd")
@@ -31,11 +32,13 @@ const CHEVRON_SCALE := 0.9
 const ARROW_WIDTH := 26.0
 const LOCK_WIDTH := 28.0
 const COLOR_USER := Color(0.45, 0.92, 1.0, 1.0)
+const COLOR_DEFAULT_TRAINER := Color(0.5, 1.0, 0.6, 1.0)
 const COLOR_LOCK := Color(1.0, 0.82, 0.3, 1.0)
 
 ## このスロットがある枠（0〜7）。
 var slot := 0
 var _tag_label: Control
+var _trainer_button: Button
 var _name_label: Control
 var _style_mark: Control
 var _style_id := ""
@@ -66,7 +69,17 @@ func setup(slot_index: int) -> void:
 	_tag_label.call("setup", 14)
 	_tag_label.custom_minimum_size = Vector2(TAG_WIDTH, ROW_HEIGHT - 6.0)
 	_tag_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(_tag_label)
+	_trainer_button = Button.new()
+	_trainer_button.name = "TrainerButton"
+	_trainer_button.flat = true
+	_trainer_button.tooltip_text = "CPUトレーナーを選ぶ（Y）"
+	_trainer_button.custom_minimum_size = Vector2(TAG_WIDTH, ROW_HEIGHT - 6.0)
+	_trainer_button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_trainer_button.pressed.connect(func() -> void: trainer_requested.emit(slot))
+	row.add_child(_trainer_button)
+	_trainer_button.add_child(_tag_label)
+	_tag_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_tag_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(_arrow("◀", -1))
 	_portrait = Portrait.new()
 	_portrait.custom_minimum_size = Vector2(ROW_HEIGHT - 6.0, ROW_HEIGHT - 6.0)
@@ -125,7 +138,7 @@ func _arrow(text: String, direction: int) -> Button:
 	button.add_theme_color_override("font_hover_color", MenuStyle.COLOR_TEXT)
 	button.pressed.connect(func() -> void:
 		grab_focus()
-		cycle_requested.emit(slot, direction))
+		cycle_requested.emit(slot, direction, "mouse"))
 	return button
 
 
@@ -138,15 +151,22 @@ func set_role(is_user: bool) -> void:
 
 ## トレーナー名の表示を、今の役（ユーザーかCPUか）とキャラに合わせる。
 func _refresh_trainer() -> void:
+	_trainer_button.disabled = _is_user or _taken or _locked
+	_trainer_button.focus_mode = Control.FOCUS_NONE if _trainer_button.disabled else Control.FOCUS_ALL
 	_tag_label.call("set_text", trainer_text())
-	_tag_label.call("set_color", COLOR_USER if _is_user else MenuStyle.COLOR_DIM)
+	_tag_label.call("set_color", trainer_color())
+
+func trainer_color() -> Color:
+	if _is_user:
+		return COLOR_USER
+	return COLOR_DEFAULT_TRAINER if not _taken and not _pururin_id.is_empty() and RaceSession.is_default_trainer(slot, RaceSession.slot_trainer_id(slot)) else MenuStyle.COLOR_DIM
 
 
 ## このスロットに出すトレーナー名。
 func trainer_text() -> String:
 	if _is_user:
 		return RaceSession.trainer_name_for(_pururin_id, true)
-	return CPU_TAG if _pururin_id.is_empty() or _taken else RaceSession.trainer_name_for(_pururin_id, false)
+	return CPU_TAG if _taken else str(RaceSession.trainer_for_slot(slot).get("name", CPU_TAG))
 
 
 func is_user() -> bool:
@@ -155,6 +175,7 @@ func is_user() -> bool:
 
 func set_locked(locked: bool) -> void:
 	_locked = locked
+	_refresh_trainer()
 	_lock_button.queue_redraw()
 	queue_redraw()
 
@@ -217,7 +238,7 @@ func _gui_input(event: InputEvent) -> void:
 	var direction := cycle_direction(event)
 	if direction != 0:
 		accept_event()
-		cycle_requested.emit(slot, direction)
+		cycle_requested.emit(slot, direction, cycle_source(event))
 		return
 	var move := RaceControllerInput.slot_move_direction(event)
 	if move != 0:
@@ -254,6 +275,15 @@ static func cycle_direction(event: InputEvent) -> int:
 			continue
 		return pair[1]
 	return 0
+
+
+## 左右変更の入力元。マウス矢印とゲームパッドを、画面側の音声判定で区別する。
+static func cycle_source(event: InputEvent) -> String:
+	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+		return "gamepad"
+	if event is InputEventMouseButton:
+		return "mouse"
+	return "keyboard"
 
 
 func _draw() -> void:

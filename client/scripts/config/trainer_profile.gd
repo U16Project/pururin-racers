@@ -41,11 +41,13 @@ static func validate_config(data: Variant) -> PackedStringArray:
 	if not data is Dictionary:
 		errors.append("trainer_profile: オブジェクトが必要です")
 		return errors
-	for key: String in ["name_min_length", "name_max_length", "icon_size_px"]:
+	for key: String in ["name_min_length", "name_max_length", "icon_size_px", "introduction_max_length"]:
 		if not (data.get(key) is float or data.get(key) is int) or float(data[key]) < 1.0:
 			errors.append("trainer_profile.%s: 1以上の数字が必要です" % key)
 	if errors.is_empty() and int(data["name_min_length"]) > int(data["name_max_length"]):
 		errors.append("trainer_profile.name_min_length: name_max_length 以下にしてください")
+	if not data.get("default_introduction") is String or (errors.is_empty() and str(data["default_introduction"]).length() > int(data["introduction_max_length"])):
+		errors.append("trainer_profile.default_introduction: 決まりの長さに収まる紹介文が必要です")
 	# 用意してある人の絵（仮）。髪型と、髪・肌・服の色で描く。
 	var avatars: Variant = data.get("avatars")
 	if not avatars is Array or avatars.is_empty():
@@ -87,7 +89,7 @@ static func use_paths(save: String, icon_file: String) -> void:
 static func reload_profile() -> void:
 	_loaded = true
 	_icon_texture = null
-	_data = {"name": str(config()["default_name"]), "icon": {"kind": "none", "id": ""}}
+	_data = {"name": str(config()["default_name"]), "introduction": str(config()["default_introduction"]), "icon": {"kind": "none", "id": ""}}
 	if not FileAccess.file_exists(_save_path):
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_save_path))
@@ -96,7 +98,13 @@ static func reload_profile() -> void:
 		last_error = "トレーナーの登録内容を読めません: %s" % _save_path
 		push_error(last_error)
 		return
-	_data = {"name": str(parsed["name"]), "icon": {"kind": str(parsed["icon"]["kind"]), "id": str(parsed["icon"].get("id", ""))}}
+	# 紹介文は、あとから足した項目。前の版で保存した内容には無いので、そのときは、最初の紹介文にする。
+	var saved_introduction: Variant = parsed.get("introduction", str(config()["default_introduction"]))
+	if not saved_introduction is String or not introduction_problem(saved_introduction).is_empty():
+		last_error = "トレーナーの登録内容を読めません: %s" % _save_path
+		push_error(last_error)
+		return
+	_data = {"name": str(parsed["name"]), "introduction": str(saved_introduction), "icon": {"kind": str(parsed["icon"]["kind"]), "id": str(parsed["icon"].get("id", ""))}}
 
 
 static func _ensure_loaded() -> void:
@@ -120,6 +128,35 @@ static func name_problem(text: String) -> String:
 		if trimmed.unicode_at(index) < 32:
 			return "名前に、改行などは使えません"
 	return ""
+
+
+## トレーナーの紹介文。
+static func introduction() -> String:
+	_ensure_loaded()
+	return str(_data["introduction"])
+
+
+## 紹介文として使えない理由（使えるなら空）。空でもよい。改行は、空白に直して数える。
+static func introduction_problem(text: String) -> String:
+	var limit := int(config()["introduction_max_length"])
+	if clean_introduction(text).length() > limit:
+		return "紹介文は %d 文字までにしてください" % limit
+	return ""
+
+
+## 紹介文の、前後の空白を取り、改行を空白に直したもの。
+static func clean_introduction(text: String) -> String:
+	return text.replace("\r", "").replace("\n", " ").strip_edges()
+
+
+## 紹介文を登録する。長すぎるなら、理由を返して、何も変えない。
+static func set_introduction(text: String) -> String:
+	_ensure_loaded()
+	var problem := introduction_problem(text)
+	if problem.is_empty():
+		_data["introduction"] = clean_introduction(text)
+		_save()
+	return problem
 
 
 ## 名前を登録する。使えない名前なら、理由を返して、何も変えない。

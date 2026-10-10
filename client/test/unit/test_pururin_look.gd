@@ -633,7 +633,7 @@ func test_runners_in_the_race_wear_the_body_of_their_own_look() -> void:
 	var race: Node = LocalRaceScene.instantiate()
 	add_child_autofree(race)
 	var runners: Array = race.call("get_runners_for_simulation")
-	assert_eq(runners.size(), RosterConfig.values()["roster"].size())
+	assert_eq(runners.size(), RaceSession.SLOT_COUNT)
 	for runner: Node3D in runners:
 		var id := str(runner.call("get_snapshot")["id"])
 		var look := LookConfig.look_for(id)
@@ -796,6 +796,7 @@ func test_every_pururin_wears_its_own_kind_of_mark() -> void:
 	for id: String in config["looks"]:
 		var marks: Array = config["looks"][id]["marks"]
 		assert_gt(marks.size(), 0, "%s に、マークがある" % id)
-		var kind := str(marks[0]["part"])
+		# 選択肢が増えても既存部品を再利用できる。種類・色・配置の組合せで識別する。
+		var kind := JSON.stringify(marks)
 		assert_false(seen.has(kind), "%s のマークは、ほかの個体と同じ種類" % id)
 		seen[kind] = true

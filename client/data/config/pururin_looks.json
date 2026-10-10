@@ -6,6 +6,8 @@
     "expressions": [ "normal", "joy", "relax", "first_place", "push_win", "anger", "sorrow", "push_lose" ]
   },
   "looks": {
+    "cpu-8": {"body":{"type":"builtin","shape":"dome","height":1.14,"base_height":0.2},"body_texture":null,"finish":"gloss","body_motion":{"set":"standard","amount":1,"speed":1},"primary_color_index":2,"secondary_color":"#EAF6FF","secondary_top_ratio":0.3,"outline_width":0.014,"top":{"part":"bubble_crown","params":{"size":0.12,"count":5,"spread":0.3,"seed":31,"color":"#CFE9FF"}},"sides":{"part":"fin_flipper","yaw_deg":78,"height_ratio":0.15,"params":{"length":0.3}},"tail":{"part":"bubble_tail","height_ratio":0.24,"params":{"size":0.09,"count":3,"seed":37,"color":"#CFE9FF"}},"face":{"eye_yaw_deg":24,"eye_height_ratio":0.43,"eye_size":[0.085,0.125],"eye_tilt_deg":5,"eye_lashes":1,"eye_colors":["#08144D","#2980FA"],"mouth_height_ratio":0.3,"cheek_yaw_deg":38,"cheek_height_ratio":0.3,"cheek_color":"#FF99B899","expressions":{"normal":{"eyes":"eyes_calm","mouth":"mouth_smile","cheeks":"cheek_blush"},"joy":{"eyes":"eyes_joy","mouth":"mouth_smile"},"anger":{"eyes":"eyes_anger","mouth":"mouth_flat"},"sorrow":{"eyes":"eyes_sorrow","mouth":"mouth_flat"},"relax":{"eyes":"eyes_relax","mouth":"mouth_omega"},"first_place":{"eyes":"eyes_round","mouth":"mouth_open","effect":"effect_sparkle"},"push_win":{"eyes":"eyes_effort","brows":"brow_angry","mouth":"mouth_flat"},"push_lose":{"eyes":"eyes_squeeze","mouth":"mouth_wavy","effect":"effect_sweat"}}},"marks":[{"part":"mark_drop","yaw_deg":0,"height_ratio":0.67,"size":0.14,"color":"#FFD8F0"},{"part":"mark_moon","yaw_deg":180,"height_ratio":0.6,"size":0.19,"color":"#FFD8F0"}]},
+    "cpu-9": {"body":{"type":"builtin","shape":"dome","height":0.96,"base_height":0.18},"body_texture":null,"finish":"sheer","body_motion":{"set":"standard","amount":1.2,"speed":1.1},"primary_color_index":3,"secondary_color":"#FFF2BF","secondary_top_ratio":0.2,"outline_width":0.014,"top":{"part":"bubble_crown","params":{"size":0.115,"count":5,"spread":0.28,"seed":53,"color":"#D6F0A8"}},"sides":{"part":"bubble_side","yaw_deg":84,"height_ratio":0.36,"params":{"size":0.085,"count":4,"seed":41,"color":"#D6F0A8"}},"tail":{"part":"bubble_tail","height_ratio":0.3,"params":{"size":0.08,"count":3,"seed":47,"color":"#D6F0A8"}},"face":{"eye_yaw_deg":21,"eye_height_ratio":0.44,"eye_size":[0.072,0.115],"eye_tilt_deg":-4,"eye_lashes":1,"eye_colors":["#0E3D1C","#58D97A"],"mouth_height_ratio":0.31,"cheek_yaw_deg":36,"cheek_height_ratio":0.31,"cheek_color":"#FF99B899","expressions":{"normal":{"eyes":"eyes_round","mouth":"mouth_omega","cheeks":"cheek_blush"},"joy":{"eyes":"eyes_joy","mouth":"mouth_open"},"anger":{"eyes":"eyes_anger","mouth":"mouth_frown"},"sorrow":{"eyes":"eyes_sorrow","mouth":"mouth_wavy"},"relax":{"eyes":"eyes_relax","mouth":"mouth_omega"},"first_place":{"eyes":"eyes_sparkle","mouth":"mouth_open","effect":"effect_sparkle"},"push_win":{"eyes":"eyes_effort","brows":"brow_angry","mouth":"mouth_grit"},"push_lose":{"eyes":"eyes_squeeze","mouth":"mouth_wavy","effect":"effect_sweat"}}},"marks":[{"part":"mark_flower","yaw_deg":0,"height_ratio":0.72,"size":0.12,"color":"#FFF2BF"},{"part":"mark_star","yaw_deg":180,"height_ratio":0.57,"size":0.22,"color":"#FFF2BF"}]},
     "player-1": {
       "body": { "type": "builtin", "shape": "dome", "height": 1.04, "base_height": 0.18 },
       "body_texture": null,
@@ -41,8 +43,8 @@
         }
       },
       "marks": [
-        { "part": "mark_star", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.13, "color": "#FFE14D" },
-        { "part": "mark_star", "yaw_deg": 180.0, "height_ratio": 0.6, "size": 0.2, "color": "#FFE14D" }
+        { "part": "mark_star", "yaw_deg": 0, "height_ratio": 0.66, "size": 0.17, "color": "#FFE14D" },
+        { "part": "mark_star", "yaw_deg": 180, "height_ratio": 0.58, "size": 0.22, "color": "#FFE14D" }
       ]
     },
     "cpu-1": {
@@ -80,8 +82,8 @@
         }
       },
       "marks": [
-        { "part": "mark_bolt", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.14, "color": "#FFE14D" },
-        { "part": "mark_bolt", "yaw_deg": 180.0, "height_ratio": 0.6, "size": 0.22, "color": "#FFE14D" }
+        { "part": "mark_bolt", "yaw_deg": 0, "height_ratio": 0.63, "size": 0.22, "color": "#FFE14D" },
+        { "part": "mark_bolt", "yaw_deg": 180, "height_ratio": 0.6, "size": 0.16, "color": "#FFE14D" }
       ]
     },
     "cpu-2": {
@@ -119,8 +121,8 @@
         }
       },
       "marks": [
-        { "part": "mark_heart", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.12, "color": "#FF8FB8" },
-        { "part": "mark_heart", "yaw_deg": 180.0, "height_ratio": 0.6, "size": 0.19, "color": "#FF8FB8" }
+        { "part": "mark_heart", "yaw_deg": 0, "height_ratio": 0.69, "size": 0.11, "color": "#FF8FB8" },
+        { "part": "mark_heart", "yaw_deg": 180, "height_ratio": 0.55, "size": 0.24, "color": "#FF8FB8" }
       ]
     },
     "cpu-3": {
@@ -158,8 +160,8 @@
         }
       },
       "marks": [
-        { "part": "mark_moon", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.12, "color": "#FFF3B0" },
-        { "part": "mark_moon", "yaw_deg": 180.0, "height_ratio": 0.64, "size": 0.19, "color": "#FFF3B0" }
+        { "part": "mark_moon", "yaw_deg": 34, "height_ratio": 0.52, "size": 0.15, "color": "#FFF3B0" },
+        { "part": "mark_moon", "yaw_deg": 180, "height_ratio": 0.66, "size": 0.18, "color": "#FFF3B0" }
       ]
     },
     "cpu-4": {
@@ -171,7 +173,7 @@
       "secondary_color": "#FFFFFF",
       "secondary_top_ratio": 0.0,
       "outline_width": 0.014,
-      "top": { "part": "leaf_sprout", "params": { "length": 0.4, "width": 0.12, "spread_deg": 52.0 } },
+      "top": { "part": "halo_ring", "params": { "radius": 0.19, "thickness": 0.022, "height": 0.22, "tilt_deg": 14.0, "color": "#D8F0B4" } },
       "sides": { "part": "leaf_wing", "yaw_deg": 88.0, "height_ratio": 0.42, "params": { "length": 0.5, "feathers": 2, "sweep_deg": 34.0 } },
       "tail": { "part": "leaf_tail", "height_ratio": 0.3, "params": {} },
       "face": {
@@ -197,8 +199,8 @@
         }
       },
       "marks": [
-        { "part": "mark_swirl", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.13, "color": "#FFFFFF" },
-        { "part": "mark_swirl", "yaw_deg": 180.0, "height_ratio": 0.62, "size": 0.2, "color": "#FFFFFF" }
+        { "part": "mark_swirl", "yaw_deg": 0, "height_ratio": 0.84, "size": 0.19, "color": "#FFFFFF" },
+        { "part": "mark_swirl", "yaw_deg": 180, "height_ratio": 0.56, "size": 0.14, "color": "#FFFFFF" }
       ]
     },
     "cpu-5": {
@@ -210,7 +212,7 @@
       "secondary_color": "#FFE9B8",
       "secondary_top_ratio": 0.25,
       "outline_width": 0.014,
-      "top": { "part": "flame_crest", "params": { "length": 0.36, "width": 0.13, "lean": -0.1, "side_scale": 0.0 } },
+      "top": { "part": "horn_pair", "params": { "length": 0.3, "width": 0.07, "spread_deg": 26.0, "curve": 0.12, "color": "#F2C98A" } },
       "sides": { "part": "flame_fin", "yaw_deg": 80.0, "height_ratio": 0.26, "params": { "length": 0.26, "width": 0.085 } },
       "tail": { "part": "flame_tail", "height_ratio": 0.28, "params": { "length": 0.24 } },
       "face": {
@@ -236,8 +238,8 @@
         }
       },
       "marks": [
-        { "part": "mark_flower", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.12, "color": "#FFFFFF" },
-        { "part": "mark_flower", "yaw_deg": 180.0, "height_ratio": 0.64, "size": 0.19, "color": "#FFFFFF" }
+        { "part": "mark_flower", "yaw_deg": 20, "height_ratio": 0.7, "size": 0.13, "color": "#FFFFFF" },
+        { "part": "mark_flower", "yaw_deg": 180, "height_ratio": 0.62, "size": 0.2, "color": "#FFFFFF" }
       ]
     },
     "cpu-6": {
@@ -249,9 +251,9 @@
       "secondary_color": "#FFFFFF",
       "secondary_top_ratio": 0.0,
       "outline_width": 0.014,
-      "top": { "part": "nub_drop", "params": { "height": 0.44, "lean": -0.26 } },
-      "sides": { "part": "fin_flipper", "yaw_deg": 78.0, "height_ratio": 0.15, "params": { "length": 0.3 } },
-      "tail": { "part": "tail_flipper", "height_ratio": 0.2, "params": {} },
+      "top": { "part": "bubble_crown", "params": { "size": 0.15, "count": 4, "spread": 0.26, "seed": 5 } },
+      "sides": { "part": "bubble_side", "yaw_deg": 78.0, "height_ratio": 0.2, "params": { "size": 0.11, "count": 3, "seed": 9 } },
+      "tail": { "part": "bubble_tail", "height_ratio": 0.26, "params": { "size": 0.1, "count": 4, "seed": 17 } },
       "face": {
         "eye_yaw_deg": 24.0,
         "eye_height_ratio": 0.43,
@@ -275,8 +277,8 @@
         }
       },
       "marks": [
-        { "part": "mark_drop", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.13, "color": "#EAF6FF" },
-        { "part": "mark_drop", "yaw_deg": 180.0, "height_ratio": 0.62, "size": 0.2, "color": "#EAF6FF" }
+        { "part": "mark_drop", "yaw_deg": 0, "height_ratio": 0.71, "size": 0.1, "color": "#EAF6FF" },
+        { "part": "mark_drop", "yaw_deg": 180, "height_ratio": 0.58, "size": 0.26, "color": "#EAF6FF" }
       ]
     },
     "cpu-7": {
@@ -288,9 +290,9 @@
       "secondary_color": "#FFFFFF",
       "secondary_top_ratio": 0.0,
       "outline_width": 0.014,
-      "top": { "part": "rock_crown", "params": { "size": 0.27, "count": 2, "spread": 0.26, "seed": 8, "color": "#8E8A84" } },
-      "sides": { "part": "rock_side", "yaw_deg": 86.0, "height_ratio": 0.4, "params": { "size": 0.2, "seed": 21, "color": "#8E8A84" } },
-      "tail": { "part": "rock_tail", "height_ratio": 0.36, "params": { "size": 0.15, "seed": 14, "color": "#8E8A84" } },
+      "top": { "part": "crystal_crown", "params": { "length": 0.32, "width": 0.065, "count": 3, "spread": 0.2, "seed": 8, "color": "#D9B271" } },
+      "sides": { "part": "crystal_side", "yaw_deg": 86.0, "height_ratio": 0.4, "params": { "length": 0.22, "width": 0.05, "tilt_deg": 18.0, "seed": 21, "color": "#D9B271" } },
+      "tail": { "part": "crystal_tail", "height_ratio": 0.36, "params": { "length": 0.2, "width": 0.05, "tilt_deg": 10.0, "seed": 14, "color": "#D9B271" } },
       "face": {
         "eye_yaw_deg": 18.0,
         "eye_height_ratio": 0.46,
@@ -314,8 +316,8 @@
         }
       },
       "marks": [
-        { "part": "mark_diamond", "yaw_deg": 40.0, "height_ratio": 0.76, "size": 0.13, "color": "#F2EEE6" },
-        { "part": "mark_diamond", "yaw_deg": 180.0, "height_ratio": 0.64, "size": 0.2, "color": "#F2EEE6" }
+        { "part": "mark_diamond", "yaw_deg": 0, "height_ratio": 0.61, "size": 0.24, "color": "#F2EEE6" },
+        { "part": "mark_diamond", "yaw_deg": 180, "height_ratio": 0.68, "size": 0.13, "color": "#F2EEE6" }
       ]
     }
   }

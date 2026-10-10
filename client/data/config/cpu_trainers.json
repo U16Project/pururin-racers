@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "trainers": [
+    {
+      "id": "yuu",
+      "name": "ユウ",
+      "profile_id": "balanced",
+      "portrait_path": "res://assets/ui/cpu_trainers/yuu_v01.png",
+      "favorite_running_style": "pace",
+      "introduction": "相棒の呼吸と足音に、じっと耳をすます若きトレーナー。口ぐせは「あわてない、あわてない」。勝負どころを見きわめる目は、同期でいちばんと評判だ。"
+    },
+    {
+      "id": "homura",
+      "name": "ホムラ",
+      "profile_id": "front",
+      "portrait_path": "res://assets/ui/cpu_trainers/homura_v01.png",
+      "favorite_running_style": "escape",
+      "introduction": "スタートの合図と同時に、声が枯れるまで叫ぶ熱血漢。「前にだれもいない景色を見せてやる！」が合言葉。先頭を走る姿に、だれよりも胸を熱くする。"
+    },
+    {
+      "id": "shizuku",
+      "name": "シズク",
+      "profile_id": "balanced",
+      "portrait_path": "res://assets/ui/cpu_trainers/shizuku_v01.png",
+      "favorite_running_style": "pace",
+      "introduction": "雨上がりの水たまりで、ぷるりんと出会ったのが始まり。集団の流れを読むのが得意で、ささやくような指示なのに、相棒にはなぜかよく届く。"
+    },
+    {
+      "id": "daichi",
+      "name": "ダイチ",
+      "profile_id": "draft",
+      "portrait_path": "res://assets/ui/cpu_trainers/daichi_v01.png",
+      "favorite_running_style": "stalk",
+      "introduction": "畑仕事できたえた足腰と、どっしりかまえた心の持ち主。前の背中に隠れて力をため、「実りは最後に刈り取るもんだ」と笑って待つ。"
+    },
+    {
+      "id": "hayate",
+      "name": "ハヤテ",
+      "profile_id": "late",
+      "portrait_path": "res://assets/ui/cpu_trainers/hayate_v01.png",
+      "favorite_running_style": "closer",
+      "introduction": "丘の上で風を読むのが日課の、気まぐれな作戦家。序盤は後ろでのんびり、最後の直線で景色を全部ぬりかえる。その一瞬が、たまらなく好き。"
+    },
+    {
+      "id": "akari",
+      "name": "アカリ",
+      "profile_id": "balanced",
+      "portrait_path": "res://assets/ui/cpu_trainers/akari_v01.png",
+      "favorite_running_style": "pace",
+      "introduction": "商店街の人気者で、応援の声はコースの端まで届く。無理はさせない、でもあきらめもしない。ゴールのあとは、勝っても負けても、まず抱きしめる。"
+    },
+    {
+      "id": "minato",
+      "name": "ミナト",
+      "profile_id": "draft",
+      "portrait_path": "res://assets/ui/cpu_trainers/minato_v01.png",
+      "favorite_running_style": "stalk",
+      "introduction": "港町育ちで、潮の流れを読むように集団を見る。あせらず、さわがず、すき間が空くその時を待つ。静かな指示の裏に、負けずぎらいを隠している。"
+    },
+    {
+      "id": "gantetsu",
+      "name": "ガンテツ",
+      "profile_id": "front",
+      "portrait_path": "res://assets/ui/cpu_trainers/gantetsu_v01.png",
+      "favorite_running_style": "escape",
+      "introduction": "岩のような体格と、山びこのような大声。小細工はきらいで、作戦はいつも「前へ」。だれよりも早起きして、相棒とコースの土を確かめている。"
+    },
+    {
+      "id": "hinata",
+      "name": "ヒナタ",
+      "profile_id": "balanced",
+      "portrait_path": "res://assets/ui/cpu_trainers/hinata_v01.png",
+      "favorite_running_style": "pace",
+      "introduction": "日だまりのような笑顔で、どんなぷるりんともすぐ仲良くなる。勝ち負けより、気持ちよく走れたかを大事にする。なのに、気づけば上位にいる。"
+    },
+    {
+      "id": "kaede",
+      "name": "カエデ",
+      "profile_id": "draft",
+      "portrait_path": "res://assets/ui/cpu_trainers/kaede_v01.png",
+      "favorite_running_style": "stalk",
+      "introduction": "手帳にびっしり、ライバルのくせを書きこむ研究家。集団の中こそ特等席、と信じている。秋の紅葉のように、終盤にじわりと色を変えてくる。"
+    },
+    {
+      "id": "ren",
+      "name": "レン",
+      "profile_id": "front",
+      "portrait_path": "res://assets/ui/cpu_trainers/ren_v01.png",
+      "favorite_running_style": "escape",
+      "introduction": "迷ったら前へ、がモットーの切りこみ隊長。思い切りのよい指示で、相棒の背中を押す。負けたレースのあとほど、次の作戦を楽しそうに語る。"
+    },
+    {
+      "id": "ibuki",
+      "name": "イブキ",
+      "profile_id": "late",
+      "portrait_path": "res://assets/ui/cpu_trainers/ibuki_v01.png",
+      "favorite_running_style": "closer",
+      "introduction": "多くを語らず、じっと展開を見つめる。動くのは、みんなが苦しくなった最後だけ。ひと息で流れを変える差し脚に、観客席がどよめく。"
+    },
+    {
+      "id": "tsubaki",
+      "name": "ツバキ",
+      "profile_id": "balanced",
+      "portrait_path": "res://assets/ui/cpu_trainers/tsubaki_v01.png",
+      "favorite_running_style": "pace",
+      "introduction": "道場の師範代でもある、きっちりした性格。指示は一つずつ、短く、正確に。乱れた流れを立て直すのがうまく、相棒はいつも落ち着いて走る。"
+    }
+  ]
+}

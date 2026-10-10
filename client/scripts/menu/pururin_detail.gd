@@ -44,6 +44,8 @@ const BAR_TOP := 24.0
 const BAR_BOTTOM_MARGIN := 22.0
 const BAR_SEGMENT_GAP := 2.0
 const COLOR_BAR := Color(0.36, 0.72, 1.0, 1.0)
+## 水属性は通常バーの水色と近いため、ボーナス段だけ濃い青にして見分ける。
+const COLOR_BAR_BONUS_WATER := Color(0.05, 0.42, 0.95, 1.0)
 const COLOR_BAR_TRACK := Color(1.0, 1.0, 1.0, 0.16)
 ## 配分できない段（属性のボーナスが無い能力の、配分の上限より上）の色と、斜めの線の色。
 const COLOR_BAR_LOCKED := Color(0.0, 0.0, 0.0, 0.42)
@@ -216,6 +218,10 @@ static func bar_filled_segments(value: int) -> int:
 	return clampi(value, 0, bar_segment_count())
 
 
+static func bonus_bar_color(attribute_id: String, attribute_color: Color) -> Color:
+	return COLOR_BAR_BONUS_WATER if attribute_id == "water" else attribute_color
+
+
 ## 表示する個体を変える。空のIDなら「未選択」。
 ## taken_by に、使っているスロットの名前（例「5枠」）を渡すと、「選択済み」の帯と強制選択のボタンを出す。
 ## holder_locked が true（使っているスロットが施錠中）なら、強制選択は押せない。
@@ -338,6 +344,7 @@ func _draw_bars() -> void:
 	var stats: Dictionary = _preview["pre_race_stats"]
 	var stat_ids: Array = PururinStatsConfig.values()["stat_ids"]
 	var bonus_stats: Array = _preview["bonus_stats"]
+	var bonus_color := bonus_bar_color(str(_preview["attribute_id"]), _preview["attribute_color"])
 	var column_width := _bars.size.x / float(stat_ids.size())
 	var bar_height := maxf(_bars.size.y - BAR_TOP - BAR_BOTTOM_MARGIN, 0.0)
 	var segments := bar_segment_count()
@@ -356,7 +363,7 @@ func _draw_bars() -> void:
 			var rect := Rect2(Vector2(center_x - BAR_WIDTH * 0.5, top), Vector2(BAR_WIDTH, segment_height))
 			match bar_segment_kind(stat_id in bonus_stats, filled, segment):
 				"bonus":
-					_bars.draw_rect(rect, _preview["attribute_color"])
+					_bars.draw_rect(rect, bonus_color)
 				"filled":
 					_bars.draw_rect(rect, COLOR_BAR)
 				"locked":

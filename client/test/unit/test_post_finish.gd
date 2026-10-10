@@ -5,6 +5,8 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const LocalRaceController := preload("res://scripts/local_race_controller.gd")
+const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 
 
 func _start() -> float:
@@ -185,4 +187,90 @@ func test_a_finished_row_in_the_standings_keeps_its_heart_and_stamina_from_the_g
 			assert_almost_eq(float(row["fuel_ratio"]), fuel_at_goal, 0.0001)
 		if str(row["name"]) == str(racing.get("display_name")):
 			assert_almost_eq(float(row["heart_bpm"]), 190.0, 0.0001)
+
+
+
+func test_the_result_board_offers_retry_and_return_and_both_sound_like_a_decision() -> void:
+	var race := _race()
+	var retry := race.find_child("ResultRetryButton", true, false) as Button
+	var back := race.find_child("ResultReturnButton", true, false) as Button
+	assert_eq(retry.text, "もう1回 同条件で")
+	assert_eq(back.text, "レース選択へ戻る")
+	# 2つは横に並び、左右で行き来できる。
+	assert_eq(retry.get_parent(), back.get_parent())
+	assert_lt(retry.get_index(), back.get_index())
+	assert_eq(retry.get_node(retry.focus_neighbor_right), back)
+	assert_eq(back.get_node(back.focus_neighbor_left), retry)
+	# もう1回は、同じレースの場面を開き直す（レース選択で決めた内容は変えない）。
+	assert_eq(LocalRaceController.LOCAL_RACE_SCENE, "res://scenes/local_race.tscn")
+	var before := RaceSession.slots_snapshot()
+	assert_eq(RaceSession.slots_snapshot(), before)
+	# どちらのボタンも、決定の音（戻るの音ではない）。
+	var source := FileAccess.get_file_as_string("res://scripts/local_race_controller.gd")
+	assert_true(source.contains('bind_button_sound(_result_return_button, "confirmation")'))
+	assert_true(source.contains('bind_button_sound(_result_retry_button, "confirmation")'))
+
+
+func test_only_the_players_pururin_has_a_ground_marker_under_it() -> void:
+	var race := _race()
+	var player: Node3D = race.get("_player")
+	for runner: Node3D in race.call("get_runners_for_simulation"):
+		var marker := runner.get_node_or_null("PlayerGroundMarker") as MeshInstance3D
+		if runner == player:
+			assert_not_null(marker)
+			# 足元の、地面のすぐ上。体（半径0.75m）より外に、輪がある。体の中の節ではないので、一人称でも消えない。
+			assert_almost_eq(marker.position.y, PlayerGroundMarker.HEIGHT_M, 0.0001)
+			assert_gt(PlayerGroundMarker.RING_INNER_M, 0.75)
+			var bounds := marker.mesh.get_aabb()
+			assert_almost_eq(bounds.size.y, 0.0, 0.0001, "平ら")
+			assert_almost_eq(bounds.end.x, PlayerGroundMarker.RING_OUTER_M, 0.001)
+			assert_eq(marker.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+		else:
+			assert_null(marker)
+	# 明るさは、決めた範囲の中で脈を打つ。
+	for step in 20:
+		var alpha := PlayerGroundMarker.alpha_at(float(step) * 0.1)
+		assert_between(alpha, PlayerGroundMarker.ALPHA_MIN, PlayerGroundMarker.ALPHA_MAX)
+
+
+func test_the_ground_marker_shows_notch_heart_and_stamina() -> void:
+	var race := _race()
+	var player: Node3D = race.get("_player")
+	var marker := player.get_node("PlayerGroundMarker") as MeshInstance3D
+	var arrows := marker.get_node(PlayerGroundMarker.ARROWS_NAME) as MeshInstance3D
+	var heart_min := LocalRaceMath.Config.number("heart_rate_min_bpm")
+	var heart_max := LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
+	var heart_state := {"heart_min_bpm": heart_min, "heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"), "heart_max_bpm": heart_max}
+	# 矢じりの数は、ノッチの数。ノッチ0では、出さない。
+	for notch in int(LocalRaceMath.DRIVE_LEVEL_MAX) + 1:
+		marker.call("show_state", notch, heart_min, 1.0, 0.0)
+		assert_eq(PlayerGroundMarker.arrow_count_for(notch), notch)
+		if notch == 0:
+			assert_null(arrows.mesh)
+		else:
+			assert_eq(arrows.mesh.get_faces().size(), notch * 3, "ノッチ %d" % notch)
+	assert_eq(PlayerGroundMarker.arrow_count_for(-2), 0, "ブレーキ側のノッチでは、出さない")
+	# 回る速さは、心拍が高いほど速い（下限と上限の間）。
+	assert_almost_eq(PlayerGroundMarker.turn_speed_for(heart_min, heart_min, heart_max), PlayerGroundMarker.TURN_MIN_DEG_PER_S, 0.0001)
+	assert_almost_eq(PlayerGroundMarker.turn_speed_for(heart_max + 50.0, heart_min, heart_max), PlayerGroundMarker.TURN_MAX_DEG_PER_S, 0.0001)
+	assert_gt(PlayerGroundMarker.turn_speed_for(180.0, heart_min, heart_max), PlayerGroundMarker.turn_speed_for(120.0, heart_min, heart_max))
+	# 色：輪は体力の色、矢じりは心拍の色（操作盤と同じ色に、少し白を混ぜたもの）。最初の1回は、そのままの色で出る。
+	var fresh: MeshInstance3D = MeshInstance3D.new()
+	fresh.set_script(PlayerGroundMarker)
+	add_child_autofree(fresh)
+	heart_state["heart_bpm"] = heart_max
+	fresh.call("show_state", 3, heart_max, 0.2, 0.0)
+	var ring_color := (fresh.material_override as StandardMaterial3D).albedo_color
+	var arrow_color := ((fresh.get_node(PlayerGroundMarker.ARROWS_NAME) as MeshInstance3D).material_override as StandardMaterial3D).albedo_color
+	var expected_ring := PlayerGroundMarker.soft_color(RaceHud.fuel_color(0.2))
+	var expected_arrow := PlayerGroundMarker.soft_color(RaceHud.heart_color(heart_state))
+	assert_almost_eq(ring_color.r, expected_ring.r, 0.001)
+	assert_almost_eq(ring_color.g, expected_ring.g, 0.001)
+	assert_almost_eq(arrow_color.r, expected_arrow.r, 0.001)
+	assert_almost_eq(arrow_color.b, expected_arrow.b, 0.001)
+	# そのあとは、色を急に変えない（なめらかに近づける）。
+	fresh.call("show_state", 3, heart_max, 1.0, 1.0 / 60.0)
+	var next_ring := (fresh.material_override as StandardMaterial3D).albedo_color
+	var target_ring := PlayerGroundMarker.soft_color(RaceHud.fuel_color(1.0))
+	assert_gt(absf(next_ring.r - target_ring.r) + absf(next_ring.g - target_ring.g) + absf(next_ring.b - target_ring.b), 0.01)
 

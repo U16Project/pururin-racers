@@ -3,6 +3,8 @@
   "default_name": "トレーナー",
   "name_min_length": 2,
   "name_max_length": 12,
+  "default_introduction": "ぷるりんと走りはじめたばかりの、新人トレーナー。",
+  "introduction_max_length": 70,
   "icon_size_px": 256,
   "avatars": [
     {"id": "avatar-1", "body": "male", "hair_style": "short", "hair_color": "#3B2A20", "skin_color": "#F6D3B4", "shirt_color": "#3F7FD9"},
