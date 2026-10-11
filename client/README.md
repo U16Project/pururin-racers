@@ -158,7 +158,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
 
 ## フォント
 
-- 日本語 UI 用に `fonts/NotoSansCJK-Regular.ttc`（Noto Sans CJK / SIL OFL）を同梱。詳細は [`fonts/README.md`](fonts/README.md)
+- 日本語 UI 用に `fonts/NotoSansJP-Regular.otf`（Noto Sans JP / SIL OFL）を同梱。詳細は [`fonts/README.md`](fonts/README.md)
 
 ## プロジェクト配置
 

@@ -2,7 +2,7 @@ extends GutTest
 
 const UIAudio := preload("res://scripts/ui_audio.gd")
 const RaceSelect := preload("res://scripts/race_select.gd")
-const Title := preload("res://scripts/title.gd")
+const TrainerProfileScreen := preload("res://scripts/trainer_profile_screen.gd")
 const Runner := preload("res://scripts/runner_local_race.gd")
 
 
@@ -50,9 +50,9 @@ func test_change_sounds_require_the_right_input_and_an_actual_change() -> void:
 	assert_eq(RaceSelect.cycle_sound_key("mouse", true), "arrow_click")
 	assert_eq(RaceSelect.cycle_sound_key("keyboard", true), "")
 	assert_eq(RaceSelect.cycle_sound_key("gamepad", false), "")
-	assert_eq(Title.screen_mode_sound_key(true, true), "selection_cycle")
-	assert_eq(Title.screen_mode_sound_key(false, true), "")
-	assert_eq(Title.screen_mode_sound_key(true, false), "")
+	assert_eq(TrainerProfileScreen.screen_mode_sound_key(true, true), "selection_cycle")
+	assert_eq(TrainerProfileScreen.screen_mode_sound_key(false, true), "")
+	assert_eq(TrainerProfileScreen.screen_mode_sound_key(true, false), "")
 	assert_eq(Runner.notch_sound_key(2.0, 3.0), "notch_up")
 	assert_eq(Runner.notch_sound_key(3.0, 2.0), "notch_down")
 	assert_eq(Runner.notch_sound_key(3.0, 3.0), "")

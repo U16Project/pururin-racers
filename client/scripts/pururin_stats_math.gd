@@ -50,6 +50,12 @@ static func pre_race_stats(attribute_id: String, allocation: Dictionary) -> Dict
 	return result
 
 
+## レースの進み具合（0〜1）が、何番目の区間か（0から）。
+static func phase_index(progress_ratio: float) -> int:
+	var phase_count := int(Config.values()["race_phase_count"])
+	return mini(int(floor(clampf(progress_ratio, 0.0, 0.999999) * phase_count)), phase_count - 1)
+
+
 static func effective_stats(attribute_id: String, allocation: Dictionary, style_id: String, live_rank: int, progress_ratio: float, field_size: int = rank_reference_size()) -> Dictionary:
 	var styles: Dictionary = Config.values()["running_styles"]
 	assert(styles.has(style_id), "未知の脚質です: %s" % style_id)
@@ -58,8 +64,7 @@ static func effective_stats(attribute_id: String, allocation: Dictionary, style_
 	var position_bonus := rank_bonus(style_id, live_rank, field_size)
 	for stat_id in result:
 		result[stat_id] = int(result[stat_id]) + position_bonus
-	var phase_index := mini(int(floor(clampf(progress_ratio, 0.0, 0.999999) * int(Config.values()["race_phase_count"]))), int(Config.values()["race_phase_count"]) - 1)
-	if phase_index == int(style["phase_index"]):
+	if phase_index(progress_ratio) == int(style["phase_index"]):
 		var phase_bonus: Dictionary = style["phase_bonus"]
 		result[phase_bonus["stat"]] = int(result[phase_bonus["stat"]]) + int(phase_bonus["amount"])
 	for stat_id in result:

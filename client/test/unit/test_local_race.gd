@@ -8,6 +8,7 @@ const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const LocalRaceCameraScript := preload("res://scripts/local_race_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
+const LocalRaceController := preload("res://scripts/local_race_controller.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
@@ -117,6 +118,7 @@ func test_local_race_scene_applies_shared_course_before_the_field_starts() -> vo
 func test_start_countdown_config_uses_default_notch_four_and_faster_cpu_launch() -> void:
 	var config := LocalRaceMath.Config.values()
 	assert_eq(config["start_countdown_seconds"], 3.0)
+	assert_eq(config["race_entry_wait_seconds"], 5.0)
 	assert_eq(config["player_start_drive_level"], 4.0)
 	assert_eq(config["cpu_start_drive_level"], 5.0)
 	assert_eq(config["cpu_start_drive_duration_seconds"], 1.0)
@@ -129,6 +131,7 @@ func test_countdown_keeps_runners_still_then_starts_everyone_together() -> void:
 	var player: Node = race.get_node("Runners/Runner1")
 	var cpu: Node = race.get_node("Runners/Runner2")
 	var start_distance: float = player.call("get_distance")
+	race.call("_begin_start_countdown")
 	race.call("_update_start_countdown", 2.9)
 	assert_false(player.call("is_race_active"))
 	assert_false(cpu.call("is_race_active"))
@@ -138,6 +141,41 @@ func test_countdown_keeps_runners_still_then_starts_everyone_together() -> void:
 	assert_true(cpu.call("is_race_active"))
 	assert_eq(player.call("get_drive_level"), 4.0)
 	race.free()
+
+
+func test_race_entry_waits_five_seconds_before_the_countdown() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child(race)
+	var wait := LocalRaceMath.Config.number("race_entry_wait_seconds")
+	var countdown := LocalRaceMath.Config.number("start_countdown_seconds")
+	var label: Label = race.get_node("%CountdownLabel")
+	assert_false(race.get("_race_started"))
+	assert_almost_eq(float(race.get("_entry_wait_remaining")), wait, 0.001)
+	assert_false(label.visible)
+	race.call("_update_before_start", wait - 0.1)
+	assert_false(race.get("_race_started"))
+	assert_false(label.visible)
+	race.call("_update_before_start", 0.2)
+	assert_false(race.get("_race_started"))
+	assert_true(label.visible)
+	race.call("_update_before_start", countdown)
+	assert_true(race.get("_race_started"))
+	race.free()
+
+
+func test_first_place_player_starts_the_finish_celebration_just_before_the_goal() -> void:
+	assert_true(LocalRaceController.should_start_player_finish_celebration(8.0, 1))
+	assert_true(LocalRaceController.should_start_player_finish_celebration(-0.1, 1))
+	assert_false(LocalRaceController.should_start_player_finish_celebration(8.01, 1))
+	assert_false(LocalRaceController.should_start_player_finish_celebration(1.0, 2))
+
+
+func test_contact_sound_plays_only_when_a_touch_starts() -> void:
+	var race_script := load("res://scripts/local_race_controller.gd")
+	assert_false(race_script.contact_sound_starts(false, 0, false))
+	assert_true(race_script.contact_sound_starts(false, 1, false))
+	assert_true(race_script.contact_sound_starts(false, 0, true))
+	assert_false(race_script.contact_sound_starts(true, 2, true))
 
 
 ## 設定値から計算する期待値（設定を変えてもテストが壊れないようにする）。
@@ -1265,6 +1303,8 @@ func test_220_bpm_thirty_seconds_lowers_single_runner_speed() -> void:
 
 ## F3の詳細の文字（操作盤の左と右に分けて出している）を、1つにつなげる。
 func _detail_text(race: Node) -> String:
+	# 詳細の文字は、見えているときだけ作られるので、ここで作らせてから読む。
+	race.call("_update_detail_text")
 	return str(race.get_node("UI/HudLabel").text) + "\n" + str(race.get_node("UI/HudLabelRight").text)
 
 
@@ -1301,7 +1341,7 @@ func test_detail_text_sits_right_of_the_panel_inside_the_screen() -> void:
 		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
 		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
 	)
-	var panel_right: float = RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH
+	var panel_right: float = RaceHud.panel_left(screen.x) + RaceHud.PANEL_WIDTH
 	assert_gte(left.anchor_left * screen.x + left.offset_left, panel_right)
 	assert_gte(right.anchor_left * screen.x + right.offset_left, left.anchor_right * screen.x + left.offset_right)
 	assert_lte(right.anchor_right * screen.x + right.offset_right, screen.x)

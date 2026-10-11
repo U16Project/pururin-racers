@@ -158,5 +158,3 @@ func test_the_name_tab_sits_between_the_standings_and_the_panel() -> void:
 	var panel_top := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT
 	var standings_bottom := RaceHud.standings_top(screen_height, RaceHud.STANDINGS_FULL_ROWS) + RaceHud.STANDINGS_FULL_ROWS * RaceHud.STANDINGS_ROW_HEIGHT
 	assert_gte(panel_top - RaceHud.NAME_TAB_HEIGHT, standings_bottom, "名札は、順位表の一番下の行に重ならない")
-	# 順位表の右端は、操作盤の右端までに収まる。
-	assert_lte(RaceHud.STANDINGS_LEFT + RaceHud.STANDINGS_WIDTH, RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH)

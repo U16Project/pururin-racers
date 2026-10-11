@@ -5,105 +5,121 @@
       "id": "yuu",
       "name": "ユウ",
       "profile_id": "balanced",
-      "portrait_path": "res://assets/ui/cpu_trainers/yuu_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/yuu_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "相棒の呼吸と足音に、じっと耳をすます若きトレーナー。口ぐせは「あわてない、あわてない」。勝負どころを見きわめる目は、同期でいちばんと評判だ。"
+      "introduction": "レース場で働きながら、トレーナーの腕を磨く青年。プルの様子をよく見て、前の集団から離れないよう指示を送る。抜け出せる道を見つけると、迷わず前進を促す。"
     },
     {
       "id": "homura",
       "name": "ホムラ",
       "profile_id": "front",
-      "portrait_path": "res://assets/ui/cpu_trainers/homura_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/homura_v02.png",
       "favorite_running_style": "escape",
-      "introduction": "スタートの合図と同時に、声が枯れるまで叫ぶ熱血漢。「前にだれもいない景色を見せてやる！」が合言葉。先頭を走る姿に、だれよりも胸を熱くする。"
+      "introduction": "市場と町の店を行き来する、元気な配達人。レースでは、混み合う前にプルを先頭へ送り出したい。後ろの動きに振り回されず、先に取った位置を守るよう指示する。"
     },
     {
       "id": "shizuku",
       "name": "シズク",
       "profile_id": "balanced",
-      "portrait_path": "res://assets/ui/cpu_trainers/shizuku_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/shizuku_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "雨上がりの水たまりで、ぷるりんと出会ったのが始まり。集団の流れを読むのが得意で、ささやくような指示なのに、相棒にはなぜかよく届く。"
+      "introduction": "農園の水路を手入れする女性。プルの疲れや周囲の変化によく気づき、苦しくなる前にペースを緩めるよう伝える。前を見失わない位置を保ち、余力が戻れば追うよう促す。"
     },
     {
       "id": "daichi",
       "name": "ダイチ",
       "profile_id": "draft",
-      "portrait_path": "res://assets/ui/cpu_trainers/daichi_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/daichi_v03.png",
       "favorite_running_style": "stalk",
-      "introduction": "畑仕事できたえた足腰と、どっしりかまえた心の持ち主。前の背中に隠れて力をため、「実りは最後に刈り取るもんだ」と笑って待つ。"
+      "introduction": "城下町へ野菜を届ける農園主。序盤はプルを急がせず、集団について力を残すよう指示する。前のプルが疲れ始めるころを見計らい、少しずつ追い上げを促す。"
     },
     {
       "id": "hayate",
       "name": "ハヤテ",
       "profile_id": "late",
-      "portrait_path": "res://assets/ui/cpu_trainers/hayate_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/hayate_v03.png",
       "favorite_running_style": "closer",
-      "introduction": "丘の上で風を読むのが日課の、気まぐれな作戦家。序盤は後ろでのんびり、最後の直線で景色を全部ぬりかえる。その一瞬が、たまらなく好き。"
+      "introduction": "山を越える旅人を案内する青年。レースでは、プルに後ろで待つよう伝えながら、前の集団の動きを見ている。追い始める場所を決めると、ためらわず前へ向かわせる。"
     },
     {
       "id": "akari",
       "name": "アカリ",
       "profile_id": "balanced",
-      "portrait_path": "res://assets/ui/cpu_trainers/akari_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/akari_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "商店街の人気者で、応援の声はコースの端まで届く。無理はさせない、でもあきらめもしない。ゴールのあとは、勝っても負けても、まず抱きしめる。"
+      "introduction": "市場でパン屋を営む、気さくな女性。プルが無理なく走れる場所を選び、前の集団についていくよう指示する。終盤に並びかけられてもすぐには引かず、競り合うよう励ます。"
     },
     {
       "id": "minato",
       "name": "ミナト",
       "profile_id": "draft",
-      "portrait_path": "res://assets/ui/cpu_trainers/minato_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/minato_v03.png",
       "favorite_running_style": "stalk",
-      "introduction": "港町育ちで、潮の流れを読むように集団を見る。あせらず、さわがず、すき間が空くその時を待つ。静かな指示の裏に、負けずぎらいを隠している。"
+      "introduction": "港で荷船に乗る船乗り。プルを集団の後ろにつかせ、力を残しながら進める道を探す。前が開けばすぐに知らせ、隙間を抜けて追い上げるよう指示する。"
     },
     {
       "id": "gantetsu",
       "name": "ガンテツ",
       "profile_id": "front",
-      "portrait_path": "res://assets/ui/cpu_trainers/gantetsu_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/gantetsu_v02.png",
       "favorite_running_style": "escape",
-      "introduction": "岩のような体格と、山びこのような大声。小細工はきらいで、作戦はいつも「前へ」。だれよりも早起きして、相棒とコースの土を確かめている。"
+      "introduction": "城壁や石橋の修繕を担う石工。集団の中で進路を塞がれることを嫌い、早めにプルを前へ出す。先頭を取った後は走るペースを整え、追ってくるプルに備えるよう伝える。"
     },
     {
       "id": "hinata",
       "name": "ヒナタ",
       "profile_id": "balanced",
-      "portrait_path": "res://assets/ui/cpu_trainers/hinata_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/hinata_v03.png",
       "favorite_running_style": "pace",
-      "introduction": "日だまりのような笑顔で、どんなぷるりんともすぐ仲良くなる。勝ち負けより、気持ちよく走れたかを大事にする。なのに、気づけば上位にいる。"
+      "introduction": "城下町の宿屋で旅人を迎える女の子。担当するプルに、前の集団についていくよう声をかける。前が塞がっていれば空いている側へ導き、道が開けば前へ出るよう促す。"
     },
     {
       "id": "kaede",
       "name": "カエデ",
       "profile_id": "draft",
-      "portrait_path": "res://assets/ui/cpu_trainers/kaede_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/kaede_v02.png",
       "favorite_running_style": "stalk",
-      "introduction": "手帳にびっしり、ライバルのくせを書きこむ研究家。集団の中こそ特等席、と信じている。秋の紅葉のように、終盤にじわりと色を変えてくる。"
+      "introduction": "レース場で着順や走りを記録する女性。ほかのプルがいつ前へ出たか、どこで遅れ始めたかをよく覚えている。担当するプルには集団の後ろについていくよう伝え、前のプルの勢いが鈍ったところで追い上げを指示する。"
     },
     {
       "id": "ren",
       "name": "レン",
       "profile_id": "front",
-      "portrait_path": "res://assets/ui/cpu_trainers/ren_v01.png",
-      "favorite_running_style": "escape",
-      "introduction": "迷ったら前へ、がモットーの切りこみ隊長。思い切りのよい指示で、相棒の背中を押す。負けたレースのあとほど、次の作戦を楽しそうに語る。"
+      "portrait_path": "res://assets/ui/cpu_trainers/ren_v02.png",
+      "favorite_running_style": "pace",
+      "introduction": "王城の警備を務める騎士。好機にはプルへ迷わず前進を命じるが、先頭争いを長引かせない。良い位置を取ればペースを整えるよう伝え、最後の勝負に備えさせる。"
     },
     {
       "id": "ibuki",
       "name": "イブキ",
       "profile_id": "late",
-      "portrait_path": "res://assets/ui/cpu_trainers/ibuki_v01.png",
+      "portrait_path": "res://assets/ui/cpu_trainers/ibuki_v03.png",
       "favorite_running_style": "closer",
-      "introduction": "多くを語らず、じっと展開を見つめる。動くのは、みんなが苦しくなった最後だけ。ひと息で流れを変える差し脚に、観客席がどよめく。"
+      "introduction": "山麓でぷるりんの世話をする青年。周囲が先を急いでも、担当するプルには落ち着いて待つよう伝える。十分に力を残せたと見れば追い上げを指示し、ゴールまで走り切るよう励ます。"
     },
     {
       "id": "tsubaki",
       "name": "ツバキ",
       "profile_id": "balanced",
-      "portrait_path": "res://assets/ui/cpu_trainers/tsubaki_v01.png",
-      "favorite_running_style": "pace",
-      "introduction": "道場の師範代でもある、きっちりした性格。指示は一つずつ、短く、正確に。乱れた流れを立て直すのがうまく、相棒はいつも落ち着いて走る。"
+      "portrait_path": "res://assets/ui/cpu_trainers/tsubaki_v03.png",
+      "favorite_running_style": "stalk",
+      "introduction": "港や街道を巡回する騎士。周囲をよく見て、プルを無理なく集団へ導く。前方に道が開く瞬間を見逃さず、残していた力で抜け出すよう指示を送る。"
+    },
+    {
+      "id": "lotta",
+      "name": "ロッタ",
+      "profile_id": "front",
+      "portrait_path": "res://assets/ui/cpu_trainers/lotta_v02.png",
+      "favorite_running_style": "escape",
+      "introduction": "港から市場へ魚を運ぶ、威勢のよい女性。レースではプルを早めに前へ送り、ほかのプルに追わせる展開を好む。近づく足音を聞けば、担当するプルの様子を確かめて、もうひと頑張りを促す。"
+    },
+    {
+      "id": "ordo",
+      "name": "オルド",
+      "profile_id": "draft",
+      "portrait_path": "res://assets/ui/cpu_trainers/ordo_v02.png",
+      "favorite_running_style": "stalk",
+      "introduction": "城の庭師を名乗る年配の男性。その正体は？？？。担当するプルには集団について待つよう伝え、前に道が開くと、嬉しそうに追い上げの指示を送る。"
     }
   ]
 }

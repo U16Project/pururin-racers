@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/camera_exploration.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/m2_track_path.gd" id="2_track"]
 [ext_resource type="Script" path="res://scripts/exploration_camera.gd" id="3_camera"]
-[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="4_font"]
+[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansJP-Regular.otf" id="4_font"]
 
 [sub_resource type="StandardMaterial3D" id="Mat_track"]
 albedo_color = Color(0.8, 0.63, 0.43, 1)

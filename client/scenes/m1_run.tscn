@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/runner_m1.gd" id="1_runner"]
 [ext_resource type="Script" path="res://scripts/net_ping_m1.gd" id="2_net"]
-[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="3_font"]
+[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansJP-Regular.otf" id="3_font"]
 
 [sub_resource type="Curve3D" id="Curve3D_track"]
 closed = true

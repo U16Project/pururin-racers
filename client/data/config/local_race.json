@@ -3,6 +3,7 @@
   "drive_level_max": 6,
   "drive_level_step": 1,
   "start_countdown_seconds": 3.0,
+  "race_entry_wait_seconds": 5.0,
   "player_start_drive_level": 4,
   "cpu_start_drive_level": 5,
   "cpu_start_drive_duration_seconds": 1.0,

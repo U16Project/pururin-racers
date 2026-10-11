@@ -11,13 +11,13 @@ config_version=5
 [application]
 
 config/name="PURURIN-RACERS"
+run/main_scene="res://scenes/logo.tscn"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Godot/app_userdata/ぷるりんレーサーズ"
-config/custom_user_dir_name.linux="godot/app_userdata/ぷるりんレーサーズ"
+config/features=PackedStringArray("4.7")
 config/icon="res://assets/ui/pururin_app_icon.png"
 config/windows_native_icon="res://assets/ui/pururin_app_icon.ico"
-run/main_scene="res://scenes/logo.tscn"
-config/features=PackedStringArray("4.7")
+config/custom_user_dir_name.linux="godot/app_userdata/ぷるりんレーサーズ"
 
 [autoload]
 
@@ -36,8 +36,4 @@ enabled=PackedStringArray("res://addons/gut/plugin.cfg")
 
 [gui]
 
-theme/custom_font="res://fonts/NotoSansCJK-Regular.ttc"
-
-[rendering]
-
-renderer/rendering_method.web="gl_compatibility"
+theme/custom_font="res://fonts/NotoSansJP-Regular.otf"

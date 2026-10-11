@@ -4,7 +4,7 @@ extends RefCounted
 
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 
-const FONT_PATH := "res://fonts/NotoSansCJK-Regular.ttc"
+const FONT_PATH := "res://fonts/NotoSansJP-Regular.otf"
 ## 数字の高さ（フォントの大きさに対する割合。Noto Sans CJKの数字）。
 const DIGIT_HEIGHT_EM := 0.733
 ## コースの中心線から、柵までの距離（コース幅15mの端の、少し外）。

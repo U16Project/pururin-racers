@@ -14,6 +14,18 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
+const FpsLabel := preload("res://scripts/debug/fps_label.gd")
+const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
+## 丸い操作盤の大きさ（外の輪の半径。ピクセル）と、画面の下からのすき間。
+const ROUND_HUD_RADIUS := 142.0
+const ROUND_HUD_BOTTOM_MARGIN := 8.0
+## 丸い操作盤の絵を描き直す回数（1秒あたり）。
+const ROUND_HUD_UPDATES_PER_S := 10.0
+## ウェブ版オフラインテストで、順位表の絵を描き直す回数（1秒あたり）。
+const RACE_HUD_UPDATES_PER_S := 4.0
+## 丸い操作盤の左の端と、仮想パッドの左スティックとの、すき間。
+const ROUND_HUD_STICK_GAP := 8.0
 const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
@@ -23,6 +35,7 @@ const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_bui
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+const TouchControls := preload("res://scripts/presentation/touch_controls.gd")
 
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
@@ -31,6 +44,8 @@ const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 const RESULT_WAIT_AFTER_LAST_S := 2.0
 const RESULT_WAIT_AFTER_PLAYER_S := 5.0
 const FINAL_STRETCH_DISTANCE_M := 400.0
+## 首位の自プルがこの距離まで来たら、ゴール線を越える少し前から紙吹雪を始める。
+const CELEBRATION_EARLY_TRIGGER_M := 8.0
 ## 先頭がゴールしてから、観客のざわめきが消えるまでの秒数。
 const FINAL_STRETCH_FADE_OUT_S := 10.0
 @onready var _track: Path3D = $TrackPath
@@ -71,14 +86,30 @@ var _player: Node3D = null
 var _race_started: bool = false
 var _start_countdown_remaining: float = 0.0
 var _start_signal_remaining: float = 0.0
+## レース画面に入ってから、カウントダウンを始めるまでの待ち。
+var _entry_wait_remaining: float = 0.0
 var _final_stretch_ambience_started := false
 var _final_stretch_ambience_fading := false
+## 前のtickで、自分が接触か押し合いの最中だったか。始まった瞬間だけ音を鳴らす。
+var _contact_sound_was_touching := false
 var _race_distance_m: float = RaceSession.DEFAULT_DISTANCE_M
 var _race_route: Dictionary = {}
 var _launch_visual: MeshInstance3D
 var _telemetry_recorder := RaceTelemetryRecorder.new()
 ## 常時表示のHUD。詳細な診断テキスト（_hud_label）はF3で切り替えるデバッグ表示。
 var _race_hud: Control
+var _round_hud: Control
+## 丸い操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
+## 絵の描き直しは、1秒に ROUND_HUD_UPDATES_PER_S 回だけにする。
+var _round_hud_viewport: SubViewport
+var _round_hud_view: TextureRect
+var _round_hud_drawn_msec := -1000000
+## ウェブ版オフラインテストのときだけ使う、順位表（前の操作盤）の絵と、その貼り先。
+var _race_hud_viewport: SubViewport
+var _race_hud_view: TextureRect
+var _race_hud_drawn_msec := -1000000
+## 画面の上の仮想パッド。
+var _touch_controls: Control
 ## 詳細な診断テキストの後半（2列目）。前半は _hud_label（1列目）。どちらも操作盤の右。
 var _hud_label_right: Label
 
@@ -89,8 +120,52 @@ func _ready() -> void:
 	_result_panel.visible = false
 	_race_hud = RaceHud.new()
 	_race_hud.name = "RaceHud"
-	$UI.add_child(_race_hud)
-	$UI.move_child(_race_hud, 0)
+	if RaceSession.is_course_only():
+		# ウェブ版オフラインテスト：順位表（前の操作盤）も、別の絵に描いて貼る。描き直しは、丸い操作盤と同じ回数だけ（軽くするため）。
+		_race_hud_viewport = SubViewport.new()
+		_race_hud_viewport.name = "RaceHudViewport"
+		_race_hud_viewport.transparent_bg = true
+		_race_hud_viewport.disable_3d = true
+		_race_hud_viewport.size_2d_override_stretch = true
+		_race_hud_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		$UI.add_child(_race_hud_viewport)
+		_race_hud_viewport.add_child(_race_hud)
+		_race_hud_view = TextureRect.new()
+		_race_hud_view.name = "RaceHudView"
+		_race_hud_view.texture = _race_hud_viewport.get_texture()
+		_race_hud_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_race_hud_view.stretch_mode = TextureRect.STRETCH_SCALE
+		_race_hud_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		$UI.add_child(_race_hud_view)
+		$UI.move_child(_race_hud_view, 0)
+	else:
+		$UI.add_child(_race_hud)
+		$UI.move_child(_race_hud, 0)
+	# 下の操作盤は、丸い操作盤に替える（前の操作盤は、消しているだけで残してある）。
+	_race_hud.set("main_panel_visible", false)
+	_round_hud_viewport = SubViewport.new()
+	_round_hud_viewport.name = "RoundRaceHudViewport"
+	_round_hud_viewport.transparent_bg = true
+	_round_hud_viewport.disable_3d = true
+	_round_hud_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	$UI.add_child(_round_hud_viewport)
+	_round_hud = Control.new()
+	_round_hud.set_script(RoundRaceHud)
+	_round_hud.name = "RoundRaceHud"
+	_round_hud_viewport.add_child(_round_hud)
+	_round_hud_view = TextureRect.new()
+	_round_hud_view.name = "RoundRaceHudView"
+	_round_hud_view.texture = _round_hud_viewport.get_texture()
+	_round_hud_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_round_hud_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_round_hud_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$UI.add_child(_round_hud_view)
+	$UI.move_child(_round_hud_view, 1)
+	_place_round_hud()
+	get_viewport().size_changed.connect(_place_round_hud)
+	# 画面の上の仮想パッド（スマホ用。左下のボタンかF2で出し入れ）。
+	_touch_controls = TouchControls.new()
+	$UI.add_child(_touch_controls)
 	_hud_label_right = _hud_label.duplicate()
 	_hud_label_right.name = "HudLabelRight"
 	_hud_label_right.unique_name_in_owner = false
@@ -143,8 +218,11 @@ func _ready() -> void:
 		return
 	_place_markers()
 	_spawn_field()
-	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
-	RaceAudio.play_countdown_start()
+	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
+	_countdown_label.visible = false
+	RaceAudio.play_race_entry()
+	if _entry_wait_remaining <= 0.0:
+		_begin_start_countdown()
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
 	_guide_label.text = "\n".join(PackedStringArray([
@@ -194,6 +272,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_hud_label.visible = not _hud_label.visible
 			_hud_label_right.visible = _hud_label.visible
 			_guide_label.visible = _hud_label.visible
+			if _hud_label.visible and _player != null:
+				_update_detail_text()
 			get_viewport().set_input_as_handled()
 
 
@@ -205,7 +285,7 @@ func _process(_delta: float) -> void:
 	if _player != null:
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
 	if not _paused and not _race_started:
-		_update_start_countdown(_delta)
+		_update_before_start(_delta)
 	elif not _paused:
 		# 結果の板を出したあとも、走者は止めない（時計と記録だけ止める）。
 		_update_start_signal(_delta)
@@ -270,6 +350,40 @@ func _start_final_stretch_fade_out() -> void:
 	RaceAudio.fade_out_final_stretch_ambience(FINAL_STRETCH_FADE_OUT_S)
 
 
+## 入場の待ちが終わってから、カウントダウンを進める。
+func _update_before_start(delta: float) -> void:
+	if _entry_wait_remaining > 0.0:
+		_entry_wait_remaining -= delta
+		if _entry_wait_remaining > 0.0:
+			return
+		delta = -_entry_wait_remaining
+		_entry_wait_remaining = 0.0
+		_begin_start_countdown()
+	_update_start_countdown(delta)
+
+
+func _begin_start_countdown() -> void:
+	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
+	_countdown_label.visible = true
+	_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
+	RaceAudio.play_countdown_start()
+
+
+## 接触か押し合いが始まった瞬間だけ鳴らす。続いているあいだは、重ねて鳴らさない。
+func _update_contact_audio() -> void:
+	if _player == null:
+		return
+	var contact_count := int(_player.call("get_contact_count"))
+	var in_push := bool(_player.call("is_in_push_contest"))
+	if contact_sound_starts(_contact_sound_was_touching, contact_count, in_push):
+		RaceAudio.play_contact()
+	_contact_sound_was_touching = contact_count > 0 or in_push
+
+
+static func contact_sound_starts(was_touching: bool, contact_count: int, in_push: bool) -> bool:
+	return not was_touching and (contact_count > 0 or in_push)
+
+
 func _update_start_countdown(delta: float) -> void:
 	_start_countdown_remaining = maxf(_start_countdown_remaining - delta, 0.0)
 	if _start_countdown_remaining > 0.0:
@@ -299,6 +413,7 @@ func _finalize_draft_tick() -> void:
 		return
 	# M5オンラインと同じく、移動後のゴール判定を先に確定する。
 	# 着順とタイムを確定した後も、結果表示までは全員が接触・ドラフトを続ける。
+	_maybe_start_player_finish_celebration()
 	_check_finishes()
 	_resolve_pushes()
 	var snapshots: Array = []
@@ -309,6 +424,7 @@ func _finalize_draft_tick() -> void:
 		_runners[index].call("apply_draft_details", details)
 		_runners[index].call("apply_rear_assist_details", LocalRaceMath.calculate_rear_assist_details(snapshots, index))
 		_runners[index].call("apply_contact_count", LocalRaceMath.lateral_contact_count(snapshots, index))
+	_update_contact_audio()
 
 
 ## 横に動いて他の走者に重なった分を、押し合いの勝負で解く。位置が決まってから、ドラフトなどを計算する。
@@ -401,7 +517,12 @@ func _place_markers() -> void:
 		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m")
 	)
 	_update_launch_visual()
-	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route)
+	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route, RaceSession.is_course_only())
+	if RaceSession.is_course_only():
+		# ウェブ版オフラインテスト：軽くするために太陽の影を切り、重さを確かめるためにコマ数を出す。
+		($Sun as DirectionalLight3D).shadow_enabled = false
+		if $UI.get_node_or_null("FpsLabel") == null:
+			$UI.add_child(FpsLabel.new())
 	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
 
 
@@ -514,8 +635,14 @@ func _check_finishes() -> void:
 			_start_final_stretch_fade_out()
 		# 紙吹雪とスローは、ユーザーのぷるりんが1位でゴールしたときだけ出す。
 		if _finish_count == 1 and crossing["runner"] == _player:
-			_celebration.play(_track, _goal_marker.global_position, 15.0)
-			RaceAudio.play_player_first_cheer()
+			_start_player_finish_celebration(true)
+			RaceAudio.play_player_first_goal()
+		# ユーザー自身が2位以下でゴールしたときも、ゴール線を通ったことは音で知らせる。
+		elif crossing["runner"] == _player:
+			RaceAudio.play_player_finish_bell()
+		elif _finish_count == 1 and _player != null:
+			var remaining := _race_distance_m - float(_player.call("get_race_progress"))
+			RaceAudio.play_other_leader_finish(remaining, _race_distance_m)
 	var all_done := true
 	for r in _runners:
 		if not r.call("is_finished"):
@@ -524,6 +651,26 @@ func _check_finishes() -> void:
 	if all_done and not _results_pending:
 		_results_pending = true
 		_results_wait_remaining = result_wait_seconds(_race_elapsed - float(_player.call("get_finish_time")) if _player != null else RESULT_WAIT_AFTER_PLAYER_S)
+
+
+## 直前に首位なら、ゴール線を越える約8m前から紙吹雪を見せ始める。
+func _maybe_start_player_finish_celebration() -> void:
+	if _celebration.has_played() or _player == null or bool(_player.call("is_finished")):
+		return
+	var remaining := _race_distance_m - float(_player.call("get_race_progress"))
+	if should_start_player_finish_celebration(remaining, _live_place(_player)):
+		_start_player_finish_celebration(false)
+
+
+static func should_start_player_finish_celebration(remaining_m: float, live_place: int) -> bool:
+	return live_place == 1 and remaining_m <= CELEBRATION_EARLY_TRIGGER_M
+
+
+func _start_player_finish_celebration(start_slow_motion: bool) -> void:
+	var travel := -_goal_marker.global_transform.basis.z
+	travel.y = 0.0
+	# ウェブ版オフラインテストでは、紙ふぶきを出さない（スマホのブラウザでとても重いため）。スローの演出は、そのまま。
+	_celebration.play(null if RaceSession.is_course_only() else _track, _goal_marker.global_position, 15.0, travel, start_slow_motion)
 
 
 ## 全員がゴールしてから、結果の板を出すまでの秒数。seconds_since_player_finish は、ユーザーがゴールしてからの秒数。
@@ -536,11 +683,19 @@ func _update_hud() -> void:
 	if _player == null:
 		return
 	_update_race_hud()
+	# 詳細表示（F3）の文字は、見えているときだけ作る（毎コマ作ると、見えていなくても重い）。
+	if _hud_label.visible:
+		_update_detail_text()
+
+
+## 詳細表示（F3）の文字を作る。
+func _update_detail_text() -> void:
 	if not _race_started:
 		_hud_label_right.text = ""
+		var notch_hint := "カウント中に↑↓で開始出力を選択" if _entry_wait_remaining <= 0.0 else "↑↓で開始出力を選択"
 		_hud_label.text = "\n".join(PackedStringArray([
 			"開始出力 %+d" % int(roundi(_player.call("get_drive_level"))),
-			"カウント中に↑↓で開始出力を選択",
+			notch_hint,
 			"Esc＝メニュー",
 		]))
 		return
@@ -613,7 +768,7 @@ func _layout_overlay_labels() -> void:
 		label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
 		label.add_theme_color_override("font_outline_color", outline)
 		label.add_theme_constant_override("outline_size", 5)
-	var first_left := RaceHud.PANEL_LEFT_MARGIN + RaceHud.PANEL_WIDTH + 12.0
+	var first_left := RaceHud.panel_left(get_viewport().get_visible_rect().size.x) + RaceHud.PANEL_WIDTH + 12.0
 	_hud_label.offset_left = first_left
 	_hud_label.offset_right = first_left + column_width
 	_hud_label_right.offset_left = first_left + column_width
@@ -635,13 +790,45 @@ func _layout_overlay_labels() -> void:
 	_guide_label.add_theme_constant_override("outline_size", 5)
 
 
+## 丸い操作盤の位置。左の端を、仮想パッドの左スティックのぎりぎり右に、下の端を、画面の下に寄せる
+## （名前のための外側の余白は、画面の外へ出してよい）。
+func _place_round_hud() -> void:
+	var screen := get_viewport().get_visible_rect().size
+	# 絵は、画面の実際の点の細かさで描く（拡大してぼやけないように）。貼るときに、もとの大きさへ戻す。
+	var zoom := maxf(get_viewport().get_stretch_transform().get_scale().x, 1.0)
+	_round_hud.call("set_radius", ROUND_HUD_RADIUS * zoom)
+	var drawn_size := _round_hud.custom_minimum_size.ceil()
+	_round_hud_viewport.size = Vector2i(drawn_size)
+	_round_hud.position = Vector2.ZERO
+	_round_hud.size = drawn_size
+	var left := TouchControls.STICK_CENTER_FROM_LEFT + TouchControls.STICK_RADIUS + ROUND_HUD_STICK_GAP
+	var center := Vector2(left + ROUND_HUD_RADIUS, screen.y - ROUND_HUD_BOTTOM_MARGIN - ROUND_HUD_RADIUS)
+	_round_hud_view.size = drawn_size / zoom
+	_round_hud_view.position = center - _round_hud_view.size * 0.5
+	_round_hud_drawn_msec = -1000000
+	if _race_hud_viewport != null:
+		# 順位表の絵は、画面いっぱい。画面の実際の点の細かさで描く。
+		_race_hud_viewport.size = Vector2i((screen * zoom).ceil())
+		_race_hud_viewport.size_2d_override = Vector2i(screen.ceil())
+		_race_hud_view.position = Vector2.ZERO
+		_race_hud_view.size = screen
+
+
 func _update_race_hud() -> void:
 	if _race_hud == null:
+		return
+	# 操作盤に渡す値は、描き直すコマでだけ作る（順位表の値づくりなどが、毎コマだと重いため）。
+	# 順位表を画面にそのまま出しているとき（ウェブ版オフラインテスト以外）は、今までどおり毎コマ。
+	var now := Time.get_ticks_msec()
+	var race_hud_due := _race_hud_viewport == null or float(now - _race_hud_drawn_msec) >= 1000.0 / RACE_HUD_UPDATES_PER_S
+	var round_hud_due := float(now - _round_hud_drawn_msec) >= 1000.0 / ROUND_HUD_UPDATES_PER_S
+	if not race_hud_due and not round_hud_due:
 		return
 	var air_breakdown: Dictionary = _player.call("get_air_reduction_breakdown")
 	var place := _live_place(_player) if _race_started else 0
 	var style_id := str(_player.call("get_running_style_id"))
 	var has_style := not style_id.is_empty()
+	var attribute_id := str(_player.call("get_attribute_id"))
 	var state := {
 		"place": place,
 		"player_name": str(_player.get("display_name")),
@@ -649,6 +836,8 @@ func _update_race_hud() -> void:
 		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
 		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,
+		"attribute_id": attribute_id,
+		"attribute_color": Color.from_string(str(HudStatsConfig.values()["attributes"][attribute_id]["color"]), Color.WHITE) if not attribute_id.is_empty() else Color.WHITE,
 		"field_size": _runners.size(),
 		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"race_distance_m": _race_distance_m,
@@ -660,12 +849,15 @@ func _update_race_hud() -> void:
 		"runners": _hud_runner_marks(),
 		"standings": _hud_standings(),
 		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
+		"time_s": _race_elapsed,
 		"speed_kmh": _player.call("get_actual_speed"),
 		"notch": int(roundi(_player.call("get_drive_level"))),
 		"notch_max": int(LocalRaceMath.DRIVE_LEVEL_MAX),
 		"braking": _player.call("is_braking"),
 		"fuel_ratio": _player.call("get_stamina_ratio"),
 		"heart_bpm": _player.call("get_heart_rate_bpm"),
+		# 鼓動の音が鳴っていないあいだ（スタート前・ゴール後）は、光らせない。
+		"heart_beat_phase": RaceAudio.heartbeat_phase(float(_player.call("get_heart_rate_bpm"))) if _race_started and not bool(_player.call("is_finished")) else 1.0,
 		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
 		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
 		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
@@ -677,11 +869,23 @@ func _update_race_hud() -> void:
 		# 操作盤は、ゴールした時点の表示で止める（あとで見返せるように）。順位表だけは、動かし続ける。
 		if _finish_hud_state.is_empty():
 			state["time_text"] = LocalRaceMath.format_race_time(float(_player.call("get_finish_time")))
+			state["time_s"] = float(_player.call("get_finish_time"))
 			_finish_hud_state = state
 		var frozen := _finish_hud_state.duplicate()
 		frozen["standings"] = state["standings"]
 		state = frozen
-	_race_hud.call("update_state", state)
+	if _race_hud_viewport == null:
+		_race_hud.call("update_state", state)
+	elif race_hud_due:
+		# 順位表と丸い操作盤は、同じコマで描き直さない（重いコマを作らないため）。
+		_race_hud_drawn_msec = now
+		_race_hud.call("update_state", state)
+		_race_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+		return
+	if round_hud_due:
+		_round_hud_drawn_msec = now
+		_round_hud.call("update_state", state)
+		_round_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 ## 進行バーに出す全走者の位置（割合）・自分かどうか・色。
@@ -774,8 +978,11 @@ func _show_results() -> void:
 	_race_over = true
 	_pause_panel.visible = false
 	_result_panel.visible = true
+	# 結果の板と重ならないように、仮想パッドは引っ込める。
+	_touch_controls.call("set_pad_shown", false)
 	_result_board.call("set_rows", _result_rows())
 	_result_retry_button.grab_focus()
+	RaceAudio.play_result_applause()
 
 
 ## 着順の表の中身。着順の順に、着順・名前・色・ユーザーかどうか・タイム。
@@ -871,6 +1078,7 @@ func _exit_tree() -> void:
 	_celebration.stop()
 	RaceAudio.stop_final_stretch_ambience()
 	RaceAudio.stop_heartbeat()
+	RaceAudio.stop_race_oneshots()
 
 
 ## 同じ距離・同じ枠順・同じ顔ぶれで、もう1回走る（レース選択で決めた内容は、そのまま）。

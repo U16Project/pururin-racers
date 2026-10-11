@@ -7,6 +7,8 @@ const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const COLOR_BACK := Color(1.0, 1.0, 1.0, 0.08)
 const COLOR_EMPTY := Color(1.0, 1.0, 1.0, 0.28)
+const FRAME_RADIUS_RATIO := 0.18
+const FRAME_BORDER_RATIO := 0.06
 
 var _kind := ""
 var _id := ""
@@ -43,15 +45,17 @@ func shown_id() -> String:
 
 func _draw() -> void:
 	var side := minf(size.x, size.y)
+	if side <= 1.0:
+		return
 	var rect := Rect2((size - Vector2(side, side)) * 0.5, Vector2(side, side))
-	var back := StyleBoxFlat.new()
-	back.bg_color = COLOR_BACK
-	back.set_corner_radius_all(int(side * 0.18))
-	draw_style_box(back, rect)
+	var radius := side * FRAME_RADIUS_RATIO
+	_draw_plate(rect, radius)
 	match _kind:
 		"file":
 			if _texture != null:
-				draw_texture_rect(_texture, rect.grow(-side * 0.06), false)
+				# 画像も枠と同じ角丸にする。四角のまま置くと、角が枠の曲線からはみ出す。
+				var border := side * FRAME_BORDER_RATIO
+				_draw_textured_frame(_texture, rect.grow(-border), radius - border)
 		"avatar":
 			_draw_avatar(rect, TrainerProfile.avatar_by_id(_id))
 		_:
@@ -59,6 +63,56 @@ func _draw() -> void:
 			var center := rect.get_center()
 			draw_circle(center + Vector2(0.0, -side * 0.12), side * 0.17, COLOR_EMPTY)
 			draw_arc(center + Vector2(0.0, side * 0.42), side * 0.3, PI * 1.12, PI * 1.88, 16, COLOR_EMPTY, side * 0.16)
+
+
+func _draw_plate(rect: Rect2, radius: float) -> void:
+	var back := StyleBoxFlat.new()
+	back.bg_color = COLOR_BACK
+	back.set_corner_radius_all(int(round(radius)))
+	draw_style_box(back, rect)
+
+
+## 画像を、枠と同じ角丸の中だけに描く。Godot 4.7 の draw_polygon（頂点・色・UV・texture）。
+func _draw_textured_frame(texture: Texture2D, rect: Rect2, radius: float) -> void:
+	var points := rounded_frame_points(rect, radius)
+	var colors := PackedColorArray()
+	var uvs := PackedVector2Array()
+	colors.resize(points.size())
+	uvs.resize(points.size())
+	for index in points.size():
+		colors[index] = Color.WHITE
+		uvs[index] = (points[index] - rect.position) / rect.size
+	draw_polygon(points, colors, uvs, texture)
+
+
+## 角丸の四角の外周。半径は枠の半径と揃える。
+static func rounded_frame_points(rect: Rect2, radius: float) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	var limit := minf(rect.size.x, rect.size.y) * 0.5
+	var used := clampf(radius, 0.0, limit)
+	if used <= 0.0:
+		points.append(rect.position)
+		points.append(Vector2(rect.end.x, rect.position.y))
+		points.append(rect.end)
+		points.append(Vector2(rect.position.x, rect.end.y))
+		return points
+	var centers: Array[Vector2] = [
+		Vector2(rect.end.x - used, rect.position.y + used),
+		Vector2(rect.end.x - used, rect.end.y - used),
+		Vector2(rect.position.x + used, rect.end.y - used),
+		Vector2(rect.position.x + used, rect.position.y + used),
+	]
+	var starts: Array[float] = [-PI * 0.5, 0.0, PI * 0.5, PI]
+	var steps := 6
+	for corner in centers.size():
+		for step in steps + 1:
+			var angle := starts[corner] + (PI * 0.5) * float(step) / float(steps)
+			var point := centers[corner] + Vector2(cos(angle), sin(angle)) * used
+			if points.is_empty() or points[points.size() - 1].distance_squared_to(point) > 0.01:
+				points.append(point)
+	if points.size() > 1 and points[0].distance_squared_to(points[points.size() - 1]) <= 0.01:
+		points.remove_at(points.size() - 1)
+	return points
 
 
 ## 人の絵（仮）。肩から上を、図形で描く。位置と大きさは、枠の一辺を1とした割合。

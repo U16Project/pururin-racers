@@ -14,7 +14,7 @@ func after_each() -> void:
 	Session.clear_slots()
 
 func test_trainer_choices_and_new_pururins() -> void:
-	assert_eq(Trainers.values().size(), 13)
+	assert_eq(Trainers.values().size(), 15)
 	assert_eq(Session.roster_ids().size(), 10)
 	assert_false(Looks.look_for("cpu-8").is_empty())
 	assert_false(Looks.look_for("cpu-9").is_empty())
@@ -24,6 +24,21 @@ func test_trainer_choices_and_new_pururins() -> void:
 		assert_true(ResourceLoader.exists(str(trainer["portrait_path"])))
 		assert_false(str(trainer["introduction"]).is_empty())
 		assert_true(trainer["favorite_running_style"] in ["escape", "pace", "stalk", "closer"])
+		var portrait: Texture2D = load(str(trainer["portrait_path"]))
+		assert_not_null(portrait)
+		if portrait != null:
+			assert_eq(portrait.get_width(), 1024)
+			assert_eq(portrait.get_height(), 1024)
+		for forbidden in ["相棒", "ノッチ", "出力"]:
+			assert_false(str(trainer["introduction"]).contains(forbidden))
+	assert_eq(Trainers.by_id("ren")["favorite_running_style"], "pace")
+	assert_eq(Trainers.by_id("tsubaki")["favorite_running_style"], "stalk")
+	assert_eq(Trainers.by_id("ren")["profile_id"], "front")
+	assert_eq(Trainers.by_id("tsubaki")["profile_id"], "balanced")
+	assert_eq(Trainers.by_id("lotta")["profile_id"], "front")
+	assert_eq(Trainers.by_id("ordo")["profile_id"], "draft")
+	assert_true(Trainers.by_id("ordo")["introduction"].contains("？？？"))
+	assert_false(Trainers.by_id("ordo")["introduction"].contains("王様"))
 
 
 func test_empty_cpu_slot_accepts_trainer_and_keeps_it_when_character_changes() -> void:

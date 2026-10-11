@@ -9,6 +9,8 @@ const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
 const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
 const StartGate := preload("res://scripts/presentation/start_gate.gd")
+## 試し：描くのが重い原因を探すための切り替え（原因が分かったら消す）。
+const RenderProbe := preload("res://scripts/debug/render_probe.gd")
 
 @onready var _track: Path3D = $TrackPath
 @onready var _ground: MeshInstance3D = $Ground
@@ -24,6 +26,7 @@ var _guide_prefix := ""
 
 
 func _ready() -> void:
+	$UI.add_child(RenderProbe.new())
 	var result := M5CourseBuilder.load_layout_result()
 	if result.has("error"):
 		_guide_label.text = "コース設定を確認してください：%s\nEsc／B　タイトルへ戻る" % str(result["error"])

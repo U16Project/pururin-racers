@@ -12,7 +12,7 @@ const TitleScene := preload("res://scenes/title.tscn")
 
 class ProfileWithoutNavigation extends "res://scripts/trainer_profile_screen.gd":
 	var transitions := 0
-	func go_to_race_select() -> void:
+	func go_to_mode_select() -> void:
 		transitions += 1
 
 
@@ -41,7 +41,8 @@ func test_start_uses_registration_validation_and_only_transitions_once() -> void
 	assert_eq(screen.transitions, 1)
 	TrainerProfile.reload_profile()
 	assert_eq(TrainerProfile.trainer_name(), "テスト")
-	assert_eq(screen.find_child("RegisterButton", true, false).get_node("ButtonMark").get("kind"), "START")
+	assert_eq(screen.find_child("FreeRaceButton", true, false).get_node("ButtonMark").get("kind"), "START")
+	assert_null(screen.find_child("RegisterButton", true, false))
 
 
 ## 本物の登録内容に触らないように、テスト用の保存場所を使う。
@@ -211,14 +212,15 @@ func test_a_picture_file_can_be_chosen_and_an_unreadable_one_is_refused() -> voi
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(source_path))
 
 
-func test_game_start_goes_to_the_trainer_screen_and_ok_goes_to_race_select() -> void:
+func test_game_start_goes_to_the_trainer_screen_and_then_to_mode_select() -> void:
 	var title: Control = TitleScene.instantiate()
 	add_child_autofree(title)
-	assert_eq((title.find_child("FreeRaceButton", true, false) as Button).text, "ゲーム開始")
+	assert_eq((title.find_child("PressAnyButton", true, false) as Label).text, "ー　PRESS ANY BUTTON　ー")
 	assert_eq(title.call("next_scene_path"), "res://scenes/trainer_profile.tscn")
 	var screen := _screen()
-	assert_eq(screen.get("RACE_SELECT_SCENE_PATH"), "res://scenes/race_select.tscn")
-	assert_true(ResourceLoader.exists(screen.get("RACE_SELECT_SCENE_PATH")))
+	assert_eq((screen.find_child("FreeRaceButton", true, false) as Button).text, "ゲーム開始")
+	assert_eq(screen.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
+	assert_true(ResourceLoader.exists(screen.get("MODE_SELECT_SCENE_PATH")))
 
 
 func test_a_saved_avatar_that_no_longer_exists_is_reported() -> void:

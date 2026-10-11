@@ -118,7 +118,8 @@ static func stand_block_centers(before_goal_m: float, past_goal_m: float) -> Arr
 
 ## layout は、コースの定義（shared/course_layout_m5.json）。route は、今のレースのルート。
 ## ground_material は、シーンの地面の素材（外へ広げる地面にも、同じものを使う）。
-func place(track: Path3D, ground_material: Material, layout: Dictionary, route: Dictionary) -> void:
+## course_only が true なら、コースまわり（地面と柵）だけを作る。観客席・町・遠くの景色などは作らない。
+func place(track: Path3D, ground_material: Material, layout: Dictionary, route: Dictionary, course_only: bool = false) -> void:
 	assert(_track == null or _track == track, "RaceVenueは配置先Pathごとに作成してください")
 	if track == null or track.curve == null or layout.is_empty() or route.is_empty():
 		return
@@ -146,6 +147,8 @@ func place(track: Path3D, ground_material: Material, layout: Dictionary, route: 
 	_root.add_child(_field)
 	_build_ground(ground_material)
 	_build_fences()
+	if course_only:
+		return
 	_build_poles()
 	_build_stands()
 	_build_royal_box()

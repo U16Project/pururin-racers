@@ -27,7 +27,7 @@ const SIGN_TRACK_EDGE_MARGIN_M := 0.05
 ## 板を支える、2本の柱の太さ。
 const SIGN_POST_THICKNESS_M := 0.1
 const SIGN_FONT_SIZE := 64
-const SIGN_FONT_PATH := "res://fonts/NotoSansCJK-Regular.ttc"
+const SIGN_FONT_PATH := "res://fonts/NotoSansJP-Regular.otf"
 ## 数字の高さ（フォントの大きさに対する割合。Noto Sans CJKの数字）。
 const SIGN_DIGIT_HEIGHT_EM := 0.733
 ## 数字の高さは、板の縦の約5.5割。

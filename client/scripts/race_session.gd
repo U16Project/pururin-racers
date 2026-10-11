@@ -41,6 +41,9 @@ static var _locked: Array[bool] = _no_locks()
 static var _user_slot := 0
 ## レースからレース選択へ戻るところか（戻ったとき、選択の枠をレース開始ボタンに置くための印）。
 static var _returning_from_race := false
+## 「ウェブ版オフラインテスト」で始めたか。true のあいだ、レースの景色は、コースまわり（地面と柵）だけにする
+## （スマホのブラウザでも軽く動くように）。レースの中身は、同じ。
+static var _course_only := false
 
 
 static func _empty_slots() -> Array[String]:
@@ -79,6 +82,14 @@ static func normalize_distance(distance_m: float) -> float:
 
 
 ## レースからレース選択へ戻るときに、印を付ける。
+static func set_course_only(enabled: bool) -> void:
+	_course_only = enabled
+
+
+static func is_course_only() -> bool:
+	return _course_only
+
+
 static func mark_returning_from_race() -> void:
 	_returning_from_race = true
 

@@ -38,6 +38,31 @@ const CARPET_COLOR := Color(0.70, 0.11, 0.16)
 const CARPET_EDGE_WIDTH_M := 0.4
 ## じゅうたんを、コースの面から浮かせる量（市松の線より下にして、線が上に出るようにする）。
 const CARPET_LIFT_M := 0.02
+## ゴールを華やかにする、風船。色の順ぐり、1つの大きさ（半径m）、縦に少しのばす割合。
+const BALLOON_COLORS := [
+	Color("#FF7FB2"), Color("#FFD24D"), Color("#5BB8FF"), Color("#6FD98A"), Color("#FFFFFF"), Color("#C79BFF"),
+]
+const BALLOON_RADIUS_M := 0.42
+const BALLOON_STRETCH := 1.22
+## アーチの、風船どうしの間隔（m）と、柱から前後へ離す量（m）。
+const BALLOON_SPACING_M := 1.0
+const BALLOON_SIDE_OFFSET_M := 0.92
+## アーチの、柱に沿って並べる高さの範囲と、門の上でふくらませる高さ（m）。
+const BALLOON_COLUMN_FROM_M := 1.3
+const BALLOON_COLUMN_TO_M := 9.0
+const BALLOON_ARCH_BASE_M := 9.25
+const BALLOON_ARCH_RISE_M := 1.1
+## 柱のふもとに結ぶ、風船の束（1つぶんの数、浮かぶ高さ、ひもの太さ）。
+const BUNCH_COUNT := 5
+const BUNCH_HEIGHT_M := Vector2(2.6, 4.3)
+const BUNCH_STRING_RADIUS_M := 0.02
+const BUNCH_TIE_HEIGHT_M := 0.9
+## 札の上に載せる、金の王冠（輪の半径・輪の高さ・とがりの高さ・とがりの数・宝石の色）。
+const CROWN_RADIUS_M := 0.62
+const CROWN_BAND_M := 0.42
+const CROWN_SPIKE_M := 0.46
+const CROWN_POINTS := 5
+const CROWN_GEM_COLOR := Color("#FF5A8A")
 
 var _track: Path3D
 var _root: Node3D
@@ -75,6 +100,8 @@ func place(track: Path3D, path_distance: float, width_m: float) -> void:
 	_build_cloth()
 	_build_carpet()
 	_build_ground_line()
+	_build_balloons()
+	_build_crown()
 	_show_for_laps()
 
 
@@ -172,6 +199,116 @@ func _build_carpet() -> void:
 		var line := Parts.mesh(_root, edge, Parts.material(Parts.COLOR_GOLD, 0.8), at)
 		line.name = "CarpetEdge%s" % ("L" if side < 0.0 else "R")
 		_goal_nodes.append(line)
+
+
+## ゴールの札の上に載せる、金の王冠（1位を決める場所、という目印）。
+## 風船のアーチは前後にずらしてあるので、そのすき間（まん中）に収まる。
+func _build_crown() -> void:
+	# 風船のアーチのまん中に空けたすき間へ、王冠を据える。
+	var base := BALLOON_ARCH_BASE_M + BALLOON_ARCH_RISE_M - 0.75
+	var gold := Parts.gold()
+	Parts.cylinder(_root, CROWN_RADIUS_M, CROWN_RADIUS_M * 1.06, CROWN_BAND_M, Vector3(0.0, base, 0.0), gold, 14)
+	for point in CROWN_POINTS:
+		var angle := TAU * float(point) / float(CROWN_POINTS)
+		var at := Vector3(cos(angle) * CROWN_RADIUS_M * 0.8, base + CROWN_BAND_M, sin(angle) * CROWN_RADIUS_M * 0.8)
+		Parts.cylinder(_root, 0.0, CROWN_RADIUS_M * 0.3, CROWN_SPIKE_M, at, gold, 10)
+		Parts.mesh(_root, Parts.sphere_mesh(CROWN_RADIUS_M * 0.17, 10), gold, at + Vector3(0.0, CROWN_SPIKE_M + 0.04, 0.0))
+	# 前と後ろに、赤い宝石を1つずつ。
+	var gem := Parts.material(CROWN_GEM_COLOR, 0.2)
+	for face: float in [-1.0, 1.0]:
+		Parts.mesh(_root, Parts.sphere_mesh(CROWN_RADIUS_M * 0.26, 12), gem, Vector3(0.0, base + CROWN_BAND_M * 0.55, face * CROWN_RADIUS_M * 0.92))
+
+
+## ゴールの門を、風船で飾る。柱に沿って上がり、門の上でふくらむアーチと、ふもとに結んだ束。
+## 周回の数に関わらず、いつも出す（門そのものの飾りなので）。
+## アーチの風船を置く場所（柱に沿って上がり、門の上を渡る）。span は、柱と柱のあいだ。
+## 位置だけを決める（テストから、この並びを確かめられるように分けてある）。
+static func balloon_positions(span: float) -> Array[Vector3]:
+	var half := span * 0.5
+	var spots: Array[Vector3] = []
+	var column_steps := int((BALLOON_COLUMN_TO_M - BALLOON_COLUMN_FROM_M) / BALLOON_SPACING_M)
+	# 左右の柱に沿って、上へ並べる。柱の前後に1つずつ。
+	for side: float in [-1.0, 1.0]:
+		for step in column_steps + 1:
+			var height := BALLOON_COLUMN_FROM_M + float(step) * BALLOON_SPACING_M
+			for depth: float in [-1.0, 1.0]:
+				spots.append(Vector3(side * half, height, depth * BALLOON_SIDE_OFFSET_M))
+	# 門の上を、まん中がふくらむ弧で渡す。まん中は、王冠を置くために空ける。
+	var arch_steps := int(half * 2.0 / BALLOON_SPACING_M)
+	for step in arch_steps + 1:
+		var across := -half + float(step) * (half * 2.0 / float(arch_steps))
+		if absf(across) < CROWN_RADIUS_M * 2.0:
+			continue
+		var t := across / half
+		var height := BALLOON_ARCH_BASE_M + BALLOON_ARCH_RISE_M * (1.0 - t * t)
+		for depth: float in [-1.0, 1.0]:
+			spots.append(Vector3(across, height, depth * BALLOON_SIDE_OFFSET_M * 0.8))
+	return spots
+
+
+## ゴールの門を、風船で飾る。柱に沿って上がり、門の上でふくらむアーチと、ふもとに結んだ束。
+## 周回の数に関わらず、いつも出す（門そのものの飾りなので）。
+func _build_balloons() -> void:
+	var transforms := []
+	var colors := []
+	var spots := balloon_positions(span_m())
+	for index in spots.size():
+		_push_balloon(transforms, colors, spots[index], index)
+	var balloons := Parts.multi(_root, Parts.sphere_mesh(1.0, 12), transforms, colors, _balloon_material())
+	balloons.name = "Balloons"
+	var half := span_m() * 0.5
+	for side: float in [-1.0, 1.0]:
+		_build_balloon_bunch(Vector3(side * (half + 0.9), 0.0, BALLOON_SIDE_OFFSET_M * 1.6), side)
+
+
+## 風船を1つ、置き方の並びに足す。番号から、色と大きさを少しずつ変える。
+func _push_balloon(transforms: Array, colors: Array, at: Vector3, index: int) -> void:
+	var color: Color = BALLOON_COLORS[index % BALLOON_COLORS.size()]
+	# 同じ大きさが並ばないように、番号で少しだけ散らす。
+	var size := BALLOON_RADIUS_M * (0.86 + 0.28 * fposmod(float(index) * 0.37, 1.0))
+	var turn := Basis(Vector3.UP, fposmod(float(index) * 1.1, TAU))
+	transforms.append(Transform3D(turn.scaled(Vector3(size, size * BALLOON_STRETCH, size)), at))
+	# まとめて置く形の色は、そのままだと白っぽく出るので、リニア空間に直してから渡す。
+	colors.append(color.srgb_to_linear())
+
+
+## 柱のふもとに結んだ、風船の束。ひもで結び目へつなぐ。
+func _build_balloon_bunch(foot: Vector3, side: float) -> void:
+	var tie := foot + Vector3(0.0, BUNCH_TIE_HEIGHT_M, 0.0)
+	var string_material := Parts.material(Parts.COLOR_WHITE, 0.8)
+	for index in BUNCH_COUNT:
+		var angle := TAU * float(index) / float(BUNCH_COUNT) + side
+		var spread := 0.55 + 0.25 * fposmod(float(index) * 0.53, 1.0)
+		var height := lerpf(BUNCH_HEIGHT_M.x, BUNCH_HEIGHT_M.y, fposmod(float(index) * 0.41, 1.0))
+		var at := foot + Vector3(cos(angle) * spread, height, sin(angle) * spread)
+		var color: Color = BALLOON_COLORS[(index + int(side) + 3) % BALLOON_COLORS.size()]
+		var size := BALLOON_RADIUS_M * 1.05
+		Parts.mesh(_root, Parts.sphere_mesh(size, 12), _balloon_material(color), at, Vector3.ZERO, Vector3(1.0, BALLOON_STRETCH, 1.0))
+		# 結び目へ向かう、細いひも。
+		var line := at - tie
+		var string := Parts.cylinder_mesh(BUNCH_STRING_RADIUS_M, BUNCH_STRING_RADIUS_M, line.length(), 6)
+		var node := Parts.mesh(_root, string, string_material, (at + tie) * 0.5)
+		node.transform = Transform3D(_basis_with_y(line), (at + tie) * 0.5)
+
+
+## +Y を dir に向けた、正規直交の向き（ひもを、結び目から風船へ向けるのに使う）。
+static func _basis_with_y(dir: Vector3) -> Basis:
+	var y := dir.normalized()
+	var reference := Vector3.BACK if absf(y.dot(Vector3.BACK)) < 0.9 else Vector3.RIGHT
+	var x := reference.cross(y).normalized()
+	var z := x.cross(y).normalized()
+	return Basis(x, y, z)
+
+
+## 風船の塗り（つやのある、少し光る玉）。色を省くと、1つ1つの色を使う。
+func _balloon_material(color: Color = Color.WHITE) -> StandardMaterial3D:
+	var material := Parts.material(color, 0.22)
+	material.metallic_specular = 0.75
+	material.rim_enabled = true
+	material.rim = 0.4
+	if color == Color.WHITE:
+		material.vertex_color_use_as_albedo = true
+	return material
 
 
 func _build_ground_line() -> void:

@@ -3,7 +3,7 @@ extends Control
 ## 左が、枠番号（1〜8。動かない）とキャラスロット（ユーザー1つ＋CPU7つ。上下に動かして枠順を決める）。
 ## 右が、今見ているスロットの個体の詳細。
 
-const TITLE_SCENE_PATH := "res://scenes/title.tscn"
+const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
 const RACE_SCENE_PATH := "res://scenes/race_entries.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/race_select_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
@@ -103,7 +103,7 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 20)
 	content.add_child(buttons)
-	_back_button = MenuStyle.button("タイトルへ戻る", 22, MenuStyle.COLOR_BUTTON_QUIET)
+	_back_button = MenuStyle.button("戻る", 22, MenuStyle.COLOR_BUTTON_QUIET)
 	_back_button.name = "BackButton"
 	_back_button.custom_minimum_size = Vector2(260.0, 44.0)
 	_back_button.pressed.connect(go_to_title)
@@ -458,7 +458,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func go_to_title() -> void:
-	get_tree().change_scene_to_file(TITLE_SCENE_PATH)
+	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
 
 
 func go_to_race() -> void:

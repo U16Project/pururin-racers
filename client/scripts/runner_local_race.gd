@@ -37,6 +37,8 @@ var _current_speed_kmh: float = 0.0
 ## 前の走者にふさがれた分を引いた、実際に進んでいる対地速度（表示用。走行計算には使わない）。
 var _actual_speed_kmh: float = 0.0
 var _drive_level: float = 0.0
+## 今の有効ステータスを計算したときの条件（個体・順位・区間・頭数）。同じ条件のあいだは、計算し直さない。
+var _effective_stats_key: Array = []
 ## ブレーキ操作を押している間 true。ノッチ設定は保持し、離すと元の出力へ戻る。
 var _braking: bool = false
 var _drive_hold_direction: float = 0.0
@@ -621,6 +623,10 @@ func get_effective_stats() -> Dictionary:
 
 
 ## 操作性による、左右のライン移動の速さの倍率。
+func get_attribute_id() -> String:
+	return str(_pururin.get("attribute", ""))
+
+
 func get_running_style_id() -> String:
 	return str(_pururin.get("running_style", ""))
 
@@ -975,12 +981,19 @@ func _apply_pururin_race_stats() -> void:
 		max_speed_kmh = _base_max_speed_kmh
 		_natural_top_speed_kmh = _base_max_speed_kmh
 		return
+	# 有効ステータスは、個体・順位・区間・頭数が同じなら変わらない。変わったときだけ計算し直す（毎コマ計算すると重い）。
+	var live_place := _cpu_live_place()
+	var progress_ratio := _race_progress / _race_distance_m
+	var stats_key := [_pururin, live_place, PururinStatsMath.phase_index(progress_ratio), _field_size]
+	if stats_key == _effective_stats_key and not _effective_stats.is_empty():
+		return
+	_effective_stats_key = stats_key.duplicate(true)
 	_effective_stats = PururinStatsMath.effective_stats(
 		str(_pururin["attribute"]),
 		_pururin["allocation"],
 		str(_pururin["running_style"]),
-		_cpu_live_place(),
-		_race_progress / _race_distance_m,
+		live_place,
+		progress_ratio,
 		_field_size
 	)
 	_natural_top_speed_kmh = LocalRaceMath.top_speed_natural_speed_kmh(int(_effective_stats["top_speed"]))

@@ -1,27 +1,18 @@
 extends Control
-## タイトル画面。背景の画像（ゲーム名のロゴ入り）の上に、遊ぶモードのボタンを置く。
+## タイトル画面。背景の画像だけを出し、下の方に「PRESS ANY BUTTON」を点滅させる。
+## キー・ゲームパッドのボタン・マウスのボタンで、メニュー画面へ進む。
 
-const CAMERA_EXPLORATION_SCENE_PATH := "res://scenes/camera_exploration.tscn"
-const PAD_DIAGNOSTICS_SCENE_PATH := "res://scenes/pad_diagnostics.tscn"
 const TRAINER_PROFILE_SCENE_PATH := "res://scenes/trainer_profile.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_screen_background.png"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
-## ボタンの下の余白と、ボタンの濃さ（1で不透明）。
-const BUTTON_BOTTOM_MARGIN := 124.0
-const BUTTON_HEIGHT := 54.0
-const BUTTON_GAP := 8.0
-const BUTTON_OPACITY := 0.7
-const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
-const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
-const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
+const Logo := preload("res://scripts/logo.gd")
+const PROMPT_TEXT := "ー　PRESS ANY BUTTON　ー"
+## ロゴからの押しっぱなしで、すぐ抜けないようにする待ち時間。
+const ARM_DELAY_MSEC := 250
 
-var _free_race_button: Button
-var _camera_exploration_button: Button
-var _pad_diagnostics_button: Button
-var _screen_mode_label: Label
-var _screen_mode_index := -1
-var _screen_mode_row: HBoxContainer
-var _screen_direction_down := {"ui_left": false, "ui_right": false}
+var _prompt: Label
+var _armed_at_msec := 0
+var _leaving := false
 
 
 func _ready() -> void:
@@ -43,203 +34,40 @@ func _ready() -> void:
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	# ボタンは少し透けさせて、背景の絵が見えるようにする。
-	_free_race_button = MenuStyle.button("ゲーム開始", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
-	_free_race_button.name = "FreeRaceButton"
-	_free_race_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_free_race_button.offset_left = -182.0
-	_free_race_button.offset_right = 182.0
-	_free_race_button.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 3.0 - BUTTON_GAP * 2.0
-	_free_race_button.offset_bottom = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 2.0 - BUTTON_GAP * 2.0
-	_free_race_button.pressed.connect(go_to_race_select)
-	UIAudio.bind_button_sound(_free_race_button, "confirmation")
-	add_child(_free_race_button)
-	_camera_exploration_button = MenuStyle.button("カメラで探検", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
-	_camera_exploration_button.name = "CameraExplorationButton"
-	_camera_exploration_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	_camera_exploration_button.offset_left = -182.0
-	_camera_exploration_button.offset_right = 182.0
-	_camera_exploration_button.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT * 2.0 - BUTTON_GAP
-	_camera_exploration_button.offset_bottom = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT - BUTTON_GAP
-	_camera_exploration_button.pressed.connect(go_to_camera_exploration)
-	UIAudio.bind_button_sound(_camera_exploration_button, "confirmation")
-	add_child(_camera_exploration_button)
-	_free_race_button.focus_neighbor_bottom = _free_race_button.get_path_to(_camera_exploration_button)
-	_camera_exploration_button.focus_neighbor_top = _camera_exploration_button.get_path_to(_free_race_button)
-	var diagnostics := MenuStyle.button("ゲームパッド設定・入力確認", 16, MenuStyle.COLOR_BUTTON_QUIET)
-	_pad_diagnostics_button = diagnostics
-	diagnostics.name = "PadDiagnosticsButton"
-	diagnostics.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	diagnostics.offset_left = -182.0
-	diagnostics.offset_right = 182.0
-	diagnostics.offset_top = -BUTTON_BOTTOM_MARGIN - BUTTON_HEIGHT
-	diagnostics.offset_bottom = -BUTTON_BOTTOM_MARGIN
-	diagnostics.pressed.connect(go_to_pad_diagnostics)
-	UIAudio.bind_button_sound(diagnostics, "confirmation")
-	add_child(diagnostics)
-	_camera_exploration_button.focus_neighbor_bottom = _camera_exploration_button.get_path_to(diagnostics)
-	diagnostics.focus_neighbor_top = diagnostics.get_path_to(_camera_exploration_button)
-	_build_screen_mode_selector()
-	var quit_button := MenuStyle.button("ゲームを終了", 22, Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
-	quit_button.name = "QuitButton"
-	quit_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	quit_button.offset_left = -182.0
-	quit_button.offset_right = 182.0
-	quit_button.offset_top = -78.0
-	quit_button.offset_bottom = -24.0
-	quit_button.pressed.connect(func(): get_tree().quit())
-	UIAudio.bind_button_sound(quit_button, "confirmation")
-	add_child(quit_button)
-	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(quit_button)
-	quit_button.focus_neighbor_top = quit_button.get_path_to(_screen_mode_row)
-	_free_race_button.grab_focus()
+	_prompt = MenuStyle.label(PROMPT_TEXT, 28)
+	_prompt.name = "PressAnyButton"
+	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_prompt.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_prompt.offset_left = -360.0
+	_prompt.offset_right = 360.0
+	_prompt.offset_top = -88.0
+	_prompt.offset_bottom = -36.0
+	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_prompt)
+	var tween := create_tween().set_loops()
+	tween.tween_property(_prompt, "modulate:a", 0.15, 0.55)
+	tween.tween_property(_prompt, "modulate:a", 1.0, 0.55)
+	_armed_at_msec = Time.get_ticks_msec()
 
 
-func _build_screen_mode_selector() -> void:
-	var row := HBoxContainer.new()
-	row.name = "ScreenModeSelector"
-	_screen_mode_row = row
-	row.focus_mode = Control.FOCUS_ALL
-	row.gui_input.connect(_screen_mode_gui_input)
-	row.focus_entered.connect(row.queue_redraw)
-	row.focus_exited.connect(row.queue_redraw)
-	row.focus_exited.connect(func(): _screen_direction_down = {"ui_left": false, "ui_right": false})
-	row.draw.connect(func():
-		if row.has_focus():
-			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
-	)
-	row.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	row.offset_left = -182.0
-	row.offset_right = 182.0
-	row.offset_top = -116.0
-	row.offset_bottom = -86.0
-	row.add_theme_constant_override("separation", 4)
-	add_child(row)
-	var caption := MenuStyle.label("ウィンドウサイズ", 14)
-	caption.name = "ModeCaption"
-	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(caption)
-	var previous := _screen_mode_button("◀", "PreviousModeButton", -1)
-	row.add_child(previous)
-	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 14)
-	_screen_mode_label.name = "ModeLabel"
-	_screen_mode_label.custom_minimum_size.x = 140.0
-	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_screen_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_screen_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_screen_mode_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_screen_mode_label)
-	var next := _screen_mode_button("▶", "NextModeButton", 1)
-	row.add_child(next)
-	row.focus_neighbor_top = row.get_path_to(_pad_diagnostics_button)
-	_pad_diagnostics_button.focus_neighbor_bottom = _pad_diagnostics_button.get_path_to(row)
-	_sync_screen_mode()
-
-
-func _screen_mode_button(text: String, node_name: String, direction: int) -> Button:
-	var button := MenuStyle.button(text, 14, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
-	button.name = node_name
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(36, 30)
-	# 通常のメニューボタンより薄い、画面最下部の操作行。
-	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
-		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
-		style.content_margin_left = 8.0
-		style.content_margin_right = 8.0
-		style.content_margin_top = 3.0
-		style.content_margin_bottom = 3.0
-		button.add_theme_stylebox_override(state, style)
-	button.pressed.connect(func() -> void:
-		var previous := _screen_mode_index
-		_cycle_screen_mode(direction)
-		if _screen_mode_index != previous:
-			UIAudio.play_arrow_click())
-	return button
-
-
-## 行全体を選んで左右で切り替える。軸の連続イベントやキーリピートは数えない。
-func _screen_mode_gui_input(event: InputEvent) -> void:
-	if not _screen_mode_row.has_focus():
+## タイトルには操作部品がないため、未処理入力ではなく最初の入力段階で受ける。
+## これでマウスクリックも、GUIへ消費されずに確実に進める。
+func _input(event: InputEvent) -> void:
+	if Time.get_ticks_msec() - _armed_at_msec < ARM_DELAY_MSEC:
 		return
-	for action in ["ui_left", "ui_right"]:
-		if not event.is_action(action):
-			continue
-		var down := event.is_action_pressed(action, true, true)
-		if down and not _screen_direction_down[action] and not event.is_echo():
-			var previous := _screen_mode_index
-			_cycle_screen_mode(-1 if action == "ui_left" else 1)
-			var sound_key := screen_mode_sound_key(event is InputEventJoypadButton or event is InputEventJoypadMotion, _screen_mode_index != previous)
-			if sound_key == "selection_cycle":
-				UIAudio.play_selection_cycle()
-		_screen_direction_down[action] = down
-		_screen_mode_row.accept_event()
+	if Logo.is_skip_event(event):
+		get_viewport().set_input_as_handled()
+		go_to_menu()
 
 
-## タイトル再入場やOSの最大化・復元にも表示を合わせる。
-func _process(_delta: float) -> void:
-	_sync_screen_mode()
-
-
-func _sync_screen_mode() -> void:
-	var mode := DisplayServer.window_get_mode()
-	if mode == DisplayServer.WINDOW_MODE_MINIMIZED:
-		return
-	var index := screen_mode_index(mode)
-	if index != _screen_mode_index:
-		_screen_mode_index = index
-		_screen_mode_label.text = SCREEN_MODE_LABELS[index]
-
-
-static func screen_mode_index(mode: int) -> int:
-	if mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
-		return 2
-	var index := SCREEN_MODES.find(mode)
-	return maxi(index, 0)
-
-
-static func screen_mode_sound_key(is_gamepad: bool, changed: bool) -> String:
-	return "selection_cycle" if is_gamepad and changed else ""
-
-
-static func cycled_screen_mode(mode: int, direction: int) -> int:
-	return SCREEN_MODES[posmod(screen_mode_index(mode) + direction, SCREEN_MODES.size())]
-
-
-func _cycle_screen_mode(direction: int) -> void:
-	DisplayServer.window_set_mode(cycled_screen_mode(DisplayServer.window_get_mode(), direction))
-	_sync_screen_mode()
-
-
-## ゲームパッドの決定（A）で、選んでいるボタンを押す（Godotの標準では、ゲームパッドのボタンは「決定」に割り当てられていない）。
-func _unhandled_input(event: InputEvent) -> void:
-	if not RaceControllerInput.is_accept_pressed(event):
-		return
-	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
-	var viewport := get_viewport()
-	if RaceControllerInput.activate_focused_control(viewport):
-		viewport.set_input_as_handled()
-
-
-## ゲーム開始の次は、トレーナーの画面（そこから、レース選択へ進む）。
 func next_scene_path() -> String:
 	return TRAINER_PROFILE_SCENE_PATH
 
 
-func camera_exploration_scene_path() -> String:
-	return CAMERA_EXPLORATION_SCENE_PATH
-
-
-func go_to_race_select() -> void:
+func go_to_menu() -> void:
+	if _leaving:
+		return
+	_leaving = true
+	UIAudio.play_confirmation()
 	get_tree().change_scene_to_file(next_scene_path())
-
-
-func go_to_camera_exploration() -> void:
-	get_tree().change_scene_to_file(camera_exploration_scene_path())
-
-func pad_diagnostics_scene_path() -> String:
-	return PAD_DIAGNOSTICS_SCENE_PATH
-
-
-func go_to_pad_diagnostics() -> void:
-	get_tree().change_scene_to_file(pad_diagnostics_scene_path())

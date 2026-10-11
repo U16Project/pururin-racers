@@ -190,6 +190,20 @@ func test_a_finished_row_in_the_standings_keeps_its_heart_and_stamina_from_the_g
 
 
 
+func test_the_result_board_lists_every_finisher() -> void:
+	var race := _race()
+	var runners: Array = race.call("get_runners_for_simulation")
+	var place := 1
+	for runner in runners:
+		runner.call("mark_finished", place, 90.0 + place)
+		place += 1
+	race.call("_show_results")
+	var board: Control = race.find_child("ResultBoard", true, false)
+	assert_eq(board.call("rows").size(), runners.size())
+	assert_gt(board.custom_minimum_size.y, 0.0)
+	assert_eq(int(board.call("rows")[0]["place"]), 1)
+
+
 func test_the_result_board_offers_retry_and_return_and_both_sound_like_a_decision() -> void:
 	var race := _race()
 	var retry := race.find_child("ResultRetryButton", true, false) as Button

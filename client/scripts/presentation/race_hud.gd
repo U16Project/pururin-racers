@@ -9,7 +9,9 @@ const PANEL_WIDTH := 440.0
 ## BOOST・DASH の文字の左に付ける、ボタンのマークの大きさ。
 const DRIVE_ACTION_MARK_SIZE := 13.0
 ## 操作盤は画面の左下（順位表の下）。画面の左端からの余白。
-const PANEL_LEFT_MARGIN := 46.0
+## 操作盤は画面のまん中に置く（左右の端は、スマホの仮想パッドのために空ける）。
+## ここは、画面がとても狭いときの、左右の最小の余白。
+const PANEL_SIDE_MIN_MARGIN := 46.0
 const GAUGE_BAR_HEIGHT := 110.0
 ## 体力バーのうち、下から負債（マイナス）に使う割合。負債の全体（0〜限度）をこの長さで見せるので、プラス側より縮尺が小さい（減りが遅く見える）。
 const FUEL_DEBT_ZONE_RATIO := 0.25
@@ -109,6 +111,8 @@ var _state := {
 	"air_blue": 0.0,
 	"countdown": false,
 }
+## 下の操作盤を出すか。丸い操作盤（RoundRaceHud）を出しているあいだは、消す。順位表と左上の表示は、そのまま。
+var main_panel_visible := true
 var _blink := 0.0
 ## 確定した行に使う太字。
 var _bold_font: FontVariation
@@ -148,6 +152,11 @@ static func confirmed_count(standings: Array) -> int:
 			break
 		count += 1
 	return count
+
+
+## 操作盤の左はし。画面のまん中に置く。
+static func panel_left(screen_width: float) -> float:
+	return maxf((screen_width - PANEL_WIDTH) * 0.5, PANEL_SIDE_MIN_MARGIN)
 
 
 ## 順位表のいちばん上の縦の位置。row_count 行の表が、上の項目（順位・残り距離・タイム）と操作盤の、ちょうど中間に来る位置。
@@ -263,7 +272,8 @@ func _draw() -> void:
 		return
 	_draw_race_info(font)
 	_draw_standings(font)
-	_draw_main_panel(font)
+	if main_panel_visible:
+		_draw_main_panel(font)
 
 
 func _draw_race_info(font: Font) -> void:
@@ -286,7 +296,7 @@ func _draw_main_panel(font: Font) -> void:
 	# 親が CanvasLayer の場合は Control の size が当てにならないため、ビューポートの大きさを使う。
 	var screen := get_viewport_rect().size
 	var panel := Rect2(
-		Vector2(PANEL_LEFT_MARGIN, screen.y - PANEL_BOTTOM_MARGIN - PANEL_HEIGHT),
+		Vector2(panel_left(screen.x), screen.y - PANEL_BOTTOM_MARGIN - PANEL_HEIGHT),
 		Vector2(PANEL_WIDTH, PANEL_HEIGHT)
 	)
 	draw_rect(panel, COLOR_PANEL)

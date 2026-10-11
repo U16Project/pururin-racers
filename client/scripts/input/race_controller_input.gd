@@ -1,6 +1,8 @@
 extends RefCounted
 ## キーボードと標準ゲームパッドをレース画面で共通に扱う小さな入力部品。
 
+const TouchPadInput := preload("res://scripts/input/touch_pad_input.gd")
+
 const DEVICE := 0
 const STICK_DEADZONE := 0.25
 const TRIGGER_THRESHOLD := 0.5
@@ -13,13 +15,19 @@ static func _options() -> Node:
 	var tree := Engine.get_main_loop() as SceneTree
 	return tree.root.get_node_or_null("PadInputOptions") if tree != null else null
 
+## 本物のパッドと、画面の上の仮想パッドの、どちらが押されていても押したことにする。
 static func button_down(button: int) -> bool:
+	if TouchPadInput.button_down(button):
+		return true
 	var options := _options()
 	return options.button_down(button) if options != null else Input.is_joy_button_pressed(DEVICE, button)
 
+## 倒し方は、本物のパッドと仮想パッドのうち、大きく倒しているほうを使う。
 static func axis_value(axis: int) -> float:
 	var options := _options()
-	return options.axis_value(axis) if options != null else Input.get_joy_axis(DEVICE, axis)
+	var pad: float = options.axis_value(axis) if options != null else Input.get_joy_axis(DEVICE, axis)
+	var touch := TouchPadInput.axis_value(axis)
+	return touch if absf(touch) > absf(pad) else pad
 
 
 static func line_axis() -> float:

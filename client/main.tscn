@@ -1,7 +1,7 @@
 [gd_scene load_steps=3 format=3 uid="uid://bq8m0main0001"]
 
 [ext_resource type="Script" uid="uid://i3ngiy5ncvhv" path="res://main.gd" id="1_main"]
-[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansCJK-Regular.ttc" id="2_font"]
+[ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansJP-Regular.otf" id="2_font"]
 
 [node name="Main" type="Control"]
 layout_mode = 3

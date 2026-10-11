@@ -264,6 +264,38 @@ func test_red_carpet_lies_past_the_goal_line_only_on_the_final_lap() -> void:
 	assert_true(carpet.visible)
 
 
+func test_balloons_and_crown_decorate_the_gate_and_stay_on_every_lap() -> void:
+	var track := Path3D.new()
+	track.curve = Curve3D.new()
+	track.curve.add_point(Vector3.ZERO)
+	track.curve.add_point(Vector3(0, 0, -100))
+	add_child_autofree(track)
+	var visual := GoalVisual.new()
+	visual.place(track, 10.0, 15.0)
+	var gate := track.get_node(GoalVisual.ROOT_NAME) as Node3D
+	var balloons := gate.get_node("Balloons") as MultiMeshInstance3D
+	var spots := GoalVisual.balloon_positions(visual.span_m())
+	assert_gt(spots.size(), 40)
+	assert_eq(balloons.multimesh.instance_count, spots.size())
+	var half := visual.span_m() * 0.5
+	var highest := 0.0
+	var gap := half
+	for at: Vector3 in spots:
+		# 風船は、柱の外側より内へ入らない（コースの上に垂れ下がらない）。
+		assert_true(absf(at.x) <= half + 0.01)
+		highest = maxf(highest, at.y)
+		# 門の上の高さにある風船のうち、まん中にいちばん近いもの。
+		if at.y > GoalVisual.POST_HEIGHT_M:
+			gap = minf(gap, absf(at.x))
+	# 門の上を越えるアーチになっていて、まん中は王冠のために空いている。
+	assert_gt(highest, GoalVisual.POST_HEIGHT_M)
+	assert_gt(gap, GoalVisual.CROWN_RADIUS_M)
+	# 周回が残っていても、飾りは出したまま（札と地面の線だけが切り替わる）。
+	visual.set_laps_to_go(1)
+	assert_true(balloons.visible)
+	assert_false((gate.get_node("GroundLine") as Node3D).visible)
+
+
 func test_invalid_configuration_prevents_race_start_and_displays_error() -> void:
 	var saved := Config.values()
 	var saved_error := Config.last_error

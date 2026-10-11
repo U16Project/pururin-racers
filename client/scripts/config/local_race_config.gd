@@ -10,6 +10,7 @@ const NUMBER_RANGES := {
 	"drive_level_max": [1.0, 100.0],
 	"drive_level_step": [1.0, 1.0],
 	"start_countdown_seconds": [0.0, 30.0],
+	"race_entry_wait_seconds": [0.0, 30.0],
 	"player_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_duration_seconds": [0.0, 30.0],
