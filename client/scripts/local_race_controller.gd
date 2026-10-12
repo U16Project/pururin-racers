@@ -39,6 +39,11 @@ const TouchControls := preload("res://scripts/presentation/touch_controls.gd")
 
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
+const ONLINE_LOBBY_SCENE := "res://scenes/online_lobby.tscn"
+const OnlineSession := preload("res://scripts/online/online_session.gd")
+const OnlineProtocol := preload("res://scripts/online/online_protocol.gd")
+## オンラインで、今の操作を、変わっていなくても送り直す間（秒）。
+const ONLINE_INPUT_RESEND_S := 0.25
 const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 ## 結果の板を出すまでの待ち。最後の走者がゴールしてからの秒数と、ユーザーがゴールしてからの秒数（長いほうを待つ）。
 const RESULT_WAIT_AFTER_LAST_S := 2.0
@@ -98,6 +103,19 @@ var _launch_visual: MeshInstance3D
 var _telemetry_recorder := RaceTelemetryRecorder.new()
 ## 常時表示のHUD。詳細な診断テキスト（_hud_label）はF3で切り替えるデバッグ表示。
 var _race_hud: Control
+## オンラインのゲーム側か（サーバーのレースを映すだけで、自分では走りを計算しない）。
+var _online_view := false
+var _online_client: Node
+## 個体のID → 走者（届いた状態を、走者に配るため）。
+var _runners_by_id := {}
+## 最後に送った操作と、送ってからの秒数。
+var _online_sent_input := {}
+var _online_input_age_s := 0.0
+## 自分の走者の、前に届いた状態（音を鳴らすきっかけを見つけるため）。
+var _online_previous_own := {}
+## 通信ごしの人（オンラインのサーバーだけ）。人の番号 → 走者、人の番号 → 今の操作。
+var _remote_runners := {}
+var _remote_inputs := {}
 var _round_hud: Control
 ## 丸い操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
 ## 絵の描き直しは、1秒に ROUND_HUD_UPDATES_PER_S 回だけにする。
@@ -218,6 +236,14 @@ func _ready() -> void:
 		return
 	_place_markers()
 	_spawn_field()
+	if _online_view:
+		_online_client = OnlineSession.client(get_tree())
+		_online_client.message_received.connect(_on_online_message)
+		_online_client.closed.connect(_leave_online_race)
+		# オンラインでは、もう1回は部屋から始める。
+		_result_retry_button.visible = false
+		_result_return_button.text = "部屋へ戻る"
+		_pause_return_button.text = "部屋へ戻る"
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
 	RaceAudio.play_race_entry()
@@ -256,11 +282,16 @@ func _unhandled_input(event: InputEvent) -> void:
 		_set_paused(false)
 		get_viewport().set_input_as_handled()
 	elif not _paused and _race_started and _player != null and RaceControllerInput.is_dash_pressed(event):
-		if bool(_player.call("trigger_dash")):
+		# オンラインでは、押したことをサーバーへ送る（音は、効いたことが届いてから鳴らす）。
+		if _online_view:
+			_online_client.send(OnlineProtocol.ACTION, {"kind": OnlineProtocol.ACTION_DASH})
+		elif bool(_player.call("trigger_dash")):
 			RaceAudio.play_dash()
 		get_viewport().set_input_as_handled()
 	elif not _paused and _race_started and _player != null and RaceControllerInput.is_boost_pressed(event):
-		if bool(_player.call("trigger_boost")):
+		if _online_view:
+			_online_client.send(OnlineProtocol.ACTION, {"kind": OnlineProtocol.ACTION_BOOST})
+		elif bool(_player.call("trigger_boost")):
 			RaceAudio.play_boost()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
@@ -280,10 +311,17 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
+	if _online_view:
+		_process_online_view(_delta)
+		return
 	# ゆっくりの戻しは、一時停止中でも進める（止めたまま、ゆっくりが残らないように）。
 	_celebration.advance(_delta)
 	if _player != null:
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
+	for peer_id: int in _remote_runners:
+		var remote_input: Dictionary = _remote_inputs[peer_id]
+		_remote_runners[peer_id].call("set_remote_input", float(remote_input["line"]), float(remote_input["notch"]))
+		_remote_runners[peer_id].call("set_braking", _race_started and not _paused and not _race_over and bool(remote_input["brake"]))
 	if not _paused and not _race_started:
 		_update_before_start(_delta)
 	elif not _paused:
@@ -299,7 +337,7 @@ func _process(_delta: float) -> void:
 		_update_goal_gate()
 		call_deferred("_finalize_draft_tick")
 		if not _race_over:
-			_telemetry_recorder.record_sample(_race_elapsed, _runners)
+			_record_telemetry_sample()
 	if _results_pending and not _race_over and not _paused:
 		_results_wait_remaining -= _delta
 		if _results_wait_remaining <= 0.0:
@@ -393,7 +431,8 @@ func _update_start_countdown(delta: float) -> void:
 	_start_gate.clear_after_start()
 	# スタートの線も、ゲートと同じときに消す（周回でもう一度通る所に、残さない）。
 	create_tween().tween_callback(_start_marker.hide).set_delay(StartGate.CLEAR_DELAY_S)
-	_telemetry_recorder.start(_race_distance_m)
+	if not _is_online_host():
+		_telemetry_recorder.start(_race_distance_m)
 	_countdown_label.text = "START!"
 	_start_signal_remaining = 0.8
 	for runner in _runners:
@@ -446,6 +485,10 @@ func _spawn_field() -> void:
 		child.queue_free()
 	_runners.clear()
 	_player = null
+	_remote_runners.clear()
+	_remote_inputs.clear()
+	_runners_by_id.clear()
+	_online_view = RaceSession.is_online_view()
 	# 出るのは、キャラが入っている枠だけ。スタートの位置は、枠の番号どおり（未選択の枠は、空けたまま）。
 	var entries := RaceSession.field_entries()
 	var field_size := entries.size()
@@ -453,7 +496,7 @@ func _spawn_field() -> void:
 		var entry: Dictionary = entries[i]
 		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"])).duplicate(true)
 		pururin["trainer_profile_id"] = entry["trainer_profile_id"]
-		pururin["trainer_name"] = RaceSession.trainer_name_for(str(entry["id"]), bool(entry["player"]))
+		pururin["trainer_name"] = str(entry["trainer_name"]) if entry.has("trainer_name") else RaceSession.trainer_name_for(str(entry["id"]), bool(entry["player"]))
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
@@ -477,7 +520,22 @@ func _spawn_field() -> void:
 			field_size
 		)
 		_runners.append(runner)
-		if is_player:
+		_runners_by_id[str(entry["id"])] = runner
+		var peer_id := int(entry.get("peer_id", 0))
+		# オンラインのゲーム側：全員、サーバーから届いた状態を映すだけ。自分の番号の走者が、この画面の「自分」。
+		if _online_view:
+			runner.set("puppet", true)
+			is_player = peer_id == RaceSession.online_view_peer_id()
+			peer_id = 0
+		# 通信ごしの人（オンラインのサーバーだけ）：操作は通信で受け取る。この画面の「自分」にはしない。
+		if peer_id != 0:
+			runner.set("remote_controlled", true)
+			runner.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
+			# サーバーの端末に、走者ごとの1秒おきの診断の文を流さない。
+			runner.set("_drive_diagnostic_log_remaining", INF)
+			_remote_runners[peer_id] = runner
+			_remote_inputs[peer_id] = {"line": 0.0, "notch": 0.0, "brake": false}
+		elif is_player:
 			_player = runner
 			# 自分のぷるりんの足元に、光る目印を付ける（集団の中でも、自分が分かるように）。
 			var marker := MeshInstance3D.new()
@@ -488,6 +546,181 @@ func _spawn_field() -> void:
 					_camera.call("set_follow_target", runner)
 				_camera.set("overview_ortho_size", 560.0)
 				_camera.set("overview_height", 500.0)
+
+
+# ---------------------------------------------------------------- オンラインのゲーム側
+
+## オンラインのゲーム側の1コマ。走りは計算しない。操作を送り、届いた状態で、音と表示だけを進める。
+func _process_online_view(delta: float) -> void:
+	_celebration.advance(delta)
+	_send_online_input(delta)
+	_update_start_signal(delta)
+	_update_goal_gate()
+	if _race_started and not _race_over:
+		_update_heartbeat_audio(delta)
+	_update_hud()
+
+
+## 今の操作（ライン・ノッチ・ブレーキ）を、変わったときと、決めた間ごとに、サーバーへ送る。
+func _send_online_input(delta: float) -> void:
+	if _player == null or _race_over:
+		return
+	var input := {"line": 0.0, "notch": 0.0, "brake": false}
+	if not _paused:
+		input = {
+			"line": float(_player.call("_read_steer_axis")),
+			"notch": float(_player.call("_read_drive_axis")),
+			"brake": RaceControllerInput.brake_pressed(),
+		}
+	_online_input_age_s += delta
+	if input != _online_sent_input or _online_input_age_s >= ONLINE_INPUT_RESEND_S:
+		if _online_client.send(OnlineProtocol.INPUT, input):
+			_online_sent_input = input
+			_online_input_age_s = 0.0
+
+
+func _on_online_message(data: Dictionary) -> void:
+	match str(data["t"]):
+		OnlineProtocol.RACE_STATE: _apply_online_state(data)
+		OnlineProtocol.RACE_RESULT: _apply_online_result(data)
+
+
+## 届いたレースの状態を、走者と表示に入れる。
+func _apply_online_state(data: Dictionary) -> void:
+	if _race_over:
+		return
+	for state: Dictionary in data["runners"]:
+		var runner: Node3D = _runners_by_id.get(str(state["id"]))
+		if runner == null:
+			continue
+		runner.call("apply_online_state", state)
+		if runner == _player:
+			_play_online_own_sounds(state)
+	_race_elapsed = float(data["elapsed"])
+	if _race_started:
+		return
+	if bool(data["started"]):
+		_race_started = true
+		_start_gate.clear_after_start()
+		create_tween().tween_callback(_start_marker.hide).set_delay(StartGate.CLEAR_DELAY_S)
+		_countdown_label.visible = true
+		_countdown_label.text = "START!"
+		_start_signal_remaining = 0.8
+		for runner in _runners:
+			runner.call("set_race_active", true)
+	elif float(data["countdown"]) > 0.0:
+		if not _countdown_label.visible:
+			_countdown_label.visible = true
+			RaceAudio.play_countdown_start()
+		_countdown_label.text = "スタートまで %d" % ceili(float(data["countdown"]))
+
+
+## 自分の走者の状態の変わり目で、音を鳴らす（ノッチ・ダッシュ・ブースト・ゴール）。
+func _play_online_own_sounds(state: Dictionary) -> void:
+	var previous := _online_previous_own
+	_online_previous_own = state
+	if previous.is_empty():
+		return
+	match RunnerScript.notch_sound_key(float(previous["notch"]), float(state["notch"])):
+		"notch_up": UIAudio.play_notch_up()
+		"notch_down": UIAudio.play_notch_down()
+	if float(state["dash_ratio"]) > float(previous["dash_ratio"]):
+		RaceAudio.play_dash()
+	if int(state["boost_uses_left"]) < int(previous["boost_uses_left"]):
+		RaceAudio.play_boost()
+	if bool(state["finished"]) and not bool(previous["finished"]):
+		if int(state["finish_order"]) == 1:
+			_start_player_finish_celebration(true)
+			RaceAudio.play_player_first_goal()
+		else:
+			RaceAudio.play_player_finish_bell()
+
+
+## 届いた着順を走者に入れて、着順の板を出す。
+func _apply_online_result(data: Dictionary) -> void:
+	if _race_over:
+		return
+	for row: Dictionary in data["rows"]:
+		var runner: Node3D = _runners_by_id.get(str(row["id"]))
+		if runner != null:
+			runner.call("mark_finished", int(row["place"]), float(row["time"]))
+	_show_results()
+
+
+## オンラインのレースの画面を出て、部屋の画面へ戻る（つながりは、そのまま）。
+func _leave_online_race() -> void:
+	_celebration.stop()
+	RaceSession.set_online_entries([])
+	RaceSession.set_online_view(0)
+	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE)
+
+
+# ---------------------------------------------------------------- オンラインのサーバー側
+
+## オンラインのサーバーの上のレースか（通信ごしの人の走者がいる）。
+func _is_online_host() -> bool:
+	return not _remote_runners.is_empty()
+
+
+## レースの記録（あとで見返すためのファイル）に、今の状態を足す。サーバーの上では、記録しない（ファイルがたまり続けるため）。
+func _record_telemetry_sample() -> void:
+	if not _is_online_host():
+		_telemetry_recorder.record_sample(_race_elapsed, _runners)
+
+
+## 通信ごしの人の、今の操作を受け取る（オンラインのサーバーだけ）。その人の走者がいなければ、何もしない。
+## line＝ライン（-1〜1）、notch＝ノッチの上げ下げ（-1〜1。押しているあいだの値）、brake＝ブレーキを押しているか。
+func set_remote_input(peer_id: int, line: float, notch: float, brake: bool) -> void:
+	if _remote_inputs.has(peer_id):
+		_remote_inputs[peer_id] = {"line": line, "notch": notch, "brake": brake}
+
+
+## 通信ごしの人が、ダッシュ（"dash"）かブースト（"boost"）を押した。使えたら true。
+func trigger_remote_action(peer_id: int, action: String) -> bool:
+	if _paused or not _race_started or not _remote_runners.has(peer_id):
+		return false
+	match action:
+		"dash": return bool(_remote_runners[peer_id].call("trigger_dash"))
+		"boost": return bool(_remote_runners[peer_id].call("trigger_boost"))
+	return false
+
+
+## 通信ごしの人の走者（いなければ null）。
+func remote_runner(peer_id: int) -> Node3D:
+	return _remote_runners.get(peer_id)
+
+
+## オンラインで配る、レースの今の状態。
+func online_state() -> Dictionary:
+	var runners: Array = []
+	for runner in _runners:
+		runners.append(runner.call("get_online_state"))
+	return {
+		"elapsed": _race_elapsed,
+		"started": _race_started,
+		"entry_wait": maxf(_entry_wait_remaining, 0.0),
+		"countdown": maxf(_start_countdown_remaining, 0.0),
+		"over": _race_over,
+		"runners": runners,
+	}
+
+
+## 着順の一覧（ゴールした順）。1体ぶん：走者のID、順位、タイム（秒）。
+func online_result_rows() -> Array:
+	var ordered: Array = _runners.duplicate()
+	ordered.sort_custom(func(a, b): return a.call("get_finish_order") < b.call("get_finish_order"))
+	var rows: Array = []
+	for runner in ordered:
+		rows.append({"id": str(runner.call("get_snapshot")["id"]), "place": int(runner.call("get_finish_order")), "time": float(runner.call("get_finish_time"))})
+	return rows
+
+
+func is_race_started() -> bool:
+	return _race_started
+
+
+func is_race_over() -> bool:
+	return _race_over
 
 
 ## ヘッドレス統合シミュレーションが通常レースの生成済みランナーを再利用するための参照。
@@ -973,7 +1206,8 @@ func _show_results() -> void:
 	_celebration.stop()
 	RaceAudio.stop_final_stretch_ambience()
 	RaceAudio.stop_heartbeat()
-	_telemetry_recorder.finalize(_race_elapsed, _runners)
+	if not _online_view and not _is_online_host():
+		_telemetry_recorder.finalize(_race_elapsed, _runners)
 	# 結果の板を出しても、走者は止めない。
 	_race_over = true
 	_pause_panel.visible = false
@@ -981,7 +1215,10 @@ func _show_results() -> void:
 	# 結果の板と重ならないように、仮想パッドは引っ込める。
 	_touch_controls.call("set_pad_shown", false)
 	_result_board.call("set_rows", _result_rows())
-	_result_retry_button.grab_focus()
+	if _result_retry_button.visible:
+		_result_retry_button.grab_focus()
+	else:
+		_result_return_button.grab_focus()
 	RaceAudio.play_result_applause()
 
 
@@ -994,7 +1231,7 @@ func _result_rows() -> Array:
 		rows.append({
 			"place": int(r.call("get_finish_order")),
 			"name": str(r.get("display_name")),
-			"trainer": RaceSession.trainer_name_for(str(r.call("get_snapshot")["id"]), r == _player),
+			"trainer": str((r.get("_pururin") as Dictionary)["trainer_name"]),
 			"color": PururinVisualStyle.color_for_racer_id(str(r.call("get_snapshot")["id"])),
 			"player": r == _player,
 			"time_text": LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),
@@ -1063,8 +1300,10 @@ func _build_result_board() -> void:
 
 func _set_paused(paused: bool) -> void:
 	_paused = paused
-	for r in _runners:
-		r.call("set_paused", paused)
+	# オンラインでは、レースはサーバーで進んでいるので、止めない（板を出すだけ）。
+	if not _online_view:
+		for r in _runners:
+			r.call("set_paused", paused)
 	if _race_over:
 		_pause_panel.visible = false
 		return
@@ -1089,5 +1328,8 @@ func _retry_same_race() -> void:
 
 func _return_to_race_select() -> void:
 	_celebration.stop()
+	if _online_view:
+		_leave_online_race()
+		return
 	RaceSession.mark_returning_from_race()
 	get_tree().change_scene_to_file(RACE_SELECT_SCENE)

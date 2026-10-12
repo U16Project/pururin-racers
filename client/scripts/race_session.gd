@@ -44,6 +44,11 @@ static var _returning_from_race := false
 ## 「ウェブ版オフラインテスト」で始めたか。true のあいだ、レースの景色は、コースまわり（地面と柵）だけにする
 ## （スマホのブラウザでも軽く動くように）。レースの中身は、同じ。
 static var _course_only := false
+## オンラインのサーバーが走らせるレースの、出走の一覧。空なら、ふつう（手元のレース選択）の出走を使う。
+## 1体ぶんは field_entries と同じ形に、"peer_id"（通信ごしの人の番号。CPUは0）と "trainer_name" を足したもの。
+static var _online_entries: Array = []
+## オンラインのゲーム側で、サーバーのレースを映すとき、自分の番号（0なら、映す側ではない）。
+static var _online_view_peer_id := 0
 
 
 static func _empty_slots() -> Array[String]:
@@ -82,6 +87,28 @@ static func normalize_distance(distance_m: float) -> float:
 
 
 ## レースからレース選択へ戻るときに、印を付ける。
+## オンラインのサーバーが、これから走らせるレースの出走を決める。空の配列を渡すと、ふつうの出走に戻る。
+static func set_online_entries(entries: Array) -> void:
+	_online_entries = entries.duplicate(true)
+
+
+## オンラインのゲーム側：サーバーのレースを映す。peer_id は、自分の番号（0を渡すと、やめる）。
+static func set_online_view(peer_id: int) -> void:
+	_online_view_peer_id = peer_id
+
+
+static func is_online_view() -> bool:
+	return _online_view_peer_id != 0
+
+
+static func online_view_peer_id() -> int:
+	return _online_view_peer_id
+
+
+static func has_online_entries() -> bool:
+	return not _online_entries.is_empty()
+
+
 static func set_course_only(enabled: bool) -> void:
 	_course_only = enabled
 
@@ -136,6 +163,8 @@ static func selected_opponent_ids() -> Array[String]:
 ## レースに出る個体と、その枠。枠の順。未選択の枠は入らない（その枠は空けたまま走る）。
 ## 1つぶんの辞書：gate（枠の番号0〜7）、id（個体）、player（ユーザーかどうか）
 static func field_entries() -> Array:
+	if not _online_entries.is_empty():
+		return _online_entries.duplicate(true)
 	var entries: Array = []
 	for slot in SLOT_COUNT:
 		if _slots[slot] != EMPTY:
@@ -284,6 +313,9 @@ static func clear_unlocked() -> void:
 
 ## レースを始められない理由。始められるなら空。"no_player"＝ユーザーが未選択、"no_opponent"＝相手が1体もいない。
 static func race_start_problem() -> String:
+	# オンラインのサーバーの出走は、サーバーが組んで確かめてある。
+	if not _online_entries.is_empty():
+		return ""
 	if _slots[_user_slot] == EMPTY:
 		return "no_player"
 	if selected_opponent_ids().is_empty():

@@ -21,6 +21,24 @@ const ACTUAL_SPEED_SMOOTHING_S := 0.3
 @export var max_speed_kmh: float = 58.0
 @export var steer_speed: float = 4.0
 @export var player_controlled: bool = false
+## オンラインのサーバーで、通信ごしの人が操作する走者か。true のとき、ライン・ノッチは set_remote_input の値を読む
+## （サーバーのキーボード・パッドは読まない）。走りの計算は、手元で操作する走者（player_controlled）と同じ。
+var remote_controlled := false
+var _remote_line := 0.0
+var _remote_notch := 0.0
+## オンラインのゲーム側で、サーバーから届いた状態を映すだけの走者か。true のとき、自分では走りを計算しない。
+var puppet := false
+## 届いた状態（進んだ距離・ライン・速さ m/s）と、届いてからの秒数。届く間は、速さのぶんだけ先へ進めて、なめらかに追う。
+var _net_progress := 0.0
+var _net_offset := 0.0
+var _net_speed_mps := 0.0
+var _net_age_s := 0.0
+var _net_air_aero := 0.0
+var _net_air_draft := 0.0
+var _net_has_state := false
+## 映すだけの走者が、届いた位置へ追いつく速さ（1秒あたりの割合）と、届かないあいだ先へ進めてよい秒数の上限。
+const PUPPET_FOLLOW_PER_S := 14.0
+const PUPPET_EXTRAPOLATE_MAX_S := 0.3
 @export var display_name: String = "ぷるりん"
 @export var gate_index: int = 0
 
@@ -324,6 +342,8 @@ func apply_rear_assist_details(details: Dictionary) -> void:
 ## 合計は実際の走行計算と同じ式（空力倍率 × (1 − 合成した減り)）で求める。
 ## 空力が5より低く空気抵抗が増える分は、緑を0として表示し、合計には含めない。
 func get_air_reduction_breakdown() -> Dictionary:
+	if puppet:
+		return {"aero_rear": _net_air_aero, "draft": _net_air_draft, "total": _net_air_aero + _net_air_draft}
 	var aero_multiplier := _aero_air_resistance_multiplier()
 	var rear := get_rear_assist_air_factor()
 	var combined := _draft_air_resistance_factor()
@@ -468,6 +488,55 @@ func get_contact_stamina_load_l_per_s() -> float:
 
 func get_rear_assist_air_factor() -> float:
 	return LocalRaceMath.rear_assist_air_factor(_rear_assist_p, int(_effective_stats.get("aero", 5)))
+
+
+## サーバーから届いた状態を、この走者に入れる（映すだけの走者用）。
+func apply_online_state(state: Dictionary) -> void:
+	_net_progress = float(state["progress"])
+	_net_offset = float(state["offset"])
+	_net_speed_mps = float(state["actual_speed"]) / 3.6
+	_net_age_s = 0.0
+	_net_air_aero = float(state["air_aero"])
+	_net_air_draft = float(state["air_draft"])
+	# 最初の1回は、その場所へ直接置く。
+	if not _net_has_state:
+		_net_has_state = true
+		_race_progress = _net_progress
+		_offset = _net_offset
+	_current_speed_kmh = float(state["speed"])
+	_actual_speed_kmh = float(state["actual_speed"])
+	_drive_level = float(state["notch"])
+	_braking = bool(state["braking"])
+	_heart_rate_bpm = float(state["heart"])
+	_stamina = float(state["stamina_ratio"]) * _stamina_capacity_l
+	_dash_time_left = float(state["dash_ratio"]) * LocalRaceMath.Config.number("dash_duration_s")
+	_boost_time_left = float(state["boost_ratio"]) * LocalRaceMath.Config.number("boost_duration_s")
+	_boost_uses = int(LocalRaceMath.Config.number("boost_max_uses")) - int(state["boost_uses_left"])
+	_contact_count = int(state["contacts"])
+	_in_push_contest = bool(state["pushing"])
+	_finished = bool(state["finished"])
+	_finish_order = int(state["finish_order"])
+	_finish_time = float(state["finish_time"])
+
+
+## 映すだけの走者を、届いた位置へ、なめらかに動かす。
+func _advance_puppet(delta: float) -> void:
+	_net_age_s = minf(_net_age_s + delta, PUPPET_EXTRAPOLATE_MAX_S)
+	var follow := 1.0 - exp(-delta * PUPPET_FOLLOW_PER_S)
+	# 先へ進めるのは、走り出してから。スタート前は、届く「速さ」が止まっていても0でない（走り出しの速さが入っている）ので、
+	# 先へ進めると、届くたびに戻されて、前後に揺れて見える。
+	var ahead_m := _net_speed_mps * _net_age_s if _race_active else 0.0
+	_race_progress = lerpf(_race_progress, _net_progress + ahead_m, follow)
+	_offset = lerpf(_offset, _net_offset, follow)
+	var pose := M5CourseBuilder.route_pose(_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m())
+	_distance = fposmod(float(pose.get("mainline_distance", _distance)), _path.curve.get_baked_length())
+	_apply_pose()
+
+
+## 通信ごしの人の、今の操作（ライン：-1＝左〜1＝右、ノッチ：-1＝下げる〜1＝上げる。押しているあいだの値）。
+func set_remote_input(line: float, notch: float) -> void:
+	_remote_line = clampf(line, -1.0, 1.0)
+	_remote_notch = clampf(notch, -1.0, 1.0)
 
 
 func set_braking(braking: bool) -> void:
@@ -688,6 +757,33 @@ func mark_finished(order: int, finish_time: float) -> void:
 	_finish_time = finish_time
 
 
+## オンラインで配る、この走者の今の状態（画面に出すのに要るものだけ）。
+func get_online_state() -> Dictionary:
+	var air := get_air_reduction_breakdown()
+	return {
+		"id": str(_pururin.get("id", "")),
+		"gate": gate_index,
+		"progress": _race_progress,
+		"offset": _offset,
+		"speed": _current_speed_kmh,
+		"actual_speed": _actual_speed_kmh,
+		"notch": _selected_drive_level(),
+		"braking": _braking,
+		"heart": _heart_rate_bpm,
+		"stamina_ratio": get_stamina_ratio(),
+		"air_aero": float(air["aero_rear"]),
+		"air_draft": float(air["draft"]),
+		"dash_ratio": get_dash_time_ratio(),
+		"boost_ratio": get_boost_time_ratio(),
+		"boost_uses_left": get_boost_uses_left(),
+		"contacts": _contact_count,
+		"pushing": _in_push_contest,
+		"finished": _finished,
+		"finish_order": _finish_order,
+		"finish_time": get_finish_time(),
+	}
+
+
 func get_snapshot() -> Dictionary:
 	return {
 		"id": str(_pururin.get("id", "runner-%d" % (gate_index + 1))),
@@ -744,7 +840,7 @@ func get_telemetry_snapshot() -> Dictionary:
 
 
 func _active_drive_level() -> float:
-	if player_controlled:
+	if player_controlled or puppet:
 		# ブレーキ中は出力0として扱う。燃料も心拍上昇も使わず、制動だけが働く。
 		return 0.0 if _braking else _drive_level
 	if _cpu_start_drive_remaining > 0.0:
@@ -774,6 +870,9 @@ func _process(delta: float) -> void:
 	_update_expression(delta)
 	_update_action(delta)
 	if _path == null or _path.curve == null:
+		return
+	if puppet:
+		_advance_puppet(delta)
 		return
 	if not _race_active:
 		# 開始前も出力だけは選べる。位置・速度・状態値は動かさない。
@@ -1060,6 +1159,9 @@ func _step_player_drive_level(direction: float) -> bool:
 	if is_equal_approx(next, previous):
 		return false
 	_drive_level = next
+	# 通信ごしの人のノッチの音は、その人のゲームで鳴らす（サーバーでは鳴らさない）。
+	if remote_controlled:
+		return true
 	match notch_sound_key(previous, next):
 		"notch_up": UIAudio.play_notch_up()
 		"notch_down": UIAudio.play_notch_down()
@@ -1075,6 +1177,8 @@ static func notch_sound_key(previous: float, next: float) -> String:
 
 
 func _read_drive_axis() -> float:
+	if remote_controlled:
+		return _remote_notch
 	var v := 0.0
 	if Input.is_physical_key_pressed(KEY_UP):
 		v += 1.0
@@ -1090,7 +1194,7 @@ func _update_condition(delta: float) -> void:
 
 ## 選んでいるノッチ。プレイヤーはブレーキ中でも選んだノッチ、CPUは実際に使うノッチ。
 func _selected_drive_level() -> float:
-	return _drive_level if player_controlled else _active_drive_level()
+	return _drive_level if player_controlled or puppet else _active_drive_level()
 
 
 func _update_condition_for_drive_level(drive_level: float, delta: float) -> void:
@@ -1144,6 +1248,8 @@ func _reset_stamina_for_effective_stats() -> void:
 
 
 func _read_steer_axis() -> float:
+	if remote_controlled:
+		return _remote_line
 	var v := 0.0
 	if Input.is_physical_key_pressed(KEY_LEFT):
 		v -= 1.0
