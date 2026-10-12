@@ -1,5 +1,5 @@
 {
-  "server_url": "ws://127.0.0.1:18766",
+  "server_url": "ws://133.167.117.244:18766",
   "connect_timeout_s": 8.0,
   "server_max_fps": 30
 }
