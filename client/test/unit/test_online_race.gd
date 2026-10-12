@@ -162,6 +162,12 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 	var runner_b: Node3D = race.call("remote_runner", b)
 	assert_true(bool(runner_a.get("remote_controlled")))
 	assert_true(bool(runner_a.get("player_controlled")))
+	# サーバーには画面が無いので、見た目だけの処理（表情・体の動き・カメラ・画面の部品）は止めてある。走りの計算は、そのまま。
+	for runner in race.get("_runners"):
+		assert_false(bool(runner.get("presentation_enabled")))
+		assert_eq(runner.get_node("Body").process_mode, Node.PROCESS_MODE_DISABLED)
+		assert_true(runner.is_processing())
+	assert_eq(race.get_node("UI").process_mode, Node.PROCESS_MODE_DISABLED)
 	# スタートまで（入場の待ちとカウントダウン）を早送りする。
 	Engine.time_scale = FAST_FORWARD
 	var waited := 0.0
@@ -262,6 +268,8 @@ func test_the_game_side_shows_the_servers_race_without_computing_it() -> void:
 	for runner in runners:
 		assert_true(bool(runner.get("puppet")))
 		assert_false(bool(runner.get("remote_controlled")))
+		# ゲーム側は画面があるので、見た目の処理は動かす。
+		assert_true(bool(runner.get("presentation_enabled")))
 	var me: Node3D = race.get("_player")
 	assert_eq(str(me.call("get_snapshot")["id"]), ids[1])
 	# オンラインでは、もう1回は部屋から。戻る先は部屋。

@@ -10,8 +10,6 @@ const PORT_ENVIRONMENT := "PORT"
 const ROOM_CAPACITY := 8
 ## 名前と合言葉の、長さの上限。
 const NAME_MAX_LENGTH := 12
-## サーバーの計算の回数の上限（1秒あたり）。画面が無いので、決めないと、力のかぎり回り続ける。
-const SERVER_MAX_FPS := 60
 const ROOM_CODE_MAX_LENGTH := 16
 
 ## ゲーム → サーバー。

@@ -5,6 +5,7 @@ extends Node
 ## 起動：`godot --headless --path client res://scenes/online_server.tscn`
 
 const Protocol := preload("res://scripts/online/online_protocol.gd")
+const OnlineConfig := preload("res://scripts/config/online_config.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
@@ -25,14 +26,14 @@ var _rooms := {}
 
 func _ready() -> void:
 	if listen_on_ready:
-		Engine.max_fps = Protocol.SERVER_MAX_FPS
+		Engine.max_fps = OnlineConfig.server_max_fps()
 		var port := Protocol.server_port()
 		var error := listen(port)
 		if error != OK:
 			push_error("オンラインのサーバー：入口 %d で待ち受けられません（%s）" % [port, error_string(error)])
 			get_tree().quit(1)
 			return
-		print("ぷるりんレーサーズ — オンラインのサーバー待機中（:%d）" % port)
+		print("ぷるりんレーサーズ — オンラインのサーバー待機中（:%d、計算は1秒%d回まで）" % [port, Engine.max_fps])
 
 
 ## 入口の番号を決めて、待ち受けを始める。

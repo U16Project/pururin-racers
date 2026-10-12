@@ -26,6 +26,8 @@ const ACTUAL_SPEED_SMOOTHING_S := 0.3
 var remote_controlled := false
 var _remote_line := 0.0
 var _remote_notch := 0.0
+## 見た目だけの処理（接触の光・表情・体の動き）をするか。画面の無いサーバーでは false にして、計算を軽くする。
+var presentation_enabled := true
 ## オンラインのゲーム側で、サーバーから届いた状態を映すだけの走者か。true のとき、自分では走りを計算しない。
 var puppet := false
 ## 届いた状態（進んだ距離・ライン・速さ m/s）と、届いてからの秒数。届く間は、速さのぶんだけ先へ進めて、なめらかに追う。
@@ -875,9 +877,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _paused:
 		return
-	_update_contact_visual(delta)
-	_update_expression(delta)
-	_update_action(delta)
+	# 見た目だけの処理（接触の光・表情・体の動き）。走りの計算には使わない。画面の無いサーバーでは、やらない。
+	if presentation_enabled:
+		_update_contact_visual(delta)
+		_update_expression(delta)
+		_update_action(delta)
 	if _path == null or _path.curve == null:
 		return
 	if puppet:

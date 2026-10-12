@@ -240,6 +240,8 @@ func _ready() -> void:
 		return
 	_place_markers()
 	_spawn_field()
+	if _is_online_host():
+		_stop_presentation_for_server()
 	if _online_view:
 		_online_client = OnlineSession.client(get_tree())
 		_online_client.message_received.connect(_on_online_message)
@@ -340,9 +342,11 @@ func _process(_delta: float) -> void:
 		# ランナーは前tickに確定したドラフト値を使って移動する。
 		# 移動と接触解決が終わってから、次tick用のドラフトを一括計算する。
 		_share_snapshots()
-		_update_final_stretch_audio()
-		_update_heartbeat_audio(_delta)
-		_update_goal_gate()
+		# 音と、ゴールの門の札は、画面のあるときだけ（サーバーでは、やらない）。
+		if not _is_online_host():
+			_update_final_stretch_audio()
+			_update_heartbeat_audio(_delta)
+			_update_goal_gate()
 		call_deferred("_finalize_draft_tick")
 		if not _race_over:
 			_record_telemetry_sample()
@@ -672,6 +676,18 @@ func _leave_online_race() -> void:
 
 
 # ---------------------------------------------------------------- オンラインのサーバー側
+
+## 画面の無いサーバーの上では、見た目だけの処理を止める（走りの計算は、そのまま）。
+## 止めるもの：走者の接触の光・表情・体の動き、体の部品の動き、カメラ、画面の部品（操作盤・仮想パッドなど）。
+func _stop_presentation_for_server() -> void:
+	for runner in _runners:
+		runner.set("presentation_enabled", false)
+		var body := runner.get_node_or_null("Body")
+		if body != null:
+			body.process_mode = Node.PROCESS_MODE_DISABLED
+	_camera.process_mode = Node.PROCESS_MODE_DISABLED
+	$UI.process_mode = Node.PROCESS_MODE_DISABLED
+
 
 ## オンラインのサーバーの上のレースか（通信ごしの人の走者がいる）。
 func _is_online_host() -> bool:

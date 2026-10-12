@@ -55,8 +55,18 @@ func test_online_config_names_a_server_and_a_timeout() -> void:
 	assert_true(OnlineConfig.is_server_url("wss://example.onrender.com"))
 	assert_false(OnlineConfig.is_server_url("http://example.com"))
 	assert_false(OnlineConfig.is_server_url("ws://"))
-	assert_false(OnlineConfig.validate({"server_url": "http://x", "connect_timeout_s": 8.0}).is_empty())
-	assert_false(OnlineConfig.validate({"server_url": "ws://x", "connect_timeout_s": 0.0}).is_empty())
+	# サーバーの計算の回数は、決めた範囲の整数。
+	var fps_range: Vector2 = OnlineConfig.SERVER_MAX_FPS_RANGE
+	assert_between(float(OnlineConfig.server_max_fps()), fps_range.x, fps_range.y)
+	var good := {"server_url": "ws://x", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x)}
+	assert_true(OnlineConfig.validate(good).is_empty())
+	for bad: Dictionary in [
+		{"server_url": "http://x"}, {"connect_timeout_s": 0.0},
+		{"server_max_fps": fps_range.x - 1.0}, {"server_max_fps": fps_range.y + 1.0}, {"server_max_fps": 30.5}, {"server_max_fps": "30"},
+	]:
+		var changed := good.duplicate()
+		changed.merge(bad, true)
+		assert_false(OnlineConfig.validate(changed).is_empty(), str(bad))
 
 
 func test_the_lobby_starts_with_the_configured_server_and_the_trainer_name() -> void:

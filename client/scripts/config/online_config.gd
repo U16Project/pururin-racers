@@ -2,6 +2,8 @@ extends RefCounted
 ## オンライン対戦の設定（つなぐ先のサーバーなど）。初期値は data/config/online.json だけに置く。
 
 const CONFIG_PATH := "res://data/config/online.json"
+## サーバーの計算の回数（1秒あたり）として受け付ける範囲。
+const SERVER_MAX_FPS_RANGE := Vector2(10.0, 120.0)
 ## つなぐ先として受け付ける書き出し（暗号なし・暗号あり）。
 const URL_PREFIXES := ["ws://", "wss://"]
 
@@ -30,6 +32,9 @@ static func validate(data: Variant) -> PackedStringArray:
 		errors.append("online.server_url: ws:// か wss:// で始まるURLが必要です")
 	if not (data.get("connect_timeout_s") is float or data.get("connect_timeout_s") is int) or float(data["connect_timeout_s"]) <= 0.0:
 		errors.append("online.connect_timeout_s: 0より大きい数字が必要です")
+	var fps: Variant = data.get("server_max_fps")
+	if not (fps is float or fps is int) or float(fps) != floorf(float(fps)) or float(fps) < SERVER_MAX_FPS_RANGE.x or float(fps) > SERVER_MAX_FPS_RANGE.y:
+		errors.append("online.server_max_fps: %d〜%d の整数が必要です" % [int(SERVER_MAX_FPS_RANGE.x), int(SERVER_MAX_FPS_RANGE.y)])
 	return errors
 
 
@@ -43,6 +48,12 @@ static func is_server_url(url: String) -> bool:
 
 static func server_url() -> String:
 	return str(values()["server_url"])
+
+
+## サーバーの計算の回数の上限（1秒あたり）。画面が無いので、決めないと、力のかぎり回り続ける。
+## 少ないほど、サーバーは軽い。レースの計算は「前の計算から何秒たったか」で進めるので、回数を変えても、レースの長さは変わらない。
+static func server_max_fps() -> int:
+	return int(values()["server_max_fps"])
 
 
 static func connect_timeout_s() -> float:
