@@ -93,7 +93,39 @@ body {
 		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
 <link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
 <link rel="manifest" href="index.manifest.json">
-
+<script>
+// 新しい版の受け取り。ゲームのファイルは端末が覚え込むので、そのままだと、新しい版を上げても古い版が出続ける。
+// ・開いたとき、もう受け取り終わっている新しい版があれば、すぐ切り替えて読み込み直す。
+// ・遊んでいる途中で受け取り終わったら、勝手には切り替えず、上に知らせを出す（押すと切り替える）。
+(function () {
+	if (!('serviceWorker' in navigator)) { return; }
+	function apply(worker) { worker.postMessage('update'); }
+	function offer(worker) {
+		if (document.getElementById('pururin-update')) { return; }
+		var bar = document.createElement('button');
+		bar.id = 'pururin-update';
+		bar.textContent = '新しい版があります。ここを押すと、更新します。';
+		bar.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:1000;padding:10px 18px;font-size:16px;color:#fff;background:#2e6b94;border:2px solid #ffdb4d;border-radius:10px;cursor:pointer;';
+		bar.onclick = function () { bar.textContent = '更新しています…'; apply(worker); };
+		document.body.appendChild(bar);
+	}
+	function watch(reg) {
+		if (!reg) { return; }
+		if (reg.waiting && navigator.serviceWorker.controller) { apply(reg.waiting); return; }
+		reg.addEventListener('updatefound', function () {
+			var worker = reg.installing;
+			if (!worker) { return; }
+			worker.addEventListener('statechange', function () {
+				if (worker.state === 'installed' && navigator.serviceWorker.controller) { offer(worker); }
+			});
+		});
+		reg.update().catch(function () {});
+	}
+	window.addEventListener('load', function () {
+		navigator.serviceWorker.getRegistration().then(watch).catch(function () {});
+	});
+})();
+</script>
 	</head>
 	<body>
 		<canvas id="canvas">
@@ -112,7 +144,7 @@ body {
 
 		<script src="index.js"></script>
 		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":26671360,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
+const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":true,"fileSizes":{"index.pck":27129016,"index.wasm":39509339},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"serviceWorker":"index.service.worker.js"};
 const GODOT_THREADS_ENABLED = false;
 const engine = new Engine(GODOT_CONFIG);
 
