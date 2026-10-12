@@ -55,12 +55,3 @@ static func release_all() -> void:
 		set_button(button, false)
 	for axis: int in _axes.keys():
 		set_axis(axis, 0.0)
-
-
-## スティックの倒し方。center はスティックのまん中、point は指の場所、radius は端までの長さ。
-## 返すのは、-1〜1の横と縦（倒しきると長さ1）。
-static func stick_vector(center: Vector2, point: Vector2, radius: float) -> Vector2:
-	if radius <= 0.0:
-		return Vector2.ZERO
-	var offset := (point - center) / radius
-	return offset if offset.length() <= 1.0 else offset.normalized()

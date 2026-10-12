@@ -24,7 +24,7 @@ const ROUND_HUD_BOTTOM_MARGIN := 8.0
 const ROUND_HUD_UPDATES_PER_S := 10.0
 ## ウェブ版オフラインテストで、順位表の絵を描き直す回数（1秒あたり）。
 const RACE_HUD_UPDATES_PER_S := 4.0
-## 丸い操作盤の左の端と、仮想パッドの左スティックとの、すき間。
+## 丸い操作盤の左の端と、仮想パッドのラインのボタンの右の端との、すき間。
 const ROUND_HUD_STICK_GAP := 8.0
 const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
@@ -790,7 +790,7 @@ func _layout_overlay_labels() -> void:
 	_guide_label.add_theme_constant_override("outline_size", 5)
 
 
-## 丸い操作盤の位置。左の端を、仮想パッドの左スティックのぎりぎり右に、下の端を、画面の下に寄せる
+## 丸い操作盤の位置。左の端を、仮想パッドのラインのボタンのすぐ右に、下の端を、画面の下に寄せる
 ## （名前のための外側の余白は、画面の外へ出してよい）。
 func _place_round_hud() -> void:
 	var screen := get_viewport().get_visible_rect().size
@@ -801,7 +801,7 @@ func _place_round_hud() -> void:
 	_round_hud_viewport.size = Vector2i(drawn_size)
 	_round_hud.position = Vector2.ZERO
 	_round_hud.size = drawn_size
-	var left := TouchControls.STICK_CENTER_FROM_LEFT + TouchControls.STICK_RADIUS + ROUND_HUD_STICK_GAP
+	var left := TouchControls.LINE_BUTTONS_RIGHT + ROUND_HUD_STICK_GAP
 	var center := Vector2(left + ROUND_HUD_RADIUS, screen.y - ROUND_HUD_BOTTOM_MARGIN - ROUND_HUD_RADIUS)
 	_round_hud_view.size = drawn_size / zoom
 	_round_hud_view.position = center - _round_hud_view.size * 0.5

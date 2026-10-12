@@ -42,7 +42,7 @@ const INFO_VALUE_FONT_SIZE := 96
 const INFO_WORD_FONT_SIZE := 46
 const INFO_PIXEL_SIZE_M := 0.0033
 const INFO_GAP_M := 0.05
-const INFO_STEP_S := 1.6
+const INFO_STEP_S := 0.7
 const INFO_ALPHA_MAX := 0.88
 const INFO_COLOR := RaceHud.COLOR_GOLD
 ## 描く順番（大きいほど後＝手前）。透ける体のぷるりんより後に描く。

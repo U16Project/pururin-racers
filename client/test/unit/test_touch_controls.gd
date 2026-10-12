@@ -19,18 +19,6 @@ func _pad() -> Control:
 	return pad
 
 
-func test_stick_vector_stays_inside_one_and_points_at_the_finger() -> void:
-	var center := Vector2(200.0, 500.0)
-	assert_eq(TouchPadInput.stick_vector(center, center, 100.0), Vector2.ZERO)
-	# まん中から半分の所は、0.5倒したことになる。
-	assert_almost_eq(TouchPadInput.stick_vector(center, center + Vector2(50.0, 0.0), 100.0).x, 0.5, 0.001)
-	# 外まで動かしても、倒しきり（長さ1）で止まる。
-	var far := TouchPadInput.stick_vector(center, center + Vector2(400.0, 0.0), 100.0)
-	assert_almost_eq(far.length(), 1.0, 0.001)
-	assert_almost_eq(far.x, 1.0, 0.001)
-	assert_eq(TouchPadInput.stick_vector(center, center + Vector2(10.0, 0.0), 0.0), Vector2.ZERO)
-
-
 func test_touch_state_is_remembered_and_cleared() -> void:
 	assert_false(TouchPadInput.button_down(JOY_BUTTON_X))
 	TouchPadInput.set_button(JOY_BUTTON_X, true)
@@ -63,21 +51,20 @@ func test_pad_parts_answer_only_while_the_pad_is_shown() -> void:
 	if pad.is_pad_shown():
 		pad.toggle_pad()
 	assert_false(pad.is_pad_shown())
-	assert_eq(pad.widget_at(pad.stick_center()), "")
-	assert_eq(pad.widget_at(pad.button_center(TouchControls.ROUND_BUTTONS[0])), "")
+	for spec: Dictionary in TouchControls.all_buttons():
+		assert_eq(pad.widget_at(pad.button_center(spec)), "")
 	pad.toggle_pad()
 	assert_true(pad.is_pad_shown())
-	assert_eq(pad.widget_at(pad.stick_center()), "stick")
-	for spec: Dictionary in TouchControls.ROUND_BUTTONS:
+	for spec: Dictionary in TouchControls.all_buttons():
 		assert_eq(pad.widget_at(pad.button_center(spec)), str(spec["id"]))
 
 
-func test_buttons_do_not_overlap_each_other_or_the_stick() -> void:
+func test_buttons_do_not_overlap_each_other() -> void:
 	var pad := _pad()
 	if not pad.is_pad_shown():
 		pad.toggle_pad()
-	var spots: Array = [[pad.stick_center(), TouchControls.STICK_RADIUS]]
-	for spec: Dictionary in TouchControls.ROUND_BUTTONS:
+	var spots: Array = []
+	for spec: Dictionary in TouchControls.all_buttons():
 		spots.append([pad.button_center(spec), float(spec["radius"])])
 	for i in spots.size():
 		for j in range(i + 1, spots.size()):
@@ -97,15 +84,32 @@ func test_hiding_the_pad_lets_go_of_everything() -> void:
 	assert_almost_eq(TouchPadInput.axis_value(JOY_AXIS_LEFT_X), 0.0, 0.001)
 
 
-func test_the_knob_follows_the_stick_and_stays_in_the_ring() -> void:
+func test_line_buttons_move_the_line_left_and_right_while_held() -> void:
 	var pad := _pad()
 	if not pad.is_pad_shown():
 		pad.toggle_pad()
-	TouchPadInput.set_axis(JOY_AXIS_LEFT_X, 1.0)
-	var knob: Vector2 = pad.knob_center()
-	var center: Vector2 = pad.stick_center()
-	assert_gt(knob.x, center.x)
-	assert_almost_eq(knob.distance_to(center), TouchControls.STICK_RADIUS - TouchControls.STICK_KNOB_RADIUS, 0.001)
+	var left: Vector2 = pad.button_center(TouchControls.button_spec("line_left"))
+	var right: Vector2 = pad.button_center(TouchControls.button_spec("line_right"))
+	# ◀は左、▶は右に並ぶ。右の端は、決めた位置（丸い操作盤の置き場所の基準）を超えない。
+	assert_lt(left.x, right.x)
+	assert_lte(right.x + float(TouchControls.LINE_BUTTON_RADIUS), float(TouchControls.LINE_BUTTONS_RIGHT))
+	# 押しているあいだだけ、左右の値が入る。
+	pad.call("_press", 0, left, true)
+	assert_almost_eq(RaceControllerInput.line_axis(), -1.0, 0.001)
+	pad.call("_press", 0, left, false)
+	assert_almost_eq(RaceControllerInput.line_axis(), 0.0, 0.001)
+	pad.call("_press", 0, right, true)
+	assert_almost_eq(RaceControllerInput.line_axis(), 1.0, 0.001)
+	# 押したまま、となりのボタンへ指をすべらせると、そちらに切り替わる。
+	pad.call("_drag", 0, left)
+	assert_almost_eq(RaceControllerInput.line_axis(), -1.0, 0.001)
+	# 別の指で反対も押すと、打ち消し合って止まる。離すと、残っているほうへ動く。
+	pad.call("_press", 1, right, true)
+	assert_almost_eq(RaceControllerInput.line_axis(), 0.0, 0.001)
+	pad.call("_press", 0, left, false)
+	assert_almost_eq(RaceControllerInput.line_axis(), 1.0, 0.001)
+	pad.call("_press", 1, right, false)
+	assert_almost_eq(RaceControllerInput.line_axis(), 0.0, 0.001)
 
 
 func test_set_pad_shown_puts_it_away_and_back() -> void:

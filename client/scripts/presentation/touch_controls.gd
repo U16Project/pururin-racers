@@ -5,12 +5,15 @@ extends Control
 
 const TouchPadInput := preload("res://scripts/input/touch_pad_input.gd")
 
-## スティックの大きさ（外側の輪と、つまみ）。
-const STICK_RADIUS := 104.0
-const STICK_KNOB_RADIUS := 46.0
-## スティックのまん中（左から・下から）。スマホの親指が届くように、左の端に寄せる。
-const STICK_CENTER_FROM_LEFT := 140.0
-const STICK_CENTER_FROM_BOTTOM := 118.0
+## ラインを左右へ動かすボタン（左下に、◀ ▶ を横に並べる。スマホの親指が届くように、左の端に寄せる）。
+## 1つぶん：名前、文字、左下の角からの位置、半径、押しているあいだ入れる左右の値（-1＝左、1＝右）。
+const LINE_BUTTON_RADIUS := 50.0
+const LINE_BUTTONS := [
+	{"id": "line_left", "text": "◀", "offset": Vector2(90.0, 104.0), "radius": LINE_BUTTON_RADIUS, "axis_value": -1.0, "color": Color("#5b6b8c"), "from_left": true},
+	{"id": "line_right", "text": "▶", "offset": Vector2(194.0, 104.0), "radius": LINE_BUTTON_RADIUS, "axis_value": 1.0, "color": Color("#5b6b8c"), "from_left": true},
+]
+## ラインのボタンの、右の端（左から）。丸い操作盤は、このすぐ右に置く。
+const LINE_BUTTONS_RIGHT := 244.0
 ## 丸ボタン。1つぶん：名前、文字、角からの位置、半径、パッドのボタン番号。
 ## 位置は右下の角から。`from_left` が true なら左から、`from_top` が true なら上から測る。
 ## ABXYに当たる3つは、本物のパッドと同じひし形（下＝A、右＝B、左＝X）に並べる。
@@ -83,8 +86,11 @@ func toggle_pad() -> void:
 
 # ---------------------------------------------------------------- 置き場所
 
-func stick_center() -> Vector2:
-	return Vector2(STICK_CENTER_FROM_LEFT, size.y - STICK_CENTER_FROM_BOTTOM)
+## 「ライン左右」の文字を出す場所（2つのボタンの、まん中の上）。
+func line_label_center() -> Vector2:
+	var left := button_center(LINE_BUTTONS[0])
+	var right := button_center(LINE_BUTTONS[1])
+	return (left + right) * 0.5 - Vector2(0.0, LINE_BUTTON_RADIUS + 20.0)
 
 
 func button_center(spec: Dictionary) -> Vector2:
@@ -94,20 +100,23 @@ func button_center(spec: Dictionary) -> Vector2:
 	return Vector2(x, y)
 
 
-## その場所にある部品のID（スティックは "stick"）。無ければ空文字。
+## 全部のボタン（ラインの左右と、丸ボタン）。
+static func all_buttons() -> Array:
+	return LINE_BUTTONS + ROUND_BUTTONS
+
+
+## その場所にある部品のID。無ければ空文字。
 func widget_at(point: Vector2) -> String:
 	if not _shown:
 		return ""
-	if point.distance_to(stick_center()) <= STICK_RADIUS:
-		return "stick"
-	for spec: Dictionary in ROUND_BUTTONS:
+	for spec: Dictionary in all_buttons():
 		if point.distance_to(button_center(spec)) <= float(spec["radius"]):
 			return str(spec["id"])
 	return ""
 
 
 static func button_spec(id: String) -> Dictionary:
-	for spec: Dictionary in ROUND_BUTTONS:
+	for spec: Dictionary in all_buttons():
 		if str(spec["id"]) == id:
 			return spec
 	return {}
@@ -146,18 +155,23 @@ func _press(finger: int, point: Vector2, pressed: bool) -> void:
 		return
 	get_viewport().set_input_as_handled()
 	_touching[finger] = id
-	if id == "stick":
-		_apply_stick(point)
+	if is_line_button(id):
+		_apply_line()
 	else:
 		TouchPadInput.set_button(int(button_spec(id)["button"]), true)
 	queue_redraw()
 
 
+## ラインのボタンを押したまま、指をとなりのラインのボタンへすべらせたら、そちらに切り替える。
 func _drag(finger: int, point: Vector2) -> void:
-	if str(_touching.get(finger, "")) != "stick":
+	if not is_line_button(str(_touching.get(finger, ""))):
 		return
 	get_viewport().set_input_as_handled()
-	_apply_stick(point)
+	var id := widget_at(point)
+	if is_line_button(id) and id != str(_touching[finger]):
+		_touching[finger] = id
+		_apply_line()
+		queue_redraw()
 
 
 func _release(finger: int) -> void:
@@ -165,25 +179,27 @@ func _release(finger: int) -> void:
 	if id == "":
 		return
 	_touching.erase(finger)
-	if id == "stick":
-		TouchPadInput.set_axis(JOY_AXIS_LEFT_X, 0.0)
-		TouchPadInput.set_axis(JOY_AXIS_LEFT_Y, 0.0)
+	if is_line_button(id):
+		_apply_line()
 	else:
 		TouchPadInput.set_button(int(button_spec(id)["button"]), false)
 	queue_redraw()
 
 
-func _apply_stick(point: Vector2) -> void:
-	var stick := TouchPadInput.stick_vector(stick_center(), point, STICK_RADIUS)
-	TouchPadInput.set_axis(JOY_AXIS_LEFT_X, stick.x)
-	TouchPadInput.set_axis(JOY_AXIS_LEFT_Y, stick.y)
-	queue_redraw()
+static func is_line_button(id: String) -> bool:
+	for spec: Dictionary in LINE_BUTTONS:
+		if str(spec["id"]) == id:
+			return true
+	return false
 
 
-## スティックの、今のつまみの場所（絵を描くのと、テスト用）。
-func knob_center() -> Vector2:
-	var stick := Vector2(TouchPadInput.axis_value(JOY_AXIS_LEFT_X), TouchPadInput.axis_value(JOY_AXIS_LEFT_Y))
-	return stick_center() + stick * (STICK_RADIUS - STICK_KNOB_RADIUS)
+## 今押しているラインのボタンから、左右の値を決める（◀だけ＝-1、▶だけ＝1、両方か、どちらも無し＝0）。
+func _apply_line() -> void:
+	var value := 0.0
+	for spec: Dictionary in LINE_BUTTONS:
+		if str(spec["id"]) in _touching.values():
+			value += float(spec["axis_value"])
+	TouchPadInput.set_axis(JOY_AXIS_LEFT_X, value)
 
 
 # ---------------------------------------------------------------- 見た目
@@ -191,14 +207,8 @@ func knob_center() -> Vector2:
 func _draw() -> void:
 	if not _shown:
 		return
-	var center := stick_center()
-	draw_circle(center, STICK_RADIUS, COLOR_FACE)
-	draw_arc(center, STICK_RADIUS, 0.0, TAU, 48, COLOR_EDGE, 3.0, true)
-	var knob := knob_center()
-	draw_circle(knob, STICK_KNOB_RADIUS, Color(1.0, 1.0, 1.0, 0.5))
-	draw_arc(knob, STICK_KNOB_RADIUS, 0.0, TAU, 32, COLOR_EDGE, 3.0, true)
-	_draw_text(center - Vector2(0.0, STICK_RADIUS + 20.0), "◀ ライン左右 ▶", 20)
-	for spec: Dictionary in ROUND_BUTTONS:
+	_draw_text(line_label_center(), "ライン左右", 20)
+	for spec: Dictionary in all_buttons():
 		var at := button_center(spec)
 		var radius := float(spec["radius"])
 		var held := str(spec["id"]) in _touching.values()
