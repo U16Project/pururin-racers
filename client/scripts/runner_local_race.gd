@@ -533,6 +533,15 @@ func _advance_puppet(delta: float) -> void:
 	_apply_pose()
 
 
+## 通信ごしの人が抜けたあと、この走者を、その個体のCPUトレーナーに任せる（オンラインのサーバーだけ）。
+func hand_over_to_cpu() -> void:
+	remote_controlled = false
+	player_controlled = false
+	_remote_line = 0.0
+	_remote_notch = 0.0
+	_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(str(_pururin.get("trainer_profile_id", "")))
+
+
 ## 通信ごしの人の、今の操作（ライン：-1＝左〜1＝右、ノッチ：-1＝下げる〜1＝上げる。押しているあいだの値）。
 func set_remote_input(line: float, notch: float) -> void:
 	_remote_line = clampf(line, -1.0, 1.0)

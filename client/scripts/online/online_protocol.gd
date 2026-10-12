@@ -27,6 +27,8 @@ const START := "start"
 const INPUT := "input"
 ## ダッシュ・ブーストを押した（kind＝"dash" か "boost"）。
 const ACTION := "action"
+## レースの画面ができた（全員ぶんそろうと、入場の待ちとカウントダウンが始まる）。
+const READY := "ready"
 ## サーバー → ゲーム。
 const WELCOME := "welcome"
 const ROOM := "room"
@@ -57,6 +59,8 @@ const ACTION_DASH := "dash"
 const ACTION_BOOST := "boost"
 ## レースの状態を配る回数（1秒あたり）。
 const STATE_RATE_HZ := 20.0
+## 全員のレースの画面ができるのを待つ秒数の上限。過ぎたら、できていない人を待たずに始める。
+const READY_TIMEOUT_S := 20.0
 
 
 ## 送る文を作る。

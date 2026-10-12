@@ -27,6 +27,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `start` | — | レースを始める。部屋の主だけ。全員が選び終わっていること |
 | `input` | `line`（-1〜1）、`notch`（-1〜1）、`brake`（真偽） | レース中の、今の操作。押しているあいだの値を、変わるたびに送る |
 | `action` | `kind`（`dash` か `boost`） | ダッシュ・ブーストを押した |
+| `ready` | — | レースの画面ができた |
 
 部屋の主は、その部屋に最初に入った人。主が抜けたら、次に古い人が主になる。
 
@@ -50,7 +51,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 一覧の順にCPUで埋める（8体まで）。
 
 レースの状態（`race_state`）：`elapsed`（レースの時計。秒）、`started`（スタートしたか）、`entry_wait`（入場の待ちの残り秒）、
-`countdown`（カウントダウンの残り秒）、`over`（終わったか）、`runners`（全員ぶん）。
+`countdown`（カウントダウンの残り秒）、`hold`（全員の画面ができるのを待っているか）、`over`（終わったか）、`runners`（全員ぶん）。
 `runners` の1体ぶん：`id`、`gate`、`progress`（進んだ距離 m）、`offset`（ライン m）、`speed`・`actual_speed`（km/h）、`notch`、
 `braking`、`heart`（心拍）、`stamina_ratio`、`air_aero`・`air_draft`（空気抵抗の軽減）、`dash_ratio`・`boost_ratio`（残り時間の割合）、
 `boost_uses_left`、`contacts`（接触している数）、`pushing`（押し合い中か）、`finished`、`finish_order`、`finish_time`。
@@ -63,6 +64,9 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 
 - 部屋ごとに、ゲーム本体と同じレースの場面（`local_race`）を1つ作って走らせる。レースの計算は、オフラインと同じプログラム。
 - 人の走者は、手元で操作する走者と同じ計算で走る。違うのは、操作をキーボード・パッドではなく、届いた `input`・`action` から読むことだけ。
+- レースを作ったら、まず止めておく。部屋の全員から `ready` が届いたら、入場の待ち → カウントダウン → スタートへ進む（画面を作るのが遅い端末を、置いていかないため）。20秒待っても届かない人がいたら、待たずに始める。
+- レース中に抜けた人の走者は、その個体のCPUトレーナーに任せる。レースは、残った人のために続く。
+- サーバーの端末には、走者ごとの診断の文を流さない。レースの記録ファイルも作らない。
 - サーバーの計算は、1秒60回まで。レースが終わったら、着順を配って、レースを片づけ、部屋に戻す。部屋に誰もいなくなったら、レースも部屋も消す。
 
 ## ゲーム側のレース
@@ -76,4 +80,4 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 
 ## まだ決めていないもの（これから足す）
 
-トレーナー（CPUの乗り手）を人が選ぶこと。途中で抜けた人の走者の扱い（今は、最後の操作のまま走り続ける）。通信が遅い・途切れるときの見え方の調整。
+トレーナー（CPUの乗り手）を人が選ぶこと。通信が遅い・途切れるときの見え方の調整。途中で切れた人が、同じレースに戻ること。

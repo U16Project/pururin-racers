@@ -111,8 +111,12 @@ var _runners_by_id := {}
 ## 最後に送った操作と、送ってからの秒数。
 var _online_sent_input := {}
 var _online_input_age_s := 0.0
+## カウントダウンの表示（と音）を、もう始めたか。
+var _online_countdown_shown := false
 ## 自分の走者の、前に届いた状態（音を鳴らすきっかけを見つけるため）。
 var _online_previous_own := {}
+## オンラインのサーバーで、全員のレースの画面ができるのを待っているか（待っているあいだ、入場の待ちもカウントダウンも進めない）。
+var _start_hold := false
 ## 通信ごしの人（オンラインのサーバーだけ）。人の番号 → 走者、人の番号 → 今の操作。
 var _remote_runners := {}
 var _remote_inputs := {}
@@ -244,6 +248,8 @@ func _ready() -> void:
 		_result_retry_button.visible = false
 		_result_return_button.text = "部屋へ戻る"
 		_pause_return_button.text = "部屋へ戻る"
+		# 画面ができたことを、サーバーに知らせる（全員ぶんそろうと、スタートへ向かう時計が動き出す）。
+		_online_client.send(OnlineProtocol.READY)
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
 	RaceAudio.play_race_entry()
@@ -323,7 +329,9 @@ func _process(_delta: float) -> void:
 		_remote_runners[peer_id].call("set_remote_input", float(remote_input["line"]), float(remote_input["notch"]))
 		_remote_runners[peer_id].call("set_braking", _race_started and not _paused and not _race_over and bool(remote_input["brake"]))
 	if not _paused and not _race_started:
-		_update_before_start(_delta)
+		# オンラインのサーバーでは、全員の画面ができるまで、入場の待ちを始めない。
+		if not _start_hold:
+			_update_before_start(_delta)
 	elif not _paused:
 		# 結果の板を出したあとも、走者は止めない（時計と記録だけ止める）。
 		_update_start_signal(_delta)
@@ -608,11 +616,19 @@ func _apply_online_state(data: Dictionary) -> void:
 		_start_signal_remaining = 0.8
 		for runner in _runners:
 			runner.call("set_race_active", true)
+	elif bool(data["hold"]):
+		_countdown_label.visible = true
+		_countdown_label.text = "みんなの準備を待っています…"
+		_online_countdown_shown = false
 	elif float(data["countdown"]) > 0.0:
-		if not _countdown_label.visible:
+		if not _online_countdown_shown:
+			_online_countdown_shown = true
 			_countdown_label.visible = true
 			RaceAudio.play_countdown_start()
 		_countdown_label.text = "スタートまで %d" % ceili(float(data["countdown"]))
+	else:
+		# 入場の待ちのあいだは、何も出さない。
+		_countdown_label.visible = false
 
 
 ## 自分の走者の状態の変わり目で、音を鳴らす（ノッチ・ダッシュ・ブースト・ゴール）。
@@ -690,6 +706,30 @@ func remote_runner(peer_id: int) -> Node3D:
 	return _remote_runners.get(peer_id)
 
 
+## 全員のレースの画面ができるまで、スタートへ向かう時計を止める（オンラインのサーバーだけ）。
+func hold_start() -> void:
+	_start_hold = true
+
+
+func release_start_hold() -> void:
+	_start_hold = false
+
+
+func is_start_held() -> bool:
+	return _start_hold
+
+
+## 通信ごしの人が抜けた：その走者を、その個体のCPUトレーナーに任せる（オンラインのサーバーだけ）。
+func release_remote_runner(peer_id: int) -> void:
+	if not _remote_runners.has(peer_id):
+		return
+	var runner: Node3D = _remote_runners[peer_id]
+	_remote_runners.erase(peer_id)
+	_remote_inputs.erase(peer_id)
+	runner.call("set_braking", false)
+	runner.call("hand_over_to_cpu")
+
+
 ## オンラインで配る、レースの今の状態。
 func online_state() -> Dictionary:
 	var runners: Array = []
@@ -700,6 +740,7 @@ func online_state() -> Dictionary:
 		"started": _race_started,
 		"entry_wait": maxf(_entry_wait_remaining, 0.0),
 		"countdown": maxf(_start_countdown_remaining, 0.0),
+		"hold": _start_hold,
 		"over": _race_over,
 		"runners": runners,
 	}

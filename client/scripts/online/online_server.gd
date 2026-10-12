@@ -18,7 +18,8 @@ var _tcp := TCPServer.new()
 var _peers := {}
 var _next_peer_id := 1
 ## 部屋。合言葉 → {"host": 部屋の主の番号, "distance_m": 距離, "picks": {人の番号: ぷるりんのID},
-## "race": 走っているレース（無ければ null）, "state_wait_s": 次に状態を配るまでの秒数}
+## "race": 走っているレース（無ければ null）, "state_wait_s": 次に状態を配るまでの秒数,
+## "ready": {レースの画面ができた人の番号: true}, "ready_wait_s": 全員の画面ができるのを待った秒数}
 var _rooms := {}
 
 
@@ -69,6 +70,15 @@ func room_members(room: String) -> Array:
 	return members
 
 
+## 部屋にいる全員の、レースの画面ができたか。
+func everyone_ready(room: String) -> bool:
+	var ready: Dictionary = _rooms[room]["ready"]
+	for member: Dictionary in room_members(room):
+		if not ready.has(int(member["peer_id"])):
+			return false
+	return true
+
+
 ## その部屋で走っているレース（無ければ null）。
 func room_race(room: String) -> Node:
 	return _rooms[room]["race"] if _rooms.has(room) else null
@@ -114,7 +124,7 @@ func _receive(peer_id: int, text: String) -> void:
 	# ここから下は、部屋に入ってからでないと、できない。
 	var room := str(_peers[peer_id]["room"])
 	if room.is_empty():
-		_refuse(peer_id, Protocol.ERROR_NOT_IN_ROOM if type in [Protocol.PICK, Protocol.DISTANCE, Protocol.START, Protocol.INPUT, Protocol.ACTION] else Protocol.ERROR_BAD_MESSAGE)
+		_refuse(peer_id, Protocol.ERROR_NOT_IN_ROOM if type in [Protocol.PICK, Protocol.DISTANCE, Protocol.START, Protocol.INPUT, Protocol.ACTION, Protocol.READY] else Protocol.ERROR_BAD_MESSAGE)
 		return
 	match type:
 		Protocol.PICK: _pick(peer_id, room, data)
@@ -122,6 +132,7 @@ func _receive(peer_id: int, text: String) -> void:
 		Protocol.START: _start_race(peer_id, room)
 		Protocol.INPUT: _race_input(peer_id, room, data)
 		Protocol.ACTION: _race_action(peer_id, room, data)
+		Protocol.READY: (_rooms[room]["ready"] as Dictionary)[peer_id] = true
 		_: _refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 
 
@@ -144,7 +155,7 @@ func _join(peer_id: int, data: Dictionary) -> void:
 	_peers[peer_id]["name"] = player_name
 	_peers[peer_id]["room"] = room
 	if not _rooms.has(room):
-		_rooms[room] = {"host": peer_id, "distance_m": RaceSession.DEFAULT_DISTANCE_M, "picks": {}, "race": null, "state_wait_s": 0.0}
+		_rooms[room] = {"host": peer_id, "distance_m": RaceSession.DEFAULT_DISTANCE_M, "picks": {}, "race": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0}
 	_send(peer_id, Protocol.message(Protocol.WELCOME, _room_fields(room, {"peer_id": peer_id, "capacity": Protocol.ROOM_CAPACITY})))
 	_announce_room(room)
 
@@ -161,6 +172,10 @@ func _leave_room(peer_id: int) -> void:
 		return
 	_peers[peer_id]["room"] = ""
 	(_rooms[room]["picks"] as Dictionary).erase(peer_id)
+	(_rooms[room]["ready"] as Dictionary).erase(peer_id)
+	# レース中に抜けた人の走者は、その個体のCPUトレーナーに任せる。
+	if room_race(room) != null:
+		room_race(room).call("release_remote_runner", peer_id)
 	var members := room_members(room)
 	if members.is_empty():
 		_end_race(room)
@@ -253,8 +268,12 @@ func _start_race(peer_id: int, room: String) -> void:
 	race.name = "Race_%d" % int(_rooms[room]["host"])
 	add_child(race)
 	RaceSession.set_online_entries([])
+	# 全員のレースの画面ができるまで、スタートへ向かう時計を止めておく。
+	race.call("hold_start")
 	_rooms[room]["race"] = race
 	_rooms[room]["state_wait_s"] = 0.0
+	_rooms[room]["ready"] = {}
+	_rooms[room]["ready_wait_s"] = 0.0
 	_send_room(room, Protocol.message(Protocol.RACE_START, {"distance_m": distance, "entries": entries}))
 	_announce_room(room)
 
@@ -283,6 +302,10 @@ func _update_race(room: String, delta: float) -> void:
 		_end_race(room)
 		_announce_room(room)
 		return
+	if bool(race.call("is_start_held")):
+		_rooms[room]["ready_wait_s"] = float(_rooms[room]["ready_wait_s"]) + delta
+		if everyone_ready(room) or float(_rooms[room]["ready_wait_s"]) >= Protocol.READY_TIMEOUT_S:
+			race.call("release_start_hold")
 	_rooms[room]["state_wait_s"] = float(_rooms[room]["state_wait_s"]) - delta
 	if float(_rooms[room]["state_wait_s"]) <= 0.0:
 		_rooms[room]["state_wait_s"] = 1.0 / Protocol.STATE_RATE_HZ

@@ -145,6 +145,17 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 	assert_almost_eq(float(start.get("distance_m", 0.0)), float(RaceSession.supported_distances_m()[0]), 0.001)
 	var race: Node = _server.room_race("部屋")
 	assert_not_null(race)
+	# 全員のレースの画面ができるまで、スタートへ向かう時計は止まっている。
+	assert_true(bool(race.call("is_start_held")))
+	var wait_before := float(race.get("_entry_wait_remaining"))
+	_clients["a"].send(Protocol.READY)
+	await wait_seconds(0.4)
+	assert_true(bool(race.call("is_start_held")), "1人だけでは、まだ始まらない")
+	assert_almost_eq(float(race.get("_entry_wait_remaining")), wait_before, 0.0001)
+	assert_true(bool((await _wait_for("a", Protocol.RACE_STATE)).get("hold", false)))
+	_clients["b"].send(Protocol.READY)
+	await wait_seconds(0.4)
+	assert_false(bool(race.call("is_start_held")), "全員そろったら、動き出す")
 	# サーバーの上のレースには、「この画面の自分」はいない。人の走者は、通信で動かす。
 	assert_null(race.get("_player"))
 	var runner_a: Node3D = race.call("remote_runner", a)
@@ -213,6 +224,12 @@ func test_nobody_joins_or_picks_while_the_room_is_racing() -> void:
 	await wait_for_signal(late.connected, WAIT_S)
 	late.join_room("late", "部屋")
 	assert_eq(await _error_code("late"), Protocol.ERROR_RACING)
+	# 画面ができたと言ってこない人がいても、決めた秒数で打ち切って始める。
+	var race: Node = _server.room_race("部屋")
+	assert_true(bool(race.call("is_start_held")))
+	_server.get("_rooms")["部屋"]["ready_wait_s"] = Protocol.READY_TIMEOUT_S
+	await wait_seconds(0.2)
+	assert_false(bool(race.call("is_start_held")))
 	# 最後の1人が抜けたら、レースも部屋も片づく。
 	_clients["a"].disconnect_from_server()
 	await wait_seconds(0.5)
@@ -267,11 +284,11 @@ func test_the_game_side_shows_the_servers_race_without_computing_it() -> void:
 		var before_start := state.duplicate()
 		before_start["progress"] = 0.0
 		waiting.append(before_start)
-	race.call("_on_online_message", Protocol.message(Protocol.RACE_STATE, {"elapsed": 0.0, "started": false, "entry_wait": 0.0, "countdown": 2.0, "over": false, "runners": waiting}))
+	race.call("_on_online_message", Protocol.message(Protocol.RACE_STATE, {"elapsed": 0.0, "started": false, "entry_wait": 0.0, "countdown": 2.0, "hold": false, "over": false, "runners": waiting}))
 	for _frame in 5:
 		me.call("_process", 0.016)
 	assert_almost_eq(float(me.call("get_race_progress")), 0.0, 0.0001)
-	race.call("_on_online_message", Protocol.message(Protocol.RACE_STATE, {"elapsed": 12.5, "started": true, "entry_wait": 0.0, "countdown": 0.0, "over": false, "runners": states}))
+	race.call("_on_online_message", Protocol.message(Protocol.RACE_STATE, {"elapsed": 12.5, "started": true, "entry_wait": 0.0, "countdown": 0.0, "hold": false, "over": false, "runners": states}))
 	assert_true(bool(race.call("is_race_started")))
 	assert_almost_eq(float(me.call("get_heart_rate_bpm")), 151.0, 0.001)
 	assert_almost_eq(float(me.call("get_drive_level")), 4.0, 0.001)
@@ -292,3 +309,34 @@ func test_the_game_side_shows_the_servers_race_without_computing_it() -> void:
 	assert_eq(int(me.call("get_finish_order")), 2)
 	assert_true((race.find_child("ResultPanel", true, false) as Control).visible)
 	assert_eq(str(race.call("_result_rows")[1]["trainer"]), "人1")
+
+
+func test_a_runner_whose_player_leaves_is_handed_to_the_cpu() -> void:
+	var ids := _roster_ids()
+	var a := await _enter("a", "部屋")
+	var b := await _enter("b", "部屋")
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
+	await _wait_for("b", Protocol.ROOM)
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.START)
+	assert_false((await _wait_for("a", Protocol.RACE_START)).is_empty())
+	var race: Node = _server.room_race("部屋")
+	var runner_b: Node3D = race.call("remote_runner", b)
+	assert_true(bool(runner_b.get("remote_controlled")))
+	# b が抜ける。b の走者は、その個体のCPUトレーナーに任される。レースは、残った人のために続く。
+	_clients["b"].disconnect_from_server()
+	var waited := 0.0
+	while race.call("remote_runner", b) != null and waited < WAIT_S:
+		await wait_seconds(0.05)
+		waited += 0.05
+	assert_null(race.call("remote_runner", b))
+	assert_false(bool(runner_b.get("remote_controlled")))
+	assert_false(bool(runner_b.get("player_controlled")))
+	assert_eq(runner_b.get("_cpu_trainer_profile"), LocalRaceMath.cpu_trainer_profile_by_id(str(PururinRosterConfig.pururin_by_id(ids[1])["trainer_profile_id"])) if PururinRosterConfig.pururin_by_id(ids[1]).has("trainer_profile_id") else runner_b.get("_cpu_trainer_profile"))
+	assert_not_null(_server.room_race("部屋"))
+	assert_not_null(race.call("remote_runner", a))
+	# 抜けた人を待たずに、残った人の準備だけで始まる。
+	_clients["a"].send(Protocol.READY)
+	await wait_seconds(0.3)
+	assert_false(bool(race.call("is_start_held")))

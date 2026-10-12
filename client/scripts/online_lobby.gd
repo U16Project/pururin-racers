@@ -14,9 +14,10 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const LOCAL_RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const Protocol := preload("res://scripts/online/online_protocol.gd")
-const PANEL_SIZE := Vector2(640.0, 680.0)
-const ARROW_BUTTON_SIZE := Vector2(52.0, 46.0)
-const FIELD_HEIGHT := 46.0
+const PANEL_SIZE := Vector2(640.0, 624.0)
+const ARROW_BUTTON_SIZE := Vector2(52.0, 40.0)
+const BUTTON_HEIGHT := 44.0
+const FIELD_HEIGHT := 40.0
 const LABEL_WIDTH := 110.0
 
 ## サーバーに断られたときの、画面に出す文。
@@ -89,9 +90,9 @@ func _build() -> void:
 	panel.offset_bottom = PANEL_SIZE.y * 0.5
 	add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
+	column.add_theme_constant_override("separation", 4)
 	panel.add_child(column)
-	var heading := MenuStyle.label("オンラインフリー対戦", 30)
+	var heading := MenuStyle.label("オンラインフリー対戦", 26)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(heading)
 	var name_label := MenuStyle.label("名前：%s" % TrainerProfile.trainer_name(), 20, MenuStyle.COLOR_DIM)
@@ -103,35 +104,35 @@ func _build() -> void:
 	_room_edit.text_submitted.connect(func(_text: String) -> void: join())
 	_join_button = MenuStyle.button("部屋に入る", 22)
 	_join_button.name = "JoinButton"
-	_join_button.custom_minimum_size = Vector2(0.0, 52.0)
+	_join_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_join_button.pressed.connect(join)
 	UIAudio.bind_button_sound(_join_button, "confirmation")
 	column.add_child(_join_button)
 	_status = MenuStyle.label("", 18)
 	_status.name = "Status"
 	_status.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	_status.custom_minimum_size = Vector2(0.0, 48.0)
+	_status.custom_minimum_size = Vector2(0.0, 26.0)
 	column.add_child(_status)
 	_room_controls = VBoxContainer.new()
 	_room_controls.name = "RoomControls"
-	_room_controls.add_theme_constant_override("separation", 8)
+	_room_controls.add_theme_constant_override("separation", 4)
 	column.add_child(_room_controls)
 	_pururin_label = _chooser(_room_controls, "ぷるりん", "Pururin", step_pururin)
 	_distance_label = _chooser(_room_controls, "距離", "Distance", step_distance, _distance_buttons)
 	_start_button = MenuStyle.button("レース開始", 22, MenuStyle.COLOR_BUTTON_ON)
 	_start_button.name = "StartButton"
-	_start_button.custom_minimum_size = Vector2(0.0, 52.0)
+	_start_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_start_button.pressed.connect(start_race)
 	UIAudio.bind_button_sound(_start_button, "confirmation")
 	_room_controls.add_child(_start_button)
 	_members_box = VBoxContainer.new()
 	_members_box.name = "Members"
 	_members_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_members_box.add_theme_constant_override("separation", 2)
+	_members_box.add_theme_constant_override("separation", 0)
 	column.add_child(_members_box)
 	_back_button = MenuStyle.button("戻る", 22, MenuStyle.COLOR_BUTTON_QUIET)
 	_back_button.name = "BackButton"
-	_back_button.custom_minimum_size = Vector2(0.0, 52.0)
+	_back_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_back_button.pressed.connect(go_back)
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
@@ -337,6 +338,12 @@ func _show_members() -> void:
 	if _peer_id == 0:
 		return
 	_members_box.add_child(MenuStyle.label("部屋の人（%d／%d人）" % [_members.size(), Protocol.ROOM_CAPACITY], 18, MenuStyle.COLOR_DIM))
+	# 8人でも画面に収まるように、2列に並べる。
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 18)
+	grid.add_theme_constant_override("v_separation", 0)
+	_members_box.add_child(grid)
 	for index in _members.size():
 		var member: Dictionary = _members[index]
 		var is_me := int(member["peer_id"]) == _peer_id
@@ -346,9 +353,11 @@ func _show_members() -> void:
 			"［主］" if int(member["peer_id"]) == int(_room.get("host", 0)) else "",
 			pururin_name(picked) if not picked.is_empty() else "選び中",
 		]
-		var line := MenuStyle.label(text, 20, MenuStyle.COLOR_BUTTON_ON if is_me else MenuStyle.COLOR_TEXT)
+		var line := MenuStyle.label(text, 17, MenuStyle.COLOR_BUTTON_ON if is_me else MenuStyle.COLOR_TEXT)
 		line.name = "Member%d" % (index + 1)
-		_members_box.add_child(line)
+		line.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.clip_text = true
+		grid.add_child(line)
 
 
 func go_back() -> void:
