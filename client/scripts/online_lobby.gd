@@ -15,6 +15,8 @@ const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config
 const LOCAL_RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const Protocol := preload("res://scripts/online/online_protocol.gd")
 const PANEL_SIZE := Vector2(640.0, 624.0)
+## 人の一覧の、1列に並べる人数。
+const MEMBERS_PER_COLUMN := 4
 const ARROW_BUTTON_SIZE := Vector2(52.0, 40.0)
 const BUTTON_HEIGHT := 44.0
 const FIELD_HEIGHT := 40.0
@@ -44,6 +46,10 @@ var _pururin_label: Label
 var _distance_label: Label
 var _distance_buttons: Array[Button] = []
 var _start_button: Button
+var _scenery_label: Label
+## 自分の画面の景色を、軽くするか（コースと柵だけ・影なし・紙ふぶきなし）。ブラウザ版は、最初から軽くする。
+## 見た目だけの話なので、人によって違っていてよい（レースの計算は、サーバーがやる）。
+var _light_scenery := OS.has_feature("web")
 ## 部屋のようす（サーバーから届いた最後のもの）。
 var _room := {}
 ## 入ろうとしている合言葉（つながるのを待っているあいだ、覚えておく）。
@@ -99,7 +105,7 @@ func _build() -> void:
 	name_label.name = "NameLabel"
 	column.add_child(name_label)
 	_server_edit = _field(column, "サーバー", "ServerEdit", OnlineConfig.server_url(), 200)
-	_room_edit = _field(column, "合言葉", "RoomEdit", "", Protocol.ROOM_CODE_MAX_LENGTH)
+	_room_edit = _field(column, "合言葉", "RoomEdit", OnlineConfig.default_room(), Protocol.ROOM_CODE_MAX_LENGTH)
 	_room_edit.placeholder_text = "同じ合言葉の人と、同じ部屋に入ります"
 	_room_edit.text_submitted.connect(func(_text: String) -> void: join())
 	_join_button = MenuStyle.button("部屋に入る", 22)
@@ -119,6 +125,7 @@ func _build() -> void:
 	column.add_child(_room_controls)
 	_pururin_label = _chooser(_room_controls, "ぷるりん", "Pururin", step_pururin)
 	_distance_label = _chooser(_room_controls, "距離", "Distance", step_distance, _distance_buttons)
+	_scenery_label = _chooser(_room_controls, "景色", "Scenery", step_scenery)
 	_start_button = MenuStyle.button("レース開始", 22, MenuStyle.COLOR_BUTTON_ON)
 	_start_button.name = "StartButton"
 	_start_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
@@ -257,6 +264,9 @@ func _apply_room(room: Dictionary) -> void:
 	_room = room if _peer_id != 0 else {}
 	_members = _room.get("members", [])
 	_room_controls.visible = _peer_id != 0
+	# サーバーの場所は、部屋に入る前にだけ出す（入ったあとは、その場所を、景色の行に使う）。
+	(_server_edit.get_parent() as Control).visible = _peer_id == 0
+	_scenery_label.text = scenery_text()
 	_show_members()
 	if _peer_id == 0:
 		return
@@ -319,16 +329,36 @@ func step_distance(direction: int) -> void:
 	_client.send(Protocol.DISTANCE, {"distance_m": distances[posmod(index + direction, distances.size())]})
 
 
+## 景色を、フルと軽いで切り替える（どちら向きに押しても、切り替わる）。
+func step_scenery(_direction: int) -> void:
+	_light_scenery = not _light_scenery
+	_scenery_label.text = scenery_text()
+
+
+func is_light_scenery() -> bool:
+	return _light_scenery
+
+
+func scenery_text() -> String:
+	return "軽い（コースだけ・影なし）" if _light_scenery else "フル"
+
+
 func start_race() -> void:
 	_client.send(Protocol.START)
 
 
 ## レースが始まった：届いた出走と距離で、レースの画面へ進む（レースは、サーバーから届く状態を映す）。
 func _go_to_race(data: Dictionary) -> void:
+	prepare_race(data)
+	get_tree().change_scene_to_file(LOCAL_RACE_SCENE_PATH)
+
+
+## レースの画面が読むもの（距離・出走・自分の番号・景色の軽さ）を、決めておく。
+func prepare_race(data: Dictionary) -> void:
 	RaceSession.select_distance(float(data["distance_m"]))
 	RaceSession.set_online_entries(data["entries"])
 	RaceSession.set_online_view(_peer_id)
-	get_tree().change_scene_to_file(LOCAL_RACE_SCENE_PATH)
+	RaceSession.set_course_only(_light_scenery)
 
 
 ## 部屋の人の一覧を出す。自分には印、部屋の主には「主」、選んだぷるりんの名前を付ける。部屋に入る前は、何も出さない。
@@ -338,9 +368,9 @@ func _show_members() -> void:
 	if _peer_id == 0:
 		return
 	_members_box.add_child(MenuStyle.label("部屋の人（%d／%d人）" % [_members.size(), Protocol.ROOM_CAPACITY], 18, MenuStyle.COLOR_DIM))
-	# 8人でも画面に収まるように、2列に並べる。
+	# 8人でも画面に収まるように、5人目からは2列に並べる（4人までは、1列で広く使う）。
 	var grid := GridContainer.new()
-	grid.columns = 2
+	grid.columns = 1 if _members.size() <= MEMBERS_PER_COLUMN else 2
 	grid.add_theme_constant_override("h_separation", 18)
 	grid.add_theme_constant_override("v_separation", 0)
 	_members_box.add_child(grid)

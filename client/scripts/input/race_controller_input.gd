@@ -50,25 +50,40 @@ static func notch_axis() -> float:
 	return axis
 
 
+## コントローラーの4つのボタン（ひし形）に当たる、キーボードのキー。
+## キーボードでも、同じひし形に並ぶ：S＝上（Y）、Z＝左（X）、X＝下（A）、C＝右（B）。左手で押し、右手は矢印キー。
+const FACE_KEYS := {JOY_BUTTON_Y: KEY_S, JOY_BUTTON_X: KEY_Z, JOY_BUTTON_A: KEY_X, JOY_BUTTON_B: KEY_C}
+
+
+## コントローラーのそのボタンに当たる、キーボードのキー。
+static func face_key(button: JoyButton) -> Key:
+	return FACE_KEYS[button]
+
+
+## コントローラーのそのボタンか、それに当たるキーを、押した瞬間か（押しっぱなしの繰り返しは数えない）。
+static func is_face_pressed(event: InputEvent, button: JoyButton) -> bool:
+	return is_button_pressed(event, button) or _is_key_just_pressed(event, face_key(button))
+
+
 ## ブレーキ操作。押している間だけ制動し、ノッチ設定は変えない。
-## キーボードはスペース、ゲームパッドはAボタンまたは左トリガー。
+## ゲームパッドはAボタンまたは左トリガー。キーボードは、Aに当たるキー（X）か、スペース。
 static func brake_pressed() -> bool:
 	return (
 		Input.is_physical_key_pressed(KEY_SPACE)
+		or Input.is_physical_key_pressed(face_key(JOY_BUTTON_A))
 		or button_down(JOY_BUTTON_A)
 		or axis_value(JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
 	)
 
 
-## ダッシュ。押した瞬間だけ（押しっぱなしの繰り返しは数えない）。ゲームパッドはB、キーボードはZ。
-## （キーボードのAは、カメラを左へずらす操作に使っている）
+## ダッシュ。押した瞬間だけ（押しっぱなしの繰り返しは数えない）。ゲームパッドはB、キーボードはBに当たるキー（C）。
 static func is_dash_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_B) or _is_key_just_pressed(event, KEY_Z)
+	return is_face_pressed(event, JOY_BUTTON_B)
 
 
-## ブースト。押した瞬間だけ。ゲームパッドはX、キーボードはX。
+## ブースト。押した瞬間だけ。ゲームパッドはX、キーボードはXに当たるキー（Z）。
 static func is_boost_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_X) or _is_key_just_pressed(event, KEY_X)
+	return is_face_pressed(event, JOY_BUTTON_X)
 
 
 static func _is_key_just_pressed(event: InputEvent, keycode: Key) -> bool:
@@ -93,14 +108,14 @@ static func is_menu_pressed(event: InputEvent) -> bool:
 	return is_button_pressed(event, JOY_BUTTON_START)
 
 
-## メニューの決定（選んでいるボタンを押す）。ゲームパッドは A。
+## メニューの決定（選んでいるボタンを押す）。ゲームパッドは A、キーボードはAに当たるキー（X）。Enter は、Godot の標準の決定。
 static func is_accept_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_A)
+	return is_face_pressed(event, JOY_BUTTON_A)
 
 
-## メニューの戻る・閉じる。ゲームパッドは B。
+## メニューの戻る・閉じる。ゲームパッドは B、キーボードはBに当たるキー（C）。Esc は、Godot の標準の戻る。
 static func is_cancel_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_B)
+	return is_face_pressed(event, JOY_BUTTON_B)
 
 
 ## レース選択で、距離を1つ前（-1）・次（1）へ動かす。ゲームパッドの L1・R1。それ以外は 0。
@@ -138,14 +153,14 @@ static func slot_move_direction(event: InputEvent) -> int:
 	return 0
 
 
-## キャラ選択で、スロットを未選択にする。ゲームパッドはX、キーボードはX。
+## キャラ選択で、スロットを未選択にする。ゲームパッドはX、キーボードはXに当たるキー（Z）。
 static func is_slot_clear_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_X) or _is_key_just_pressed(event, KEY_X)
+	return is_face_pressed(event, JOY_BUTTON_X)
 
 
-## キャラ選択で、他のスロットのキャラを奪う。ゲームパッドはY、キーボードはY。
+## キャラ選択で、他のスロットのキャラを奪う。ゲームパッドはY、キーボードはYに当たるキー（S）。
 static func is_slot_force_pressed(event: InputEvent) -> bool:
-	return is_button_pressed(event, JOY_BUTTON_Y) or _is_key_just_pressed(event, KEY_Y)
+	return is_face_pressed(event, JOY_BUTTON_Y)
 
 
 static func activate_focused_control(viewport: Viewport) -> bool:

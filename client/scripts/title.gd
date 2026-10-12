@@ -6,6 +6,7 @@ const TRAINER_PROFILE_SCENE_PATH := "res://scenes/trainer_profile.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/title_screen_background.png"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const Logo := preload("res://scripts/logo.gd")
+const BuildInfo := preload("res://scripts/build_info.gd")
 const PROMPT_TEXT := "ー　PRESS ANY BUTTON　ー"
 ## ロゴからの押しっぱなしで、すぐ抜けないようにする待ち時間。
 const ARM_DELAY_MSEC := 250
@@ -45,6 +46,17 @@ func _ready() -> void:
 	_prompt.offset_bottom = -36.0
 	_prompt.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_prompt)
+	# 右下に、版の目印（いつ書き出した版か）を小さく出す。ブラウザ版で、古い版が出ていないかを見分けるため。
+	var version := MenuStyle.label(BuildInfo.label_text(), 14, MenuStyle.COLOR_DIM)
+	version.name = "VersionLabel"
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	version.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	version.offset_left = -420.0
+	version.offset_right = -12.0
+	version.offset_top = -30.0
+	version.offset_bottom = -8.0
+	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(version)
 	var tween := create_tween().set_loops()
 	tween.tween_property(_prompt, "modulate:a", 0.15, 0.55)
 	tween.tween_property(_prompt, "modulate:a", 1.0, 0.55)

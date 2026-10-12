@@ -16,6 +16,7 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
 const FpsLabel := preload("res://scripts/debug/fps_label.gd")
+const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 ## 丸い操作盤の大きさ（外の輪の半径。ピクセル）と、画面の下からのすき間。
 const ROUND_HUD_RADIUS := 142.0
@@ -262,12 +263,12 @@ func _ready() -> void:
 	_guide_label.text = "\n".join(PackedStringArray([
 		"←→／左スティック　ライン",
 		"↑↓／十字キー　ノッチ",
-		"Space／A／LT　ブレーキ",
-		"Zキー／B　ダッシュ",
-		"Xキー／X　ブースト",
-		"Y／C　視点切替（通常・遠距離・上空・一人称）",
+		"Xキー・Space／A／LT　ブレーキ",
+		"Cキー／B　ダッシュ",
+		"Zキー／X　ブースト",
+		"Sキー／Y　視点切替（通常・遠距離・上空・一人称）",
 		"右スティック　見回す（離すと戻る）",
-		"WASD・QE　カメラの微調整",
+		"Shift＋WASD・QE　カメラの微調整",
 		"右スティック押込／R　リセット",
 		"Esc／Start　メニュー",
 		"F3　詳細表示の切替",
@@ -808,6 +809,8 @@ func _place_markers() -> void:
 	)
 	_update_launch_visual()
 	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route, RaceSession.is_course_only())
+	# ブラウザ版では、太陽の影を出さない（白っぽくなるため）。
+	SunShadow.apply($Sun as DirectionalLight3D)
 	if RaceSession.is_course_only():
 		# ウェブ版オフラインテスト：軽くするために太陽の影を切り、重さを確かめるためにコマ数を出す。
 		($Sun as DirectionalLight3D).shadow_enabled = false

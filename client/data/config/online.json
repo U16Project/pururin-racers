@@ -1,5 +1,6 @@
 {
-  "server_url": "ws://133.167.117.244:18766",
+  "server_url": "wss://os3-388-27490.vs.sakura.ne.jp",
+  "default_room": "ぷるりん",
   "connect_timeout_s": 8.0,
   "server_max_fps": 30
 }

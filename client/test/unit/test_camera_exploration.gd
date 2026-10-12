@@ -16,6 +16,9 @@ func test_exploration_scene_builds_existing_venue_without_runners() -> void:
 	assert_not_null(screen.get_node_or_null("ExplorationCamera"))
 	assert_null(screen.get_node_or_null("Runners"))
 	assert_null(screen.get_node_or_null("UI/HudLabel"))
+	# 太陽の影は、出してよい端末でだけ出す（ブラウザ版では、白っぽくなるので出さない）。測定用の表示は、もう無い。
+	assert_eq((screen.get_node("Sun") as DirectionalLight3D).shadow_enabled, preload("res://scripts/presentation/sun_shadow.gd").allowed())
+	assert_null(screen.get_node_or_null("UI/RenderProbe"))
 	var launch := screen.get_node("TrackPath/RouteLaunchStraight") as MeshInstance3D
 	assert_true(launch.visible)
 	assert_almost_eq((launch.mesh as BoxMesh).size.z, 160.0, 0.001)

@@ -57,9 +57,9 @@ func test_slot_clear_is_x_and_slot_force_is_y() -> void:
 	assert_false(RaceControllerInput.is_slot_force_pressed(_button_event(JOY_BUTTON_X)))
 	var key := InputEventKey.new()
 	key.pressed = true
-	key.physical_keycode = KEY_X
+	key.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_X)
 	assert_true(RaceControllerInput.is_slot_clear_pressed(key))
-	key.physical_keycode = KEY_Y
+	key.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_Y)
 	assert_true(RaceControllerInput.is_slot_force_pressed(key))
 
 
@@ -86,3 +86,32 @@ func test_slot_lock_is_select_and_slot_move_counts_only_the_moment_a_trigger_is_
 	assert_eq(RaceControllerInput.slot_move_direction(key), -1)
 	key.physical_keycode = KEY_PAGEDOWN
 	assert_eq(RaceControllerInput.slot_move_direction(key), 1)
+
+
+func test_keyboard_keys_sit_in_the_same_diamond_as_the_pad_buttons() -> void:
+	# S＝上（Y）、Z＝左（X）、X＝下（A）、C＝右（B）。
+	assert_eq(RaceControllerInput.face_key(JOY_BUTTON_Y), KEY_S)
+	assert_eq(RaceControllerInput.face_key(JOY_BUTTON_X), KEY_Z)
+	assert_eq(RaceControllerInput.face_key(JOY_BUTTON_A), KEY_X)
+	assert_eq(RaceControllerInput.face_key(JOY_BUTTON_B), KEY_C)
+	# 4つのボタンそれぞれ、そのボタンでも、当たるキーでも効く。ほかのボタンのキーでは効かない。
+	for button: JoyButton in [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y]:
+		assert_true(RaceControllerInput.is_face_pressed(_button_event(button), button))
+		for other: JoyButton in [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y]:
+			var key := InputEventKey.new()
+			key.pressed = true
+			key.physical_keycode = RaceControllerInput.face_key(other)
+			assert_eq(RaceControllerInput.is_face_pressed(key, button), other == button)
+	# 役目：A＝決定、B＝戻る・ダッシュ、X＝ブースト。
+	var accept := InputEventKey.new()
+	accept.pressed = true
+	accept.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_A)
+	assert_true(RaceControllerInput.is_accept_pressed(accept))
+	assert_false(RaceControllerInput.is_cancel_pressed(accept))
+	var cancel := InputEventKey.new()
+	cancel.pressed = true
+	cancel.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_B)
+	assert_true(RaceControllerInput.is_cancel_pressed(cancel))
+	assert_true(RaceControllerInput.is_dash_pressed(cancel))
+	assert_false(RaceControllerInput.is_boost_pressed(cancel))
+

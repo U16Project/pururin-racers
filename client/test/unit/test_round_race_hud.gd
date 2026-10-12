@@ -7,6 +7,7 @@ const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_ma
 const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const ModeSelectScene := preload("res://scenes/mode_select.tscn")
+const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 
 
 func after_each() -> void:
@@ -160,5 +161,7 @@ func test_normal_race_keeps_the_full_venue_and_shadows() -> void:
 	var race := _race(false)
 	assert_not_null(race.get_node_or_null("TrackPath/RaceVenue/Poles"))
 	assert_gt(race.get_node("TrackPath/RaceVenue/HomeStraight").get_child_count(), 0)
-	assert_true((race.get_node("Sun") as DirectionalLight3D).shadow_enabled)
+	# 太陽の影は、出してよい端末でだけ出す（ブラウザ版では、白っぽくなるので出さない）。
+	assert_eq(SunShadow.allowed(), not OS.has_feature("web"))
+	assert_eq((race.get_node("Sun") as DirectionalLight3D).shadow_enabled, SunShadow.allowed())
 	assert_null(race.get_node_or_null("UI/FpsLabel"))

@@ -20,6 +20,10 @@ if [[ ! -f "$task_templates/version.txt" ]] || [[ "$(tr -d '\r\n' < "$task_templ
 fi
 task_output="$task_root/build/web"
 mkdir -p -- "$task_output"
+# 版の目印（いつ書き出したか）を、ゲームの中に入れる。タイトル画面の右下に出る。Gitには入れない。
+task_build_info="$task_root/client/data/build_info.json"
+printf '{"built_at": "%s"}\n' "$(date '+%Y-%m-%d %H:%M')" > "$task_build_info"
+trap 'rm -f -- "$task_build_info"' EXIT
 echo "ぷるりんレーサーズ Web releaseを書き出します（$task_version、single-thread）"
 "$task_godot" --headless --path "$task_root/client" --export-release Web "$task_output/index.html" 2>&1 | tee "$task_root/build/web-export.log"
 for task_file in index.html index.js index.wasm index.pck; do

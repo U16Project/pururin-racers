@@ -9,3 +9,6 @@
 *.x86_64
 *.zip
 *.pck
+# 書き出しのたびに作る、版の目印
+data/build_info.json
+data/build_info.json.import

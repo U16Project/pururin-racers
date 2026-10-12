@@ -52,7 +52,7 @@ func set_follow_target(node: Node3D) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_Y) or _is_key(event, KEY_C):
+	if RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
 		_set_view(next_view(view))
 		get_viewport().set_input_as_handled()
 	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_STICK) or _is_key(event, KEY_R):
@@ -113,8 +113,12 @@ static func goal_orbit_angle(seconds_since_goal: float) -> float:
 	return PI + deg_to_rad(GOAL_ORBIT_DEG_PER_S) * (swing - GOAL_SWING_SECONDS)
 
 
+## カメラの細かい調整（開発用）。Shift を押しながら、W・S＝前後、A・D＝左右、Q・E＝向き。Ctrl も押すと、速く動く。
+## Shift を要るようにしてあるのは、S が視点の切り替え（Yボタンに当たるキー）に使われているため。
 func _process_keyboard_adjustment(delta: float) -> void:
-	var fast := 2.5 if Input.is_key_pressed(KEY_SHIFT) else 1.0
+	if not Input.is_key_pressed(KEY_SHIFT):
+		return
+	var fast := 2.5 if Input.is_key_pressed(KEY_CTRL) else 1.0
 	var speed := chase_adjust_speed * fast
 	if Input.is_key_pressed(KEY_W):
 		_back_offset -= speed * delta

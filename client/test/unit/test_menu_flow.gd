@@ -888,3 +888,16 @@ func test_stat_bars_show_the_attribute_bonus_and_the_steps_that_cannot_be_used()
 	for id: String in RaceSession.roster_ids():
 		var pururin := PururinRosterConfig.pururin_by_id(id)
 		assert_eq(PururinDetail.preview_for(id)["bonus_stats"], config["attributes"][str(pururin["attribute"])]["bonus_stats"], id)
+
+
+func test_title_shows_which_build_is_running() -> void:
+	var title := TitleScene.instantiate()
+	add_child_autofree(title)
+	var version := title.find_child("VersionLabel", true, false) as Label
+	assert_not_null(version)
+	var BuildInfo := preload("res://scripts/build_info.gd")
+	assert_eq(version.text, BuildInfo.label_text())
+	# テストは、書き出した版ではないので、日時は無く、「開発中」と出る。書き出した版では、日時が出る。
+	assert_eq(BuildInfo.built_at(), "")
+	assert_eq(BuildInfo.label_text(), BuildInfo.DEVELOPMENT_TEXT)
+

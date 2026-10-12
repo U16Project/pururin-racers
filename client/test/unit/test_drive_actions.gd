@@ -162,18 +162,18 @@ func test_boost_softens_the_debt_penalty_on_propulsion() -> void:
 
 func test_only_a_fresh_press_counts_for_dash_and_boost_keys() -> void:
 	var press := InputEventKey.new()
-	press.physical_keycode = KEY_Z
+	press.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_B)
 	press.pressed = true
 	assert_true(RaceControllerInput.is_dash_pressed(press))
 	assert_false(RaceControllerInput.is_boost_pressed(press))
 	# 押しっぱなしの繰り返しは数えない。
 	var held := InputEventKey.new()
-	held.physical_keycode = KEY_Z
+	held.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_B)
 	held.pressed = true
 	held.echo = true
 	assert_false(RaceControllerInput.is_dash_pressed(held))
 	var boost_key := InputEventKey.new()
-	boost_key.physical_keycode = KEY_X
+	boost_key.physical_keycode = RaceControllerInput.face_key(JOY_BUTTON_X)
 	boost_key.pressed = true
 	assert_true(RaceControllerInput.is_boost_pressed(boost_key))
 	var pad := InputEventJoypadButton.new()
