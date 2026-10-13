@@ -16,6 +16,7 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
 const FpsLabel := preload("res://scripts/debug/fps_label.gd")
+const FirstDrawWarmup := preload("res://scripts/presentation/first_draw_warmup.gd")
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 ## 丸い操作盤の大きさ（外の輪の半径。ピクセル）と、画面の下からのすき間。
@@ -243,6 +244,8 @@ func _ready() -> void:
 	_spawn_field()
 	if _is_online_host():
 		_stop_presentation_for_server()
+	else:
+		_warm_up_first_draw()
 	if _online_view:
 		_online_client = OnlineSession.client(get_tree())
 		_online_client.message_received.connect(_on_online_message)
@@ -818,6 +821,23 @@ func _place_markers() -> void:
 		if $UI.get_node_or_null("FpsLabel") == null:
 			$UI.add_child(FpsLabel.new())
 	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
+
+
+## コースの上の物を、スタート前に一度描いておく（ブラウザ版で、レース中に初めて映る物の所で止まらないように）。
+func _warm_up_first_draw() -> void:
+	if _track == null or _track.curve == null:
+		return
+	var points := _track.curve.get_baked_points()
+	var center := Vector3.ZERO
+	for point in points:
+		center += point
+	center /= maxf(float(points.size()), 1.0)
+	var radius := 0.0
+	for point in points:
+		radius = maxf(radius, point.distance_to(center))
+	var warmup := FirstDrawWarmup.new()
+	warmup.setup(_track.to_global(center), radius)
+	add_child(warmup)
 
 
 func _place_route_marker(node: MeshInstance3D, route_distance_m: float, color: Color) -> void:
