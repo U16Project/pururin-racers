@@ -225,7 +225,8 @@ static func bonus_bar_color(attribute_id: String, attribute_color: Color) -> Col
 ## 表示する個体を変える。空のIDなら「未選択」。
 ## taken_by に、使っているスロットの名前（例「5枠」）を渡すと、「選択済み」の帯と強制選択のボタンを出す。
 ## holder_locked が true（使っているスロットが施錠中）なら、強制選択は押せない。
-func show_pururin(pururin_id: String, taken_by: String = "", holder_locked: bool = false) -> void:
+## can_force が false なら、強制選択のボタンそのものを出さない（オンラインの部屋など、奪えない所）。
+func show_pururin(pururin_id: String, taken_by: String = "", holder_locked: bool = false, can_force: bool = true) -> void:
 	_preview = preview_for(pururin_id) if not pururin_id.is_empty() else {}
 	_portrait.call("set_pururin", PururinRosterConfig.pururin_by_id(pururin_id) if not _preview.is_empty() else {})
 	_filled_box.visible = not _preview.is_empty()
@@ -235,6 +236,7 @@ func show_pururin(pururin_id: String, taken_by: String = "", holder_locked: bool
 	# 使っているスロットが施錠中なら、奪えない。
 	_force_button.text = FORCE_LOCKED_TEXT if holder_locked else FORCE_TEXT
 	_force_button.disabled = holder_locked
+	_force_button.visible = can_force
 	# 押せないときは、Yのマークも暗くする。
 	_force_mark.modulate = Color(0.45, 0.45, 0.5, 0.45) if holder_locked else Color.WHITE
 	if not _preview.is_empty():

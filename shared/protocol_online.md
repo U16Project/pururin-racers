@@ -7,8 +7,9 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`（古い Python のサーバーは `18765`）。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `1`）と、種類 `t` が入る。
-- 1部屋の定員は8人（レースの枠の数）。部屋は、合言葉で分ける。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `4`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋の出走数は2〜8体で、部屋の主が決める。人は、出走数まで入れる。
+- 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 部屋（各自がぷるりんを選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレース開始（`start`）。
 
 ## 起動
 
@@ -20,35 +21,57 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 
 | `t` | 中身 | 意味 |
 |---|---|---|
-| `hello` | `name`（12字まで）、`room`（合言葉。16字まで） | その合言葉の部屋に入る。別の部屋にいたら、移る。レース中の部屋には入れない |
+| `hello` | `name`（12字まで）、`introduction`（自己紹介。70字まで）、`icon`（`{kind, id, image}`。`kind` は `none`・`avatar`・`file`。`avatar` は `id` に用意された絵のID。`file` は `image` に、128×128のJPEGを文字（base64）にしたもの。6万字まで） | 名乗って、部屋の一覧の所に入る。返事は `lobby`。知らない種類・大きすぎる画像は、画像なしとして扱う |
+| `profile` | `peer_id` | 同じ部屋の人の紹介を聞く。返事は `profile_info` |
 | `ping` | `client_ts` | つながっているかの確認 |
+| `create` | `room_name`（16字まで）、`password`（16字まで。空なら、だれでも入れる） | 部屋を作って、入る。作った人が、部屋の主。同じ名前の部屋は作れない |
+| `join` | `room_id`、`password` | 部屋に入る。レース中・満員の部屋には入れない |
+| `leave` | — | 部屋を出て、部屋の一覧の所へ戻る。返事は `lobby` |
 | `pick` | `pururin_id` | 自分のぷるりんを選ぶ。部屋のほかの人が選んでいる個体は、選べない |
-| `distance` | `distance_m` | 距離を決める。部屋の主だけ。選べる距離だけ |
-| `start` | — | レースを始める。部屋の主だけ。全員が選び終わっていること |
+| `settings` | `distance_m`・`field_size`（2〜8。今いる人数以上）・`cpu`（真偽）・`password` のうち、変えたいものだけ | 部屋の決めごとを変える。部屋の主だけ。1つでも受け付けられない値があれば、何も変えない |
+| `kick` | `peer_id` | 部屋の人を出す。部屋の主だけ |
+| `chat` | `text`（60字まで。`chat_max_length`） | 部屋の中で、ひとこと送る。レース中は送れない |
+| `confirm` | `on`（真偽） | 「確定」を押す・外す。部屋では、ぷるりんを選んでから |
+| `entries` | — | 出走表へ進む。部屋の主だけ。全員が選び終わって、確定していて、出走が2体以上あること。CPUの個体と、枠順（くじ）が決まる |
+| `gates` | `action`（`shuffle`＝くじを引き直す、`swap`＝`a` と `b` の枠を入れ替える。0から） | 出走表の枠順を変える。部屋の主だけ。変えると、全員の確定が外れる |
+| `back` | — | 出走表から、部屋へ戻る。部屋の主だけ |
+| `start` | — | レースを始める。部屋の主だけ。出走表で、全員が確定していること |
+| `admin` | `token`、`command`（`list`・`kick`＋`peer_id`・`close`＋`room_id`） | 管理人の命令。合い札（サーバーの環境変数 `PURURIN_ADMIN_TOKEN`）が合うときだけ。合い札が空のサーバーでは、すべて断る |
 | `input` | `line`（-1〜1）、`notch`（-1〜1）、`brake`（真偽） | レース中の、今の操作。押しているあいだの値を、変わるたびに送る |
 | `action` | `kind`（`dash` か `boost`） | ダッシュ・ブーストを押した |
 | `ready` | — | レースの画面ができた（スタート前の準備＝コースを一度描く・表情の部品を作る、が終わってから送る） |
 
-部屋の主は、その部屋に最初に入った人。主が抜けたら、次に古い人が主になる。
+部屋の主は、その部屋を作った人。主が抜けたら、次に古い人が主になる。誰もいなくなった部屋は、消える。
 
 ## サーバー → ゲーム
 
 | `t` | 中身 | 意味 |
 |---|---|---|
-| `welcome` | `peer_id`、`capacity`、部屋のようす | 部屋に入れた |
+| `lobby` | `peer_id`、`max_rooms`、`rooms`（部屋の一覧） | 部屋の一覧の所に入れた。部屋を出たとき・出されたときも、これが届く |
+| `rooms` | `rooms` | 部屋の一覧が変わった（部屋に入っていない人に配る） |
+| `welcome` | `peer_id`、部屋のようす | 部屋に入れた |
 | `room` | 部屋のようす | 部屋のようすが変わった（部屋の全員に配る） |
+| `profile_info` | `peer_id`、`name`、`introduction`、`icon` | 同じ部屋の人の紹介 |
+| `chat_message` | `peer_id`、`name`、`text` | 部屋の人のひとこと（送った本人にも届く） |
+| `kicked` | `by`（`host` か `admin`） | 部屋から出された。このあと `lobby` が届く |
+| `admin_result` | `command` と、その結果（`list` は `rooms`＝部屋と中の人・`peers`＝つないでいる数。`kick`・`close` は `done`） | 管理人の命令の返事 |
 | `pong` | `client_ts` | `ping` の返事 |
 | `error` | `code` | 断った。つながりは切らない |
 | `race_start` | `distance_m`、`entries` | レースが始まる。`entries` は出走の一覧 |
 | `race_state` | レースの状態 | レース中、1秒に20回配る |
 | `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒） |
 
-部屋のようす：`room`（合言葉）、`members`（入った順の `{peer_id, name, pururin_id}`。まだ選んでいなければ `pururin_id` は空）、
-`host`（部屋の主の番号）、`distance_m`、`racing`（レース中か）。
+部屋のようす：`room_id`、`room`（部屋の名前）、`members`（入った順の `{peer_id, name, pururin_id, confirmed}`。まだ選んでいなければ `pururin_id` は空。`confirmed` は「確定」を押しているか）、
+`phase`（`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
+`host`（部屋の主の番号）、`distance_m`、`field_size`（出走数）、`cpu`（空いた枠をCPUで埋めるか）、`locked`（パスワードがあるか）、`password`（パスワードそのもの。**部屋の主に送る `room` にだけ**入る。ほかの人には配らない）、`racing`（レース中か）。
+
+部屋の一覧（`rooms`）の1部屋ぶん：`room_id`、`name`、`host_name`、`count`（今いる人数）、`field_size`、`locked`、`racing`、`in_entries`（出走表を見ているか）。
+
+確定が外れるとき：自分がぷるりんを選び直すと、自分の確定が外れる。主が距離・出走数・CPUを変えると、全員の確定が外れる。出走表へ進んだとき・枠順が変わったときも、全員の確定が外れる。だれかが部屋を抜けると、出走表は取り消して、部屋の場面へ戻る。レースが終わると、部屋の場面へ戻る。出走表を見ている部屋には、あとから入れない。
 
 出走の一覧（`entries`）の1体ぶん：`gate`（枠。0から）、`id`（個体）、`player`（人が操作するか）、`peer_id`（その人の番号。CPUは0）、
-`trainer_id`、`trainer_profile_id`、`trainer_name`（人は、その人の名前）。人は入った順に1枠から。残りは、選ばれていない個体を、
-一覧の順にCPUで埋める（8体まで）。
+`trainer_id`、`trainer_profile_id`、`trainer_name`（人は、その人の名前）。CPUを入れる部屋では、人のほかに、出走数まで、
+選ばれていない個体を、一覧の順に足す。CPUを入れない部屋では、人だけ。枠順は、出走表へ進むときに、くじで決まる（主が、引き直しと入れ替えをできる）。
 
 レースの状態（`race_state`）：`elapsed`（レースの時計。秒）、`started`（スタートしたか）、`entry_wait`（入場の待ちの残り秒）、
 `countdown`（カウントダウンの残り秒）、`hold`（全員の画面ができるのを待っているか）、`over`（終わったか）、`runners`（全員ぶん）。
@@ -56,9 +79,12 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 `braking`、`heart`（心拍）、`stamina_ratio`、`air_aero`・`air_draft`（空気抵抗の軽減）、`dash_ratio`・`boost_ratio`（残り時間の割合）、
 `boost_uses_left`、`contacts`（接触している数）、`pushing`（押し合い中か）、`finished`、`finish_order`、`finish_time`。
 
-`error` の `code`：`bad_message`（読めない・名前や合言葉が空・知らない種類・知らない個体・選べない距離）、`version`（版が違う）、
-`room_full`（満員）、`not_in_room`（部屋に入る前にはできない）、`taken`（その個体は、ほかの人が選んでいる）、
-`not_host`（部屋の主でないとできない）、`not_ready`（まだ選んでいない人がいる）、`racing`（レース中はできない）。
+`error` の `code`：`bad_message`（読めない・名前が空・知らない種類・知らない個体・選べない距離や出走数）、`version`（版が違う）、
+`no_name`（名乗る前にはできない）、`rooms_full`（部屋の数が上限）、`room_name_taken`（同じ名前の部屋がある）、`no_room`（その部屋は無い）、
+`wrong_password`（パスワードが違う）、`room_full`（満員）、`not_in_room`（部屋に入る前にはできない）、`taken`（その個体は、ほかの人が選んでいる）、
+`not_host`（部屋の主でないとできない）、`not_ready`（まだ選んでいない人がいる）、`too_few`（出走が2体に足りない）、`racing`（レース中はできない）、
+`in_entries`（出走表を見ているあいだはできない）、`not_in_entries`（出走表でないとできない）、`not_confirmed`（まだ確定していない人がいる）、
+`not_admin`（管理人の合い札が違う）。
 
 ## サーバーの中のレース
 

@@ -49,6 +49,14 @@ var _taken_badge: Label
 var _taken := false
 var _locked := false
 var _is_user := false
+## 見るだけの行（オンラインの部屋の、ほかの人・CPUの枠など）。札の文と色、未選択のときの文を、外から決める。
+var _view_only := false
+## 見るだけの行で、この行から個体を選べるか（自分の行だけ true）。
+var _view_can_choose := false
+var _view_tag := ""
+var _view_tag_color := Color.WHITE
+var _empty_text := EMPTY_TEXT
+var _arrows: Array[Button] = []
 
 
 func setup(slot_index: int) -> void:
@@ -139,7 +147,29 @@ func _arrow(text: String, direction: int) -> Button:
 	button.pressed.connect(func() -> void:
 		grab_focus()
 		cycle_requested.emit(slot, direction, "mouse"))
+	_arrows.append(button)
 	return button
+
+
+## オンラインの部屋などで使う行にする。tag＝左の札の文（人の名前・「CPU」など）、tag_color＝その色、
+## empty_text＝個体が決まっていないときの文、can_choose＝この行で個体を選べるか（自分の行だけ true）、
+## can_focus＝カーソルを置けるか（出走表で、能力を見るため）、tag_width＝札の幅（長い名前のため）。
+## 選べない行は、◀▶と南京錠を出さない。CPUトレーナーの変更も、できない。
+func set_view(tag: String, tag_color: Color, empty_text: String, can_choose: bool, can_focus: bool = false, tag_width: float = TAG_WIDTH) -> void:
+	_view_only = true
+	_view_can_choose = can_choose
+	_view_tag = tag
+	_view_tag_color = tag_color
+	_empty_text = empty_text
+	focus_mode = Control.FOCUS_ALL if can_choose or can_focus else Control.FOCUS_NONE
+	mouse_filter = Control.MOUSE_FILTER_STOP if can_choose or can_focus else Control.MOUSE_FILTER_IGNORE
+	_trainer_button.custom_minimum_size.x = tag_width
+	_tag_label.custom_minimum_size.x = tag_width
+	for arrow: Button in _arrows:
+		arrow.modulate.a = 1.0 if can_choose else 0.0
+		arrow.disabled = not can_choose
+	_lock_button.visible = false
+	_refresh_trainer()
 
 
 ## ユーザーのスロットか、CPUのスロットか。
@@ -151,12 +181,14 @@ func set_role(is_user: bool) -> void:
 
 ## トレーナー名の表示を、今の役（ユーザーかCPUか）とキャラに合わせる。
 func _refresh_trainer() -> void:
-	_trainer_button.disabled = _is_user or _taken or _locked
+	_trainer_button.disabled = _view_only or _is_user or _taken or _locked
 	_trainer_button.focus_mode = Control.FOCUS_NONE if _trainer_button.disabled else Control.FOCUS_ALL
 	_tag_label.call("set_text", trainer_text())
 	_tag_label.call("set_color", trainer_color())
 
 func trainer_color() -> Color:
+	if _view_only:
+		return _view_tag_color
 	if _is_user:
 		return COLOR_USER
 	return COLOR_DEFAULT_TRAINER if not _taken and not _pururin_id.is_empty() and RaceSession.is_default_trainer(slot, RaceSession.slot_trainer_id(slot)) else MenuStyle.COLOR_DIM
@@ -164,6 +196,8 @@ func trainer_color() -> Color:
 
 ## このスロットに出すトレーナー名。
 func trainer_text() -> String:
+	if _view_only:
+		return _view_tag
 	if _is_user:
 		return RaceSession.trainer_name_for(_pururin_id, true)
 	return CPU_TAG if _taken else str(RaceSession.trainer_for_slot(slot).get("name", CPU_TAG))
@@ -197,7 +231,7 @@ func set_pururin(pururin: Dictionary, taken: bool = false) -> void:
 	# 脚質の印は、決まっているキャラのときだけ（未選択と「選択済み」のときは出さない）。
 	_style_mark.visible = not pururin.is_empty() and not _taken
 	_style_mark.queue_redraw()
-	_name_label.call("set_text", EMPTY_TEXT if pururin.is_empty() else str(pururin["display_name"]))
+	_name_label.call("set_text", _empty_text if pururin.is_empty() else str(pururin["display_name"]))
 	_name_label.call("set_color", MenuStyle.COLOR_DIM if pururin.is_empty() or _taken else MenuStyle.COLOR_TEXT)
 	_refresh_trainer()
 
@@ -235,6 +269,11 @@ func fitted_name() -> Dictionary:
 
 
 func _gui_input(event: InputEvent) -> void:
+	# 見るだけの行で、選べない行は、クリックでカーソルを置くだけ。
+	if _view_only and not _view_can_choose:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			grab_focus()
+		return
 	var direction := cycle_direction(event)
 	if direction != 0:
 		accept_event()

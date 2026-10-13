@@ -1,9 +1,11 @@
 extends GutTest
-## オンライン対戦の土台：サーバーにつなぐ・合言葉の部屋に入る・部屋の人の一覧が届く。
+## オンライン対戦の土台：サーバーにつなぐ・部屋を作る・部屋に入る・部屋の決めごと・出す・ひとこと・管理人。
 
 const Protocol := preload("res://scripts/online/online_protocol.gd")
 const OnlineServer := preload("res://scripts/online/online_server.gd")
 const OnlineClient := preload("res://scripts/online/online_client.gd")
+const OnlineConfig := preload("res://scripts/config/online_config.gd")
+const RaceSession := preload("res://scripts/race_session.gd")
 
 ## テスト用の入口の番号（本番の番号とは別にする）。
 const TEST_PORT := Protocol.DEFAULT_PORT + 1000
@@ -11,23 +13,29 @@ const WAIT_S := 3.0
 
 var _server: Node
 var _inbox := {}
+var _clients := {}
 
 
 func before_each() -> void:
 	_inbox = {}
+	_clients = {}
 	_server = OnlineServer.new()
 	_server.listen_on_ready = false
 	add_child_autofree(_server)
 	assert_eq(_server.listen(TEST_PORT), OK)
 
 
-func _client(label: String) -> Node:
+## つないで、名乗って、部屋の一覧の所に入る。届いた lobby を返す。
+func _enter_lobby(label: String) -> Dictionary:
 	var client: Node = OnlineClient.new()
 	add_child_autofree(client)
 	_inbox[label] = []
+	_clients[label] = client
 	client.message_received.connect(func(data: Dictionary) -> void: (_inbox[label] as Array).append(data))
 	assert_eq(client.connect_to("ws://127.0.0.1:%d" % TEST_PORT), OK)
-	return client
+	await wait_for_signal(client.connected, WAIT_S)
+	client.hello(label)
+	return await _wait_for(label, Protocol.LOBBY)
 
 
 ## その人に、その種類の文が届くまで待って、届いた文を返す（届かなければ空）。
@@ -43,97 +51,235 @@ func _wait_for(label: String, type: String) -> Dictionary:
 	return {}
 
 
+func _error(label: String) -> String:
+	return str((await _wait_for(label, Protocol.ERROR)).get("code", ""))
+
+
+## 部屋を作って、届いた welcome を返す。
+func _create(label: String, room_name: String, password: String = "") -> Dictionary:
+	_clients[label].create_room(room_name, password)
+	return await _wait_for(label, Protocol.WELCOME)
+
+
 func test_messages_carry_the_version_and_type() -> void:
-	var data := Protocol.message(Protocol.HELLO, {"name": "ユウ", "room": "abc"})
+	var data := Protocol.message(Protocol.HELLO, {"name": "ユウ"})
 	assert_eq(int(data["v"]), Protocol.VERSION)
-	assert_eq(Protocol.decode(Protocol.encode(data))["room"], "abc")
+	assert_eq(Protocol.decode(Protocol.encode(data))["name"], "ユウ")
 	# 読めない文・種類の無い文は、空で返す。
 	assert_true(Protocol.decode("こんにちは").is_empty())
 	assert_true(Protocol.decode("{\"v\": 1}").is_empty())
-	# 名前と合言葉は、空白を取り、上限で切る。
+	# 名前は、空白を取り、上限で切る。
 	assert_eq(Protocol.clean_text("  ユウ  ", Protocol.NAME_MAX_LENGTH), "ユウ")
 	assert_eq(Protocol.clean_text("あ".repeat(Protocol.NAME_MAX_LENGTH + 5), Protocol.NAME_MAX_LENGTH).length(), Protocol.NAME_MAX_LENGTH)
 
 
-func test_joining_a_room_answers_with_the_members() -> void:
-	var client := _client("a")
-	await wait_for_signal(client.connected, WAIT_S)
-	assert_true(client.is_open())
-	assert_true(client.join_room("ユウ", "合言葉"))
-	var welcome := await _wait_for("a", Protocol.WELCOME)
-	assert_eq(str(welcome.get("room", "")), "合言葉")
-	assert_eq(int(welcome.get("capacity", 0)), Protocol.ROOM_CAPACITY)
-	assert_eq((welcome.get("members", []) as Array).size(), 1)
-	assert_eq(str(welcome["members"][0]["name"]), "ユウ")
-	assert_eq(int(welcome["members"][0]["peer_id"]), int(welcome["peer_id"]))
+func test_hello_answers_with_the_room_list_and_the_limit() -> void:
+	var lobby := await _enter_lobby("a")
+	assert_gt(int(lobby["peer_id"]), 0)
+	assert_eq(int(lobby["max_rooms"]), OnlineConfig.max_rooms())
+	assert_eq((lobby["rooms"] as Array).size(), 0)
+	# 名乗る前は、部屋を作れない。
+	var stranger: Node = OnlineClient.new()
+	add_child_autofree(stranger)
+	_inbox["x"] = []
+	stranger.message_received.connect(func(data: Dictionary) -> void: (_inbox["x"] as Array).append(data))
+	stranger.connect_to("ws://127.0.0.1:%d" % TEST_PORT)
+	await wait_for_signal(stranger.connected, WAIT_S)
+	stranger.create_room("部屋")
+	assert_eq(await _error("x"), Protocol.ERROR_NO_NAME)
 
 
-func test_people_with_the_same_code_meet_and_others_do_not() -> void:
-	var a := _client("a")
-	var b := _client("b")
-	var c := _client("c")
-	await wait_for_signal(c.connected, WAIT_S)
-	a.join_room("アオ", "部屋1")
-	assert_false((await _wait_for("a", Protocol.WELCOME)).is_empty())
-	b.join_room("ベニ", "部屋1")
-	assert_false((await _wait_for("b", Protocol.WELCOME)).is_empty())
-	c.join_room("チャ", "部屋2")
-	assert_false((await _wait_for("c", Protocol.WELCOME)).is_empty())
-	# 先に入っていた人にも、2人になった一覧が届く。
-	var names: Array = []
-	var waited := 0.0
-	while names.size() < 2 and waited < WAIT_S:
-		var update := await _wait_for("a", Protocol.ROOM)
-		names = (update.get("members", []) as Array).map(func(member: Dictionary) -> String: return str(member["name"]))
-		waited += 0.5
-	assert_eq(names, ["アオ", "ベニ"])
-	assert_eq(_server.room_members("部屋1").size(), 2)
-	assert_eq(_server.room_members("部屋2").size(), 1)
+func test_creating_a_room_makes_the_creator_the_host_and_lists_the_room() -> void:
+	await _enter_lobby("a")
+	var b_lobby := await _enter_lobby("b")
+	var welcome := await _create("a", "朝の部屋", "ひみつ")
+	assert_eq(str(welcome["room"]), "朝の部屋")
+	assert_eq(int(welcome["host"]), int(welcome["peer_id"]))
+	assert_true(bool(welcome["locked"]))
+	assert_eq(int(welcome["field_size"]), Protocol.ROOM_CAPACITY)
+	assert_true(bool(welcome["cpu"]))
+	assert_false(welcome.has("password"), "パスワードそのものは、配らない")
+	# 一覧を見ている人に、新しい部屋が届く。
+	var rooms := await _wait_for("b", Protocol.ROOMS)
+	assert_eq((rooms["rooms"] as Array).size(), 1)
+	var listed: Dictionary = rooms["rooms"][0]
+	assert_eq(str(listed["name"]), "朝の部屋")
+	assert_eq(str(listed["host_name"]), "a")
+	assert_eq(int(listed["count"]), 1)
+	assert_true(bool(listed["locked"]))
+	assert_false(bool(listed["racing"]))
+	assert_eq(int(b_lobby["peer_id"]) != int(welcome["peer_id"]), true)
 
 
-func test_leaving_tells_the_rest_of_the_room() -> void:
-	var a := _client("a")
-	var b := _client("b")
-	await wait_for_signal(b.connected, WAIT_S)
-	a.join_room("アオ", "部屋")
-	await _wait_for("a", Protocol.WELCOME)
-	b.join_room("ベニ", "部屋")
+func test_joining_needs_the_password_and_a_free_place() -> void:
+	await _enter_lobby("a")
+	await _enter_lobby("b")
+	await _enter_lobby("c")
+	var welcome := await _create("a", "部屋", "ひみつ")
+	var room_id := int(welcome["room_id"])
+	_clients["b"].join_room(room_id, "ちがう")
+	assert_eq(await _error("b"), Protocol.ERROR_WRONG_PASSWORD)
+	_clients["b"].join_room(room_id + 99, "ひみつ")
+	assert_eq(await _error("b"), Protocol.ERROR_NO_ROOM)
+	_clients["b"].join_room(room_id, "ひみつ")
+	var joined := await _wait_for("b", Protocol.WELCOME)
+	assert_eq((joined["members"] as Array).size(), 2)
+	# 出走数を2にすると、3人目は入れない。
+	_clients["a"].send(Protocol.SETTINGS, {"field_size": 2})
+	await _wait_for("a", Protocol.ROOM)
+	_clients["c"].join_room(room_id, "ひみつ")
+	assert_eq(await _error("c"), Protocol.ERROR_ROOM_FULL)
+
+
+func test_rooms_are_limited_and_names_are_unique() -> void:
+	var limit := OnlineConfig.max_rooms()
+	for index in limit + 1:
+		await _enter_lobby("p%d" % index)
+	for index in limit:
+		assert_false((await _create("p%d" % index, "部屋%d" % index)).is_empty())
+	assert_eq(_server.room_count(), limit)
+	_clients["p%d" % limit].create_room("もう1つ")
+	assert_eq(await _error("p%d" % limit), Protocol.ERROR_ROOMS_FULL)
+	# 同じ名前の部屋は、作れない。自分しかいない部屋からなら、作り直せる（その部屋が消えるので）。
+	_clients["p0"].create_room("部屋1")
+	assert_eq(await _error("p0"), Protocol.ERROR_ROOM_NAME_TAKEN)
+	assert_false((await _create("p0", "作り直し")).is_empty())
+	assert_eq(_server.room_count(), limit)
+
+
+func test_only_the_host_changes_the_room_settings() -> void:
+	await _enter_lobby("a")
+	await _enter_lobby("b")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
 	await _wait_for("b", Protocol.WELCOME)
-	b.disconnect_from_server()
-	var waited := 0.0
-	while _server.room_members("部屋").size() > 1 and waited < WAIT_S:
-		await wait_seconds(0.05)
-		waited += 0.05
-	assert_eq(_server.room_members("部屋").size(), 1)
-	assert_eq(str(_server.room_members("部屋")[0]["name"]), "アオ")
+	_clients["b"].send(Protocol.SETTINGS, {"cpu": false})
+	assert_eq(await _error("b"), Protocol.ERROR_NOT_HOST)
+	var distances := RaceSession.supported_distances_m()
+	_inbox["b"].clear()
+	_inbox["a"].clear()
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": distances[0], "field_size": 4, "cpu": false, "password": "かぎ"})
+	var room := await _wait_for("b", Protocol.ROOM)
+	assert_almost_eq(float(room["distance_m"]), float(distances[0]), 0.001)
+	assert_eq(int(room["field_size"]), 4)
+	assert_false(bool(room["cpu"]))
+	assert_true(bool(room["locked"]))
+	# パスワードそのものは、主にだけ届く（確かめて、変えられるように）。ほかの人には、あるかどうかだけ。
+	assert_false(room.has("password"))
+	assert_eq(str((await _wait_for("a", Protocol.ROOM)).get("password", "")), "かぎ")
+	# 今いる人数より少ない出走数・選べない距離は、断る（ほかの項目も変えない）。
+	_clients["a"].send(Protocol.SETTINGS, {"field_size": 1, "cpu": true})
+	assert_eq(await _error("a"), Protocol.ERROR_BAD_MESSAGE)
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": 123.0})
+	assert_eq(await _error("a"), Protocol.ERROR_BAD_MESSAGE)
+	assert_false(bool(_server.call("_room_fields", int(welcome["room_id"]))["cpu"]))
 
 
-func test_a_full_room_turns_the_next_person_away() -> void:
-	var last: Node
-	for index in Protocol.ROOM_CAPACITY:
-		last = _client("p%d" % index)
-	await wait_for_signal(last.connected, WAIT_S)
-	for index in Protocol.ROOM_CAPACITY:
-		get_child(get_child_count() - Protocol.ROOM_CAPACITY + index).join_room("人%d" % index, "満員")
-		assert_false((await _wait_for("p%d" % index, Protocol.WELCOME)).is_empty())
-	var extra := _client("extra")
-	await wait_for_signal(extra.connected, WAIT_S)
-	extra.join_room("あふれ", "満員")
-	var refused := await _wait_for("extra", Protocol.ERROR)
-	assert_eq(str(refused.get("code", "")), Protocol.ERROR_ROOM_FULL)
-	assert_eq(_server.room_members("満員").size(), Protocol.ROOM_CAPACITY)
+func test_the_host_can_put_a_person_out_and_that_person_returns_to_the_list() -> void:
+	await _enter_lobby("a")
+	var b_lobby := await _enter_lobby("b")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	_clients["b"].send(Protocol.KICK, {"peer_id": int(welcome["peer_id"])})
+	assert_eq(await _error("b"), Protocol.ERROR_NOT_HOST)
+	_inbox["b"].clear()
+	_clients["a"].send(Protocol.KICK, {"peer_id": int(b_lobby["peer_id"])})
+	assert_eq(str((await _wait_for("b", Protocol.KICKED))["by"]), Protocol.KICKED_BY_HOST)
+	assert_false((await _wait_for("b", Protocol.LOBBY)).is_empty())
+	assert_eq(_server.room_members(int(welcome["room_id"])).size(), 1)
 
 
-func test_bad_messages_are_refused_without_dropping_the_connection() -> void:
-	var client := _client("a")
-	await wait_for_signal(client.connected, WAIT_S)
-	# 合言葉が空。
-	client.join_room("ユウ", "   ")
-	assert_eq(str((await _wait_for("a", Protocol.ERROR)).get("code", "")), Protocol.ERROR_BAD_MESSAGE)
-	# 知らない種類。
-	client.send("知らない種類")
-	assert_eq(str((await _wait_for("a", Protocol.ERROR)).get("code", "")), Protocol.ERROR_BAD_MESSAGE)
-	# そのあとも、ふつうに使える。
-	client.send(Protocol.PING, {"client_ts": 42})
-	assert_eq(int((await _wait_for("a", Protocol.PONG)).get("client_ts", 0)), 42)
-	assert_true(client.is_open())
+func test_when_the_host_leaves_the_next_person_becomes_the_host_and_an_empty_room_closes() -> void:
+	await _enter_lobby("a")
+	var b_lobby := await _enter_lobby("b")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	_inbox["b"].clear()
+	_clients["a"].send(Protocol.LEAVE)
+	assert_false((await _wait_for("a", Protocol.LOBBY)).is_empty())
+	var room := await _wait_for("b", Protocol.ROOM)
+	assert_eq(int(room["host"]), int(b_lobby["peer_id"]))
+	_clients["b"].send(Protocol.LEAVE)
+	await _wait_for("b", Protocol.LOBBY)
+	assert_eq(_server.room_count(), 0)
+
+
+func test_chat_reaches_everyone_in_the_room_and_is_cut_to_the_limit() -> void:
+	await _enter_lobby("a")
+	await _enter_lobby("b")
+	await _enter_lobby("c")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	_clients["b"].send(Protocol.CHAT, {"text": "よ".repeat(OnlineConfig.chat_max_length() + 10)})
+	var heard := await _wait_for("a", Protocol.CHAT_MESSAGE)
+	assert_eq(str(heard["name"]), "b")
+	assert_eq(str(heard["text"]).length(), OnlineConfig.chat_max_length())
+	assert_false((await _wait_for("b", Protocol.CHAT_MESSAGE)).is_empty(), "送った本人にも届く")
+	# 部屋の外の人には、届かない。部屋に入っていない人は、送れない。
+	assert_true(_inbox["c"].filter(func(data: Dictionary) -> bool: return str(data["t"]) == Protocol.CHAT_MESSAGE).is_empty())
+	_clients["c"].send(Protocol.CHAT, {"text": "やあ"})
+	assert_eq(await _error("c"), Protocol.ERROR_NOT_IN_ROOM)
+
+
+func test_the_administrator_lists_rooms_puts_people_out_and_closes_rooms() -> void:
+	await _enter_lobby("admin")
+	var a_lobby := await _enter_lobby("a")
+	await _enter_lobby("b")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	# 合い札が設定されていないサーバーでは、何もできない。違う合い札も、断る。
+	_clients["admin"].send(Protocol.ADMIN, {"token": "", "command": Protocol.ADMIN_LIST})
+	assert_eq(await _error("admin"), Protocol.ERROR_NOT_ADMIN)
+	_server.admin_token = "あいふだ"
+	_clients["admin"].send(Protocol.ADMIN, {"token": "ちがう", "command": Protocol.ADMIN_LIST})
+	assert_eq(await _error("admin"), Protocol.ERROR_NOT_ADMIN)
+	_clients["admin"].send(Protocol.ADMIN, {"token": "あいふだ", "command": Protocol.ADMIN_LIST})
+	var listed := await _wait_for("admin", Protocol.ADMIN_RESULT)
+	assert_eq((listed["rooms"] as Array).size(), 1)
+	assert_eq((listed["rooms"][0]["members"] as Array).size(), 2)
+	# 部屋の主でも、出せる。
+	_clients["admin"].send(Protocol.ADMIN, {"token": "あいふだ", "command": Protocol.ADMIN_KICK, "peer_id": int(a_lobby["peer_id"])})
+	assert_eq(str((await _wait_for("a", Protocol.KICKED))["by"]), Protocol.KICKED_BY_ADMIN)
+	assert_true(bool((await _wait_for("admin", Protocol.ADMIN_RESULT))["done"]))
+	assert_eq(_server.room_members(int(welcome["room_id"])).size(), 1)
+	# 部屋を閉じると、中の人は一覧の所へ戻り、部屋は消える。
+	_inbox["b"].clear()
+	_clients["admin"].send(Protocol.ADMIN, {"token": "あいふだ", "command": Protocol.ADMIN_CLOSE, "room_id": int(welcome["room_id"])})
+	assert_false((await _wait_for("b", Protocol.KICKED)).is_empty())
+	assert_false((await _wait_for("b", Protocol.LOBBY)).is_empty())
+	assert_eq(_server.room_count(), 0)
+
+
+func test_profiles_reach_people_in_the_same_room_only() -> void:
+	await _enter_lobby("a")
+	await _enter_lobby("b")
+	var c_lobby := await _enter_lobby("c")
+	# a は、自己紹介と、自分で入れた画像を名乗り直す。
+	_clients["a"].hello("a", "よろしく。", {"kind": "file", "id": "", "image": "QUJD"})
+	var a_lobby := await _wait_for("a", Protocol.LOBBY)
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	_clients["b"].send(Protocol.PROFILE, {"peer_id": int(a_lobby["peer_id"])})
+	var info := await _wait_for("b", Protocol.PROFILE_INFO)
+	assert_eq(str(info["name"]), "a")
+	assert_eq(str(info["introduction"]), "よろしく。")
+	assert_eq([str(info["icon"]["kind"]), str(info["icon"]["image"])], ["file", "QUJD"])
+	# 同じ部屋にいない人のことは、聞けない。部屋に入っていない人は、聞けない。
+	_clients["b"].send(Protocol.PROFILE, {"peer_id": int(c_lobby["peer_id"])})
+	assert_eq(await _error("b"), Protocol.ERROR_BAD_MESSAGE)
+	_clients["c"].send(Protocol.PROFILE, {"peer_id": int(a_lobby["peer_id"])})
+	assert_eq(await _error("c"), Protocol.ERROR_NOT_IN_ROOM)
+
+
+func test_bad_or_oversized_icons_become_no_icon() -> void:
+	assert_eq(str(OnlineServer.clean_icon("x")["kind"]), "none")
+	assert_eq(str(OnlineServer.clean_icon({"kind": "movie"})["kind"]), "none")
+	assert_eq(str(OnlineServer.clean_icon({"kind": "file", "image": ""})["kind"]), "none")
+	assert_eq(str(OnlineServer.clean_icon({"kind": "file", "image": "あ".repeat(Protocol.ICON_IMAGE_MAX_CHARS + 1)})["kind"]), "none")
+	var avatar := OnlineServer.clean_icon({"kind": "avatar", "id": "avatar-3", "image": "QUJD"})
+	assert_eq([str(avatar["kind"]), str(avatar["id"]), str(avatar["image"])], ["avatar", "avatar-3", ""], "用意された絵には、画像を付けない")

@@ -8,13 +8,16 @@ const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
+const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
 const BUTTON_WIDTH := 460.0
 const BUTTON_HEIGHT := 58.0
 
 var _offline_button: Button
 var _online_button: Button
 var _web_test_button: Button
+var _guide_button: Button
 var _back_button: Button
+var _guide_overlay: Control
 
 
 func _ready() -> void:
@@ -32,8 +35,8 @@ func _ready() -> void:
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -280.0
 	panel.offset_right = 280.0
-	panel.offset_top = -180.0
-	panel.offset_bottom = 180.0
+	panel.offset_top = -225.0
+	panel.offset_bottom = 225.0
 	add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
@@ -53,6 +56,10 @@ func _ready() -> void:
 	_online_button.pressed.connect(go_to_online_lobby)
 	UIAudio.bind_button_sound(_online_button, "confirmation")
 	column.add_child(_online_button)
+	_guide_button = _choice_button("操作ガイド", "ControlGuideButton", MenuStyle.COLOR_BUTTON_QUIET)
+	_guide_button.pressed.connect(_open_control_guide)
+	UIAudio.bind_button_sound(_guide_button, "confirmation")
+	column.add_child(_guide_button)
 	_back_button = _choice_button("戻る", "BackButton", MenuStyle.COLOR_BUTTON_QUIET)
 	_back_button.pressed.connect(go_to_menu)
 	UIAudio.bind_button_sound(_back_button, "back")
@@ -62,8 +69,10 @@ func _ready() -> void:
 	_web_test_button.focus_neighbor_top = _web_test_button.get_path_to(_offline_button)
 	_web_test_button.focus_neighbor_bottom = _web_test_button.get_path_to(_online_button)
 	_online_button.focus_neighbor_top = _online_button.get_path_to(_web_test_button)
-	_online_button.focus_neighbor_bottom = _online_button.get_path_to(_back_button)
-	_back_button.focus_neighbor_top = _back_button.get_path_to(_online_button)
+	_online_button.focus_neighbor_bottom = _online_button.get_path_to(_guide_button)
+	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_online_button)
+	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_back_button)
+	_back_button.focus_neighbor_top = _back_button.get_path_to(_guide_button)
 	_offline_button.grab_focus()
 
 
@@ -94,8 +103,27 @@ func go_to_menu() -> void:
 	get_tree().change_scene_to_file(MENU_SCENE_PATH)
 
 
+func _open_control_guide() -> void:
+	if is_instance_valid(_guide_overlay):
+		return
+	var guide := ControlGuide.new()
+	_guide_overlay = guide
+	add_child(guide)
+	guide.closed.connect(_on_control_guide_closed)
+
+
+func _on_control_guide_closed() -> void:
+	_guide_overlay = null
+	if is_instance_valid(_guide_button):
+		_guide_button.grab_focus()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
+	if is_instance_valid(_guide_overlay):
+		if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+			viewport.set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		UIAudio.play_back()
 		viewport.set_input_as_handled()

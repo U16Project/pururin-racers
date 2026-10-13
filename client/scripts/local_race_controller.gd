@@ -40,6 +40,7 @@ const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TouchControls := preload("res://scripts/presentation/touch_controls.gd")
+const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
 
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
@@ -141,6 +142,9 @@ var _race_hud_view: TextureRect
 var _race_hud_drawn_msec := -1000000
 ## 画面の上の仮想パッド。
 var _touch_controls: Control
+var _pause_guide_button: Button
+var _control_guide: Control
+var _guide_pad_was_shown := false
 ## 詳細な診断テキストの後半（2列目）。前半は _hud_label（1列目）。どちらも操作盤の右。
 var _hud_label_right: Label
 
@@ -208,6 +212,7 @@ func _ready() -> void:
 	_layout_overlay_labels()
 	_build_result_board()
 	_add_pause_marks()
+	_add_pause_guide_button()
 	_pause_return_button.pressed.connect(_return_to_race_select)
 	_result_return_button.pressed.connect(_return_to_race_select)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -289,6 +294,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
 	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
+		return
+	if is_instance_valid(_control_guide):
 		return
 	if _race_over:
 		return
@@ -1385,6 +1392,48 @@ func _add_pause_marks() -> void:
 	start_mark.offset_top = -11.0
 	start_mark.offset_bottom = 11.0
 	MenuStyle.add_mark(_resume_button, "B", 24.0)
+
+
+## 一時停止の板から開く操作ガイド。閉じると板へ戻り、レースは一時停止のまま。
+func _add_pause_guide_button() -> void:
+	var box := _pause_panel.get_node("PauseBox") as VBoxContainer
+	_pause_guide_button = MenuStyle.button("操作ガイド", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	_pause_guide_button.name = "PauseControlGuideButton"
+	_pause_guide_button.custom_minimum_size = Vector2(0.0, 44.0)
+	_pause_guide_button.pressed.connect(_open_control_guide_from_pause)
+	UIAudio.bind_button_sound(_pause_guide_button, "confirmation")
+	box.add_child(_pause_guide_button)
+	box.move_child(_pause_guide_button, _pause_return_button.get_index())
+	_resume_button.focus_neighbor_bottom = _resume_button.get_path_to(_pause_guide_button)
+	_pause_guide_button.focus_neighbor_top = _pause_guide_button.get_path_to(_resume_button)
+	_pause_guide_button.focus_neighbor_bottom = _pause_guide_button.get_path_to(_pause_return_button)
+	_pause_return_button.focus_neighbor_top = _pause_return_button.get_path_to(_pause_guide_button)
+	_pause_panel.offset_top = -150.0
+	_pause_panel.offset_bottom = 150.0
+
+
+func _open_control_guide_from_pause() -> void:
+	if not _paused or is_instance_valid(_control_guide):
+		return
+	_guide_pad_was_shown = bool(_touch_controls.call("is_pad_shown"))
+	_touch_controls.call("set_pad_shown", false)
+	_touch_controls.set_process_input(false)
+	_pause_panel.visible = false
+	var guide := ControlGuide.new()
+	_control_guide = guide
+	$UI.add_child(guide)
+	guide.closed.connect(_on_control_guide_closed)
+
+
+func _on_control_guide_closed() -> void:
+	_control_guide = null
+	if is_instance_valid(_touch_controls):
+		_touch_controls.set_process_input(true)
+		_touch_controls.call("set_pad_shown", _guide_pad_was_shown if not _race_over else false)
+	_guide_pad_was_shown = false
+	if _paused and not _race_over:
+		_pause_panel.visible = true
+		_pause_guide_button.grab_focus()
 
 
 ## 結果の板の中身を組む：見出しの下に飾りの線、着順の表、戻るボタン。

@@ -43,9 +43,20 @@ func send(type: String, fields: Dictionary = {}) -> bool:
 	return _socket.send_text(Protocol.encode(Protocol.message(type, fields))) == OK
 
 
-## 合言葉の部屋に入る。
-func join_room(player_name: String, room: String) -> bool:
-	return send(Protocol.HELLO, {"name": player_name, "room": room})
+## 名乗って、部屋の一覧の所に入る。
+## introduction＝自己紹介、icon＝{kind, id, image}（相手の画面に出す、自分の紹介）。
+func hello(player_name: String, introduction: String = "", icon: Dictionary = {}) -> bool:
+	return send(Protocol.HELLO, {"name": player_name, "introduction": introduction, "icon": icon})
+
+
+## 部屋を作る（パスワードが空なら、だれでも入れる部屋）。
+func create_room(room_name: String, password: String = "") -> bool:
+	return send(Protocol.CREATE, {"room_name": room_name, "password": password})
+
+
+## 部屋に入る。
+func join_room(room_id: int, password: String = "") -> bool:
+	return send(Protocol.JOIN, {"room_id": room_id, "password": password})
 
 
 func _exit_tree() -> void:

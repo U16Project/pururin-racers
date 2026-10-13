@@ -22,8 +22,13 @@ const COLOR_BORDER := Color(1.0, 1.0, 1.0, 0.35)
 var _title: Label
 var _scroll: ScrollContainer
 var _grid: GridContainer
+var _note: HBoxContainer
 var _tiles: Array[Button] = []
 var _slot := -1
+## レース選択のスロットを使わない開き方（open_choices）のときの、今選んでいる個体と、使用中の個体（個体 → 使っている人の番目。0から）。
+var _custom := false
+var _custom_current := ""
+var _custom_taken := {}
 
 
 func _ready() -> void:
@@ -69,6 +74,7 @@ func _ready() -> void:
 	_grid.add_theme_constant_override("v_separation", TILE_GAP)
 	grid_margin.add_child(_grid)
 	var note := HBoxContainer.new()
+	_note = note
 	note.name = "Note"
 	note.add_theme_constant_override("separation", 5)
 	for item: Array in [["A", "決定"], ["Y", "強制選択"], ["B", "閉じる"]]:
@@ -105,6 +111,7 @@ func slot() -> int:
 
 ## そのスロットのキャラを選ぶ窓を開く。カーソルは、今入っているキャラ（空なら「未選択」）に置く。
 func open(slot_index: int, title_text: String) -> void:
+	_custom = false
 	_slot = slot_index
 	_title.text = title_text
 	_rebuild()
@@ -113,6 +120,24 @@ func open(slot_index: int, title_text: String) -> void:
 	for tile in _tiles:
 		if str(tile.call("pururin_id")) == current:
 			tile.grab_focus()
+
+
+## スロットを使わずに開く（オンラインの部屋など）。current_id＝今選んでいる個体（まだなら空）、
+## taken＝ほかの人が使っている個体（個体 → その人の番目。0から）。「未選択」のタイルと、強制選択は無い。
+func open_choices(title_text: String, current_id: String, taken: Dictionary) -> void:
+	_custom = true
+	_custom_current = current_id
+	_custom_taken = taken
+	_slot = -1
+	_title.text = title_text
+	(_note.get_child(2) as Control).visible = false
+	(_note.get_child(3) as Control).visible = false
+	_rebuild()
+	visible = true
+	for tile in _tiles:
+		if str(tile.call("pururin_id")) == current_id or (current_id.is_empty() and bool(tile.call("can_pick"))):
+			tile.grab_focus()
+			break
 
 
 func close() -> void:
@@ -139,16 +164,20 @@ func _rebuild() -> void:
 		_grid.remove_child(child)
 		child.queue_free()
 	_tiles.clear()
-	var ids: Array[String] = [RaceSession.EMPTY]
+	var ids: Array[String] = []
+	if not _custom:
+		ids.append(RaceSession.EMPTY)
 	ids.append_array(RaceSession.roster_ids())
 	for identifier in ids:
 		var tile: Button = Tile.new()
 		tile.call("setup", identifier)
-		var holder := RaceSession.slot_holding(identifier)
-		if identifier == RaceSession.slot_pururin_id(_slot):
+		var holder := int(_custom_taken.get(identifier, -1)) if _custom else RaceSession.slot_holding(identifier)
+		var current := _custom_current if _custom else RaceSession.slot_pururin_id(_slot)
+		if identifier == current:
 			tile.call("set_state", Tile.State.CURRENT)
 		elif holder >= 0:
-			tile.call("set_state", Tile.State.LOCKED if RaceSession.is_locked(holder) else Tile.State.TAKEN, holder)
+			# スロットを使わない開き方では、奪えない（施錠と同じ扱い）。
+			tile.call("set_state", Tile.State.LOCKED if _custom or RaceSession.is_locked(holder) else Tile.State.TAKEN, holder)
 		else:
 			tile.call("set_state", Tile.State.FREE)
 		tile.pressed.connect(_on_tile_pressed.bind(tile))

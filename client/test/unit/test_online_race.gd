@@ -18,12 +18,15 @@ const FAST_FORWARD := 6.0
 var _server: Node
 var _inbox := {}
 var _clients := {}
+## 部屋の名前 → サーバーが付けた部屋の番号。
+var _room_ids := {}
 var _course_only_before := false
 
 
 func before_each() -> void:
 	_inbox = {}
 	_clients = {}
+	_room_ids = {}
 	_course_only_before = RaceSession.is_course_only()
 	_server = OnlineServer.new()
 	_server.listen_on_ready = false
@@ -52,8 +55,16 @@ func _enter(label: String, room: String) -> int:
 	client.message_received.connect(func(data: Dictionary) -> void: (_inbox[label] as Array).append(data))
 	assert_eq(client.connect_to("ws://127.0.0.1:%d" % TEST_PORT), OK)
 	await wait_for_signal(client.connected, WAIT_S)
-	client.join_room(label, room)
-	return int((await _wait_for(label, Protocol.WELCOME)).get("peer_id", 0))
+	client.hello(label)
+	await _wait_for(label, Protocol.LOBBY)
+	# その名前の部屋が無ければ作り（作った人が主）、あれば入る。
+	if _room_ids.has(room):
+		client.join_room(int(_room_ids[room]))
+	else:
+		client.create_room(room)
+	var welcome := await _wait_for(label, Protocol.WELCOME)
+	_room_ids[room] = int(welcome.get("room_id", 0))
+	return int(welcome.get("peer_id", 0))
 
 
 ## その人に、その種類の文が届くまで待って、いちばん新しいものを返す（届かなければ空）。
@@ -73,6 +84,19 @@ func _wait_for(label: String, type: String, max_s: float = WAIT_S) -> Dictionary
 	return {}
 
 
+## 部屋の全員が確定 → 主が出走表へ → 全員が確定 → 主がレース開始、までを進める。
+func _go(host: String, labels: Array) -> void:
+	for label: String in labels:
+		_clients[label].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients[host].send(Protocol.ENTRIES)
+	await wait_seconds(0.2)
+	for label: String in labels:
+		_clients[label].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients[host].send(Protocol.START)
+
+
 func _error_code(label: String) -> String:
 	return str((await _wait_for(label, Protocol.ERROR)).get("code", ""))
 
@@ -85,7 +109,7 @@ func test_entries_put_people_first_and_fill_the_rest_with_cpu() -> void:
 	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[0]})
 	await _wait_for("b", Protocol.ROOM)
 	await wait_seconds(0.2)
-	var entries: Array = _server.build_entries("部屋")
+	var entries: Array = _server.build_entries(_room_ids["部屋"])
 	assert_eq(entries.size(), mini(RaceSession.SLOT_COUNT, ids.size()))
 	# 人は、入った順に1枠から。名前は、その人の名前。
 	assert_eq([int(entries[0]["peer_id"]), str(entries[0]["id"]), str(entries[0]["trainer_name"])], [a, ids[2], "a"])
@@ -116,18 +140,20 @@ func test_picking_distance_and_starting_follow_the_room_rules() -> void:
 	assert_eq(await _error_code("b"), Protocol.ERROR_TAKEN)
 	# 距離を決めるのも、始めるのも、部屋の主（最初に入った人）だけ。
 	var distances: Array = RaceSession.supported_distances_m()
-	_clients["b"].send(Protocol.DISTANCE, {"distance_m": distances[0]})
+	_clients["b"].send(Protocol.SETTINGS, {"distance_m": distances[0]})
 	assert_eq(await _error_code("b"), Protocol.ERROR_NOT_HOST)
 	_clients["b"].send(Protocol.START)
 	assert_eq(await _error_code("b"), Protocol.ERROR_NOT_HOST)
-	_clients["a"].send(Protocol.DISTANCE, {"distance_m": distances[0]})
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": distances[0]})
 	assert_almost_eq(float((await _wait_for("b", Protocol.ROOM)).get("distance_m", 0.0)), float(distances[0]), 0.001)
-	_clients["a"].send(Protocol.DISTANCE, {"distance_m": 777.0})
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": 777.0})
 	assert_eq(await _error_code("a"), Protocol.ERROR_BAD_MESSAGE)
-	# まだ選んでいない人がいると、始められない。
-	_clients["a"].send(Protocol.START)
+	# まだ選んでいない人がいると、出走表へ進めない。出走表でないと、始められない。
+	_clients["a"].send(Protocol.ENTRIES)
 	assert_eq(await _error_code("a"), Protocol.ERROR_NOT_READY)
-	assert_null(_server.room_race("部屋"))
+	_clients["a"].send(Protocol.START)
+	assert_eq(await _error_code("a"), Protocol.ERROR_NOT_IN_ENTRIES)
+	assert_null(_server.room_race(_room_ids["部屋"]))
 
 
 func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
@@ -137,13 +163,13 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
 	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
 	await _wait_for("b", Protocol.ROOM)
-	_clients["a"].send(Protocol.DISTANCE, {"distance_m": RaceSession.supported_distances_m()[0]})
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": RaceSession.supported_distances_m()[0]})
 	await _wait_for("b", Protocol.ROOM)
-	_clients["a"].send(Protocol.START)
+	await _go("a", ["a", "b"])
 	var start := await _wait_for("b", Protocol.RACE_START)
 	assert_eq((start.get("entries", []) as Array).size(), mini(RaceSession.SLOT_COUNT, ids.size()))
 	assert_almost_eq(float(start.get("distance_m", 0.0)), float(RaceSession.supported_distances_m()[0]), 0.001)
-	var race: Node = _server.room_race("部屋")
+	var race: Node = _server.room_race(_room_ids["部屋"])
 	assert_not_null(race)
 	# 全員のレースの画面ができるまで、スタートへ向かう時計は止まっている。
 	assert_true(bool(race.call("is_start_held")))
@@ -185,14 +211,18 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 		await wait_seconds(0.1)
 	assert_true(bool(state.get("started", false)))
 	assert_eq((state.get("runners", []) as Array).size(), (start["entries"] as Array).size())
-	# a がラインを右へ、b がノッチを上げる。a がダッシュを押す。
+	# a がラインを動かし、b がノッチを上げる。a がダッシュを押す。
+	# 枠順はくじなので、a が端の枠にいても動けるように、コースのまん中へ向かって動かす。
 	var offset_before := float(runner_a.get("_offset"))
+	var toward_center := -1.0 if offset_before > 0.0 else 1.0
 	var notch_before := float(runner_b.call("get_drive_level"))
-	_clients["a"].send(Protocol.INPUT, {"line": 1.0, "notch": 0.0, "brake": false})
+	_clients["a"].send(Protocol.INPUT, {"line": toward_center, "notch": 0.0, "brake": false})
 	_clients["b"].send(Protocol.INPUT, {"line": 0.0, "notch": 1.0, "brake": false})
 	_clients["a"].send(Protocol.ACTION, {"kind": Protocol.ACTION_DASH})
 	await wait_seconds(0.6)
-	assert_gt(float(runner_a.get("_offset")), offset_before)
+	# 届いた操作が、a の走者に入っている。枠順はくじなので、となりの走者にふさがれたり、押されたりして、
+	# 思った向きに動けないことがある。動いた向きまでは、確かめない。
+	assert_almost_eq(float(runner_a.get("_remote_line")), toward_center, 0.0001)
 	assert_gt(float(runner_b.call("get_drive_level")), notch_before)
 	assert_true(bool(runner_a.call("is_dash_active")))
 	assert_gt(float(runner_a.call("get_race_progress")), 0.0)
@@ -208,7 +238,7 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 	var result := await _wait_for("a", Protocol.RACE_RESULT)
 	assert_eq((result.get("rows", []) as Array).size(), (start["entries"] as Array).size())
 	await wait_seconds(0.2)
-	assert_null(_server.room_race("部屋"))
+	assert_null(_server.room_race(_room_ids["部屋"]))
 	assert_false(bool((await _wait_for("a", Protocol.ROOM)).get("racing", true)))
 
 
@@ -217,7 +247,7 @@ func test_nobody_joins_or_picks_while_the_room_is_racing() -> void:
 	await _enter("a", "部屋")
 	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
 	await _wait_for("a", Protocol.ROOM)
-	_clients["a"].send(Protocol.START)
+	await _go("a", ["a"])
 	assert_false((await _wait_for("a", Protocol.RACE_START)).is_empty())
 	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[1]})
 	assert_eq(await _error_code("a"), Protocol.ERROR_RACING)
@@ -228,19 +258,21 @@ func test_nobody_joins_or_picks_while_the_room_is_racing() -> void:
 	late.message_received.connect(func(data: Dictionary) -> void: (_inbox["late"] as Array).append(data))
 	late.connect_to("ws://127.0.0.1:%d" % TEST_PORT)
 	await wait_for_signal(late.connected, WAIT_S)
-	late.join_room("late", "部屋")
+	late.hello("late")
+	await _wait_for("late", Protocol.LOBBY)
+	late.join_room(int(_room_ids["部屋"]))
 	assert_eq(await _error_code("late"), Protocol.ERROR_RACING)
 	# 画面ができたと言ってこない人がいても、決めた秒数で打ち切って始める。
-	var race: Node = _server.room_race("部屋")
+	var race: Node = _server.room_race(_room_ids["部屋"])
 	assert_true(bool(race.call("is_start_held")))
-	_server.get("_rooms")["部屋"]["ready_wait_s"] = Protocol.READY_TIMEOUT_S
+	_server.get("_rooms")[_room_ids["部屋"]]["ready_wait_s"] = Protocol.READY_TIMEOUT_S
 	await wait_seconds(0.2)
 	assert_false(bool(race.call("is_start_held")))
 	# 最後の1人が抜けたら、レースも部屋も片づく。
 	_clients["a"].disconnect_from_server()
 	await wait_seconds(0.5)
-	assert_eq(_server.room_members("部屋").size(), 0)
-	assert_null(_server.room_race("部屋"))
+	assert_eq(_server.room_members(_room_ids["部屋"]).size(), 0)
+	assert_null(_server.room_race(_room_ids["部屋"]))
 
 
 ## ゲーム側のレース（サーバーのレースを映すだけ）を、サーバーなしで作る。view_peer が、自分の番号。
@@ -327,9 +359,9 @@ func test_a_runner_whose_player_leaves_is_handed_to_the_cpu() -> void:
 	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
 	await _wait_for("b", Protocol.ROOM)
 	await wait_seconds(0.2)
-	_clients["a"].send(Protocol.START)
+	await _go("a", ["a", "b"])
 	assert_false((await _wait_for("a", Protocol.RACE_START)).is_empty())
-	var race: Node = _server.room_race("部屋")
+	var race: Node = _server.room_race(_room_ids["部屋"])
 	var runner_b: Node3D = race.call("remote_runner", b)
 	assert_true(bool(runner_b.get("remote_controlled")))
 	# b が抜ける。b の走者は、その個体のCPUトレーナーに任される。レースは、残った人のために続く。
@@ -342,9 +374,109 @@ func test_a_runner_whose_player_leaves_is_handed_to_the_cpu() -> void:
 	assert_false(bool(runner_b.get("remote_controlled")))
 	assert_false(bool(runner_b.get("player_controlled")))
 	assert_eq(runner_b.get("_cpu_trainer_profile"), LocalRaceMath.cpu_trainer_profile_by_id(str(PururinRosterConfig.pururin_by_id(ids[1])["trainer_profile_id"])) if PururinRosterConfig.pururin_by_id(ids[1]).has("trainer_profile_id") else runner_b.get("_cpu_trainer_profile"))
-	assert_not_null(_server.room_race("部屋"))
+	assert_not_null(_server.room_race(_room_ids["部屋"]))
 	assert_not_null(race.call("remote_runner", a))
 	# 抜けた人を待たずに、残った人の準備だけで始まる。
 	_clients["a"].send(Protocol.READY)
 	await wait_seconds(0.3)
 	assert_false(bool(race.call("is_start_held")))
+
+
+func test_the_field_size_and_the_cpu_switch_shape_the_entries() -> void:
+	var ids := _roster_ids()
+	await _enter("a", "部屋")
+	await _enter("b", "部屋")
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
+	_clients["a"].send(Protocol.SETTINGS, {"field_size": 5})
+	await _wait_for("a", Protocol.ROOM)
+	await wait_seconds(0.2)
+	# CPUあり：人のあとを、出走数まで、CPUで埋める。
+	assert_eq((_server.build_entries(_room_ids["部屋"]) as Array).size(), 5)
+	# CPUなし：人だけ。
+	_clients["a"].send(Protocol.SETTINGS, {"cpu": false})
+	await _wait_for("a", Protocol.ROOM)
+	await wait_seconds(0.2)
+	var people_only: Array = _server.build_entries(_room_ids["部屋"])
+	assert_eq(people_only.size(), 2)
+	for entry: Dictionary in people_only:
+		assert_true(bool(entry["player"]))
+
+
+func test_a_race_needs_at_least_two_runners() -> void:
+	var ids := _roster_ids()
+	await _enter("a", "部屋")
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["a"].send(Protocol.SETTINGS, {"cpu": false})
+	await _wait_for("a", Protocol.ROOM)
+	_clients["a"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.ENTRIES)
+	assert_eq(await _error_code("a"), Protocol.ERROR_TOO_FEW)
+	assert_null(_server.room_race(_room_ids["部屋"]))
+
+
+
+func test_everyone_confirms_before_the_entry_list_and_again_before_the_start() -> void:
+	var ids := _roster_ids()
+	var a := await _enter("a", "部屋")
+	var b := await _enter("b", "部屋")
+	# 選ぶ前は、確定できない。
+	_clients["b"].send(Protocol.CONFIRM, {"on": true})
+	assert_eq(await _error_code("b"), Protocol.ERROR_NOT_READY)
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
+	_clients["a"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	# 1人でも確定していないと、出走表へ進めない。
+	_clients["a"].send(Protocol.ENTRIES)
+	assert_eq(await _error_code("a"), Protocol.ERROR_NOT_CONFIRMED)
+	_clients["b"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	assert_true(_server.everyone_confirmed(_room_ids["部屋"]))
+	# 選び直すと、自分の確定は外れる。決めごとが変わると、全員の確定が外れる。
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[2]})
+	await wait_seconds(0.2)
+	var members: Array = _server.room_members(_room_ids["部屋"])
+	assert_eq([bool(members[0]["confirmed"]), bool(members[1]["confirmed"])], [true, false])
+	_clients["a"].send(Protocol.SETTINGS, {"field_size": 6})
+	await wait_seconds(0.2)
+	assert_false(bool(_server.room_members(_room_ids["部屋"])[0]["confirmed"]))
+	# 全員が確定すると、出走表へ。枠順が付き、確定は、いったん外れる。
+	_clients["a"].send(Protocol.CONFIRM, {"on": true})
+	_clients["b"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_inbox["b"].clear()
+	_clients["a"].send(Protocol.ENTRIES)
+	var room := await _wait_for("b", Protocol.ROOM)
+	assert_eq(str(room["phase"]), Protocol.PHASE_ENTRIES)
+	var entries: Array = room["entries"]
+	assert_eq(entries.size(), 6)
+	for index in entries.size():
+		assert_eq(int(entries[index]["gate"]), index)
+	assert_false(bool(room["members"][0]["confirmed"]))
+	# 出走表では、選び直せない。主でない人は、枠順を変えられない。
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[3]})
+	assert_eq(await _error_code("b"), Protocol.ERROR_IN_ENTRIES)
+	_clients["b"].send(Protocol.GATES, {"action": Protocol.GATES_SHUFFLE})
+	assert_eq(await _error_code("b"), Protocol.ERROR_NOT_HOST)
+	# 主が、2つの枠を入れ替える。
+	var first_id := str(entries[0]["id"])
+	var third_id := str(entries[2]["id"])
+	_inbox["b"].clear()
+	_clients["a"].send(Protocol.GATES, {"action": Protocol.GATES_SWAP, "a": 0, "b": 2})
+	var swapped: Array = (await _wait_for("b", Protocol.ROOM))["entries"]
+	assert_eq([str(swapped[0]["id"]), str(swapped[2]["id"])], [third_id, first_id])
+	assert_eq([int(swapped[0]["gate"]), int(swapped[2]["gate"])], [0, 2])
+	# 全員の確定がそろうまで、始められない。
+	_clients["a"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.START)
+	assert_eq(await _error_code("a"), Protocol.ERROR_NOT_CONFIRMED)
+	# 主が「部屋へ戻る」と、選ぶ所へ戻る。
+	_inbox["b"].clear()
+	_clients["a"].send(Protocol.BACK)
+	var back := await _wait_for("b", Protocol.ROOM)
+	assert_eq(str(back["phase"]), Protocol.PHASE_ROOM)
+	assert_eq((back["entries"] as Array).size(), 0)
+	assert_gt(a + b, 0)

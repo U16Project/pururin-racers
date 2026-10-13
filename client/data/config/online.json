@@ -2,5 +2,7 @@
   "server_url": "wss://os3-388-27490.vs.sakura.ne.jp",
   "default_room": "ぷるりん",
   "connect_timeout_s": 8.0,
-  "server_max_fps": 30
+  "server_max_fps": 30,
+  "max_rooms": 6,
+  "chat_max_length": 60
 }

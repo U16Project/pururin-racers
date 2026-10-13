@@ -1,6 +1,6 @@
 extends Node
 ## オンライン対戦のサーバー（画面なしの Godot で動かす）。
-## つなぐ・合言葉の部屋に集まる・ぷるりんと距離を選ぶ・レースを走らせて状態を配る、を受け持つ。
+## つなぐ・部屋を作る・部屋に入る・部屋の決めごと・ぷるりんを選ぶ・ひとこと・レースを走らせて状態を配る、を受け持つ。
 ## レースは、ゲーム本体と同じ場面（local_race）を、部屋ごとに1つ作って走らせる。
 ## 起動：`godot --headless --path client res://scenes/online_server.tscn`
 
@@ -15,25 +15,31 @@ const LocalRaceScene := preload("res://scenes/local_race.tscn")
 @export var listen_on_ready := true
 
 var _tcp := TCPServer.new()
-## つないでいる相手。番号 → {"socket": WebSocketPeer, "name": 名前, "room": 合言葉（部屋に入る前は空）}
+## つないでいる相手。番号 → {"socket": WebSocketPeer, "name": 名前（名乗る前は空）, "room": 部屋の番号（部屋に入っていなければ 0）}
 var _peers := {}
 var _next_peer_id := 1
-## 部屋。合言葉 → {"host": 部屋の主の番号, "distance_m": 距離, "picks": {人の番号: ぷるりんのID},
+## 部屋。部屋の番号 → {"name": 部屋の名前, "password": パスワード（空なら、だれでも入れる）, "host": 部屋の主の番号,
+## "distance_m": 距離, "field_size": 出走数, "cpu": 空いた枠をCPUで埋めるか, "picks": {人の番号: ぷるりんのID},
+## "phase": 場面（ぷるりんを選ぶ所か、出走表か）, "confirmed": {「確定」を押した人の番号: true}, "entries": 出走表（枠順に並んだ出走の一覧）,
 ## "race": 走っているレース（無ければ null）, "state_wait_s": 次に状態を配るまでの秒数,
 ## "ready": {レースの画面ができた人の番号: true}, "ready_wait_s": 全員の画面ができるのを待った秒数}
 var _rooms := {}
+var _next_room_id := 1
+## 管理人の合い札（空なら、管理人の命令は、すべて断る）。起動時に、環境変数から読む。テストでは、直接入れる。
+var admin_token := ""
 
 
 func _ready() -> void:
 	if listen_on_ready:
 		Engine.max_fps = OnlineConfig.server_max_fps()
+		admin_token = OS.get_environment(Protocol.ADMIN_TOKEN_ENVIRONMENT)
 		var port := Protocol.server_port()
 		var error := listen(port)
 		if error != OK:
 			push_error("オンラインのサーバー：入口 %d で待ち受けられません（%s）" % [port, error_string(error)])
 			get_tree().quit(1)
 			return
-		print("ぷるりんレーサーズ — オンラインのサーバー待機中（:%d、計算は1秒%d回まで）" % [port, Engine.max_fps])
+		print("ぷるりんレーサーズ — オンラインのサーバー待機中（:%d、計算は1秒%d回まで、部屋は%dつまで、管理人の合い札は%s）" % [port, Engine.max_fps, OnlineConfig.max_rooms(), "あり" if not admin_token.is_empty() else "なし"])
 
 
 ## 入口の番号を決めて、待ち受けを始める。
@@ -45,7 +51,7 @@ func stop() -> void:
 	for peer_id: int in _peers.keys():
 		(_peers[peer_id]["socket"] as WebSocketPeer).close()
 	_peers.clear()
-	for room: String in _rooms.keys():
+	for room: int in _rooms.keys():
 		_end_race(room)
 	_rooms.clear()
 	_tcp.stop()
@@ -59,20 +65,26 @@ func peer_count() -> int:
 	return _peers.size()
 
 
-## その合言葉の部屋にいる人（入った順）。1人ぶん：{"peer_id": 番号, "name": 名前, "pururin_id": 選んだぷるりん（まだなら空）}
-func room_members(room: String) -> Array:
+func room_count() -> int:
+	return _rooms.size()
+
+
+## その部屋にいる人（入った順）。1人ぶん：{"peer_id": 番号, "name": 名前, "pururin_id": 選んだぷるりん（まだなら空）}
+func room_members(room: int) -> Array:
 	var members: Array = []
-	var picks: Dictionary = _rooms[room]["picks"] if _rooms.has(room) else {}
-	var ids := _peers.keys()
-	ids.sort()
-	for peer_id: int in ids:
-		if str(_peers[peer_id]["room"]) == room:
-			members.append({"peer_id": peer_id, "name": _peers[peer_id]["name"], "pururin_id": str(picks.get(peer_id, ""))})
+	if not _rooms.has(room):
+		return members
+	var picks: Dictionary = _rooms[room]["picks"]
+	for peer_id: int in _rooms[room]["order"]:
+		members.append({
+			"peer_id": peer_id, "name": _peers[peer_id]["name"], "pururin_id": str(picks.get(peer_id, "")),
+			"confirmed": (_rooms[room]["confirmed"] as Dictionary).has(peer_id),
+		})
 	return members
 
 
 ## 部屋にいる全員の、レースの画面ができたか。
-func everyone_ready(room: String) -> bool:
+func everyone_ready(room: int) -> bool:
 	var ready: Dictionary = _rooms[room]["ready"]
 	for member: Dictionary in room_members(room):
 		if not ready.has(int(member["peer_id"])):
@@ -81,26 +93,44 @@ func everyone_ready(room: String) -> bool:
 
 
 ## その部屋で走っているレース（無ければ null）。
-func room_race(room: String) -> Node:
+func room_race(room: int) -> Node:
 	return _rooms[room]["race"] if _rooms.has(room) else null
+
+
+## 部屋の一覧（作った順）。1部屋ぶん：room_id、name、host_name、count（今いる人数）、field_size、locked（パスワードがあるか）、racing。
+func room_list() -> Array:
+	var list: Array = []
+	var ids := _rooms.keys()
+	ids.sort()
+	for room: int in ids:
+		var data: Dictionary = _rooms[room]
+		list.append({
+			"room_id": room, "name": str(data["name"]), "host_name": str(_peers[int(data["host"])]["name"]),
+			"count": (data["order"] as Array).size(), "field_size": int(data["field_size"]),
+			"locked": not str(data["password"]).is_empty(), "racing": data["race"] != null,
+			"in_entries": str(data["phase"]) == Protocol.PHASE_ENTRIES,
+		})
+	return list
 
 
 func _process(delta: float) -> void:
 	while _tcp.is_connection_available():
 		var socket := WebSocketPeer.new()
 		if socket.accept_stream(_tcp.take_connection()) == OK:
-			_peers[_next_peer_id] = {"socket": socket, "name": "", "room": ""}
+			_peers[_next_peer_id] = {"socket": socket, "name": "", "room": 0, "introduction": "", "icon": clean_icon({})}
 			_next_peer_id += 1
 	for peer_id: int in _peers.keys():
+		if not _peers.has(peer_id):
+			continue
 		var socket: WebSocketPeer = _peers[peer_id]["socket"]
 		socket.poll()
 		match socket.get_ready_state():
 			WebSocketPeer.STATE_OPEN:
-				while socket.get_available_packet_count() > 0:
+				while _peers.has(peer_id) and socket.get_available_packet_count() > 0:
 					_receive(peer_id, socket.get_packet().get_string_from_utf8())
 			WebSocketPeer.STATE_CLOSED:
 				_drop(peer_id)
-	for room: String in _rooms.keys():
+	for room: int in _rooms.keys():
 		_update_race(room, delta)
 
 
@@ -120,16 +150,41 @@ func _receive(peer_id: int, text: String) -> void:
 			_send(peer_id, Protocol.message(Protocol.PONG, {"client_ts": data.get("client_ts", 0)}))
 			return
 		Protocol.HELLO:
-			_join(peer_id, data)
+			_hello(peer_id, data)
 			return
-	# ここから下は、部屋に入ってからでないと、できない。
-	var room := str(_peers[peer_id]["room"])
-	if room.is_empty():
-		_refuse(peer_id, Protocol.ERROR_NOT_IN_ROOM if type in [Protocol.PICK, Protocol.DISTANCE, Protocol.START, Protocol.INPUT, Protocol.ACTION, Protocol.READY] else Protocol.ERROR_BAD_MESSAGE)
+		Protocol.ADMIN:
+			_admin(peer_id, data)
+			return
+	# ここから下は、名乗ってからでないと、できない。
+	if str(_peers[peer_id]["name"]).is_empty():
+		_refuse(peer_id, Protocol.ERROR_NO_NAME)
 		return
 	match type:
+		Protocol.CREATE:
+			_create(peer_id, data)
+			return
+		Protocol.JOIN:
+			_join(peer_id, data)
+			return
+		Protocol.LEAVE:
+			_leave_room(peer_id)
+			_send_lobby(peer_id)
+			return
+	# ここから下は、部屋に入ってからでないと、できない。
+	var room := int(_peers[peer_id]["room"])
+	if room == 0:
+		_refuse(peer_id, Protocol.ERROR_NOT_IN_ROOM if type in ROOM_MESSAGES else Protocol.ERROR_BAD_MESSAGE)
+		return
+	match type:
+		Protocol.PROFILE: _send_profile(peer_id, room, data)
 		Protocol.PICK: _pick(peer_id, room, data)
-		Protocol.DISTANCE: _set_distance(peer_id, room, data)
+		Protocol.SETTINGS: _set_settings(peer_id, room, data)
+		Protocol.KICK: _kick(peer_id, room, data)
+		Protocol.CHAT: _chat(peer_id, room, data)
+		Protocol.CONFIRM: _confirm(peer_id, room, data)
+		Protocol.ENTRIES: _open_entries(peer_id, room)
+		Protocol.GATES: _change_gates(peer_id, room, data)
+		Protocol.BACK: _back_to_room(peer_id, room)
 		Protocol.START: _start_race(peer_id, room)
 		Protocol.INPUT: _race_input(peer_id, room, data)
 		Protocol.ACTION: _race_action(peer_id, room, data)
@@ -137,28 +192,116 @@ func _receive(peer_id: int, text: String) -> void:
 		_: _refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 
 
-## 合言葉の部屋に入る。満員なら断る。レース中の部屋には、入れない。
-func _join(peer_id: int, data: Dictionary) -> void:
-	var room := Protocol.clean_text(data.get("room", ""), Protocol.ROOM_CODE_MAX_LENGTH)
+## 部屋の中でだけ使える文の種類。
+const ROOM_MESSAGES := [Protocol.PROFILE, Protocol.PICK, Protocol.SETTINGS, Protocol.KICK, Protocol.CHAT, Protocol.CONFIRM, Protocol.ENTRIES, Protocol.GATES, Protocol.BACK, Protocol.START, Protocol.INPUT, Protocol.ACTION, Protocol.READY]
+
+
+## 名乗って、部屋の一覧の所に入る。
+func _hello(peer_id: int, data: Dictionary) -> void:
 	var player_name := Protocol.clean_text(data.get("name", ""), Protocol.NAME_MAX_LENGTH)
-	if room.is_empty() or player_name.is_empty():
+	if player_name.is_empty():
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
-	var previous_room := str(_peers[peer_id]["room"])
-	if previous_room != room:
-		if room_members(room).size() >= Protocol.ROOM_CAPACITY:
-			_refuse(peer_id, Protocol.ERROR_ROOM_FULL)
-			return
-		if room_race(room) != null:
-			_refuse(peer_id, Protocol.ERROR_RACING)
-			return
-		_leave_room(peer_id)
 	_peers[peer_id]["name"] = player_name
-	_peers[peer_id]["room"] = room
+	_peers[peer_id]["introduction"] = Protocol.clean_text(data.get("introduction", ""), Protocol.INTRODUCTION_MAX_LENGTH)
+	_peers[peer_id]["icon"] = clean_icon(data.get("icon", {}))
+	var room := int(_peers[peer_id]["room"])
+	if room != 0:
+		# 部屋にいる人が名前を変えたら、部屋の人と、一覧を見ている人に知らせる。
+		_announce_room(room)
+		_announce_rooms()
+		return
+	_send_lobby(peer_id)
+
+
+## 届いたアイコンを、決まりの形にそろえる。知らない種類・大きすぎる画像は、画像なしにする。
+## 画像の中身は、サーバーでは開かない（そのまま、同じ部屋の人へ渡すだけ）。
+static func clean_icon(value: Variant) -> Dictionary:
+	var none := {"kind": "none", "id": "", "image": ""}
+	if not value is Dictionary:
+		return none
+	var kind := str(value.get("kind", "none"))
+	if not kind in Protocol.ICON_KINDS:
+		return none
+	var image := str(value.get("image", "")) if kind == "file" else ""
+	if kind == "file" and (image.is_empty() or image.length() > Protocol.ICON_IMAGE_MAX_CHARS):
+		return none
+	return {"kind": kind, "id": str(value.get("id", "")).left(32) if kind == "avatar" else "", "image": image}
+
+
+## 同じ部屋の人の紹介を返す。
+func _send_profile(peer_id: int, room: int, data: Dictionary) -> void:
+	var target := int(data.get("peer_id", 0))
+	if not (_rooms[room]["order"] as Array).has(target):
+		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+		return
+	_send(peer_id, Protocol.message(Protocol.PROFILE_INFO, {
+		"peer_id": target, "name": str(_peers[target]["name"]),
+		"introduction": str(_peers[target]["introduction"]), "icon": _peers[target]["icon"],
+	}))
+
+
+## 部屋を作る。作った人が、部屋の主。
+func _create(peer_id: int, data: Dictionary) -> void:
+	var room_name := Protocol.clean_text(data.get("room_name", ""), Protocol.ROOM_NAME_MAX_LENGTH)
+	if room_name.is_empty():
+		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+		return
+	var current := int(_peers[peer_id]["room"])
+	# 自分しかいない部屋から作り直すときは、その部屋が消えるぶん、上限に数えない。
+	var leaving_empties_room := current != 0 and (_rooms[current]["order"] as Array).size() == 1
+	if _rooms.size() - (1 if leaving_empties_room else 0) >= OnlineConfig.max_rooms():
+		_refuse(peer_id, Protocol.ERROR_ROOMS_FULL)
+		return
+	for other: int in _rooms:
+		if str(_rooms[other]["name"]) == room_name and not (other == current and leaving_empties_room):
+			_refuse(peer_id, Protocol.ERROR_ROOM_NAME_TAKEN)
+			return
+	_leave_room(peer_id)
+	var room := _next_room_id
+	_next_room_id += 1
+	_rooms[room] = {
+		"name": room_name, "password": Protocol.clean_text(data.get("password", ""), Protocol.PASSWORD_MAX_LENGTH),
+		"host": peer_id, "order": [], "distance_m": RaceSession.DEFAULT_DISTANCE_M,
+		"field_size": Protocol.ROOM_CAPACITY, "cpu": true, "picks": {},
+		"phase": Protocol.PHASE_ROOM, "confirmed": {}, "entries": [],
+		"race": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0,
+	}
+	_enter(peer_id, room)
+
+
+## 部屋に入る。無い部屋・パスワード違い・満員・レース中は、断る。
+func _join(peer_id: int, data: Dictionary) -> void:
+	var room := int(data.get("room_id", 0))
 	if not _rooms.has(room):
-		_rooms[room] = {"host": peer_id, "distance_m": RaceSession.DEFAULT_DISTANCE_M, "picks": {}, "race": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0}
-	_send(peer_id, Protocol.message(Protocol.WELCOME, _room_fields(room, {"peer_id": peer_id, "capacity": Protocol.ROOM_CAPACITY})))
+		_refuse(peer_id, Protocol.ERROR_NO_ROOM)
+		return
+	if int(_peers[peer_id]["room"]) == room:
+		_send(peer_id, Protocol.message(Protocol.WELCOME, _room_fields(room, {"peer_id": peer_id})))
+		return
+	var password := str(_rooms[room]["password"])
+	if not password.is_empty() and str(data.get("password", "")) != password:
+		_refuse(peer_id, Protocol.ERROR_WRONG_PASSWORD)
+		return
+	if (_rooms[room]["order"] as Array).size() >= int(_rooms[room]["field_size"]):
+		_refuse(peer_id, Protocol.ERROR_ROOM_FULL)
+		return
+	if room_race(room) != null:
+		_refuse(peer_id, Protocol.ERROR_RACING)
+		return
+	if str(_rooms[room]["phase"]) == Protocol.PHASE_ENTRIES:
+		_refuse(peer_id, Protocol.ERROR_IN_ENTRIES)
+		return
+	_leave_room(peer_id)
+	_enter(peer_id, room)
+
+
+func _enter(peer_id: int, room: int) -> void:
+	_peers[peer_id]["room"] = room
+	(_rooms[room]["order"] as Array).append(peer_id)
+	_send(peer_id, Protocol.message(Protocol.WELCOME, _room_fields(room, {"peer_id": peer_id})))
 	_announce_room(room)
+	_announce_rooms()
 
 
 func _drop(peer_id: int) -> void:
@@ -168,29 +311,43 @@ func _drop(peer_id: int) -> void:
 
 ## 今いる部屋から抜ける。部屋の主が抜けたら、次に古い人が主になる。誰もいなくなった部屋は、消す。
 func _leave_room(peer_id: int) -> void:
-	var room := str(_peers[peer_id]["room"])
-	if room.is_empty():
+	var room := int(_peers[peer_id]["room"])
+	if room == 0:
 		return
-	_peers[peer_id]["room"] = ""
+	_peers[peer_id]["room"] = 0
+	(_rooms[room]["order"] as Array).erase(peer_id)
 	(_rooms[room]["picks"] as Dictionary).erase(peer_id)
 	(_rooms[room]["ready"] as Dictionary).erase(peer_id)
+	# 人が抜けたら、出走表は作り直しになる（部屋の場面へ戻して、全員の確定を外す）。レース中は、そのまま走る。
+	if room_race(room) == null:
+		_reset_to_room_phase(room)
 	# レース中に抜けた人の走者は、その個体のCPUトレーナーに任せる。
 	if room_race(room) != null:
 		room_race(room).call("release_remote_runner", peer_id)
-	var members := room_members(room)
-	if members.is_empty():
-		_end_race(room)
-		_rooms.erase(room)
+	var order: Array = _rooms[room]["order"]
+	if order.is_empty():
+		_close_room(room)
 		return
 	if int(_rooms[room]["host"]) == peer_id:
-		_rooms[room]["host"] = int(members[0]["peer_id"])
+		_rooms[room]["host"] = int(order[0])
 	_announce_room(room)
+	_announce_rooms()
+
+
+## 部屋を消す（中の人は、先に出しておく）。
+func _close_room(room: int) -> void:
+	_end_race(room)
+	_rooms.erase(room)
+	_announce_rooms()
 
 
 ## 自分のぷるりんを選ぶ。ほかの人が選んでいる個体は、選べない。
-func _pick(peer_id: int, room: String, data: Dictionary) -> void:
+func _pick(peer_id: int, room: int, data: Dictionary) -> void:
 	if room_race(room) != null:
 		_refuse(peer_id, Protocol.ERROR_RACING)
+		return
+	if str(_rooms[room]["phase"]) == Protocol.PHASE_ENTRIES:
+		_refuse(peer_id, Protocol.ERROR_IN_ENTRIES)
 		return
 	var pururin_id := str(data.get("pururin_id", ""))
 	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty():
@@ -202,37 +359,235 @@ func _pick(peer_id: int, room: String, data: Dictionary) -> void:
 			_refuse(peer_id, Protocol.ERROR_TAKEN)
 			return
 	picks[peer_id] = pururin_id
+	# 選び直したら、自分の確定は外れる。
+	(_rooms[room]["confirmed"] as Dictionary).erase(peer_id)
 	_announce_room(room)
 
 
-## 距離を決める（部屋の主だけ。選べる距離だけ）。
-func _set_distance(peer_id: int, room: String, data: Dictionary) -> void:
+## 部屋の決めごとを変える（部屋の主だけ。届いた項目だけ変える。1つでも受け付けられない値があれば、何も変えない）。
+func _set_settings(peer_id: int, room: int, data: Dictionary) -> void:
 	if room_race(room) != null:
 		_refuse(peer_id, Protocol.ERROR_RACING)
 		return
 	if int(_rooms[room]["host"]) != peer_id:
 		_refuse(peer_id, Protocol.ERROR_NOT_HOST)
 		return
-	var distance := float(data.get("distance_m", 0.0))
-	if not RaceSession.supported_distances_m().has(distance):
+	if str(_rooms[room]["phase"]) == Protocol.PHASE_ENTRIES:
+		_refuse(peer_id, Protocol.ERROR_IN_ENTRIES)
+		return
+	var changes := {}
+	if data.has("distance_m"):
+		var distance := float(data["distance_m"])
+		if not RaceSession.supported_distances_m().has(distance):
+			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+			return
+		changes["distance_m"] = distance
+	if data.has("field_size"):
+		var field_size := int(data["field_size"])
+		# 今いる人数より少なくは、できない。
+		if field_size < maxi(Protocol.FIELD_SIZE_MIN, (_rooms[room]["order"] as Array).size()) or field_size > Protocol.ROOM_CAPACITY:
+			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+			return
+		changes["field_size"] = field_size
+	if data.has("cpu"):
+		changes["cpu"] = bool(data["cpu"])
+	if data.has("password"):
+		changes["password"] = Protocol.clean_text(data["password"], Protocol.PASSWORD_MAX_LENGTH)
+	for key: String in changes:
+		_rooms[room][key] = changes[key]
+	# レースの中身（距離・出走数・CPU）が変わったら、全員の確定を外す（変わった内容で、もう一度確かめてもらう）。
+	if changes.has("distance_m") or changes.has("field_size") or changes.has("cpu"):
+		(_rooms[room]["confirmed"] as Dictionary).clear()
+	_announce_room(room)
+	_announce_rooms()
+
+
+## 部屋の人を出す（部屋の主だけ。自分は出せない）。
+func _kick(peer_id: int, room: int, data: Dictionary) -> void:
+	if int(_rooms[room]["host"]) != peer_id:
+		_refuse(peer_id, Protocol.ERROR_NOT_HOST)
+		return
+	var target := int(data.get("peer_id", 0))
+	if target == peer_id or not (_rooms[room]["order"] as Array).has(target):
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
-	_rooms[room]["distance_m"] = distance
+	_put_out(target, Protocol.KICKED_BY_HOST)
+
+
+## その人を、部屋から出して、部屋の一覧の所へ戻す。
+func _put_out(peer_id: int, by: String) -> void:
+	_send(peer_id, Protocol.message(Protocol.KICKED, {"by": by}))
+	_leave_room(peer_id)
+	_send_lobby(peer_id)
+
+
+## 部屋の中の、ひとこと。レース中は、配らない。
+func _chat(peer_id: int, room: int, data: Dictionary) -> void:
+	if room_race(room) != null:
+		_refuse(peer_id, Protocol.ERROR_RACING)
+		return
+	var text := Protocol.clean_text(data.get("text", ""), OnlineConfig.chat_max_length())
+	if text.is_empty():
+		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+		return
+	_send_room(room, Protocol.message(Protocol.CHAT_MESSAGE, {"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "text": text}))
+
+
+## 「確定」を押す・外す。部屋では、ぷるりんを選んでからでないと、確定できない。
+func _confirm(peer_id: int, room: int, data: Dictionary) -> void:
+	if room_race(room) != null:
+		_refuse(peer_id, Protocol.ERROR_RACING)
+		return
+	var confirmed: Dictionary = _rooms[room]["confirmed"]
+	if not bool(data.get("on", true)):
+		confirmed.erase(peer_id)
+	elif str(_rooms[room]["phase"]) == Protocol.PHASE_ROOM and not (_rooms[room]["picks"] as Dictionary).has(peer_id):
+		_refuse(peer_id, Protocol.ERROR_NOT_READY)
+		return
+	else:
+		confirmed[peer_id] = true
 	_announce_room(room)
+
+
+## 部屋の全員が「確定」を押しているか。
+func everyone_confirmed(room: int) -> bool:
+	var confirmed: Dictionary = _rooms[room]["confirmed"]
+	for peer_id: int in _rooms[room]["order"]:
+		if not confirmed.has(peer_id):
+			return false
+	return true
+
+
+## 部屋の主かどうかと、場面を確かめる。だめなら、断って false。
+func _host_in_phase(peer_id: int, room: int, phase: String) -> bool:
+	if room_race(room) != null:
+		_refuse(peer_id, Protocol.ERROR_RACING)
+		return false
+	if int(_rooms[room]["host"]) != peer_id:
+		_refuse(peer_id, Protocol.ERROR_NOT_HOST)
+		return false
+	if str(_rooms[room]["phase"]) != phase:
+		_refuse(peer_id, Protocol.ERROR_IN_ENTRIES if phase == Protocol.PHASE_ROOM else Protocol.ERROR_NOT_IN_ENTRIES)
+		return false
+	return true
+
+
+## 出走表へ進む（部屋の主だけ）。全員が選び終わって、確定していること。CPUの個体が決まり、枠順を、くじで決める。
+func _open_entries(peer_id: int, room: int) -> void:
+	if not _host_in_phase(peer_id, room, Protocol.PHASE_ROOM):
+		return
+	for member: Dictionary in room_members(room):
+		if str(member["pururin_id"]).is_empty():
+			_refuse(peer_id, Protocol.ERROR_NOT_READY)
+			return
+	if not everyone_confirmed(room):
+		_refuse(peer_id, Protocol.ERROR_NOT_CONFIRMED)
+		return
+	var entries := build_entries(room)
+	if entries.size() < Protocol.FIELD_SIZE_MIN:
+		_refuse(peer_id, Protocol.ERROR_TOO_FEW)
+		return
+	entries.shuffle()
+	_rooms[room]["entries"] = _with_gates(entries)
+	_rooms[room]["phase"] = Protocol.PHASE_ENTRIES
+	(_rooms[room]["confirmed"] as Dictionary).clear()
+	_announce_room(room)
+	_announce_rooms()
+
+
+## 並びの順に、枠の番号（0から）を振り直す。
+static func _with_gates(entries: Array) -> Array:
+	for index in entries.size():
+		entries[index]["gate"] = index
+	return entries
+
+
+## 出走表の枠順を変える（部屋の主だけ）。くじを引き直すか、2つの枠を入れ替える。変えたら、全員の確定を外す。
+func _change_gates(peer_id: int, room: int, data: Dictionary) -> void:
+	if not _host_in_phase(peer_id, room, Protocol.PHASE_ENTRIES):
+		return
+	var entries: Array = _rooms[room]["entries"]
+	match str(data.get("action", "")):
+		Protocol.GATES_SHUFFLE:
+			entries.shuffle()
+		Protocol.GATES_SWAP:
+			var a := int(data.get("a", -1))
+			var b := int(data.get("b", -1))
+			if a < 0 or b < 0 or a >= entries.size() or b >= entries.size() or a == b:
+				_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+				return
+			var moved: Dictionary = entries[a]
+			entries[a] = entries[b]
+			entries[b] = moved
+		_:
+			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+			return
+	_rooms[room]["entries"] = _with_gates(entries)
+	(_rooms[room]["confirmed"] as Dictionary).clear()
+	_announce_room(room)
+
+
+## 出走表から、部屋へ戻る（部屋の主だけ）。
+func _back_to_room(peer_id: int, room: int) -> void:
+	if not _host_in_phase(peer_id, room, Protocol.PHASE_ENTRIES):
+		return
+	_reset_to_room_phase(room)
+	_announce_room(room)
+	_announce_rooms()
+
+
+## 部屋の場面へ戻して、出走表と、全員の確定を消す。
+func _reset_to_room_phase(room: int) -> void:
+	_rooms[room]["phase"] = Protocol.PHASE_ROOM
+	_rooms[room]["entries"] = []
+	(_rooms[room]["confirmed"] as Dictionary).clear()
+
+
+## 管理人の命令。合い札が合わなければ、断る。
+## list＝部屋と、中の人の一覧。kick＝その人を、部屋から出す。close＝部屋を閉じる（中の人は、全員、一覧の所へ戻す）。
+func _admin(peer_id: int, data: Dictionary) -> void:
+	if admin_token.is_empty() or str(data.get("token", "")) != admin_token:
+		_refuse(peer_id, Protocol.ERROR_NOT_ADMIN)
+		return
+	var command := str(data.get("command", ""))
+	match command:
+		Protocol.ADMIN_LIST:
+			var rooms := room_list()
+			for entry: Dictionary in rooms:
+				entry["members"] = room_members(int(entry["room_id"]))
+			_send(peer_id, Protocol.message(Protocol.ADMIN_RESULT, {"command": command, "rooms": rooms, "peers": _peers.size()}))
+		Protocol.ADMIN_KICK:
+			var target := int(data.get("peer_id", 0))
+			var done := _peers.has(target) and int(_peers[target]["room"]) != 0
+			if done:
+				_put_out(target, Protocol.KICKED_BY_ADMIN)
+			_send(peer_id, Protocol.message(Protocol.ADMIN_RESULT, {"command": command, "done": done}))
+		Protocol.ADMIN_CLOSE:
+			var room := int(data.get("room_id", 0))
+			var found := _rooms.has(room)
+			if found:
+				for member: int in (_rooms[room]["order"] as Array).duplicate():
+					_put_out(member, Protocol.KICKED_BY_ADMIN)
+			_send(peer_id, Protocol.message(Protocol.ADMIN_RESULT, {"command": command, "done": found}))
+		_:
+			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 
 
 # ---------------------------------------------------------------- レース
 
-## その部屋の出走の一覧を組む。人は、入った順に1枠から。残りは、まだ選ばれていない個体を、一覧の順にCPUで埋める。
-func build_entries(room: String) -> Array:
+## その部屋の出走の一覧を組む。人は、入った順に1枠から。CPUを入れる部屋では、残りを、出走数まで、
+## まだ選ばれていない個体で、一覧の順に埋める。
+func build_entries(room: int) -> Array:
 	var entries: Array = []
 	var used := {}
 	for member: Dictionary in room_members(room):
 		var pururin := PururinRosterConfig.pururin_by_id(str(member["pururin_id"]))
 		used[str(member["pururin_id"])] = true
 		entries.append(_entry(entries.size(), pururin, int(member["peer_id"]), str(member["name"])))
+	if not bool(_rooms[room]["cpu"]):
+		return entries
 	for pururin: Dictionary in PururinRosterConfig.values()["roster"]:
-		if entries.size() >= RaceSession.SLOT_COUNT:
+		if entries.size() >= mini(int(_rooms[room]["field_size"]), RaceSession.SLOT_COUNT):
 			break
 		if not used.has(str(pururin["id"])):
 			entries.append(_entry(entries.size(), pururin, 0, str(CpuTrainers.by_id(str(pururin["trainer_id"])).get("name", ""))))
@@ -247,26 +602,21 @@ static func _entry(gate: int, pururin: Dictionary, peer_id: int, trainer_name: S
 	}
 
 
-## レースを始める（部屋の主だけ。全員が選び終わっていること）。
-func _start_race(peer_id: int, room: String) -> void:
-	if room_race(room) != null:
-		_refuse(peer_id, Protocol.ERROR_RACING)
+## レースを始める（部屋の主だけ）。出走表で、全員が確定していること。出走と枠順は、出走表のとおり。
+func _start_race(peer_id: int, room: int) -> void:
+	if not _host_in_phase(peer_id, room, Protocol.PHASE_ENTRIES):
 		return
-	if int(_rooms[room]["host"]) != peer_id:
-		_refuse(peer_id, Protocol.ERROR_NOT_HOST)
+	if not everyone_confirmed(room):
+		_refuse(peer_id, Protocol.ERROR_NOT_CONFIRMED)
 		return
-	for member: Dictionary in room_members(room):
-		if str(member["pururin_id"]).is_empty():
-			_refuse(peer_id, Protocol.ERROR_NOT_READY)
-			return
-	var entries := build_entries(room)
+	var entries: Array = (_rooms[room]["entries"] as Array).duplicate(true)
 	var distance := float(_rooms[room]["distance_m"])
 	# レースの場面は、作られるときに、出走と距離を読む。作り終わったら、出走の指定は戻す。
 	RaceSession.select_distance(distance)
 	RaceSession.set_course_only(true)
 	RaceSession.set_online_entries(entries)
 	var race: Node = LocalRaceScene.instantiate()
-	race.name = "Race_%d" % int(_rooms[room]["host"])
+	race.name = "Race_%d" % room
 	add_child(race)
 	RaceSession.set_online_entries([])
 	# 全員のレースの画面ができるまで、スタートへ向かう時計を止めておく。
@@ -277,16 +627,17 @@ func _start_race(peer_id: int, room: String) -> void:
 	_rooms[room]["ready_wait_s"] = 0.0
 	_send_room(room, Protocol.message(Protocol.RACE_START, {"distance_m": distance, "entries": entries}))
 	_announce_room(room)
+	_announce_rooms()
 
 
 ## レース中の操作。レースが無い・自分の走者がいないときは、だまって捨てる（終わりぎわに届いた操作のため）。
-func _race_input(peer_id: int, room: String, data: Dictionary) -> void:
+func _race_input(peer_id: int, room: int, data: Dictionary) -> void:
 	var race := room_race(room)
 	if race != null:
 		race.call("set_remote_input", peer_id, float(data.get("line", 0.0)), float(data.get("notch", 0.0)), bool(data.get("brake", false)))
 
 
-func _race_action(peer_id: int, room: String, data: Dictionary) -> void:
+func _race_action(peer_id: int, room: int, data: Dictionary) -> void:
 	var race := room_race(room)
 	var kind := str(data.get("kind", ""))
 	if race != null and kind in [Protocol.ACTION_DASH, Protocol.ACTION_BOOST]:
@@ -294,14 +645,17 @@ func _race_action(peer_id: int, room: String, data: Dictionary) -> void:
 
 
 ## 走っているレースの状態を、決めた回数で配る。終わったら、着順を配って、レースを片づける。
-func _update_race(room: String, delta: float) -> void:
+func _update_race(room: int, delta: float) -> void:
 	var race := room_race(room)
 	if race == null:
 		return
 	if bool(race.call("is_race_over")):
 		_send_room(room, Protocol.message(Protocol.RACE_RESULT, {"rows": race.call("online_result_rows")}))
 		_end_race(room)
+		# レースが終わったら、ぷるりんを選ぶ所へ戻す。
+		_reset_to_room_phase(room)
 		_announce_room(room)
+		_announce_rooms()
 		return
 	if bool(race.call("is_start_held")):
 		_rooms[room]["ready_wait_s"] = float(_rooms[room]["ready_wait_s"]) + delta
@@ -313,7 +667,7 @@ func _update_race(room: String, delta: float) -> void:
 		_send_room(room, Protocol.message(Protocol.RACE_STATE, race.call("online_state")))
 
 
-func _end_race(room: String) -> void:
+func _end_race(room: int) -> void:
 	var race := room_race(room)
 	if race != null:
 		race.queue_free()
@@ -322,25 +676,50 @@ func _end_race(room: String) -> void:
 
 # ---------------------------------------------------------------- 送る
 
-## 部屋のようす（部屋の全員に配るもの）。
-func _room_fields(room: String, extra: Dictionary = {}) -> Dictionary:
+## 部屋のようす（部屋の全員に配るもの）。パスワードそのものは、配らない（あるかどうかだけ）。
+func _room_fields(room: int, extra: Dictionary = {}) -> Dictionary:
+	var data: Dictionary = _rooms[room]
 	var fields := {
-		"room": room, "members": room_members(room), "host": int(_rooms[room]["host"]),
-		"distance_m": float(_rooms[room]["distance_m"]), "racing": room_race(room) != null,
+		"room_id": room, "room": str(data["name"]), "members": room_members(room), "host": int(data["host"]),
+		"distance_m": float(data["distance_m"]), "field_size": int(data["field_size"]), "cpu": bool(data["cpu"]),
+		"locked": not str(data["password"]).is_empty(), "racing": data["race"] != null,
+		"phase": str(data["phase"]), "entries": data["entries"],
 	}
 	fields.merge(extra)
 	return fields
 
 
-func _announce_room(room: String) -> void:
-	if _rooms.has(room):
-		_send_room(room, Protocol.message(Protocol.ROOM, _room_fields(room)))
+## 部屋のようすを、部屋の全員に配る。部屋の主にだけ、パスワードそのもの（password）も付ける（確かめて、変えられるように）。
+func _announce_room(room: int) -> void:
+	if not _rooms.has(room):
+		return
+	var fields := _room_fields(room)
+	var text := Protocol.encode(Protocol.message(Protocol.ROOM, fields))
+	var host := int(_rooms[room]["host"])
+	for peer_id: int in _rooms[room]["order"]:
+		if peer_id == host:
+			_send(peer_id, Protocol.message(Protocol.ROOM, _room_fields(room, {"password": str(_rooms[room]["password"])})))
+		else:
+			_send_text(peer_id, text)
 
 
-func _send_room(room: String, data: Dictionary) -> void:
+func _send_room(room: int, data: Dictionary) -> void:
 	var text := Protocol.encode(data)
-	for member: Dictionary in room_members(room):
-		_send_text(int(member["peer_id"]), text)
+	for peer_id: int in _rooms[room]["order"]:
+		_send_text(peer_id, text)
+
+
+## 部屋の一覧の所に入った人（部屋を出た人・出された人）に、今の一覧を送る。
+func _send_lobby(peer_id: int) -> void:
+	_send(peer_id, Protocol.message(Protocol.LOBBY, {"peer_id": peer_id, "max_rooms": OnlineConfig.max_rooms(), "rooms": room_list()}))
+
+
+## 部屋の一覧が変わったことを、名乗っていて、部屋に入っていない人に配る。
+func _announce_rooms() -> void:
+	var text := Protocol.encode(Protocol.message(Protocol.ROOMS, {"rooms": room_list()}))
+	for peer_id: int in _peers:
+		if int(_peers[peer_id]["room"]) == 0 and not str(_peers[peer_id]["name"]).is_empty():
+			_send_text(peer_id, text)
 
 
 func _refuse(peer_id: int, code: String) -> void:
