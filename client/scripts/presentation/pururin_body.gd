@@ -35,6 +35,7 @@ const FACE_SLOTS := ["eyes", "brows", "mouth", "cheeks", "effect"]
 
 ## 表情の名前 → スロット → その部品を作る関数。部品は、その表情を最初に出すときに作る
 ## （全部の表情を先に作ると、体を組み立てる時間が長くなるため）。
+## レースでは、走っている最中に作ると画面が引っかかるので、スタート前に prepare_expression で作っておく。
 var _face_makers := {}
 ## 作り終えた部品。表情の名前 → スロット → その部品の節の並び。
 var _face_nodes := {}
@@ -120,6 +121,24 @@ func set_expression(expression: String) -> void:
 			for node: Node3D in _face_nodes[name].get(slot, []):
 				node.visible = name == shown
 	_place_children()
+
+
+## その表情の部品を、出さずに、先に作っておく（今出している表情は、変えない）。
+func prepare_expression(expression: String) -> void:
+	for slot: String in FACE_SLOTS:
+		if not _face_makers.get(expression, {}).has(slot) or _face_nodes.get(expression, {}).has(slot):
+			continue
+		_make_face(expression, slot)
+		for node: Node3D in _face_nodes[expression][slot]:
+			node.visible = expression == shown_expression_for(slot)
+
+
+## その表情の部品を、もう作ってあるか（部品を持たない表情は、作るものが無いので true）。
+func is_expression_prepared(expression: String) -> bool:
+	for slot: String in _face_makers.get(expression, {}):
+		if not _face_nodes.get(expression, {}).has(slot):
+			return false
+	return true
 
 
 ## まだ作っていない部品なら、作って、体に付ける。

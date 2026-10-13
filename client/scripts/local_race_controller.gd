@@ -96,6 +96,8 @@ var _start_signal_remaining: float = 0.0
 ## レース画面に入ってから、カウントダウンを始めるまでの待ち。
 var _entry_wait_remaining: float = 0.0
 var _final_stretch_ambience_started := false
+## これから先に作っておく、表情の部品（[体, 表情の名前] の並び）。
+var _faces_to_prepare: Array = []
 var _final_stretch_ambience_fading := false
 ## 前のtickで、自分が接触か押し合いの最中だったか。始まった瞬間だけ音を鳴らす。
 var _contact_sound_was_touching := false
@@ -323,6 +325,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
+	_prepare_next_face()
 	if _online_view:
 		_process_online_view(_delta)
 		return
@@ -823,8 +826,30 @@ func _place_markers() -> void:
 	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
 
 
+## 走者の表情の部品を、スタート前の待ち時間のうちに、1コマに1つずつ作っておく。
+## レース中やゴールの瞬間に初めて作ると、そこで画面が引っかかる（スマホのブラウザ版で目立つ）。
+func _queue_face_preparation() -> void:
+	_faces_to_prepare.clear()
+	for runner in _runners:
+		var body := runner.get_node_or_null("Body")
+		if body == null:
+			continue
+		for expression: String in body.call("expression_names"):
+			if not bool(body.call("is_expression_prepared", expression)):
+				_faces_to_prepare.append([body, expression])
+
+
+func _prepare_next_face() -> void:
+	if _faces_to_prepare.is_empty():
+		return
+	var next: Array = _faces_to_prepare.pop_front()
+	if is_instance_valid(next[0]):
+		(next[0] as Node).call("prepare_expression", str(next[1]))
+
+
 ## コースの上の物を、スタート前に一度描いておく（ブラウザ版で、レース中に初めて映る物の所で止まらないように）。
 func _warm_up_first_draw() -> void:
+	_queue_face_preparation()
 	if _track == null or _track.curve == null:
 		return
 	var points := _track.curve.get_baked_points()

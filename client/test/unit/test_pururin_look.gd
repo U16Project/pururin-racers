@@ -118,6 +118,23 @@ func test_expression_swaps_face_parts_and_falls_back_to_normal_per_slot() -> voi
 	assert_false((body.get_node("Face_joy_eyes") as Node3D).visible)
 
 
+func test_preparing_an_expression_builds_its_parts_without_showing_them() -> void:
+	var config := _swap_config()
+	var body: Node3D = Builder.build(config["looks"]["swapped"], config)
+	add_child_autofree(body)
+	assert_false(bool(body.call("is_expression_prepared", "joy")))
+	var shown_before: Array = []
+	for child in body.get_children():
+		if (child as Node3D).visible:
+			shown_before.append(child)
+	body.call("prepare_expression", "joy")
+	assert_true(bool(body.call("is_expression_prepared", "joy")))
+	assert_eq(str(body.call("expression")), "normal")
+	# 新しく付いた部品は、見えていない。前から見えていた部品は、そのまま見えている。
+	for child in body.get_children():
+		assert_eq((child as Node3D).visible, child in shown_before)
+
+
 func test_every_pururin_has_its_own_face_for_every_expression() -> void:
 	var config := _game_config()
 	var names: Array = config["expression_names"]

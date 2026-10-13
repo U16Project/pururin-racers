@@ -5,6 +5,7 @@ extends Control
 
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const FitText := preload("res://scripts/presentation/fit_text.gd")
+const GlyphBatch := preload("res://scripts/presentation/glyph_batch.gd")
 const PANEL_WIDTH := 440.0
 ## BOOST・DASH の文字の左に付ける、ボタンのマークの大きさ。
 const DRIVE_ACTION_MARK_SIZE := 13.0
@@ -116,6 +117,8 @@ var main_panel_visible := true
 var _blink := 0.0
 ## 確定した行に使う太字。
 var _bold_font: FontVariation
+## 文字は、ためておいて、最後にまとめて描く（1つずつ描くと、描く命令が多くて重いため）。文字は、ほかの絵より手前に出る。
+var _glyph_batch := GlyphBatch.new()
 
 
 func _ready() -> void:
@@ -270,10 +273,12 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	if font == null:
 		return
+	_glyph_batch.oversampling = get_viewport().get_oversampling()
 	_draw_race_info(font)
 	_draw_standings(font)
 	if main_panel_visible:
 		_draw_main_panel(font)
+	_glyph_batch.flush(self)
 
 
 func _draw_race_info(font: Font) -> void:
@@ -485,7 +490,8 @@ func _draw_standings(font: Font) -> void:
 		draw_circle(Vector2(x + 36.0, center_y), 6.5, COLOR_OUTLINE)
 		draw_circle(Vector2(x + 36.0, center_y), 5.0, row["color"])
 		# 長い名前は、欄の幅に収める（少し小さく・少し細く。それでも入らなければ末尾を「…」に）。
-		FitText.draw(self, row_font, Vector2(x + STANDINGS_NAME_X, baseline), str(row["name"]), STANDINGS_NAME_WIDTH, text_size, text_color, 0.0, 6, COLOR_OUTLINE)
+		var fitted := FitText.fit(row_font, str(row["name"]), STANDINGS_NAME_WIDTH, text_size)
+		_glyph_batch.add(row_font, str(fitted["text"]), int(fitted["font_size"]), Vector2.ZERO, text_color, 6, COLOR_OUTLINE, Transform2D(0.0, Vector2(float(fitted["x_scale"]), 1.0), 0.0, Vector2(x + STANDINGS_NAME_X, baseline)))
 		_draw_style_chevrons(Vector2(x + STANDINGS_STYLE_X, center_y), style_state_color(int(row["style_rank_bonus"])), int(row["style_group_count"]), int(row["style_group_index"]), 0.85)
 		var value_baseline := center_y + STANDINGS_VALUE_FONT_SIZE * 0.36
 		_draw_heart(Vector2(x + STANDINGS_HEART_X + 7.0, center_y), COLOR_DANGER)
@@ -746,5 +752,4 @@ func _draw_fuel_gradient(x: float, width: float, zero_y: float, from_y: float, t
 
 func _draw_text(font: Font, text: String, position: Vector2, font_size: int, color: Color) -> void:
 	# 背景に溶けないよう、暗い縁取りを付ける。
-	draw_string_outline(font, position, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, 6, Color(0.03, 0.05, 0.1, 0.9))
-	draw_string(font, position, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)
+	_glyph_batch.add(font, text, font_size, position, color, 6, Color(0.03, 0.05, 0.1, 0.9))

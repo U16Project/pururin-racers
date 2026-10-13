@@ -13,6 +13,7 @@ extends Control
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
+const GlyphBatch := preload("res://scripts/presentation/glyph_batch.gd")
 ## 大きさは、この半径（外の輪の外側）を基準にした寸法。set_radius で、全体を同じ比で変えられる。
 const BASE_RADIUS := 175.0
 const COURSE_RADIUS := 166.0
@@ -140,6 +141,9 @@ var _state := {
 }
 var _radius := BASE_RADIUS
 var _thin_gaps := PackedVector2Array()
+## ためておいた文字（[置く場所, 回す角度, 書き出しの位置, 文字, 大きさ, 色] の並び）。
+var _glyphs: Array = []
+var _glyph_batch := GlyphBatch.new()
 var _wide_gaps := PackedVector2Array()
 var _center := Vector2.ZERO
 
@@ -194,6 +198,7 @@ func _draw() -> void:
 	_center = size * 0.5
 	_thin_gaps.clear()
 	_wide_gaps.clear()
+	_glyphs.clear()
 	var font := get_theme_default_font()
 	draw_circle(_center, _radius, COLOR_FACE)
 	draw_arc(_center, _radius + _s(1.5), 0.0, TAU, 96, COLOR_RIM_LINE, _s(1.2), true)
@@ -204,6 +209,7 @@ func _draw() -> void:
 	_draw_gap_lines()
 	_draw_heart_value(font)
 	_draw_texts(font)
+	_draw_glyphs(font)
 
 
 func _arc(radius: float, width: float, from_deg: float, to_deg: float, color: Color) -> void:
@@ -519,12 +525,8 @@ func _arc_runs(font: Font, radius: float, center_deg: float, runs: Array) -> voi
 	for glyph: Array in glyphs:
 		var width := float(glyph[3])
 		var angle := angle_of(cursor_deg + direction * rad_to_deg(width / baseline_radius) * 0.5)
-		draw_set_transform(_center + Vector2.RIGHT.rotated(angle) * baseline_radius, angle + direction * PI * 0.5, Vector2.ONE)
-		var origin := Vector2(-width * 0.5, 0.0)
-		draw_string_outline(font, origin, glyph[0], HORIZONTAL_ALIGNMENT_LEFT, -1.0, glyph[1], maxi(int(_s(4.0)), 2), COLOR_OUTLINE)
-		draw_string(font, origin, glyph[0], HORIZONTAL_ALIGNMENT_LEFT, -1.0, glyph[1], glyph[2])
+		_glyphs.append([_center + Vector2.RIGHT.rotated(angle) * baseline_radius, angle + direction * PI * 0.5, Vector2(-width * 0.5, 0.0), glyph[0], glyph[1], glyph[2]])
 		cursor_deg += direction * rad_to_deg(width / baseline_radius)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## その角度（12時を0として時計まわり）が、輪の上半分か。
@@ -537,6 +539,12 @@ static func arc_text_is_upper(degrees: float) -> bool:
 func _text(font: Font, at: Vector2, text: String, font_size: int, color: Color) -> void:
 	var px := maxi(int(round(_s(float(font_size)))), 6)
 	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	var origin := at - Vector2(width * 0.5, 0.0)
-	draw_string_outline(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, maxi(int(_s(4.0)), 2), COLOR_OUTLINE)
-	draw_string(font, origin, text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, px, color)
+	_glyphs.append([Vector2.ZERO, 0.0, at - Vector2(width * 0.5, 0.0), text, px, color])
+
+
+## ためておいた文字を、まとめて描く（1文字ずつ描くと、命令の数が多くて重いため）。文字は、ほかの絵より手前に出る。
+func _draw_glyphs(font: Font) -> void:
+	var outline := maxi(int(_s(4.0)), 2)
+	for glyph: Array in _glyphs:
+		_glyph_batch.add(font, glyph[3], glyph[4], glyph[2], glyph[5], outline, COLOR_OUTLINE, Transform2D(float(glyph[1]), glyph[0]))
+	_glyph_batch.flush(self)
