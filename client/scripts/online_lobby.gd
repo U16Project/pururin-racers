@@ -13,6 +13,8 @@ const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
+const ButtonMark := preload("res://scripts/menu/button_mark.gd")
+const TrainerPicker := preload("res://scripts/menu/cpu_trainer_picker.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
@@ -51,6 +53,11 @@ const COLOR_CHIP := Color(0.1, 0.16, 0.26, 0.95)
 const ROOM_LEFT_WIDTH := 500.0
 const GATE_BADGE_SIZE := 28.0
 const DISTANCE_BUTTON_HEIGHT := 36.0
+## 距離を1つ動かすボタン（‹ L1・R1 ›）。オフラインのレース選択と同じ見た目。
+const DISTANCE_STEP_BUTTON_WIDTH := 70.0
+const DISTANCE_MARK_SIZE := 20.0
+const COLOR_STEP_BUTTON := Color(0.36, 0.23, 0.13, 1.0)
+const COLOR_STEP_BUTTON_BORDER := Color(0.62, 0.43, 0.25, 1.0)
 ## 行の右の、確定の印の幅と、「︙」（主が、その人を退出させる窓を開く）の幅。出さない行も、同じ幅だけ空ける。
 const CONFIRM_BADGE_WIDTH := 46.0
 const MEMBER_MENU_WIDTH := 24.0
@@ -72,7 +79,7 @@ const COLOR_CONFIRMED := Color(0.3, 0.8, 0.5, 1.0)
 const COLOR_DANGER_BUTTON := Color(0.72, 0.26, 0.24, 1.0)
 ## ほかの人の名前の色（自分は、枠の行の「ユーザー」の色）。
 const COLOR_OTHER_PLAYER := Color(1.0, 0.93, 0.6, 1.0)
-const CPU_SLOT_TEXT := "おまかせ（始めるときに決まる）"
+const CPU_SLOT_TEXT := "おまかせ"
 const WAITING_SLOT_TEXT := "ー選び中ー"
 const CLOSED_SLOT_TEXT := "ー"
 const PICKER_MARGIN := 8.0
@@ -132,6 +139,7 @@ var _room_title: Label
 var _room_lock: Control
 ## 距離のボタン（オフラインと同じ、横並び）。距離 → ボタン。
 var _distance_buttons := {}
+var _distance_step_buttons: Array[Button] = []
 ## 1〜8枠の行（オフラインのレース選択と同じ部品）と、その右の「出す」ボタン。
 var _slots: Array[Control] = []
 var _badges: Array[Control] = []
@@ -143,6 +151,10 @@ var _row_infos: Array = []
 var _selected_gate := -1
 ## 案内を出した、いまの場面（部屋か、出走表か）。
 var _shown_phase := ""
+## 最後に出した、部屋のできごとの知らせと、その時刻。
+var _notice_text := ""
+var _notice_msec := -100000
+const NOTICE_KEEP_MSEC := 3000
 ## 枠の下の板：部屋の決めごと（部屋）と、枠順の操作（出走表）。
 var _rules_card: Control
 var _gates_card: Control
@@ -173,6 +185,14 @@ var _profile_portrait: TextureRect
 var _profile_name: Label
 var _profile_note: Label
 var _profile_introduction: Label
+## 紹介の窓の「トレーナーを変える」（主が、CPUの紹介を見ているときだけ出る）。
+var _profile_trainer_button: Button
+## CPUトレーナーを選ぶ窓（オフラインのレース選択と同じもの）。
+var _trainer_picker: Control
+## 一覧の窓・トレーナーの窓で、いま選んでいる行（自分の行か、CPUの行）。
+var _picking_row := -1
+## 人の画像の下の、「(Y) 詳細」の案内。
+var _person_hint: Control
 ## マウスを乗せている行（無ければ -1）。乗せているあいだ、その行のぷるりんを、右の詳細に出す。
 var _hovered_row := -1
 ## 退出させる窓と、その相手の番号。
@@ -212,7 +232,11 @@ func _ready() -> void:
 	_build()
 	# レースから戻ってきたときは、部屋に入ったまま。
 	if OnlineSession.in_room():
-		_set_status("部屋「%s」にいます。" % str(OnlineSession.room.get("room", "")))
+		# レースから戻ってきた。ほかの人が、まだ結果を見ているあいだは、次の準備ができない。
+		if bool(OnlineSession.room.get("racing", false)):
+			_set_status("ほかの人が、結果を見ています。全員が戻るか、%d秒たつと、次の準備ができます。" % int(OnlineConfig.result_linger_s()))
+		else:
+			_set_status("部屋「%s」にいます。" % str(OnlineSession.room.get("room", "")))
 	elif OnlineSession.in_lobby():
 		_set_status("部屋を選ぶか、作ってください。")
 	_refresh()
@@ -507,6 +531,12 @@ func _build_dialogs() -> void:
 	_profile_introduction.name = "ProfileIntroduction"
 	_profile_introduction.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	profile_text.add_child(_profile_introduction)
+	_profile_trainer_button = MenuStyle.button("トレーナーを変える", 18, MenuStyle.COLOR_BUTTON)
+	_profile_trainer_button.name = "ProfileTrainerButton"
+	_profile_trainer_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_profile_trainer_button.pressed.connect(open_trainer_picker)
+	UIAudio.bind_button_sound(_profile_trainer_button, "confirmation")
+	profile_column.add_child(_profile_trainer_button)
 	var profile_close := MenuStyle.button("閉じる", 20, MenuStyle.COLOR_BUTTON_QUIET)
 	profile_close.name = "ProfileCloseButton"
 	profile_close.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
@@ -589,8 +619,13 @@ func _build_room(column: VBoxContainer) -> void:
 		var row: Control = PururinSlot.new()
 		row.call("setup", slot)
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.connect("cycle_requested", func(_slot: int, direction: int, _source: String) -> void: step_pururin(direction))
-		row.connect("pick_requested", func(_slot: int) -> void: open_picker())
+		row.connect("cycle_requested", func(row_index: int, direction: int, _source: String) -> void: step_row_pururin(row_index, direction))
+		row.connect("pick_requested", open_picker_for_row)
+		# X：CPUの行を「おまかせ」に戻す。Y：その行の人（CPUはトレーナー）の紹介。
+		row.connect("clear_requested", clear_cpu_row)
+		row.connect("force_requested", func(row_index: int) -> void:
+			_on_row_focused(row_index)
+			open_profile_dialog())
 		row.connect("slot_focused", _on_row_focused)
 		# マウスを乗せているあいだも、その行の人とぷるりんを、右に出す。
 		row.mouse_entered.connect(_on_row_hovered.bind(slot))
@@ -712,6 +747,21 @@ func _build_room(column: VBoxContainer) -> void:
 	_person_button.add_child(_person_icon)
 	_person_portrait = _portrait_rect("PersonPortrait")
 	_person_button.add_child(_person_portrait)
+	# 画像の下に、「(Y) 詳細」。Yボタン（キーボードはS）でも、紹介の窓が開く。
+	var hint := HBoxContainer.new()
+	hint.name = "PersonHint"
+	hint.alignment = BoxContainer.ALIGNMENT_CENTER
+	hint.add_theme_constant_override("separation", 4)
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hint.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	hint.offset_left = -PERSON_BUTTON_SIZE - PERSON_BUTTON_MARGIN
+	hint.offset_right = -PERSON_BUTTON_MARGIN
+	hint.offset_top = PERSON_BUTTON_MARGIN + PERSON_BUTTON_SIZE + 2.0
+	hint.offset_bottom = hint.offset_top + 20.0
+	hint.add_child(MenuStyle.mark("Y", 18.0))
+	hint.add_child(MenuStyle.label("詳細", 14, MenuStyle.COLOR_DIM))
+	_detail.add_child(hint)
+	_person_hint = hint
 	# 右の列の下：小さめの「部屋を出る」と、「確定」。左の列（ひとこと）は、板の下まで使える。
 	var actions := HBoxContainer.new()
 	actions.name = "RoomActions"
@@ -735,9 +785,18 @@ func _build_room(column: VBoxContainer) -> void:
 	_picker.connect("picked", _on_picker_picked)
 	_picker.connect("tile_focused", _on_picker_tile_focused)
 	_picker.connect("closed", _on_picker_closed)
+	_trainer_picker = TrainerPicker.new()
+	_trainer_picker.name = "TrainerPicker"
+	_trainer_picker.visible = false
+	add_child(_trainer_picker)
+	_trainer_picker.picked.connect(_on_trainer_picked)
+	_trainer_picker.closed.connect(func() -> void:
+		if _picking_row >= 0 and _slots[_picking_row].focus_mode != Control.FOCUS_NONE:
+			_slots[_picking_row].grab_focus())
 
 
-## 距離は、横に並べたボタンから1つ選ぶ（オフラインと同じ見た目）。押せるのは、部屋の主だけ。
+## 距離は、横に並べたボタンから1つ選ぶ（オフラインのレース選択と同じ見た目・同じ操作）。変えられるのは、部屋の主だけ。
+## 左右で動かすと、そのまま選ばれる（決定を押さなくてよい）。両端の「‹ L1」「R1 ›」と、ゲームパッドの L1・R1 でも動く。
 func _build_distance_row() -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "DistanceRow"
@@ -745,6 +804,7 @@ func _build_distance_row() -> HBoxContainer:
 	var caption := MenuStyle.label("距離", 20, MenuStyle.COLOR_DIM)
 	caption.custom_minimum_size = Vector2(56.0, 0.0)
 	row.add_child(caption)
+	row.add_child(_distance_step_button(-1))
 	for distance_m: float in RaceSession.supported_distances_m():
 		var button := MenuStyle.button("%d m" % int(distance_m), 20, MenuStyle.COLOR_BUTTON_QUIET)
 		button.name = "Distance%d" % int(distance_m)
@@ -754,11 +814,88 @@ func _build_distance_row() -> HBoxContainer:
 		for state: String in ["pressed", "hover_pressed"]:
 			button.add_theme_stylebox_override(state, MenuStyle.box(MenuStyle.COLOR_BUTTON_ON, 10, 22.0, 4.0))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.set_meta("ui_audio_focus_sound", "selection_cycle")
 		button.pressed.connect(set_distance.bind(distance_m))
+		# カーソルを合わせると、そのまま、その距離になる。
+		button.focus_entered.connect(_on_distance_focused.bind(distance_m))
 		UIAudio.bind_button_sound(button, "confirmation")
 		row.add_child(button)
 		_distance_buttons[distance_m] = button
+	row.add_child(_distance_step_button(1))
 	return row
+
+
+## 距離を1つ動かすボタン。左が「‹ L1」、右が「R1 ›」。茶色の丸い形で、矢印とマークは金色（オフラインと同じ）。
+func _distance_step_button(direction: int) -> Button:
+	var button := Button.new()
+	button.text = "‹" if direction < 0 else "›"
+	button.name = "DistancePrev" if direction < 0 else "DistanceNext"
+	button.custom_minimum_size = Vector2(DISTANCE_STEP_BUTTON_WIDTH, 34.0)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 24)
+	for state: String in ["font_color", "font_hover_color", "font_pressed_color", "font_disabled_color"]:
+		button.add_theme_color_override(state, ButtonMark.COLOR_GOLD)
+	button.add_theme_stylebox_override("normal", _step_button_box(COLOR_STEP_BUTTON, COLOR_STEP_BUTTON_BORDER))
+	button.add_theme_stylebox_override("disabled", _step_button_box(COLOR_STEP_BUTTON, COLOR_STEP_BUTTON_BORDER))
+	button.add_theme_stylebox_override("hover", _step_button_box(COLOR_STEP_BUTTON.lightened(0.12), COLOR_STEP_BUTTON_BORDER.lightened(0.2)))
+	button.add_theme_stylebox_override("pressed", _step_button_box(COLOR_STEP_BUTTON.lightened(0.25), ButtonMark.COLOR_GOLD))
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT if direction < 0 else HORIZONTAL_ALIGNMENT_RIGHT
+	var mark := MenuStyle.mark("L1" if direction < 0 else "R1", DISTANCE_MARK_SIZE)
+	mark.name = "ButtonMark"
+	button.add_child(mark)
+	var mark_width := float(mark.custom_minimum_size.x)
+	mark.set_anchors_preset(Control.PRESET_CENTER_RIGHT if direction < 0 else Control.PRESET_CENTER_LEFT)
+	mark.offset_left = -9.0 - mark_width if direction < 0 else 9.0
+	mark.offset_right = mark.offset_left + mark_width
+	mark.offset_top = -DISTANCE_MARK_SIZE * 0.5
+	mark.offset_bottom = DISTANCE_MARK_SIZE * 0.5
+	button.pressed.connect(step_distance.bind(direction, "mouse"))
+	_distance_step_buttons.append(button)
+	return button
+
+
+static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(1)
+	box.set_corner_radius_all(18)
+	box.content_margin_left = 12.0
+	box.content_margin_right = 12.0
+	box.content_margin_top = 0.0
+	box.content_margin_bottom = 4.0
+	return box
+
+
+## 部屋の主が、距離を変えられる場面か（部屋の場面だけ。出走表では、変えられない）。
+func can_set_distance() -> bool:
+	return OnlineSession.in_room() and is_host() and not OnlineSession.in_entries()
+
+
+## 距離のボタンにカーソルが来た：変えられる人なら、そのまま、その距離にする。
+func _on_distance_focused(distance_m: float) -> void:
+	if can_set_distance() and not is_equal_approx(distance_m, float(_room.get("distance_m", 0.0))):
+		_client.send(Protocol.SETTINGS, {"distance_m": distance_m})
+
+
+## 距離を、1つ前（-1）か次（1）へ動かす（部屋の主だけ）。端では止まる。
+func step_distance(direction: int, source: String = "gamepad") -> void:
+	var distances: Array = RaceSession.supported_distances_m()
+	var index := distances.find(float(_room.get("distance_m", 0.0)))
+	var next := clampi(index + direction, 0, distances.size() - 1)
+	if not can_set_distance() or index < 0 or next == index:
+		UIAudio.play_error()
+		return
+	_client.send(Protocol.SETTINGS, {"distance_m": float(distances[next])})
+	if source == "mouse":
+		UIAudio.play_arrow_click()
+	else:
+		UIAudio.play_selection_cycle()
+	# 距離の段を選んでいるときは、選択の枠も、動かした先の距離へ付いていく。
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is Button and _distance_buttons.values().has(focused):
+		(_distance_buttons[float(distances[next])] as Button).grab_focus()
 
 
 ## 行の「︙」：その人を退出させるかを確かめる窓を出す（部屋の主だけ）。
@@ -817,6 +954,8 @@ func open_profile_dialog() -> void:
 	close_dialogs()
 	_show_person_image(_shown_person, _profile_icon, _profile_portrait)
 	var peer_id := int(_shown_person.get("peer_id", 0))
+	# 主は、CPUのトレーナーを、ここから変えられる。
+	_profile_trainer_button.visible = peer_id == 0 and is_host() and _shown_person.has("row")
 	if peer_id == 0:
 		var trainer := CpuTrainers.by_id(str(_shown_person.get("trainer_id", "")))
 		_profile_name.text = str(trainer.get("name", "CPU"))
@@ -842,6 +981,9 @@ func _on_row_focused(row_index: int) -> void:
 	_show_row_detail(row_index)
 	if OnlineSession.in_entries():
 		_show_gate_controls()
+	# 人の画像から「左」で、この行へ戻れるように、行き先を決め直す。
+	if OnlineSession.in_room():
+		_link_room_focus()
 
 
 func _on_row_hovered(row_index: int) -> void:
@@ -886,7 +1028,7 @@ func _show_row_detail(row_index: int) -> void:
 	if peer_id != 0:
 		_show_person({"peer_id": peer_id, "trainer_id": ""})
 	elif not pururin_id.is_empty():
-		_show_person({"peer_id": 0, "trainer_id": str(info.get("trainer_id", ""))})
+		_show_person({"peer_id": 0, "trainer_id": str(info.get("trainer_id", "")), "row": row_index})
 	else:
 		_show_person({})
 
@@ -895,36 +1037,129 @@ func _show_row_detail(row_index: int) -> void:
 func _show_person(person: Dictionary) -> void:
 	_shown_person = person
 	_person_button.visible = not person.is_empty()
+	_person_hint.visible = not person.is_empty()
 	if not person.is_empty():
 		_show_person_image(person, _person_icon, _person_portrait)
 
 
 ## 「一覧から選ぶ」：ぷるりんの一覧の窓を、左の列の上に開く。右の詳細は、カーソルの個体に替わる。
 func open_picker() -> void:
+	open_picker_for_row(my_row())
+
+
+## その行が、主の決められるCPUの行か（主だけ。部屋では「おまかせ」の行も含む）。
+func is_cpu_row(row_index: int) -> bool:
+	if row_index < 0 or row_index >= _row_infos.size():
+		return false
+	return is_host() and bool(_row_infos[row_index].get("cpu", false))
+
+
+## その行で、ぷるりんを選べるか（部屋の場面の自分の行と、主にとってのCPUの行）。
+func can_choose_row(row_index: int) -> bool:
+	if row_index < 0 or row_index >= _row_infos.size():
+		return false
+	return is_cpu_row(row_index) or (not OnlineSession.in_entries() and int(_row_infos[row_index]["peer_id"]) == OnlineSession.peer_id)
+
+
+## その行のぷるりんを、一覧の窓から選ぶ。
+func open_picker_for_row(row_index: int) -> void:
+	if not can_choose_row(row_index):
+		return
 	close_dialogs()
+	_picking_row = row_index
 	var area := _room_box.get_global_rect()
 	_picker.global_position = area.position + Vector2(0.0, PICKER_MARGIN)
 	_picker.size = Vector2(minf(float(PururinPicker.window_width()), ROOM_LEFT_WIDTH), area.size.y - PICKER_MARGIN * 2.0)
-	_picker.call("open_choices", "ぷるりんを選ぶ", my_pururin_id(), taken_by_others())
+	_picker.call("open_choices", "CPUのぷるりんを選ぶ" if is_cpu_row(row_index) else "ぷるりんを選ぶ", str(_row_infos[row_index]["pururin_id"]), taken_except(row_index))
 
 
 func is_picker_open() -> bool:
 	return bool(_picker.call("is_open"))
 
 
-## ほかの人が選んでいる個体（個体 → その人の番目。0から）。
-func taken_by_others() -> Dictionary:
+## その行のほかで、使われている個体（個体 → その行の番目。0から）。
+func taken_except(row_index: int) -> Dictionary:
 	var taken := {}
-	for index in _members.size():
-		var member: Dictionary = _members[index]
-		if int(member["peer_id"]) != OnlineSession.peer_id and not str(member["pururin_id"]).is_empty():
-			taken[str(member["pururin_id"])] = index
+	for index in _row_infos.size():
+		var pururin_id := str(_row_infos[index]["pururin_id"])
+		if index != row_index and not pururin_id.is_empty():
+			taken[pururin_id] = index
 	return taken
 
 
+## ほかの人・CPUが使っている個体（自分の行のほか）。
+func taken_by_others() -> Dictionary:
+	return taken_except(my_row())
+
+
+## その行に、その個体を入れるよう、サーバーに頼む（自分の行＝自分のぷるりん。CPUの行＝主が決める）。
+func send_row_pururin(row_index: int, pururin_id: String) -> void:
+	if not is_cpu_row(row_index):
+		_client.send(Protocol.PICK, {"pururin_id": pururin_id})
+	elif OnlineSession.in_entries():
+		_client.send(Protocol.CPU_PICK, {"gate": row_index, "pururin_id": pururin_id})
+	else:
+		_client.send(Protocol.CPU_PICK, {"index": int(_row_infos[row_index]["cpu_index"]), "pururin_id": pururin_id})
+
+
 func _on_picker_picked(pururin_id: String) -> void:
-	_client.send(Protocol.PICK, {"pururin_id": pururin_id})
+	send_row_pururin(_picking_row, pururin_id)
 	_picker.call("close")
+
+
+## 行の ◀▶：その行のぷるりんを、次（1）か前（-1）の、空いている個体に替える。
+## 部屋の場面のCPUの行では、「おまかせ」も、並びの中に入る。
+func step_row_pururin(row_index: int, direction: int) -> void:
+	if not can_choose_row(row_index):
+		UIAudio.play_error()
+		return
+	var taken := taken_except(row_index)
+	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
+	if is_cpu_row(row_index) and not OnlineSession.in_entries():
+		ids.push_front("")
+	var index := ids.find(str(_row_infos[row_index]["pururin_id"]))
+	# まだ選んでいないとき、次へ＝最初の個体、前へ＝最後の個体から始める。
+	if index < 0:
+		index = -1 if direction > 0 else ids.size()
+	for _attempt in ids.size():
+		index = posmod(index + direction, ids.size())
+		if not taken.has(ids[index]):
+			send_row_pururin(row_index, ids[index])
+			return
+
+
+## X：CPUの行を「おまかせ」に戻す（主だけ。部屋の場面だけ）。
+func clear_cpu_row(row_index: int) -> void:
+	if not is_cpu_row(row_index) or OnlineSession.in_entries() or str(_row_infos[row_index]["pururin_id"]).is_empty():
+		UIAudio.play_error()
+		return
+	UIAudio.play_clear_selection()
+	send_row_pururin(row_index, "")
+
+
+## 紹介の窓の「トレーナーを変える」：CPUトレーナーを選ぶ窓を開く（主だけ）。
+func open_trainer_picker() -> void:
+	var row_index := int(_shown_person.get("row", -1))
+	if not is_cpu_row(row_index):
+		return
+	close_dialogs()
+	_picking_row = row_index
+	_trainer_picker.size = Vector2(680.0, 540.0)
+	_trainer_picker.position = (get_viewport_rect().size - _trainer_picker.size) * 0.5
+	_trainer_picker.call("open", row_index, str(_row_infos[row_index].get("trainer_id", "")))
+
+
+func is_trainer_picker_open() -> bool:
+	return _trainer_picker.visible
+
+
+func _on_trainer_picked(trainer_id: String) -> void:
+	if is_cpu_row(_picking_row):
+		if OnlineSession.in_entries():
+			_client.send(Protocol.CPU_PICK, {"gate": _picking_row, "trainer_id": trainer_id})
+		else:
+			_client.send(Protocol.CPU_PICK, {"index": int(_row_infos[_picking_row]["cpu_index"]), "trainer_id": trainer_id})
+	_trainer_picker.call("close")
 
 
 func _on_picker_tile_focused(pururin_id: String) -> void:
@@ -1145,8 +1380,17 @@ func _on_message(data: Dictionary) -> void:
 			var phase := str(data.get("phase", ""))
 			if phase != _shown_phase:
 				_shown_phase = phase
-				_set_status("出走表です。枠順と、みんなのぷるりんを確かめて、「確定」を押してください。" if phase == Protocol.PHASE_ENTRIES else "ぷるりんを選んで、「確定」を押してください。")
+				var guide := "出走表です。枠順と、みんなのぷるりんを確かめて、「確定」を押してください。" if phase == Protocol.PHASE_ENTRIES else "ぷるりんを選んで、「確定」を押してください。"
+				# 直前に、部屋のできごとの知らせが出ていたら、消さずに、そのあとに続ける（だれかが抜けて、部屋へ戻ったとき）。
+				var recent_notice := Time.get_ticks_msec() - _notice_msec < NOTICE_KEEP_MSEC and not _notice_text.is_empty()
+				_set_status(_notice_text + "　" + guide if recent_notice else guide)
 			_refresh()
+		Protocol.NOTICE:
+			# 部屋のできごと（入った・出た・主が替わった）：上の案内と、ひとことの欄の両方に出す。
+			_notice_text = OnlineSession.notice_text(data)
+			_notice_msec = Time.get_ticks_msec()
+			_set_status(_notice_text)
+			_show_chat()
 		Protocol.CHAT_MESSAGE:
 			_show_chat()
 		Protocol.PROFILE_INFO:
@@ -1347,28 +1591,97 @@ func _show_room() -> void:
 		button.set_pressed_no_signal(is_equal_approx(distance_m, distance))
 		# 押せない人・押せない場面でも、決まっている距離は、色を付けて、はっきり見せる。ほかは、うすくする。
 		button.disabled = not host or in_entries
+		# 変えられない人は、距離の段にカーソルを置けない。
+		button.focus_mode = Control.FOCUS_ALL if not button.disabled else Control.FOCUS_NONE
 		button.add_theme_stylebox_override("disabled", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON if button.button_pressed else MenuStyle.COLOR_BUTTON_QUIET, 10, 22.0, 4.0))
 		button.add_theme_color_override("font_disabled_color", MenuStyle.COLOR_TEXT)
 		button.modulate.a = 1.0 if not button.disabled or button.button_pressed else 0.4
+	for step_button: Button in _distance_step_buttons:
+		step_button.disabled = not host or in_entries
+		step_button.modulate.a = 1.0 if not step_button.disabled else 0.3
 	_open_password_button.visible = host
 	_rules_card.visible = not in_entries
 	_gates_card.visible = in_entries
 	if in_entries:
-		if is_picker_open():
-			_picker.call("close")
 		_show_entry_rows()
+		# 出走表では、主のCPUの行だけ、一覧の窓を使える。それ以外で開いていたら、閉じる。
+		if is_picker_open():
+			if can_choose_row(_picking_row):
+				_picker.call("open_choices", "CPUのぷるりんを選ぶ", str(_row_infos[_picking_row]["pururin_id"]), taken_except(_picking_row))
+			else:
+				_picker.call("close")
 		_show_gate_controls()
 		_show_current_detail()
 	else:
 		_selected_gate = -1
 		_show_member_rows()
 		# 一覧の窓を開いているあいだは、詳細はカーソルの個体のまま。窓のタイルの状態は、開き直して合わせる。
-		if is_picker_open():
-			_picker.call("open_choices", "ぷるりんを選ぶ", mine, taken_by_others())
+		if is_picker_open() and can_choose_row(_picking_row):
+			_picker.call("open_choices", "CPUのぷるりんを選ぶ" if is_cpu_row(_picking_row) else "ぷるりんを選ぶ", str(_row_infos[_picking_row]["pururin_id"]), taken_except(_picking_row))
 		else:
 			_show_current_detail()
 	_show_bottom_buttons()
 	_show_chat()
+	_link_room_focus()
+
+
+## 部屋の中の、上下左右の行き先を、はっきり決める（決めておかないと、位置から自動で選ばれて、思わぬ所へ飛ぶ）。
+## 上から：距離の段（主だけ）→ 出走の行 → 行の下のボタン（決めごと・枠順）→ ひとこと。
+## 行から右へ：ぷるりんの板の右上の、人の画像。その下に「部屋を出る」と「確定」。
+func _link_room_focus() -> void:
+	var rows: Array[Control] = []
+	for row: Control in _slots:
+		if row.focus_mode != Control.FOCUS_NONE:
+			rows.append(row)
+	var distance_button: Control = null
+	for distance_m: float in _distance_buttons:
+		var button: Button = _distance_buttons[distance_m]
+		if button.button_pressed and button.focus_mode != Control.FOCUS_NONE:
+			distance_button = button
+	# 行の下の、最初に止まれるボタン（決めごと・枠順のうち、押せるもの）。無ければ、ひとこと。
+	var below: Control = _chat_edit
+	var below_buttons: Array[Control] = []
+	for button: Button in (_gate_buttons if OnlineSession.in_entries() else _settings_buttons()):
+		if button.is_visible_in_tree() and not button.disabled:
+			below_buttons.append(button)
+	if not below_buttons.is_empty():
+		below = below_buttons[0]
+	var first_row: Control = rows[0] if not rows.is_empty() else below
+	var last_row: Control = rows.back() if not rows.is_empty() else (distance_button if distance_button != null else below)
+	var distances: Array = _distance_buttons.keys()
+	for index in distances.size():
+		var button: Button = _distance_buttons[distances[index]]
+		_link(button, _distance_buttons[distances[maxi(index - 1, 0)]], _distance_buttons[distances[mini(index + 1, distances.size() - 1)]], button, first_row)
+	for index in rows.size():
+		var row := rows[index]
+		var above: Control = rows[index - 1] if index > 0 else (distance_button if distance_button != null else row)
+		_link(row, row, _person_button, above, rows[index + 1] if index < rows.size() - 1 else below)
+	for index in below_buttons.size():
+		var button := below_buttons[index]
+		_link(button, below_buttons[maxi(index - 1, 0)], below_buttons[index + 1] if index < below_buttons.size() - 1 else _person_button, last_row, _chat_edit)
+	var send: Control = _chat_edit.get_parent().get_node("ChatSendButton")
+	_link(_chat_edit, _chat_edit, send, below if below != _chat_edit else last_row, _chat_edit)
+	_link(send, _chat_edit, _leave_button, below if below != _chat_edit else last_row, send)
+	var selected_row: Control = _slots[_selected_gate] if _selected_gate >= 0 and _slots[_selected_gate].focus_mode != Control.FOCUS_NONE else first_row
+	_link(_person_button, selected_row, _person_button, _person_button, _confirm_button)
+	_link(_leave_button, send, _confirm_button, _person_button, _leave_button)
+	_link(_confirm_button, _leave_button, _confirm_button, _person_button, _confirm_button)
+
+
+## 行の下の、部屋の決めごとのボタン（左から右の順）。
+func _settings_buttons() -> Array[Button]:
+	var buttons: Array[Button] = []
+	for node in _rules_card.find_children("*", "Button", true, false):
+		buttons.append(node as Button)
+	return buttons
+
+
+## 1つの部品の、左・右・上・下の行き先を決める。
+static func _link(node: Control, left: Control, right: Control, top: Control, bottom: Control) -> void:
+	node.focus_neighbor_left = node.get_path_to(left)
+	node.focus_neighbor_right = node.get_path_to(right)
+	node.focus_neighbor_top = node.get_path_to(top)
+	node.focus_neighbor_bottom = node.get_path_to(bottom)
 
 
 ## 自分の行（0から。部屋に入った順。いなければ -1）。
@@ -1421,9 +1734,17 @@ func _show_member_rows() -> void:
 			row.call("set_view", name_tag(member), PururinSlot.COLOR_USER if is_me else COLOR_OTHER_PLAYER, PururinSlot.EMPTY_TEXT if is_me else WAITING_SLOT_TEXT, is_me, true, NAME_TAG_WIDTH)
 			row.call("set_pururin", PururinRosterConfig.pururin_by_id(str(member["pururin_id"])))
 		elif with_cpu and index < field_size:
+			# CPUの行：主は、ぷるりんを決められる（◀▶・決定で一覧・Xで「おまかせ」）。決めていなければ「おまかせ」。
+			var cpu_index := index - _members.size()
+			var cpus: Array = _room.get("cpus", [])
+			var cpu: Dictionary = cpus[cpu_index] if cpu_index < cpus.size() else {"pururin_id": "", "trainer_id": ""}
+			var cpu_pururin := PururinRosterConfig.pururin_by_id(str(cpu["pururin_id"]))
+			var trainer_id := str(cpu["trainer_id"]) if not str(cpu["trainer_id"]).is_empty() else str(cpu_pururin.get("trainer_id", ""))
+			info = {"peer_id": 0, "pururin_id": str(cpu["pururin_id"]), "trainer_id": trainer_id if not cpu_pururin.is_empty() else "", "cpu": true, "cpu_index": cpu_index}
+			var tag := PururinSlot.CPU_TAG if cpu_pururin.is_empty() else "CPU %s" % str(CpuTrainers.by_id(trainer_id).get("name", ""))
 			row.call("set_role", false)
-			row.call("set_view", PururinSlot.CPU_TAG, MenuStyle.COLOR_DIM, CPU_SLOT_TEXT, false, false, NAME_TAG_WIDTH)
-			row.call("set_pururin", {})
+			row.call("set_view", tag, MenuStyle.COLOR_DIM, CPU_SLOT_TEXT, is_host(), not cpu_pururin.is_empty(), NAME_TAG_WIDTH)
+			row.call("set_pururin", cpu_pururin)
 		else:
 			row.call("set_role", false)
 			row.call("set_view", "", MenuStyle.COLOR_DIM, CLOSED_SLOT_TEXT, false, false, NAME_TAG_WIDTH)
@@ -1451,14 +1772,17 @@ func _show_entry_rows() -> void:
 			var entry: Dictionary = entries[index]
 			var peer_id := int(entry["peer_id"])
 			var is_me := peer_id == OnlineSession.peer_id
-			info = {"peer_id": peer_id, "pururin_id": str(entry["id"]), "trainer_id": str(entry.get("trainer_id", ""))}
+			info = {"peer_id": peer_id, "pururin_id": str(entry["id"]), "trainer_id": str(entry.get("trainer_id", "")), "cpu": peer_id == 0}
 			var tag := str(entry["trainer_name"])
 			var color := MenuStyle.COLOR_DIM
 			if peer_id != 0:
 				tag += "［主］" if peer_id == int(_room.get("host", 0)) else ""
 				color = PururinSlot.COLOR_USER if is_me else COLOR_OTHER_PLAYER
 			row.call("set_role", is_me)
-			row.call("set_view", tag, color, CLOSED_SLOT_TEXT, false, true, NAME_TAG_WIDTH)
+			if peer_id == 0:
+				tag = "CPU " + tag
+			# 主は、CPUの枠のぷるりんを、ここでも替えられる。
+			row.call("set_view", tag, color, CLOSED_SLOT_TEXT, peer_id == 0 and is_host(), true, NAME_TAG_WIDTH)
 			row.call("set_pururin", PururinRosterConfig.pururin_by_id(str(entry["id"])))
 		else:
 			row.call("set_role", false)
@@ -1542,20 +1866,7 @@ static func pururin_name(pururin_id: String) -> String:
 
 ## ぷるりんを、次（1）か前（-1）の個体に替える。ほかの人が選んでいる個体は、飛ばす。
 func step_pururin(direction: int) -> void:
-	var taken := {}
-	for member: Dictionary in _members:
-		if int(member["peer_id"]) != OnlineSession.peer_id and not str(member["pururin_id"]).is_empty():
-			taken[str(member["pururin_id"])] = true
-	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
-	var index := ids.find(my_pururin_id())
-	# まだ選んでいないとき、次へ＝最初の個体、前へ＝最後の個体から始める。
-	if index < 0:
-		index = -1 if direction > 0 else ids.size()
-	for _attempt in ids.size():
-		index = posmod(index + direction, ids.size())
-		if not taken.has(ids[index]):
-			_client.send(Protocol.PICK, {"pururin_id": ids[index]})
-			return
+	step_row_pururin(my_row(), direction)
 
 
 ## 距離を決める（部屋の主だけ）。
@@ -1653,6 +1964,12 @@ func send_chat() -> void:
 func _show_chat() -> void:
 	_chat_log.clear()
 	for line: Dictionary in OnlineSession.chat_log:
+		if bool(line.get("system", false)):
+			# 部屋のできごとの知らせは、色を変えて、人のひとことと見分けられるようにする。
+			_chat_log.push_color(MenuStyle.COLOR_FOCUS)
+			_chat_log.add_text("— %s\n" % str(line["text"]))
+			_chat_log.pop()
+			continue
 		_chat_log.push_color(PururinSlot.COLOR_USER if bool(line["mine"]) else COLOR_OTHER_PLAYER)
 		_chat_log.add_text(str(line["name"]))
 		_chat_log.pop()
@@ -1675,6 +1992,9 @@ func prepare_race(data: Dictionary) -> void:
 
 ## 窓が出ていれば、窓を閉じる。部屋の中では、部屋を出て、一覧へ戻る。それ以外では、つながりを切って、ゲーム選択へ戻る。
 func go_back() -> void:
+	if is_trainer_picker_open():
+		_trainer_picker.call("close")
+		return
 	if is_picker_open():
 		_picker.call("close")
 		return
@@ -1703,5 +2023,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_back()
+	elif RaceControllerInput.is_slot_force_pressed(event) and OnlineSession.in_room() and not is_dialog_open() and not is_picker_open() and not is_trainer_picker_open():
+		# Y：いま右に出している人（CPUはトレーナー）の紹介を開く。
+		viewport.set_input_as_handled()
+		open_profile_dialog()
+	elif RaceControllerInput.distance_step(event) != 0 and OnlineSession.in_room() and not is_dialog_open() and not is_picker_open():
+		# L1・R1：どこにカーソルがあっても、距離を1つ動かす（部屋の主だけ）。
+		viewport.set_input_as_handled()
+		step_distance(RaceControllerInput.distance_step(event), "gamepad")
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()

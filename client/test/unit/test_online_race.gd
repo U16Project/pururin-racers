@@ -233,11 +233,21 @@ func test_the_server_runs_the_race_and_remote_input_moves_the_runners() -> void:
 		if str(runner_state["id"]) == ids[0]:
 			dashing = float(runner_state["dash_ratio"]) > 0.0
 	assert_true(dashing)
-	# レースが終わると、着順が届き、サーバーはレースを片づけて、部屋に戻す。
+	# レースが終わると、着順が届く（1回だけ）。サーバーは、そのあとも、しばらくレースを走らせ続けて、位置を配る。
 	race.set("_race_over", true)
 	var result := await _wait_for("a", Protocol.RACE_RESULT)
 	assert_eq((result.get("rows", []) as Array).size(), (start["entries"] as Array).size())
-	await wait_seconds(0.2)
+	_inbox["a"].clear()
+	await wait_seconds(0.4)
+	assert_not_null(_server.room_race(_room_ids["部屋"]), "結果のあとも、レースは片づけない")
+	assert_false((await _wait_for("a", Protocol.RACE_STATE)).is_empty(), "結果のあとも、位置が届く")
+	assert_true(_inbox["a"].filter(func(data: Dictionary) -> bool: return str(data["t"]) == Protocol.RACE_RESULT).is_empty(), "結果は、1回だけ")
+	# 1人が見終わっただけでは、片づけない。全員が見終わると、片づけて、部屋に戻す。
+	_clients["a"].send(Protocol.RACE_DONE)
+	await wait_seconds(0.3)
+	assert_not_null(_server.room_race(_room_ids["部屋"]))
+	_clients["b"].send(Protocol.RACE_DONE)
+	assert_false((await _wait_for("a", Protocol.RACE_END)).is_empty())
 	assert_null(_server.room_race(_room_ids["部屋"]))
 	assert_false(bool((await _wait_for("a", Protocol.ROOM)).get("racing", true)))
 
@@ -480,3 +490,82 @@ func test_everyone_confirms_before_the_entry_list_and_again_before_the_start() -
 	assert_eq(str(back["phase"]), Protocol.PHASE_ROOM)
 	assert_eq((back["entries"] as Array).size(), 0)
 	assert_gt(a + b, 0)
+
+
+func test_the_host_decides_cpu_pururins_and_trainers_in_the_room_and_in_the_entry_list() -> void:
+	var ids := _roster_ids()
+	var trainers: Array = load("res://scripts/config/cpu_trainers_config.gd").values()
+	await _enter("a", "部屋")
+	await _enter("b", "部屋")
+	var room_id: int = _room_ids["部屋"]
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
+	_clients["a"].send(Protocol.SETTINGS, {"field_size": 4})
+	await wait_seconds(0.2)
+	assert_eq(_server.cpu_slot_count(room_id), 2)
+	# 主でない人は、決められない。人が選んでいる個体・ほかのCPUに決めた個体は、選べない。
+	_clients["b"].send(Protocol.CPU_PICK, {"index": 0, "pururin_id": ids[5]})
+	assert_eq(await _error_code("b"), Protocol.ERROR_NOT_HOST)
+	_clients["a"].send(Protocol.CPU_PICK, {"index": 0, "pururin_id": ids[1]})
+	assert_eq(await _error_code("a"), Protocol.ERROR_TAKEN)
+	_clients["a"].send(Protocol.CPU_PICK, {"index": 0, "pururin_id": ids[5]})
+	_clients["a"].send(Protocol.CPU_PICK, {"index": 0, "trainer_id": str(trainers[3]["id"])})
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.CPU_PICK, {"index": 1, "pururin_id": ids[5]})
+	assert_eq(await _error_code("a"), Protocol.ERROR_TAKEN)
+	var cpus: Array = _server.room_cpus(room_id)
+	assert_eq([str(cpus[0]["pururin_id"]), str(cpus[0]["trainer_id"]), str(cpus[1]["pururin_id"])], [ids[5], str(trainers[3]["id"]), ""])
+	# 出走：決めたCPUは、そのまま。「おまかせ」の所は、空いている個体が入る。
+	var entries: Array = _server.build_entries(room_id)
+	assert_eq(entries.size(), 4)
+	assert_eq([str(entries[2]["id"]), str(entries[2]["trainer_id"]), str(entries[2]["trainer_name"])], [ids[5], str(trainers[3]["id"]), str(trainers[3]["name"])])
+	assert_eq(str(entries[2]["trainer_profile_id"]), str(trainers[3]["profile_id"]))
+	assert_false(str(entries[3]["id"]) in [ids[0], ids[1], ids[5]])
+	# 人が、CPUに決めてあった個体を選ぶと、人が先。そのCPUは「おまかせ」に戻る。
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[5]})
+	await wait_seconds(0.2)
+	assert_eq(str(_server.room_cpus(room_id)[0]["pururin_id"]), "")
+	# 出走表でも、主は、CPUの枠のぷるりんとトレーナーを替えられる。替えると、全員の確定が外れる。
+	_clients["a"].send(Protocol.CONFIRM, {"on": true})
+	_clients["b"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.ENTRIES)
+	await wait_seconds(0.3)
+	var listed: Array = _server.get("_rooms")[room_id]["entries"]
+	var cpu_gate := -1
+	var human_gate := -1
+	for entry: Dictionary in listed:
+		if int(entry["peer_id"]) == 0 and cpu_gate < 0:
+			cpu_gate = int(entry["gate"])
+		if int(entry["peer_id"]) != 0:
+			human_gate = int(entry["gate"])
+	_clients["a"].send(Protocol.CPU_PICK, {"gate": human_gate, "pururin_id": ids[7]})
+	assert_eq(await _error_code("a"), Protocol.ERROR_BAD_MESSAGE)
+	_clients["b"].send(Protocol.CONFIRM, {"on": true})
+	await wait_seconds(0.2)
+	_clients["a"].send(Protocol.CPU_PICK, {"gate": cpu_gate, "pururin_id": ids[7]})
+	_clients["a"].send(Protocol.CPU_PICK, {"gate": cpu_gate, "trainer_id": str(trainers[1]["id"])})
+	await wait_seconds(0.3)
+	listed = _server.get("_rooms")[room_id]["entries"]
+	assert_eq([str(listed[cpu_gate]["id"]), str(listed[cpu_gate]["trainer_id"]), int(listed[cpu_gate]["gate"])], [ids[7], str(trainers[1]["id"]), cpu_gate])
+	assert_false(_server.everyone_confirmed(room_id))
+
+
+
+func test_the_race_is_cleared_a_set_time_after_the_result_even_if_people_stay() -> void:
+	var ids := _roster_ids()
+	await _enter("a", "部屋")
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	await _wait_for("a", Protocol.ROOM)
+	await _go("a", ["a"])
+	assert_false((await _wait_for("a", Protocol.RACE_START)).is_empty())
+	var room_id: int = _room_ids["部屋"]
+	var race: Node = _server.room_race(room_id)
+	race.set("_race_over", true)
+	assert_false((await _wait_for("a", Protocol.RACE_RESULT)).is_empty())
+	assert_not_null(_server.room_race(room_id))
+	# 決めた秒数（設定）がたつと、だれも画面を出ていなくても、片づけて、全員を部屋へ戻す。
+	_server.get("_rooms")[room_id]["linger_s"] = load("res://scripts/config/online_config.gd").result_linger_s()
+	assert_false((await _wait_for("a", Protocol.RACE_END)).is_empty())
+	assert_null(_server.room_race(room_id))
+	assert_eq(str(_server.call("_room_fields", room_id)["phase"]), Protocol.PHASE_ROOM)

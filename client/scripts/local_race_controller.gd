@@ -617,19 +617,22 @@ func _on_online_message(data: Dictionary) -> void:
 	match str(data["t"]):
 		OnlineProtocol.RACE_STATE: _apply_online_state(data)
 		OnlineProtocol.RACE_RESULT: _apply_online_result(data)
+		# サーバーがレースを片づけた（結果から決めた秒数がたった・全員が出た）：部屋へ戻る。
+		OnlineProtocol.RACE_END: _leave_online_race()
 
 
 ## 届いたレースの状態を、走者と表示に入れる。
 func _apply_online_state(data: Dictionary) -> void:
-	if _race_over:
-		return
 	for state: Dictionary in data["runners"]:
 		var runner: Node3D = _runners_by_id.get(str(state["id"]))
 		if runner == null:
 			continue
 		runner.call("apply_online_state", state)
-		if runner == _player:
+		if runner == _player and not _race_over:
 			_play_online_own_sounds(state)
+	# 結果の板を出したあとも、走者の位置は映し続ける（ゴール後に流して走るのが見える）。時計と表示は、止めたまま。
+	if _race_over:
+		return
 	_race_elapsed = float(data["elapsed"])
 	if _race_started:
 		return
@@ -691,6 +694,9 @@ func _apply_online_result(data: Dictionary) -> void:
 
 ## オンラインのレースの画面を出て、部屋の画面へ戻る（つながりは、そのまま）。
 func _leave_online_race() -> void:
+	# 結果を見終わったことを、サーバーに知らせる（全員ぶんそろうと、決めた秒数を待たずに、次の準備へ進める）。
+	if _online_client != null and is_instance_valid(_online_client):
+		_online_client.send(OnlineProtocol.RACE_DONE)
 	_celebration.stop()
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)

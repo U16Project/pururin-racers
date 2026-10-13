@@ -7,7 +7,7 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`（古い Python のサーバーは `18765`）。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `4`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `5`）と、種類 `t` が入る。版が違う文は、`version` で断る。
 - 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋の出走数は2〜8体で、部屋の主が決める。人は、出走数まで入れる。
 - 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 部屋（各自がぷるりんを選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレース開始（`start`）。
 
@@ -31,6 +31,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `settings` | `distance_m`・`field_size`（2〜8。今いる人数以上）・`cpu`（真偽）・`password` のうち、変えたいものだけ | 部屋の決めごとを変える。部屋の主だけ。1つでも受け付けられない値があれば、何も変えない |
 | `kick` | `peer_id` | 部屋の人を出す。部屋の主だけ |
 | `chat` | `text`（60字まで。`chat_max_length`） | 部屋の中で、ひとこと送る。レース中は送れない |
+| `cpu_pick` | 部屋では `index`（何番目のCPUか。0から）、出走表では `gate`（枠。0から）。`pururin_id`・`trainer_id` のうち、変えたいものだけ | CPUのぷるりん・トレーナーを決める。部屋の主だけ。ほかの人・ほかのCPUが使っている個体は、選べない（`taken`）。部屋では、空の文字で「おまかせ」に戻る。ぷるりんを替えると、トレーナーは、その個体のトレーナーに戻る。決めると、全員の確定が外れる |
 | `confirm` | `on`（真偽） | 「確定」を押す・外す。部屋では、ぷるりんを選んでから |
 | `entries` | — | 出走表へ進む。部屋の主だけ。全員が選び終わって、確定していて、出走が2体以上あること。CPUの個体と、枠順（くじ）が決まる |
 | `gates` | `action`（`shuffle`＝くじを引き直す、`swap`＝`a` と `b` の枠を入れ替える。0から） | 出走表の枠順を変える。部屋の主だけ。変えると、全員の確定が外れる |
@@ -39,6 +40,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `admin` | `token`、`command`（`list`・`kick`＋`peer_id`・`close`＋`room_id`） | 管理人の命令。合い札（サーバーの環境変数 `PURURIN_ADMIN_TOKEN`）が合うときだけ。合い札が空のサーバーでは、すべて断る |
 | `input` | `line`（-1〜1）、`notch`（-1〜1）、`brake`（真偽） | レース中の、今の操作。押しているあいだの値を、変わるたびに送る |
 | `action` | `kind`（`dash` か `boost`） | ダッシュ・ブーストを押した |
+| `race_done` | — | 結果を見終わって、レースの画面を出た。全員ぶんそろうと、サーバーは、決めた秒数を待たずに、レースを片づける |
 | `ready` | — | レースの画面ができた（スタート前の準備＝コースを一度描く・表情の部品を作る、が終わってから送る） |
 
 部屋の主は、その部屋を作った人。主が抜けたら、次に古い人が主になる。誰もいなくなった部屋は、消える。
@@ -59,10 +61,12 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `error` | `code` | 断った。つながりは切らない |
 | `race_start` | `distance_m`、`entries` | レースが始まる。`entries` は出走の一覧 |
 | `race_state` | レースの状態 | レース中、1秒に20回配る |
+| `notice` | `kind`（`joined`・`left`・`disconnected`・`kicked`・`host`）、`name`、`by`（`kicked` のとき `host` か `admin`） | 部屋のできごと（入った・出た・切れた・退出させられた・主になった）。部屋の全員に配る |
+| `race_end` | — | サーバーが、レースを片づけた。まだレースの画面にいる人は、部屋へ戻る |
 | `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒） |
 
 部屋のようす：`room_id`、`room`（部屋の名前）、`members`（入った順の `{peer_id, name, pururin_id, confirmed}`。まだ選んでいなければ `pururin_id` は空。`confirmed` は「確定」を押しているか）、
-`phase`（`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
+`phase`（`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`cpus`（CPUの数ぶんの `{pururin_id, trainer_id}`。主が決めていない所は、空の文字＝おまかせ）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
 `host`（部屋の主の番号）、`distance_m`、`field_size`（出走数）、`cpu`（空いた枠をCPUで埋めるか）、`locked`（パスワードがあるか）、`password`（パスワードそのもの。**部屋の主に送る `room` にだけ**入る。ほかの人には配らない）、`racing`（レース中か）。
 
 部屋の一覧（`rooms`）の1部屋ぶん：`room_id`、`name`、`host_name`、`count`（今いる人数）、`field_size`、`locked`、`racing`、`in_entries`（出走表を見ているか）。
@@ -70,8 +74,8 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 確定が外れるとき：自分がぷるりんを選び直すと、自分の確定が外れる。主が距離・出走数・CPUを変えると、全員の確定が外れる。出走表へ進んだとき・枠順が変わったときも、全員の確定が外れる。だれかが部屋を抜けると、出走表は取り消して、部屋の場面へ戻る。レースが終わると、部屋の場面へ戻る。出走表を見ている部屋には、あとから入れない。
 
 出走の一覧（`entries`）の1体ぶん：`gate`（枠。0から）、`id`（個体）、`player`（人が操作するか）、`peer_id`（その人の番号。CPUは0）、
-`trainer_id`、`trainer_profile_id`、`trainer_name`（人は、その人の名前）。CPUを入れる部屋では、人のほかに、出走数まで、
-選ばれていない個体を、一覧の順に足す。CPUを入れない部屋では、人だけ。枠順は、出走表へ進むときに、くじで決まる（主が、引き直しと入れ替えをできる）。
+`trainer_id`、`trainer_profile_id`、`trainer_name`（人は、その人の名前）。CPUを入れる部屋では、人のほかに、出走数まで、CPUを足す。主が決めたCPUは、そのまま。「おまかせ」の所には、
+選ばれていない個体を、一覧の順に入れる。人が、CPUに決めてあった個体を選んだら、人が先（そのCPUは「おまかせ」に戻る）。CPUを入れない部屋では、人だけ。枠順は、出走表へ進むときに、くじで決まる（主が、引き直しと入れ替えをできる）。
 
 レースの状態（`race_state`）：`elapsed`（レースの時計。秒）、`started`（スタートしたか）、`entry_wait`（入場の待ちの残り秒）、
 `countdown`（カウントダウンの残り秒）、`hold`（全員の画面ができるのを待っているか）、`over`（終わったか）、`runners`（全員ぶん）。
@@ -94,7 +98,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 - レース中に抜けた人の走者は、その個体のCPUトレーナーに任せる。レースは、残った人のために続く。
 - サーバーの端末には、走者ごとの診断の文を流さない。レースの記録ファイルも作らない。
 - サーバーには画面が無いので、見た目だけの処理は止める：走者の接触の光・表情・体の動き、体の部品の動き、カメラ、画面の部品（操作盤・仮想パッドなど）、音、ゴールの門の札。走りの計算は、止めない（止めても止めなくても、レースの結果が同じになることを確かめてある）。
-- サーバーの計算は、1秒30回まで（`client/data/config/online.json` の `server_max_fps`）。レースが終わったら、着順を配って、レースを片づけ、部屋に戻す。部屋に誰もいなくなったら、レースも部屋も消す。
+- サーバーの計算は、1秒30回まで（`client/data/config/online.json` の `server_max_fps`）。レースが終わったら、着順を1回だけ配る。そのあとも、レースを走らせ続けて、位置を配る（ゴール後に流して走るのを、全員が同じように見られるように）。結果から20秒（`online.json` の `result_linger_s`）たつか、全員から `race_done` が届いたら、`race_end` を配って、レースを片づけ、部屋に戻す。部屋に誰もいなくなったら、レースも部屋も消す。
 
 ## ゲーム側のレース
 

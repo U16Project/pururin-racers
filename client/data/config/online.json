@@ -4,5 +4,6 @@
   "connect_timeout_s": 8.0,
   "server_max_fps": 30,
   "max_rooms": 6,
-  "chat_max_length": 60
+  "chat_max_length": 60,
+  "result_linger_s": 20
 }

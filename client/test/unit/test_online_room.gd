@@ -283,3 +283,48 @@ func test_bad_or_oversized_icons_become_no_icon() -> void:
 	assert_eq(str(OnlineServer.clean_icon({"kind": "file", "image": "あ".repeat(Protocol.ICON_IMAGE_MAX_CHARS + 1)})["kind"]), "none")
 	var avatar := OnlineServer.clean_icon({"kind": "avatar", "id": "avatar-3", "image": "QUJD"})
 	assert_eq([str(avatar["kind"]), str(avatar["id"]), str(avatar["image"])], ["avatar", "avatar-3", ""], "用意された絵には、画像を付けない")
+
+
+func test_everyone_in_the_room_is_told_who_came_who_left_and_who_became_the_host() -> void:
+	await _enter_lobby("a")
+	var b_lobby := await _enter_lobby("b")
+	await _enter_lobby("c")
+	var welcome := await _create("a", "部屋")
+	var room_id := int(welcome["room_id"])
+	_clients["b"].join_room(room_id)
+	await _wait_for("b", Protocol.WELCOME)
+	# 入ったことは、先にいた人に届く。
+	var joined := await _wait_for("a", Protocol.NOTICE)
+	assert_eq([str(joined["kind"]), str(joined["name"])], [Protocol.NOTICE_JOINED, "b"])
+	_clients["c"].join_room(room_id)
+	await _wait_for("c", Protocol.WELCOME)
+	_inbox["a"].clear()
+	_inbox["b"].clear()
+	# 主が、c を退出させる：残った全員に、だれが・だれによって、が届く。
+	var c_id := 0
+	for member: Dictionary in _server.room_members(room_id):
+		if str(member["name"]) == "c":
+			c_id = int(member["peer_id"])
+	_clients["a"].send(Protocol.KICK, {"peer_id": c_id})
+	for label: String in ["a", "b"]:
+		var kicked := await _wait_for(label, Protocol.NOTICE)
+		assert_eq([str(kicked["kind"]), str(kicked["name"]), str(kicked["by"])], [Protocol.NOTICE_KICKED, "c", Protocol.KICKED_BY_HOST], label)
+	# 主が部屋を出る：残った人に、出たことと、新しい主が届く。
+	_clients["a"].send(Protocol.LEAVE)
+	var left := await _wait_for("b", Protocol.NOTICE)
+	assert_eq([str(left["kind"]), str(left["name"])], [Protocol.NOTICE_LEFT, "a"])
+	var host := await _wait_for("b", Protocol.NOTICE)
+	assert_eq([str(host["kind"]), str(host["name"])], [Protocol.NOTICE_HOST, "b"])
+	assert_eq(int(_server.call("_room_fields", room_id)["host"]), int(b_lobby["peer_id"]))
+
+
+func test_a_dropped_connection_is_told_apart_from_leaving() -> void:
+	await _enter_lobby("a")
+	await _enter_lobby("b")
+	var welcome := await _create("a", "部屋")
+	_clients["b"].join_room(int(welcome["room_id"]))
+	await _wait_for("b", Protocol.WELCOME)
+	_inbox["a"].clear()
+	_clients["b"].disconnect_from_server()
+	var notice := await _wait_for("a", Protocol.NOTICE)
+	assert_eq([str(notice["kind"]), str(notice["name"])], [Protocol.NOTICE_DISCONNECTED, "b"])

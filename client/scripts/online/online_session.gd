@@ -52,6 +52,29 @@ static func in_room() -> bool:
 	return in_lobby() and not room.is_empty()
 
 
+static func _add_chat_line(line: Dictionary) -> void:
+	chat_log.append(line)
+	if chat_log.size() > CHAT_LOG_LIMIT:
+		chat_log.pop_front()
+
+
+## 部屋のできごとの知らせを、画面に出す文にする。
+static func notice_text(data: Dictionary) -> String:
+	var player_name := str(data.get("name", ""))
+	match str(data.get("kind", "")):
+		Protocol.NOTICE_JOINED:
+			return "%s さんが、部屋に入りました。" % player_name
+		Protocol.NOTICE_LEFT:
+			return "%s さんが、部屋を出ました。" % player_name
+		Protocol.NOTICE_DISCONNECTED:
+			return "%s さんの、つながりが切れました。" % player_name
+		Protocol.NOTICE_KICKED:
+			return "%s さんが、%sによって退出しました。" % [player_name, "サーバーの管理人" if str(data.get("by", "")) == Protocol.KICKED_BY_ADMIN else "部屋の主"]
+		Protocol.NOTICE_HOST:
+			return "%s さんが、部屋の主になりました。" % player_name
+	return ""
+
+
 ## まだ紹介を持っていない人のぶんを、サーバーに聞く。
 static func _ask_profiles() -> void:
 	for member: Dictionary in members():
@@ -136,10 +159,11 @@ static func _remember(data: Dictionary) -> void:
 			_ask_profiles()
 		Protocol.PROFILE_INFO:
 			profiles[int(data["peer_id"])] = profile_from(data)
+		Protocol.NOTICE:
+			# 部屋のできごとは、ひとことの記録にも残す。
+			_add_chat_line({"system": true, "text": notice_text(data)})
 		Protocol.CHAT_MESSAGE:
-			chat_log.append({"name": str(data["name"]), "text": str(data["text"]), "mine": int(data["peer_id"]) == peer_id})
-			if chat_log.size() > CHAT_LOG_LIMIT:
-				chat_log.pop_front()
+			_add_chat_line({"name": str(data["name"]), "text": str(data["text"]), "mine": int(data["peer_id"]) == peer_id})
 
 
 static func _forget() -> void:

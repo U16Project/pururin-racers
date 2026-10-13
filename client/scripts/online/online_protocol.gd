@@ -2,7 +2,7 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 4
+const VERSION := 5
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
@@ -43,6 +43,9 @@ const CHAT := "chat"
 const ADMIN := "admin"
 ## 自分のぷるりんを選ぶ（pururin_id）。
 const PICK := "pick"
+## CPUのぷるりん・トレーナーを決める（部屋の主だけ）。部屋では index＝何番目のCPUか（0から）、出走表では gate＝枠（0から）。
+## pururin_id・trainer_id のうち、変えたいものだけ。部屋では、空の文字を送ると「おまかせ」に戻る。
+const CPU_PICK := "cpu_pick"
 ## 「確定」を押した・外した（on＝真偽）。部屋でも、出走表でも、全員の確定がそろうと、主が先へ進める。
 const CONFIRM := "confirm"
 ## 出走表へ進む（部屋の主だけ。全員が選び終わって、確定していること）。CPUの個体と、枠順（くじ）が決まる。
@@ -57,6 +60,8 @@ const START := "start"
 const INPUT := "input"
 ## ダッシュ・ブーストを押した（kind＝"dash" か "boost"）。
 const ACTION := "action"
+## 結果を見終わって、レースの画面を出た（全員ぶんそろうと、サーバーは、決めた秒数を待たずに、レースを片づける）。
+const RACE_DONE := "race_done"
 ## レースの画面ができた（全員ぶんそろうと、入場の待ちとカウントダウンが始まる）。
 const READY := "ready"
 ## サーバー → ゲーム。
@@ -71,6 +76,14 @@ const ROOM := "room"
 const PROFILE_INFO := "profile_info"
 ## 部屋の人のひとこと（peer_id、name、text）。
 const CHAT_MESSAGE := "chat_message"
+## 部屋のできごとの知らせ（kind と、その人の name）。部屋の全員に配る。
+## kind：joined＝入った、left＝出た、disconnected＝つながりが切れた、kicked＝退出させられた（by＝"host" か "admin"）、host＝部屋の主になった。
+const NOTICE := "notice"
+const NOTICE_JOINED := "joined"
+const NOTICE_LEFT := "left"
+const NOTICE_DISCONNECTED := "disconnected"
+const NOTICE_KICKED := "kicked"
+const NOTICE_HOST := "host"
 ## 部屋から出された（by＝"host" か "admin"）。このあと、lobby が届く。
 const KICKED := "kicked"
 ## 管理人の命令の返事（command と、その結果）。
@@ -83,6 +96,9 @@ const RACE_START := "race_start"
 const RACE_STATE := "race_state"
 ## レースが終わった（rows＝着順の一覧）。
 const RACE_RESULT := "race_result"
+
+## レースを片づけた（結果が出てから、決めた秒数がたった・全員が画面を出た）。まだレースの画面にいる人は、部屋へ戻る。
+const RACE_END := "race_end"
 
 ## 断るときの理由。
 const ERROR_BAD_MESSAGE := "bad_message"
