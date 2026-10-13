@@ -50,7 +50,7 @@ func _draw() -> void:
 
 
 ## マークを、指定の描画先に描く。center は、マークの中心。
-static func draw_mark(canvas: CanvasItem, font: Font, center: Vector2, mark_kind: String, mark_diameter: float) -> void:
+static func draw_mark(canvas: Object, font: Font, center: Vector2, mark_kind: String, mark_diameter: float) -> void:
 	var color: Color = COLORS[mark_kind]
 	var radius := mark_diameter * 0.5
 	var is_pill := PILL_WIDTH_RATIOS.has(mark_kind)

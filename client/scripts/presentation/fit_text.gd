@@ -35,7 +35,7 @@ static func fit(font: Font, text: String, max_width: float, font_size: int) -> D
 ## align_ratio は、欄の中での寄せ方（0＝左寄せ、0.5＝中央、1＝右寄せ）。outline_size が0より大きければ、縁取りを付ける。
 ## 収めた結果（fit と同じ）を返す。
 static func draw(
-	canvas: CanvasItem,
+	canvas: Object,
 	font: Font,
 	position: Vector2,
 	text: String,

@@ -265,7 +265,7 @@ func _draw_attribute_mark() -> void:
 
 
 ## 属性の印（地＝岩、水＝しずく、火＝炎、風＝流れる線）を、指定の描画先に描く。色は、設定の属性の色。
-static func draw_attribute_mark(canvas: CanvasItem, c: Vector2, mark_size: float, attribute_id: String, color: Color) -> void:
+static func draw_attribute_mark(canvas: Object, c: Vector2, mark_size: float, attribute_id: String, color: Color) -> void:
 	var r := mark_size * 0.44
 	match attribute_id:
 		"earth":
@@ -302,7 +302,7 @@ static func draw_attribute_mark(canvas: CanvasItem, c: Vector2, mark_size: float
 			push_error("属性の印がありません: %s" % attribute_id)
 
 
-static func _fill_with_outline(canvas: CanvasItem, points: PackedVector2Array, color: Color) -> void:
+static func _fill_with_outline(canvas: Object, points: PackedVector2Array, color: Color) -> void:
 	var closed := points.duplicate()
 	closed.append(points[0])
 	canvas.draw_polyline(closed, MenuStyle.COLOR_OUTLINE, 4.0, true)

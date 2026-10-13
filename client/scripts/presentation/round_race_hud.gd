@@ -13,7 +13,7 @@ extends Control
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
-const GlyphBatch := preload("res://scripts/presentation/glyph_batch.gd")
+const HudPainter := preload("res://scripts/presentation/hud_painter.gd")
 ## 大きさは、この半径（外の輪の外側）を基準にした寸法。set_radius で、全体を同じ比で変えられる。
 const BASE_RADIUS := 175.0
 const COURSE_RADIUS := 166.0
@@ -104,6 +104,8 @@ const STYLE_DEG := 230.0
 const COLOR_FACE := Color(0.02, 0.05, 0.11, 0.82)
 const COLOR_RIM_LINE := Color(1.0, 1.0, 1.0, 0.22)
 ## 段の境目の線の太さ（ふつうの境目と、ノッチ・ブースト1回ごとの広い境目）。
+## 鼓動の光を、何段階で描くか。
+const HEART_BEAT_LEVELS := 8
 const GAP_LINE_WIDTH := 1.4
 const WIDE_GAP_LINE_WIDTH := 4.5
 ## 段の境目の線の色（盤の地と同じ色。細い線でも段が暗くなりすぎないよう、少し透かす）。
@@ -143,7 +145,10 @@ var _radius := BASE_RADIUS
 var _thin_gaps := PackedVector2Array()
 ## ためておいた文字（[置く場所, 回す角度, 書き出しの位置, 文字, 大きさ, 色] の並び）。
 var _glyphs: Array = []
-var _glyph_batch := GlyphBatch.new()
+## 段の境目の線だけを集めている最中か（_build_gap_lines の中だけ true）。
+var _gaps_only := false
+## 丸・線・面・文字は、ここにためて、最後にまとめて描く（1つずつ描くと、描く命令が多くて重いため）。
+var _painter := HudPainter.new()
 var _wide_gaps := PackedVector2Array()
 var _center := Vector2.ZERO
 
@@ -196,57 +201,74 @@ func _s(value: float) -> float:
 
 func _draw() -> void:
 	_center = size * 0.5
-	_thin_gaps.clear()
-	_wide_gaps.clear()
 	_glyphs.clear()
+	_painter.begin(self)
 	var font := get_theme_default_font()
-	draw_circle(_center, _radius, COLOR_FACE)
-	draw_arc(_center, _radius + _s(1.5), 0.0, TAU, 96, COLOR_RIM_LINE, _s(1.2), true)
+	# 変わらない絵・たまにしか変わらない絵は、かたまりごとに覚えておいて、作り直さない（draw_block）。
+	_painter.draw_block(["face", _radius], func() -> void:
+		_painter.draw_circle(_center, _radius, COLOR_FACE)
+		_painter.draw_arc(_center, _radius + _s(1.5), 0.0, TAU, 96, COLOR_RIM_LINE, _s(1.2), true))
 	_draw_course_ring()
 	_draw_heart(font)
 	_draw_left_gauges()
 	_draw_right_gauges()
-	_draw_gap_lines()
+	_painter.draw_block(["gaps", _radius, float(_state["race_distance_m"]), int(_state["boost_max_uses"])], _build_gap_lines)
 	_draw_heart_value(font)
 	_draw_texts(font)
 	_draw_glyphs(font)
+
+
+## 段の境目の線（全部のゲージと、道のりの使わない部分の刻み）を作る。値では変わらないので、1回作れば使い回せる。
+func _build_gap_lines() -> void:
+	_thin_gaps.clear()
+	_wide_gaps.clear()
+	_gaps_only = true
+	_add_course_ticks()
+	_draw_left_gauges()
+	_draw_right_gauges()
+	_gaps_only = false
+	_draw_gap_lines()
 
 
 func _arc(radius: float, width: float, from_deg: float, to_deg: float, color: Color) -> void:
 	if is_equal_approx(from_deg, to_deg):
 		return
 	var points := maxi(int(absf(to_deg - from_deg)) + 2, 3)
-	draw_arc(_center, _s(radius), angle_of(from_deg), angle_of(to_deg), points, color, _s(width), true)
+	_painter.draw_arc(_center, _s(radius), angle_of(from_deg), angle_of(to_deg), points, color, _s(width), true)
 
 
 ## 段々のゲージを1本描く。count 段のうち、lit_from 〜 lit_to の段に色を付ける。
 ## color_at は、ゲージの中の位置（0＝始まり、1＝終わり）から色を決める。wide_gaps は、すき間を広くする境目の番号。
 ## 軽く描くために、色の付いた部分は1本の帯で描き、その上に、段の境目の線を引く。
-func _gauge(radius: float, from_deg: float, to_deg: float, count: int, lit_from: int, lit_to: int, color_at: Callable, wide_gaps: Array = []) -> void:
+func _gauge(radius: float, from_deg: float, to_deg: float, count: int, lit_from: int, lit_to: int, color_at: Callable, wide_gaps: Array = [], color_key: Variant = 0) -> void:
 	if count <= 0:
 		return
-	_arc(radius, BAND_WIDTH, from_deg, to_deg, COLOR_SLOT)
 	var cell := (to_deg - from_deg) / float(count)
+	if _gaps_only:
+		var half := (BAND_WIDTH + GLOW_EXTRA) * 0.5 + 1.0
+		for index in range(1, count):
+			_add_gap_line(radius, half, from_deg + cell * float(index), index in wide_gaps)
+		return
 	lit_from = clampi(lit_from, 0, count)
 	lit_to = clampi(lit_to, 0, count)
-	if lit_to > lit_from:
-		var a0 := from_deg + cell * float(lit_from)
-		var a1 := from_deg + cell * float(lit_to)
-		var steps := maxi(int(absf(a1 - a0) / 1.5) + 1, 2)
-		var points := PackedVector2Array()
-		var colors := PackedColorArray()
-		var glow := PackedColorArray()
-		for step in steps + 1:
-			var deg := lerpf(a0, a1, float(step) / float(steps))
-			var color: Color = color_at.call((deg - from_deg) / (to_deg - from_deg))
-			points.append(_center + Vector2.RIGHT.rotated(angle_of(deg)) * _s(radius))
-			colors.append(color)
-			glow.append(Color(color, GLOW_ALPHA))
-		draw_polyline_colors(points, glow, _s(BAND_WIDTH + GLOW_EXTRA), true)
-		draw_polyline_colors(points, colors, _s(BAND_WIDTH), true)
-	var half := (BAND_WIDTH + GLOW_EXTRA) * 0.5 + 1.0
-	for index in range(1, count):
-		_add_gap_line(radius, half, from_deg + cell * float(index), index in wide_gaps)
+	# 色の付いた段の数が同じあいだは、同じ絵。color_key は、色の決まり方が変わるときに変える値。
+	_painter.draw_block(["gauge", _radius, radius, from_deg, to_deg, count, lit_from, lit_to, color_key], func() -> void:
+		_arc(radius, BAND_WIDTH, from_deg, to_deg, COLOR_SLOT)
+		if lit_to > lit_from:
+			var a0 := from_deg + cell * float(lit_from)
+			var a1 := from_deg + cell * float(lit_to)
+			var steps := maxi(int(absf(a1 - a0) / 1.5) + 1, 2)
+			var points := PackedVector2Array()
+			var colors := PackedColorArray()
+			var glow := PackedColorArray()
+			for step in steps + 1:
+				var deg := lerpf(a0, a1, float(step) / float(steps))
+				var color: Color = color_at.call((deg - from_deg) / (to_deg - from_deg))
+				points.append(_center + Vector2.RIGHT.rotated(angle_of(deg)) * _s(radius))
+				colors.append(color)
+				glow.append(Color(color, GLOW_ALPHA))
+			_painter.draw_polyline_colors(points, glow, _s(BAND_WIDTH + GLOW_EXTRA), true)
+			_painter.draw_polyline_colors(points, colors, _s(BAND_WIDTH), true))
 
 
 ## 段の境目の線を、1本ためる。線は、あとでまとめて描く（1本ずつ描くと、数が多くて重いため）。
@@ -264,14 +286,24 @@ func _add_gap_line(radius: float, half: float, deg: float, wide: bool) -> void:
 ## ためておいた段の境目の線を、太さごとに、まとめて描く。
 func _draw_gap_lines() -> void:
 	if not _thin_gaps.is_empty():
-		draw_multiline(_thin_gaps, COLOR_GAP, maxf(_s(GAP_LINE_WIDTH), 1.0))
+		_painter.draw_multiline(_thin_gaps, COLOR_GAP, maxf(_s(GAP_LINE_WIDTH), 1.0))
 	if not _wide_gaps.is_empty():
-		draw_multiline(_wide_gaps, COLOR_GAP, maxf(_s(WIDE_GAP_LINE_WIDTH), 1.0))
+		_painter.draw_multiline(_wide_gaps, COLOR_GAP, maxf(_s(WIDE_GAP_LINE_WIDTH), 1.0))
 
 
 func _lit_course(from_deg: float, to_deg: float) -> void:
 	_arc(COURSE_RADIUS, COURSE_WIDTH + GLOW_EXTRA, from_deg, to_deg, Color(COLOR_DISTANCE_DONE, GLOW_ALPHA))
 	_arc(COURSE_RADIUS, COURSE_WIDTH, from_deg, to_deg, COLOR_DISTANCE_DONE)
+
+
+## 道のりの、使わない部分（Sから時計まわりに、Gまで）の刻みの線を、ためる。
+func _add_course_ticks() -> void:
+	var unused_from := distance_start_deg(float(_state["race_distance_m"]))
+	var unused_to := DISTANCE_GOAL_DEG + 360.0
+	var ticks := maxi(int((unused_to - unused_from) / UNUSED_TICK_DEG), 1)
+	var step := (unused_to - unused_from) / float(ticks)
+	for index in range(1, ticks):
+		_add_gap_line(COURSE_RADIUS, COURSE_WIDTH * 0.5, unused_from + step * float(index), false)
 
 
 ## 一番外：レースの道のり。走り終えたぶん（水色）、残り（うすい黄色）、使わない部分（黒い刻み）、自分の印と、ほかのプルの点。
@@ -281,32 +313,29 @@ func _draw_course_ring() -> void:
 	var done := clampf(distance - float(_state["remaining_m"]), 0.0, distance)
 	var start_deg := distance_start_deg(distance)
 	var own_deg := distance_deg(distance, done)
-	_arc(COURSE_RADIUS, COURSE_WIDTH, DISTANCE_GOAL_DEG, own_deg, COLOR_COURSE)
-	_lit_course(own_deg, start_deg)
-	# 使わない部分（Sから時計まわりに、Gまで）は、黒い刻み。
-	var unused_from := start_deg
-	var unused_to := DISTANCE_GOAL_DEG + 360.0
-	var ticks := maxi(int((unused_to - unused_from) / UNUSED_TICK_DEG), 1)
-	var step := (unused_to - unused_from) / float(ticks)
-	_arc(COURSE_RADIUS, COURSE_WIDTH, unused_from, unused_to, COLOR_SLOT)
-	for index in range(1, ticks):
-		_add_gap_line(COURSE_RADIUS, COURSE_WIDTH * 0.5, unused_from + step * float(index), false)
+	# 輪の帯は、自分の位置が 0.25度 動くごとに作り直す（それより細かい動きは、見えない）。
+	var drawn_own_deg := snappedf(own_deg, 0.25)
+	_painter.draw_block(["course", _radius, distance, drawn_own_deg], func() -> void:
+		_arc(COURSE_RADIUS, COURSE_WIDTH, DISTANCE_GOAL_DEG, drawn_own_deg, COLOR_COURSE)
+		_lit_course(drawn_own_deg, start_deg)
+		# 使わない部分（Sから時計まわりに、Gまで）は、黒い刻み（刻みの線は、_build_gap_lines で描く）。
+		_arc(COURSE_RADIUS, COURSE_WIDTH, start_deg, DISTANCE_GOAL_DEG + 360.0, COLOR_SLOT))
 	for runner: Dictionary in _state["runners"]:
 		if bool(runner.get("player", false)):
 			continue
 		var at := _center + Vector2.RIGHT.rotated(angle_of(distance_deg(distance, float(runner.get("ratio", 0.0)) * distance))) * _s(COURSE_RADIUS)
-		draw_circle(at, _s(4.2), COLOR_OUTLINE)
-		draw_circle(at, _s(3.2), runner.get("color", Color.WHITE))
+		_painter.draw_circle(at, _s(4.2), COLOR_OUTLINE)
+		_painter.draw_circle(at, _s(3.2), runner.get("color", Color.WHITE))
 	var own := _center + Vector2.RIGHT.rotated(angle_of(own_deg)) * _s(COURSE_RADIUS)
-	draw_circle(own, _s(11.0), Color(COLOR_SELF, 0.3))
-	draw_circle(own, _s(7.5), Color.WHITE)
-	draw_circle(own, _s(5.5), COLOR_SELF)
+	_painter.draw_circle(own, _s(11.0), Color(COLOR_SELF, 0.3))
+	_painter.draw_circle(own, _s(7.5), Color.WHITE)
+	_painter.draw_circle(own, _s(5.5), COLOR_SELF)
 	# S・G と、進んだ距離は、輪の上に、輪に沿わせて書く。
 	# S と G の位置には、輪を横切る茶色のバー。
 	for bar_deg: float in [start_deg, DISTANCE_GOAL_DEG]:
 		var direction := Vector2.RIGHT.rotated(angle_of(bar_deg))
-		draw_line(_center + direction * _s(COURSE_RADIUS - COURSE_WIDTH * 0.5 - GATE_BAR_OVER), _center + direction * _s(COURSE_RADIUS + COURSE_WIDTH * 0.5 + GATE_BAR_OVER), COLOR_OUTLINE, _s(GATE_BAR_WIDTH + 2.0), true)
-		draw_line(_center + direction * _s(COURSE_RADIUS - COURSE_WIDTH * 0.5 - GATE_BAR_OVER), _center + direction * _s(COURSE_RADIUS + COURSE_WIDTH * 0.5 + GATE_BAR_OVER), COLOR_GATE_BAR, _s(GATE_BAR_WIDTH), true)
+		_painter.draw_line(_center + direction * _s(COURSE_RADIUS - COURSE_WIDTH * 0.5 - GATE_BAR_OVER), _center + direction * _s(COURSE_RADIUS + COURSE_WIDTH * 0.5 + GATE_BAR_OVER), COLOR_OUTLINE, _s(GATE_BAR_WIDTH + 2.0), true)
+		_painter.draw_line(_center + direction * _s(COURSE_RADIUS - COURSE_WIDTH * 0.5 - GATE_BAR_OVER), _center + direction * _s(COURSE_RADIUS + COURSE_WIDTH * 0.5 + GATE_BAR_OVER), COLOR_GATE_BAR, _s(GATE_BAR_WIDTH), true)
 	_arc_text(font, COURSE_RADIUS, start_deg + GATE_LETTER_DEG, "S", 20, COLOR_TEXT)
 	_arc_text(font, COURSE_RADIUS, DISTANCE_GOAL_DEG + 360.0 - GATE_LETTER_DEG, "G", 20, RaceHud.COLOR_GOLD)
 	var distance_text := "%dm / %dm" % [int(round(done)), int(round(distance))]
@@ -319,7 +348,7 @@ func _draw_left_gauges() -> void:
 	var aero := float(_state["air_green"]) / AERO_FULL
 	var total := aero + float(_state["air_blue"]) / AERO_FULL
 	_gauge(INNER_RADIUS, LEFT_FROM_DEG, AERO_TO_DEG, AERO_SEGMENTS, 0, roundi(total * float(AERO_SEGMENTS)), func(ratio: float) -> Color:
-		return COLOR_AERO if ratio < aero else COLOR_DRAFT)
+		return COLOR_AERO if ratio < aero else COLOR_DRAFT, [], roundi(aero * float(AERO_SEGMENTS) * 4.0))
 	_gauge(MIDDLE_RADIUS, LEFT_FROM_DEG, SPEED_TO_DEG, SPEED_SEGMENTS, 0, roundi(float(_state["speed_kmh"]) / SPEED_FULL_KMH * float(SPEED_SEGMENTS)), func(ratio: float) -> Color:
 		return COLOR_SPEED_LOW.lerp(COLOR_SPEED_HIGH, ratio))
 	# ノッチは、上のノッチほど段の数が多い（＝長い）。ノッチの境目は、すき間を広くする。色は、位置で少しずつ変わる。
@@ -340,7 +369,8 @@ func _draw_right_gauges() -> void:
 	_gauge(OUTER_RADIUS, STAMINA_FULL_DEG, STAMINA_DEBT_DEG, STAMINA_SEGMENTS, mini(level_cell, zero_cell), maxi(level_cell, zero_cell), func(ratio: float) -> Color:
 		var deg := lerpf(STAMINA_FULL_DEG, STAMINA_DEBT_DEG, ratio)
 		return RaceHud.fuel_color(inverse_lerp(STAMINA_ZERO_DEG, STAMINA_FULL_DEG, deg) if deg <= STAMINA_ZERO_DEG else -inverse_lerp(STAMINA_ZERO_DEG, STAMINA_DEBT_DEG, deg)))
-	_arc(OUTER_RADIUS, BAND_WIDTH + 4.0, STAMINA_ZERO_DEG - 0.9, STAMINA_ZERO_DEG + 0.9, Color.WHITE)
+	if not _gaps_only:
+		_arc(OUTER_RADIUS, BAND_WIDTH + 4.0, STAMINA_ZERO_DEG - 0.9, STAMINA_ZERO_DEG + 0.9, Color.WHITE)
 	# ブーストは、1回ぶんを BOOST_CELLS 段で描く。回の境目は、すき間を広くする。
 	# 残っている回数ぶんに色を付ける。使っている最中の1回は、残り時間ぶんだけ、明るい色を付ける。
 	var uses := int(_state["boost_max_uses"])
@@ -351,7 +381,7 @@ func _draw_right_gauges() -> void:
 	var boost_lit := left * BOOST_CELLS + (roundi(float(_state["boost_ratio"]) * float(BOOST_CELLS)) if left < uses else 0)
 	var left_ratio := float(left) / float(maxi(uses, 1))
 	_gauge(INNER_RADIUS, BOOST_FROM_DEG, BOOST_TO_DEG, uses * BOOST_CELLS, 0, boost_lit, func(ratio: float) -> Color:
-		return COLOR_BOOST if ratio <= left_ratio else COLOR_BOOST.lerp(Color.WHITE, 0.35), boost_borders)
+		return COLOR_BOOST if ratio <= left_ratio else COLOR_BOOST.lerp(Color.WHITE, 0.35), boost_borders, left)
 	_gauge(MIDDLE_RADIUS, DASH_FROM_DEG, DASH_TO_DEG, GAUGE_SEGMENTS, 0, roundi(float(_state["dash_ratio"]) * float(GAUGE_SEGMENTS)), func(_ratio: float) -> Color: return COLOR_DASH)
 
 
@@ -394,27 +424,33 @@ static func place_color(place: int) -> Color:
 func _draw_heart(font: Font) -> void:
 	var heart_state := {"heart_bpm": _state["heart_bpm"], "heart_min_bpm": _state["heart_min_bpm"], "heart_normal_max_bpm": _state["heart_normal_max_bpm"], "heart_max_bpm": _state["heart_max_bpm"]}
 	var fill := clampf(inverse_lerp(float(_state["heart_min_bpm"]), float(_state["heart_max_bpm"]), float(_state["heart_bpm"])), 0.0, 1.0)
-	var shape := _heart_points(HEART_SIZE)
 	# 鼓動の強さ（音が鳴った瞬間が1、そこからすっと消える）。空の段と、外のピンクのふちを、これで光らせる。
-	var beat := beat_glow(float(_state["heart_beat_phase"]))
-	draw_colored_polygon(_heart_points(HEART_SIZE + 9.0 + 5.0 * beat), Color(COLOR_HEART_EDGE, 0.22 + 0.5 * beat))
-	draw_colored_polygon(_heart_points(HEART_SIZE + 2.5 + 1.5 * beat), COLOR_HEART_EDGE.lerp(Color.WHITE, HEART_BEAT_EDGE_GLOW * beat))
-	draw_colored_polygon(shape, COLOR_HEART_BACK)
-	# 下から段々に、心拍の高さまで色を付ける（形を、段ごとに切る）。
-	var top := INF
-	var bottom := -INF
-	for point in shape:
-		top = minf(top, point.y)
-		bottom = maxf(bottom, point.y)
-	var step := (bottom - top) / float(HEART_STEPS)
+	# 8段階に丸める（同じ段階のあいだは、同じ絵を使い回す）。
+	var beat := snappedf(beat_glow(float(_state["heart_beat_phase"])), 1.0 / float(HEART_BEAT_LEVELS))
+	var lit_color := RaceHud.heart_color(heart_state)
+	var lit_steps := 0
 	for index in HEART_STEPS:
-		var y1 := bottom - step * float(index)
-		var y0 := y1 - step + _s(HEART_STEP_GAP)
-		var lit := (float(index) + 0.5) / float(HEART_STEPS) < fill
-		for part: PackedVector2Array in Geometry2D.intersect_polygons(shape, PackedVector2Array([Vector2(-1e4, y0), Vector2(1e4, y0), Vector2(1e4, y1), Vector2(-1e4, y1)])):
-			# 細すぎて面にできない切れはしは、描かない。
-			if part.size() >= 3 and not Geometry2D.triangulate_polygon(part).is_empty():
-				draw_colored_polygon(part, RaceHud.heart_color(heart_state) if lit else COLOR_HEART_EMPTY.lerp(COLOR_HEART_BEAT, HEART_BEAT_EMPTY_GLOW * beat))
+		if (float(index) + 0.5) / float(HEART_STEPS) < fill:
+			lit_steps += 1
+	_painter.draw_block(["heart", _radius, lit_steps, beat, lit_color], func() -> void:
+		var shape := _heart_points(HEART_SIZE)
+		_painter.draw_colored_polygon(_heart_points(HEART_SIZE + 9.0 + 5.0 * beat), Color(COLOR_HEART_EDGE, 0.22 + 0.5 * beat))
+		_painter.draw_colored_polygon(_heart_points(HEART_SIZE + 2.5 + 1.5 * beat), COLOR_HEART_EDGE.lerp(Color.WHITE, HEART_BEAT_EDGE_GLOW * beat))
+		_painter.draw_colored_polygon(shape, COLOR_HEART_BACK)
+		# 下から段々に、心拍の高さまで色を付ける（形を、段ごとに切る）。
+		var top := INF
+		var bottom := -INF
+		for point in shape:
+			top = minf(top, point.y)
+			bottom = maxf(bottom, point.y)
+		var step := (bottom - top) / float(HEART_STEPS)
+		for index in HEART_STEPS:
+			var y1 := bottom - step * float(index)
+			var y0 := y1 - step + _s(HEART_STEP_GAP)
+			for part: PackedVector2Array in Geometry2D.intersect_polygons(shape, PackedVector2Array([Vector2(-1e4, y0), Vector2(1e4, y0), Vector2(1e4, y1), Vector2(-1e4, y1)])):
+				# 細すぎて面にできない切れはしは、描かない。
+				if part.size() >= 3 and not Geometry2D.triangulate_polygon(part).is_empty():
+					_painter.draw_colored_polygon(part, lit_color if index < lit_steps else COLOR_HEART_EMPTY.lerp(COLOR_HEART_BEAT, HEART_BEAT_EMPTY_GLOW * beat)))
 
 
 ## 鼓動の光の強さ。phase は、鼓動の進み具合（0＝音が鳴った瞬間、1＝次の音の直前）。
@@ -458,9 +494,9 @@ func _draw_texts(font: Font) -> void:
 	_arc_label(font, OUTER_RADIUS, NOTCH_LABEL_DEG, "Notch ", "%d" % clampi(int(_state["notch"]), 1, NOTCH_MAX), "")
 	# 右の3本：それぞれの弧の、下の延長に、（ボタンの印と）名前と値を書く。
 	_arc_label(font, OUTER_RADIUS, STAMINA_LABEL_DEG, "Stam. ", "%d" % int(round(float(_state["fuel_ratio"]) * 100.0)), "%")
-	ButtonMark.draw_mark(self, font, _center + Vector2.RIGHT.rotated(angle_of(BOOST_MARK_DEG)) * _s(INNER_RADIUS), "X", _s(18.0))
+	ButtonMark.draw_mark(_painter, font, _center + Vector2.RIGHT.rotated(angle_of(BOOST_MARK_DEG)) * _s(INNER_RADIUS), "X", _s(18.0))
 	_arc_label(font, INNER_RADIUS, BOOST_LABEL_DEG, "Boost(", "%d" % int(_state["boost_uses_left"]), ")")
-	ButtonMark.draw_mark(self, font, _center + Vector2.RIGHT.rotated(angle_of(DASH_MARK_DEG)) * _s(MIDDLE_RADIUS), "B", _s(18.0))
+	ButtonMark.draw_mark(_painter, font, _center + Vector2.RIGHT.rotated(angle_of(DASH_MARK_DEG)) * _s(MIDDLE_RADIUS), "B", _s(18.0))
 	_arc_label(font, MIDDLE_RADIUS, DASH_LABEL_DEG, "Dash(", "∞", ")")
 	# 下のすき間：順位とタイム。
 	# 順位は大きく（1〜3位は、金・銀・銅）。「/8」は小さく、右下に添える。
@@ -479,19 +515,19 @@ func _draw_texts(font: Font) -> void:
 	# 属性の印と、脚質の印は、輪の外の左下に、輪に沿わせて並べる。
 	if not str(_state["attribute_id"]).is_empty():
 		var mark_at := _center + Vector2.RIGHT.rotated(angle_of(ATTRIBUTE_DEG)) * _s(BASE_RADIUS + NAME_OUTSIDE)
-		draw_circle(mark_at, _s(ATTRIBUTE_SIZE * 0.5 + 3.0), COLOR_OUTLINE)
-		PururinDetail.draw_attribute_mark(self, mark_at, _s(ATTRIBUTE_SIZE), str(_state["attribute_id"]), _state["attribute_color"])
+		_painter.draw_circle(mark_at, _s(ATTRIBUTE_SIZE * 0.5 + 3.0), COLOR_OUTLINE)
+		PururinDetail.draw_attribute_mark(_painter, mark_at, _s(ATTRIBUTE_SIZE), str(_state["attribute_id"]), _state["attribute_color"])
 	if int(_state["style_group_count"]) > 0:
 		var style_angle := angle_of(STYLE_DEG)
-		draw_set_transform(_center + Vector2.RIGHT.rotated(style_angle) * _s(BASE_RADIUS + NAME_OUTSIDE), style_angle - PI * 0.5, Vector2.ONE)
+		_painter.draw_set_transform(_center + Vector2.RIGHT.rotated(style_angle) * _s(BASE_RADIUS + NAME_OUTSIDE), style_angle - PI * 0.5, Vector2.ONE)
 		# 名前の文字と同じように、暗いふちを先に描く（輪の外でも読めるように）。
 		var chevron_scale := _s(STYLE_SCALE)
 		for index in int(_state["style_group_count"]):
 			var tip := Vector2(index * RaceHud.STYLE_CHEVRON_STEP * chevron_scale, 0.0)
 			var own := index == int(_state["style_group_index"])
-			draw_polyline(PackedVector2Array([tip + Vector2(5.0, -6.5) * chevron_scale, tip, tip + Vector2(5.0, 6.5) * chevron_scale]), COLOR_OUTLINE, (5.6 if own else 3.6) * chevron_scale, true)
-		RaceHud.draw_style_chevrons(self, Vector2.ZERO, RaceHud.style_state_color(int(_state["style_rank_bonus"])), int(_state["style_group_count"]), int(_state["style_group_index"]), chevron_scale)
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_painter.draw_polyline(PackedVector2Array([tip + Vector2(5.0, -6.5) * chevron_scale, tip, tip + Vector2(5.0, 6.5) * chevron_scale]), COLOR_OUTLINE, (5.6 if own else 3.6) * chevron_scale, true)
+		RaceHud.draw_style_chevrons(_painter, Vector2.ZERO, RaceHud.style_state_color(int(_state["style_rank_bonus"])), int(_state["style_group_count"]), int(_state["style_group_index"]), chevron_scale)
+		_painter.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## ゲージの文字（名前・数値・単位）を、輪に沿わせて書く。数値だけ、大きく黄色。
@@ -546,5 +582,5 @@ func _text(font: Font, at: Vector2, text: String, font_size: int, color: Color) 
 func _draw_glyphs(font: Font) -> void:
 	var outline := maxi(int(_s(4.0)), 2)
 	for glyph: Array in _glyphs:
-		_glyph_batch.add(font, glyph[3], glyph[4], glyph[2], glyph[5], outline, COLOR_OUTLINE, Transform2D(float(glyph[1]), glyph[0]))
-	_glyph_batch.flush(self)
+		_painter.glyphs.add(font, glyph[3], glyph[4], glyph[2], glyph[5], outline, COLOR_OUTLINE, Transform2D(float(glyph[1]), glyph[0]))
+	_painter.flush()

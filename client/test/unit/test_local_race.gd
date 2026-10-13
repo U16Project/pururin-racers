@@ -152,6 +152,17 @@ func test_race_entry_waits_five_seconds_before_the_countdown() -> void:
 	assert_false(race.get("_race_started"))
 	assert_almost_eq(float(race.get("_entry_wait_remaining")), wait, 0.001)
 	assert_false(label.visible)
+	# スタート前の準備（表情の部品を作る・コースを一度描く）が終わるまでは、待ち時間が過ぎても、カウントダウンへ進まない。
+	assert_true(race.call("_is_preparing"))
+	race.call("_update_before_start", wait + 1.0)
+	assert_false(label.visible, "準備中は、カウントダウンを始めない")
+	# 準備を、ここで終わらせる（時計は自分で進めるので、毎コマの処理は止めておく）。
+	race.set_process(false)
+	while not (race.get("_faces_to_prepare") as Array).is_empty():
+		race.call("_prepare_next_face")
+	race.get_node("FirstDrawWarmup").free()
+	assert_false(race.call("_is_preparing"))
+	race.set("_entry_wait_remaining", wait)
 	race.call("_update_before_start", wait - 0.1)
 	assert_false(race.get("_race_started"))
 	assert_false(label.visible)

@@ -5,7 +5,7 @@ extends Control
 
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const FitText := preload("res://scripts/presentation/fit_text.gd")
-const GlyphBatch := preload("res://scripts/presentation/glyph_batch.gd")
+const HudPainter := preload("res://scripts/presentation/hud_painter.gd")
 const PANEL_WIDTH := 440.0
 ## BOOST・DASH の文字の左に付ける、ボタンのマークの大きさ。
 const DRIVE_ACTION_MARK_SIZE := 13.0
@@ -117,8 +117,8 @@ var main_panel_visible := true
 var _blink := 0.0
 ## 確定した行に使う太字。
 var _bold_font: FontVariation
-## 文字は、ためておいて、最後にまとめて描く（1つずつ描くと、描く命令が多くて重いため）。文字は、ほかの絵より手前に出る。
-var _glyph_batch := GlyphBatch.new()
+## 丸・線・面・文字は、ここにためて、最後にまとめて描く（1つずつ描くと、描く命令が多くて重いため）。文字は、ほかの絵より手前に出る。
+var _painter := HudPainter.new()
 
 
 func _ready() -> void:
@@ -273,12 +273,13 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	if font == null:
 		return
-	_glyph_batch.oversampling = get_viewport().get_oversampling()
+	_painter.begin(self)
+	_painter.glyphs.oversampling = get_viewport().get_oversampling()
 	_draw_race_info(font)
 	_draw_standings(font)
 	if main_panel_visible:
 		_draw_main_panel(font)
-	_glyph_batch.flush(self)
+	_painter.flush()
 
 
 func _draw_race_info(font: Font) -> void:
@@ -304,7 +305,7 @@ func _draw_main_panel(font: Font) -> void:
 		Vector2(panel_left(screen.x), screen.y - PANEL_BOTTOM_MARGIN - PANEL_HEIGHT),
 		Vector2(PANEL_WIDTH, PANEL_HEIGHT)
 	)
-	draw_rect(panel, COLOR_PANEL)
+	_painter.draw_rect(panel, COLOR_PANEL)
 	_draw_name_tab(font, panel)
 	var braking := bool(_state["braking"])
 	# 左：速度とドラフト
@@ -340,17 +341,17 @@ func _draw_drive_actions(font: Font, origin: Vector2) -> void:
 	# 文字の左に、ゲームパッドのボタンのマーク（ブーストはX、ダッシュはB）。
 	var mark_offset := Vector2(DRIVE_ACTION_MARK_SIZE * 0.5, -4.5)
 	var text_offset := Vector2(DRIVE_ACTION_MARK_SIZE + 4.0, 0.0)
-	ButtonMark.draw_mark(self, font, origin + mark_offset, "X", DRIVE_ACTION_MARK_SIZE)
+	ButtonMark.draw_mark(_painter, font, origin + mark_offset, "X", DRIVE_ACTION_MARK_SIZE)
 	_draw_text(font, "BOOST", origin + text_offset, 12, COLOR_DIM)
 	var uses_left := int(_state["boost_uses_left"])
 	for index in int(_state["boost_max_uses"]):
 		var center := Vector2(origin.x + 6.0 + index * 15.0, origin.y + 12.0)
 		if index < uses_left:
-			draw_circle(center, 5.0, COLOR_BOOST)
+			_painter.draw_circle(center, 5.0, COLOR_BOOST)
 		else:
-			draw_arc(center, 4.5, 0.0, TAU, 20, COLOR_DIM, 1.0)
+			_painter.draw_arc(center, 4.5, 0.0, TAU, 20, COLOR_DIM, 1.0)
 	_draw_ratio_bar(Vector2(origin.x, origin.y + 22.0), width, float(_state["boost_ratio"]), COLOR_BOOST)
-	ButtonMark.draw_mark(self, font, origin + Vector2(0.0, 46.0) + mark_offset, "B", DRIVE_ACTION_MARK_SIZE)
+	ButtonMark.draw_mark(_painter, font, origin + Vector2(0.0, 46.0) + mark_offset, "B", DRIVE_ACTION_MARK_SIZE)
 	_draw_text(font, "DASH", origin + Vector2(0.0, 46.0) + text_offset, 12, COLOR_DIM)
 	_draw_ratio_bar(Vector2(origin.x, origin.y + 51.0), width, float(_state["dash_ratio"]), COLOR_PROGRESS)
 
@@ -381,14 +382,14 @@ func _draw_name_tab(font: Font, panel: Rect2) -> void:
 	box.bg_color = COLOR_PANEL
 	box.corner_radius_top_left = 8
 	box.corner_radius_top_right = 8
-	draw_style_box(box, tab)
+	_painter.draw_style_box(box, tab)
 	FitText.draw(
-		self, font, Vector2(tab.position.x + NAME_TAB_PADDING, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
+		_painter, font, Vector2(tab.position.x + NAME_TAB_PADDING, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
 		player_name, NAME_TAB_MAX_TEXT_WIDTH, NAME_TAB_FONT_SIZE, COLOR_TEXT, 0.0, 6, COLOR_OUTLINE
 	)
 	if not trainer_name.is_empty():
 		FitText.draw(
-			self, font, Vector2(tab.position.x + NAME_TAB_PADDING + float(fitted["width"]) + NAME_TAB_TRAINER_GAP, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
+			_painter, font, Vector2(tab.position.x + NAME_TAB_PADDING + float(fitted["width"]) + NAME_TAB_TRAINER_GAP, tab.position.y + NAME_TAB_HEIGHT * 0.5 + NAME_TAB_FONT_SIZE * 0.36),
 			trainer_name, NAME_TAB_TRAINER_MAX_WIDTH, NAME_TAB_TRAINER_FONT_SIZE, COLOR_PROGRESS, 0.0, 6, COLOR_OUTLINE
 		)
 
@@ -425,27 +426,27 @@ func _draw_progress_bar(font: Font, panel: Rect2) -> void:
 		_draw_rounded_rect(Rect2(rail.position, Vector2(maxf(width * player_ratio, PROGRESS_BAR_HEIGHT), PROGRESS_BAR_HEIGHT)), COLOR_PROGRESS, PROGRESS_BAR_HEIGHT * 0.5)
 	for quarter: float in [0.25, 0.5, 0.75]:
 		var x: float = left + width * quarter
-		draw_line(Vector2(x, bar_y - 2.0), Vector2(x, bar_y + PROGRESS_BAR_HEIGHT + 2.0), Color(1.0, 1.0, 1.0, 0.4), 1.0)
+		_painter.draw_line(Vector2(x, bar_y - 2.0), Vector2(x, bar_y + PROGRESS_BAR_HEIGHT + 2.0), Color(1.0, 1.0, 1.0, 0.4), 1.0)
 	_draw_goal_checker(Vector2(left + width, bar_y + PROGRESS_BAR_HEIGHT * 0.5))
 	var center_y := bar_y + PROGRESS_BAR_HEIGHT * 0.5
 	for mark in runners:
 		if not bool(mark["player"]):
-			draw_circle(Vector2(left + width * float(mark["ratio"]), center_y), 4.5, mark["color"])
+			_painter.draw_circle(Vector2(left + width * float(mark["ratio"]), center_y), 4.5, mark["color"])
 	for mark in runners:
 		if bool(mark["player"]):
 			var center := Vector2(left + width * float(mark["ratio"]), center_y)
-			draw_circle(center, 8.5, COLOR_TEXT)
-			draw_circle(center, 6.0, mark["color"])
+			_painter.draw_circle(center, 8.5, COLOR_TEXT)
+			_painter.draw_circle(center, 6.0, mark["color"])
 
 
 ## 脚質の印。順位の組の数だけ「〈」を並べ、左が先頭の組。得意な組だけ、はっきり太く描く。
 ## center_left は、印の並びの左端・縦の中央。色は、今の順位との関係（青・白・赤）。
 func _draw_style_chevrons(center_left: Vector2, color: Color, count: int, own: int, size_scale: float = 1.0) -> void:
-	draw_style_chevrons(self, center_left, color, count, own, size_scale)
+	draw_style_chevrons(_painter, center_left, color, count, own, size_scale)
 
 
 ## 脚質の印を、指定の描画先に描く（操作盤・順位表・レース選択で共通）。
-static func draw_style_chevrons(canvas: CanvasItem, center_left: Vector2, color: Color, count: int, own: int, size_scale: float = 1.0) -> void:
+static func draw_style_chevrons(canvas: Object, center_left: Vector2, color: Color, count: int, own: int, size_scale: float = 1.0) -> void:
 	var step := STYLE_CHEVRON_STEP * size_scale
 	var half_height := 6.5 * size_scale
 	var depth := 5.0 * size_scale
@@ -487,11 +488,11 @@ func _draw_standings(font: Font) -> void:
 		var text_size := STANDINGS_CONFIRMED_FONT_SIZE if is_confirmed else STANDINGS_FONT_SIZE
 		var baseline := center_y + text_size * 0.36
 		_draw_standings_rank(row_font, Vector2(x + 12.0, center_y), index + 1, is_confirmed, text_size, text_color)
-		draw_circle(Vector2(x + 36.0, center_y), 6.5, COLOR_OUTLINE)
-		draw_circle(Vector2(x + 36.0, center_y), 5.0, row["color"])
+		_painter.draw_circle(Vector2(x + 36.0, center_y), 6.5, COLOR_OUTLINE)
+		_painter.draw_circle(Vector2(x + 36.0, center_y), 5.0, row["color"])
 		# 長い名前は、欄の幅に収める（少し小さく・少し細く。それでも入らなければ末尾を「…」に）。
 		var fitted := FitText.fit(row_font, str(row["name"]), STANDINGS_NAME_WIDTH, text_size)
-		_glyph_batch.add(row_font, str(fitted["text"]), int(fitted["font_size"]), Vector2.ZERO, text_color, 6, COLOR_OUTLINE, Transform2D(0.0, Vector2(float(fitted["x_scale"]), 1.0), 0.0, Vector2(x + STANDINGS_NAME_X, baseline)))
+		_painter.glyphs.add(row_font, str(fitted["text"]), int(fitted["font_size"]), Vector2.ZERO, text_color, 6, COLOR_OUTLINE, Transform2D(0.0, Vector2(float(fitted["x_scale"]), 1.0), 0.0, Vector2(x + STANDINGS_NAME_X, baseline)))
 		_draw_style_chevrons(Vector2(x + STANDINGS_STYLE_X, center_y), style_state_color(int(row["style_rank_bonus"])), int(row["style_group_count"]), int(row["style_group_index"]), 0.85)
 		var value_baseline := center_y + STANDINGS_VALUE_FONT_SIZE * 0.36
 		_draw_heart(Vector2(x + STANDINGS_HEART_X + 7.0, center_y), COLOR_DANGER)
@@ -508,8 +509,8 @@ func _draw_standings(font: Font) -> void:
 		var line_y := table_top + confirmed * STANDINGS_ROW_HEIGHT
 		var from := Vector2(STANDINGS_LEFT - 8.0, line_y)
 		var to := Vector2(STANDINGS_LEFT + STANDINGS_WIDTH, line_y)
-		draw_line(from, to, COLOR_OUTLINE, 4.0)
-		draw_line(from, to, COLOR_TEXT, 1.5)
+		_painter.draw_line(from, to, COLOR_OUTLINE, 4.0)
+		_painter.draw_line(from, to, COLOR_TEXT, 1.5)
 
 
 ## 順位の印。確定したら、1位は金の王冠、2位は銀メダル、3位は銅メダル、4位からは太い数字。
@@ -526,15 +527,15 @@ func _draw_standings_rank(font: Font, center: Vector2, place: int, is_confirmed:
 
 
 func _draw_crown(center: Vector2) -> void:
-	draw_crown(self, center)
+	draw_crown(_painter, center)
 
 
 func _draw_medal(font: Font, center: Vector2, place: int, color: Color) -> void:
-	draw_medal(self, font, center, place, color)
+	draw_medal(_painter, font, center, place, color)
 
 
 ## 金の王冠を、指定の描画先に描く（順位表と、着順の板で共通）。
-static func draw_crown(canvas: CanvasItem, center: Vector2, size_scale: float = 1.0) -> void:
+static func draw_crown(canvas: Object, center: Vector2, size_scale: float = 1.0) -> void:
 	var shape := PackedVector2Array([
 		Vector2(-11.0, 8.0), Vector2(-11.0, -5.0), Vector2(-5.0, 1.0), Vector2(0.0, -9.0),
 		Vector2(5.0, 1.0), Vector2(11.0, -5.0), Vector2(11.0, 8.0),
@@ -552,7 +553,7 @@ static func draw_crown(canvas: CanvasItem, center: Vector2, size_scale: float = 
 
 
 ## メダル（リボンと丸）を、指定の描画先に描く。
-static func draw_medal(canvas: CanvasItem, font: Font, center: Vector2, place: int, color: Color, size_scale: float = 1.0) -> void:
+static func draw_medal(canvas: Object, font: Font, center: Vector2, place: int, color: Color, size_scale: float = 1.0) -> void:
 	var ribbon := PackedVector2Array([
 		center + Vector2(-7.0, -12.0) * size_scale, center + Vector2(7.0, -12.0) * size_scale,
 		center + Vector2(3.0, -3.0) * size_scale, center + Vector2(-3.0, -3.0) * size_scale,
@@ -572,9 +573,9 @@ func _draw_heart(center: Vector2, color: Color) -> void:
 	for pass_index in 2:
 		var grow := 1.5 if pass_index == 0 else 0.0
 		var pass_color := COLOR_OUTLINE if pass_index == 0 else color
-		draw_circle(center + Vector2(-3.0, -2.0), 3.4 + grow, pass_color)
-		draw_circle(center + Vector2(3.0, -2.0), 3.4 + grow, pass_color)
-		draw_colored_polygon(PackedVector2Array([
+		_painter.draw_circle(center + Vector2(-3.0, -2.0), 3.4 + grow, pass_color)
+		_painter.draw_circle(center + Vector2(3.0, -2.0), 3.4 + grow, pass_color)
+		_painter.draw_colored_polygon(PackedVector2Array([
 			center + Vector2(-6.2 - grow, -0.4), center + Vector2(6.2 + grow, -0.4), center + Vector2(0.0, 6.6 + grow * 1.4),
 		]), pass_color)
 
@@ -583,14 +584,14 @@ func _draw_heart(center: Vector2, color: Color) -> void:
 ## 今の体力の位置まで、左から色を塗る。
 func _draw_battery(top_left: Vector2, fuel_ratio: float) -> void:
 	var body := Rect2(top_left, STANDINGS_BATTERY_SIZE)
-	draw_rect(body.grow(1.5), COLOR_OUTLINE)
+	_painter.draw_rect(body.grow(1.5), COLOR_OUTLINE)
 	var cap := Rect2(Vector2(body.end.x, body.position.y + 3.0), Vector2(3.0, body.size.y - 6.0))
-	draw_rect(cap.grow(1.0), COLOR_OUTLINE)
-	draw_rect(cap, COLOR_TEXT)
+	_painter.draw_rect(cap.grow(1.0), COLOR_OUTLINE)
+	_painter.draw_rect(cap, COLOR_TEXT)
 	var inner := body.grow(-2.0)
 	_draw_battery_gradient(inner, -1.0, 1.0, 0.25)
 	_draw_battery_gradient(inner, -1.0, clampf(fuel_ratio, -1.0, 1.0), 1.0)
-	draw_rect(body, COLOR_TEXT, false, 1.5)
+	_painter.draw_rect(body, COLOR_TEXT, false, 1.5)
 
 
 ## 電池の中での、体力の割合の横の位置。負債の限度（-1）が左端、0が左から4分の1、満タン（1）が右端。
@@ -617,7 +618,7 @@ func _draw_battery_gradient(inner: Rect2, from_ratio: float, to_ratio: float, al
 		c1.a = alpha
 		var x0 := battery_x(inner, r0)
 		var x1 := battery_x(inner, r1)
-		draw_polygon(
+		_painter.draw_polygon(
 			PackedVector2Array([Vector2(x0, inner.position.y), Vector2(x1, inner.position.y), Vector2(x1, inner.end.y), Vector2(x0, inner.end.y)]),
 			PackedColorArray([c0, c1, c1, c0])
 		)
@@ -628,14 +629,14 @@ func _draw_goal_checker(center: Vector2) -> void:
 	for row in 4:
 		for column in 2:
 			var color := Color(0.97, 0.98, 1.0, 1.0) if (row + column) % 2 == 0 else Color(0.08, 0.1, 0.16, 1.0)
-			draw_rect(Rect2(Vector2(center.x - cell + column * cell, center.y - cell * 2.0 + row * cell), Vector2(cell, cell)), color)
+			_painter.draw_rect(Rect2(Vector2(center.x - cell + column * cell, center.y - cell * 2.0 + row * cell), Vector2(cell, cell)), color)
 
 
 func _draw_rounded_rect(rect: Rect2, color: Color, radius: float) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = color
 	style.set_corner_radius_all(int(radius))
-	draw_style_box(style, rect)
+	_painter.draw_style_box(style, rect)
 
 
 func _draw_draft_gauge(font: Font, origin: Vector2) -> void:
@@ -652,12 +653,12 @@ func _draw_draft_gauge(font: Font, origin: Vector2) -> void:
 			color = COLOR_AERO
 		elif index < int(counts["green"]) + int(counts["blue"]):
 			color = COLOR_COOL
-		draw_rect(rect, color)
+		_painter.draw_rect(rect, color)
 	# 凡例
 	var legend_y := origin.y + 28.0
-	draw_rect(Rect2(Vector2(origin.x, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_AERO)
+	_painter.draw_rect(Rect2(Vector2(origin.x, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_AERO)
 	_draw_text(font, "空力", Vector2(origin.x + 13.0, legend_y), 14, COLOR_DIM)
-	draw_rect(Rect2(Vector2(origin.x + 56.0, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_COOL)
+	_painter.draw_rect(Rect2(Vector2(origin.x + 56.0, legend_y - 9.0), Vector2(9.0, 9.0)), COLOR_COOL)
 	_draw_text(font, "集団", Vector2(origin.x + 69.0, legend_y), 14, COLOR_DIM)
 
 
@@ -674,9 +675,9 @@ func _draw_notch_gauge(font: Font, origin: Vector2, braking: bool) -> void:
 		var color := COLOR_TRACK
 		if index > 0 and index <= notch:
 			color = COLOR_DIM if braking else COLOR_OK.lerp(COLOR_WARN, float(index) / float(NOTCH_COUNT - 1))
-		draw_rect(rect, color)
+		_painter.draw_rect(rect, color)
 		if index == notch:
-			draw_rect(rect.grow(2.0), COLOR_TEXT, false, 2.0)
+			_painter.draw_rect(rect.grow(2.0), COLOR_TEXT, false, 2.0)
 	_draw_text(font, "ノッチ", Vector2(origin.x - 6.0, origin.y + bar_height + 28.0), 17, COLOR_DIM)
 	_draw_text(font, "ブレーキ" if braking else "%d" % notch, Vector2(origin.x - (6.0 if braking else -8.0), origin.y + bar_height + 54.0), 20 if braking else 26, COLOR_DANGER if braking else COLOR_TEXT)
 
@@ -685,12 +686,12 @@ func _draw_vertical_gauge(font: Font, title: String, origin: Vector2, ratio: flo
 	var bar_width := 34.0
 	var bar_height := 110.0
 	var track := Rect2(origin, Vector2(bar_width, bar_height))
-	draw_rect(track, COLOR_TRACK)
+	_painter.draw_rect(track, COLOR_TRACK)
 	var fill_height := bar_height * ratio
-	draw_rect(Rect2(Vector2(origin.x, origin.y + bar_height - fill_height), Vector2(bar_width, fill_height)), color)
+	_painter.draw_rect(Rect2(Vector2(origin.x, origin.y + bar_height - fill_height), Vector2(bar_width, fill_height)), color)
 	if mark_ratio >= 0.0:
 		var y := origin.y + bar_height - bar_height * mark_ratio
-		draw_line(Vector2(origin.x - 4.0, y), Vector2(origin.x + bar_width + 4.0, y), COLOR_TEXT, 2.0)
+		_painter.draw_line(Vector2(origin.x - 4.0, y), Vector2(origin.x + bar_width + 4.0, y), COLOR_TEXT, 2.0)
 	_draw_text(font, title, Vector2(origin.x - 6.0, origin.y + bar_height + 28.0), 17, COLOR_DIM)
 	_draw_text(font, value_text, Vector2(origin.x - 6.0, origin.y + bar_height + 54.0), 20, color)
 
@@ -703,11 +704,11 @@ func _draw_fuel_gauge(font: Font, origin: Vector2, fuel: float) -> void:
 	var bar_height := GAUGE_BAR_HEIGHT
 	var zero_y := fuel_zero_y(origin.y)
 	var bottom_y := origin.y + bar_height
-	draw_rect(Rect2(origin, Vector2(bar_width, bar_height)), COLOR_TRACK)
+	_painter.draw_rect(Rect2(origin, Vector2(bar_width, bar_height)), COLOR_TRACK)
 	_draw_fuel_gradient(origin.x, bar_width, zero_y, origin.y, bottom_y, 0.22)
 	_draw_fuel_gradient(origin.x, bar_width, zero_y, fuel_y(zero_y, fuel), bottom_y, 1.0)
 	# 体力0の境目。ここより下が負債（マイナス）。
-	draw_line(Vector2(origin.x, zero_y), Vector2(origin.x + bar_width, zero_y), COLOR_TEXT, 1.0)
+	_painter.draw_line(Vector2(origin.x, zero_y), Vector2(origin.x + bar_width, zero_y), COLOR_TEXT, 1.0)
 	var debt := fuel_debt_ratio(fuel)
 	var value_text := "-%d%%" % int(roundf(debt * 100.0)) if debt > 0.0 else "%d%%" % int(roundf(fuel * 100.0))
 	_draw_text(font, "体力", Vector2(origin.x - 6.0, origin.y + bar_height + 28.0), 17, COLOR_DIM)
@@ -744,7 +745,7 @@ func _draw_fuel_gradient(x: float, width: float, zero_y: float, from_y: float, t
 		var c1 := (upper[1] as Color).lerp(lower[1], (y1 - upper_y) / (lower_y - upper_y))
 		c0.a = alpha
 		c1.a = alpha
-		draw_polygon(
+		_painter.draw_polygon(
 			PackedVector2Array([Vector2(x, y0), Vector2(x + width, y0), Vector2(x + width, y1), Vector2(x, y1)]),
 			PackedColorArray([c0, c0, c1, c1])
 		)
@@ -752,4 +753,4 @@ func _draw_fuel_gradient(x: float, width: float, zero_y: float, from_y: float, t
 
 func _draw_text(font: Font, text: String, position: Vector2, font_size: int, color: Color) -> void:
 	# 背景に溶けないよう、暗い縁取りを付ける。
-	_glyph_batch.add(font, text, font_size, position, color, 6, Color(0.03, 0.05, 0.1, 0.9))
+	_painter.glyphs.add(font, text, font_size, position, color, 6, Color(0.03, 0.05, 0.1, 0.9))

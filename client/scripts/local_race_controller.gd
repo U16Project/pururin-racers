@@ -17,6 +17,8 @@ const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
 const FpsLabel := preload("res://scripts/debug/fps_label.gd")
 const FirstDrawWarmup := preload("res://scripts/presentation/first_draw_warmup.gd")
+## 表情の部品を先に作る処理に、1コマで使ってよい時間（ミリ秒）。
+const FACE_PREPARE_BUDGET_MS := 8
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 ## 丸い操作盤の大きさ（外の輪の半径。ピクセル）と、画面の下からのすき間。
@@ -98,6 +100,7 @@ var _entry_wait_remaining: float = 0.0
 var _final_stretch_ambience_started := false
 ## これから先に作っておく、表情の部品（[体, 表情の名前] の並び）。
 var _faces_to_prepare: Array = []
+var _online_ready_sent := false
 var _final_stretch_ambience_fading := false
 ## 前のtickで、自分が接触か押し合いの最中だったか。始まった瞬間だけ音を鳴らす。
 var _contact_sound_was_touching := false
@@ -256,8 +259,7 @@ func _ready() -> void:
 		_result_retry_button.visible = false
 		_result_return_button.text = "部屋へ戻る"
 		_pause_return_button.text = "部屋へ戻る"
-		# 画面ができたことを、サーバーに知らせる（全員ぶんそろうと、スタートへ向かう時計が動き出す）。
-		_online_client.send(OnlineProtocol.READY)
+		# 画面ができたことは、スタート前の準備（_is_preparing）が終わってから、サーバーに知らせる（_send_online_ready_when_prepared）。
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
 	RaceAudio.play_race_entry()
@@ -327,6 +329,7 @@ func _process(_delta: float) -> void:
 		return
 	_prepare_next_face()
 	if _online_view:
+		_send_online_ready_when_prepared()
 		_process_online_view(_delta)
 		return
 	# ゆっくりの戻しは、一時停止中でも進める（止めたまま、ゆっくりが残らないように）。
@@ -411,9 +414,10 @@ func _start_final_stretch_fade_out() -> void:
 func _update_before_start(delta: float) -> void:
 	if _entry_wait_remaining > 0.0:
 		_entry_wait_remaining -= delta
-		if _entry_wait_remaining > 0.0:
+		# スタート前の準備が終わるまでは、カウントダウンへ進まない（準備で画面が止まっているあいだに、スタートしないように）。
+		if _entry_wait_remaining > 0.0 or _is_preparing():
 			return
-		delta = -_entry_wait_remaining
+		delta = minf(-_entry_wait_remaining, delta)
 		_entry_wait_remaining = 0.0
 		_begin_start_countdown()
 	_update_start_countdown(delta)
@@ -839,12 +843,29 @@ func _queue_face_preparation() -> void:
 				_faces_to_prepare.append([body, expression])
 
 
+## 1コマに、FACE_PREPARE_BUDGET_MS のあいだだけ作る（最低1つ）。速い機械では数コマで終わり、遅い機械でも、画面が止まらない。
 func _prepare_next_face() -> void:
-	if _faces_to_prepare.is_empty():
+	var started := Time.get_ticks_msec()
+	while not _faces_to_prepare.is_empty():
+		var next: Array = _faces_to_prepare.pop_front()
+		if is_instance_valid(next[0]):
+			(next[0] as Node).call("prepare_expression", str(next[1]))
+		if Time.get_ticks_msec() - started >= FACE_PREPARE_BUDGET_MS:
+			break
+
+
+## スタート前の準備（コースを一度描いておく・表情の部品を作っておく）が、まだ終わっていないか。
+func _is_preparing() -> bool:
+	return not _faces_to_prepare.is_empty() or has_node("FirstDrawWarmup")
+
+
+## オンライン：準備が終わったら、画面ができたことを、サーバーに1回だけ知らせる
+## （全員ぶんそろうと、スタートへ向かう時計が動き出す。準備の途中で知らせると、止まっているあいだにレースが始まる）。
+func _send_online_ready_when_prepared() -> void:
+	if _online_ready_sent or _is_preparing():
 		return
-	var next: Array = _faces_to_prepare.pop_front()
-	if is_instance_valid(next[0]):
-		(next[0] as Node).call("prepare_expression", str(next[1]))
+	_online_ready_sent = true
+	_online_client.send(OnlineProtocol.READY)
 
 
 ## コースの上の物を、スタート前に一度描いておく（ブラウザ版で、レース中に初めて映る物の所で止まらないように）。
