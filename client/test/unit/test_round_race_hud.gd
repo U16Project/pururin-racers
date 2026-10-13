@@ -164,4 +164,5 @@ func test_normal_race_keeps_the_full_venue_and_shadows() -> void:
 	# 太陽の影は、出してよい端末でだけ出す（ブラウザ版では、白っぽくなるので出さない）。
 	assert_eq(SunShadow.allowed(), not OS.has_feature("web"))
 	assert_eq((race.get_node("Sun") as DirectionalLight3D).shadow_enabled, SunShadow.allowed())
-	assert_null(race.get_node_or_null("UI/FpsLabel"))
+	# 重さを確かめる表示は、景色ありのレースにも出す（開発の目処がつくまで）。
+	assert_not_null(race.get_node_or_null("UI/FpsLabel"))

@@ -827,10 +827,11 @@ func _place_markers() -> void:
 	# ブラウザ版では、太陽の影を出さない（白っぽくなるため）。
 	SunShadow.apply($Sun as DirectionalLight3D)
 	if RaceSession.is_course_only():
-		# ウェブ版オフラインテスト：軽くするために太陽の影を切り、重さを確かめるためにコマ数を出す。
+		# ウェブ版オフラインテスト：軽くするために、太陽の影を切る。
 		($Sun as DirectionalLight3D).shadow_enabled = false
-		if $UI.get_node_or_null("FpsLabel") == null:
-			$UI.add_child(FpsLabel.new())
+	# 重さを確かめる表示（コマ数など）は、景色のあり・なしに関係なく、どのレースにも出す（開発の目処がつくまで）。
+	if $UI.get_node_or_null("FpsLabel") == null:
+		$UI.add_child(FpsLabel.new())
 	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
 
 
