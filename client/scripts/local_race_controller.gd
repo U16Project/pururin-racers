@@ -101,6 +101,8 @@ var _final_stretch_ambience_started := false
 ## これから先に作っておく、表情の部品（[体, 表情の名前] の並び）。
 var _faces_to_prepare: Array = []
 var _online_ready_sent := false
+## カウントダウンを始めたか（入場の待ちと、スタート前の準備が、両方終わってから true）。
+var _countdown_begun := false
 var _final_stretch_ambience_fading := false
 ## 前のtickで、自分が接触か押し合いの最中だったか。始まった瞬間だけ音を鳴らす。
 var _contact_sound_was_touching := false
@@ -412,18 +414,20 @@ func _start_final_stretch_fade_out() -> void:
 
 ## 入場の待ちが終わってから、カウントダウンを進める。
 func _update_before_start(delta: float) -> void:
-	if _entry_wait_remaining > 0.0:
+	if not _countdown_begun:
 		_entry_wait_remaining -= delta
-		# スタート前の準備が終わるまでは、カウントダウンへ進まない（準備で画面が止まっているあいだに、スタートしないように）。
+		# 入場の待ちが過ぎ、スタート前の準備も終わってから、カウントダウンへ進む
+		# （準備で画面が止まっているあいだに、スタートしないように。準備が長引いても、毎コマここで確かめる）。
 		if _entry_wait_remaining > 0.0 or _is_preparing():
 			return
-		delta = minf(-_entry_wait_remaining, delta)
+		delta = clampf(-_entry_wait_remaining, 0.0, delta)
 		_entry_wait_remaining = 0.0
 		_begin_start_countdown()
 	_update_start_countdown(delta)
 
 
 func _begin_start_countdown() -> void:
+	_countdown_begun = true
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
 	_countdown_label.visible = true
 	_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)

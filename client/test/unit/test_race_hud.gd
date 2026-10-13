@@ -158,3 +158,18 @@ func test_the_name_tab_sits_between_the_standings_and_the_panel() -> void:
 	var panel_top := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT
 	var standings_bottom := RaceHud.standings_top(screen_height, RaceHud.STANDINGS_FULL_ROWS) + RaceHud.STANDINGS_FULL_ROWS * RaceHud.STANDINGS_ROW_HEIGHT
 	assert_gte(panel_top - RaceHud.NAME_TAB_HEIGHT, standings_bottom, "名札は、順位表の一番下の行に重ならない")
+
+
+func test_standings_are_not_redrawn_every_frame_when_the_bottom_panel_is_hidden() -> void:
+	var hud := RaceHud.new()
+	add_child_autofree(hud)
+	hud.main_panel_visible = false
+	# 点滅する条件（心拍が上限超え）にしても、板を出していなければ、毎コマの描き直しを頼まない。
+	hud.update_state({"heart_bpm": float(hud.get("_state")["heart_normal_max_bpm"]) + 20.0})
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var draws := [0]
+	hud.draw.connect(func() -> void: draws[0] += 1)
+	for index in 5:
+		await get_tree().process_frame
+	assert_eq(draws[0], 0)

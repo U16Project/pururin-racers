@@ -128,7 +128,9 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_blink = fmod(_blink + delta, 1.0)
-	if heart_is_overheated(_state) or fuel_is_in_debt(_state) or bool(_state["braking"]):
+	# 点滅は、下の板（main_panel）にしか無い。板を出していないときは、毎コマの描き直しを頼まない
+	# （頼むと、順位表まで毎コマ組み立て直して、終盤に急に重くなる）。
+	if main_panel_visible and (heart_is_overheated(_state) or fuel_is_in_debt(_state) or bool(_state["braking"])):
 		queue_redraw()
 
 

@@ -156,6 +156,10 @@ func test_race_entry_waits_five_seconds_before_the_countdown() -> void:
 	assert_true(race.call("_is_preparing"))
 	race.call("_update_before_start", wait + 1.0)
 	assert_false(label.visible, "準備中は、カウントダウンを始めない")
+	# 待ち時間が過ぎたあとのコマでも、準備が終わるまでは、始めない（スタートもしない）。
+	race.call("_update_before_start", LocalRaceMath.Config.number("start_countdown_seconds") + 1.0)
+	assert_false(label.visible)
+	assert_false(race.get("_race_started"), "準備中に、カウントダウンを飛ばしてスタートしない")
 	# 準備を、ここで終わらせる（時計は自分で進めるので、毎コマの処理は止めておく）。
 	race.set_process(false)
 	while not (race.get("_faces_to_prepare") as Array).is_empty():
