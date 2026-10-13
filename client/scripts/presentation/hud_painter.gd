@@ -27,11 +27,15 @@ var _xform := Transform2D.IDENTITY
 ## 覚えておいた絵（名前 → [位置, 色, 三角形の番号]）。同じ絵を、作り直さずに、そのまま描くため。
 var _blocks := {}
 ## 覚えておく絵の数の上限（超えたら、いったん全部忘れる）。
-const BLOCK_CACHE_LIMIT := 400
+const BLOCK_CACHE_LIMIT := 2000
+## 絵を組み立てるのに使った時間の合計（マイクロ秒。全部のペインターの合計）。重さを確かめる表示（FpsLabel）が読む。
+static var build_usec_total := 0
+var _began_usec := 0
 
 
 func begin(canvas: CanvasItem) -> void:
 	_canvas = canvas
+	_began_usec = Time.get_ticks_usec()
 	_xform = Transform2D.IDENTITY
 	_points.clear()
 	_colors.clear()
@@ -43,6 +47,7 @@ func begin(canvas: CanvasItem) -> void:
 func flush() -> void:
 	_flush_shapes()
 	glyphs.flush(_canvas)
+	build_usec_total += Time.get_ticks_usec() - _began_usec
 
 
 ## 図形の、三角形の数（テスト用）。

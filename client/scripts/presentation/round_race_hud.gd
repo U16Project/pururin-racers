@@ -104,6 +104,8 @@ const STYLE_DEG := 230.0
 const COLOR_FACE := Color(0.02, 0.05, 0.11, 0.82)
 const COLOR_RIM_LINE := Color(1.0, 1.0, 1.0, 0.22)
 ## 段の境目の線の太さ（ふつうの境目と、ノッチ・ブースト1回ごとの広い境目）。
+## 道のりの「走り終えたぶん」を、何度ごとに区切って覚えるか。
+const COURSE_DONE_STEP_DEG := 6.0
 ## 鼓動の光を、何段階で描くか。
 const HEART_BEAT_LEVELS := 8
 const GAP_LINE_WIDTH := 1.4
@@ -313,13 +315,18 @@ func _draw_course_ring() -> void:
 	var done := clampf(distance - float(_state["remaining_m"]), 0.0, distance)
 	var start_deg := distance_start_deg(distance)
 	var own_deg := distance_deg(distance, done)
-	# 輪の帯は、自分の位置が 0.25度 動くごとに作り直す（それより細かい動きは、見えない）。
-	var drawn_own_deg := snappedf(own_deg, 0.25)
-	_painter.draw_block(["course", _radius, distance, drawn_own_deg], func() -> void:
-		_arc(COURSE_RADIUS, COURSE_WIDTH, DISTANCE_GOAL_DEG, drawn_own_deg, COLOR_COURSE)
-		_lit_course(drawn_own_deg, start_deg)
+	# 輪の帯のうち、変わらない部分（残りの色の帯と、使わない部分）は、1回作って使い回す。
+	_painter.draw_block(["course", _radius, distance], func() -> void:
+		_arc(COURSE_RADIUS, COURSE_WIDTH, DISTANCE_GOAL_DEG, start_deg, COLOR_COURSE)
 		# 使わない部分（Sから時計まわりに、Gまで）は、黒い刻み（刻みの線は、_build_gap_lines で描く）。
 		_arc(COURSE_RADIUS, COURSE_WIDTH, start_deg, DISTANCE_GOAL_DEG + 360.0, COLOR_SLOT))
+	# 走り終えたぶん（水色）は、COURSE_DONE_STEP_DEG ごとに区切って覚える。毎回作り直すと、重い。
+	# 区切りから今の位置までの、短い残りだけ、その場で描く。
+	var cached_deg := start_deg - floorf((start_deg - own_deg) / COURSE_DONE_STEP_DEG) * COURSE_DONE_STEP_DEG
+	if cached_deg < start_deg:
+		_painter.draw_block(["course_done", _radius, distance, cached_deg], func() -> void:
+			_lit_course(cached_deg, start_deg))
+	_lit_course(own_deg, cached_deg)
 	for runner: Dictionary in _state["runners"]:
 		if bool(runner.get("player", false)):
 			continue

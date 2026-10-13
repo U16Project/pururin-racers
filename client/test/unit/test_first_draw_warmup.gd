@@ -34,6 +34,6 @@ func test_frames_per_second_counts_the_frames_actually_drawn() -> void:
 
 
 func test_status_text_shows_frames_process_time_and_draw_calls() -> void:
-	var text := FpsLabel.status_text(40, 12.4, 230)
-	for part in ["40", "12", "230"]:
+	var text := FpsLabel.status_text(40, 12.4, 88.0, 230)
+	for part in ["40", "12", "88", "230"]:
 		assert_string_contains(text, part)
