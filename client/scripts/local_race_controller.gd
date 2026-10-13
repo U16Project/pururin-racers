@@ -805,7 +805,8 @@ func _place_markers() -> void:
 	_course_markers.place(
 		_track, _race_route, _race_distance_m, LocalRaceMath.lap_length_m(),
 		LocalRaceMath.Config.number("course_marker_sign_interval_m"),
-		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m")
+		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m"),
+		LocalRaceMath.Config.number("course_marker_sign_visible_distance_m")
 	)
 	_update_launch_visual()
 	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route, RaceSession.is_course_only())

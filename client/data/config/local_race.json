@@ -66,6 +66,7 @@
   "brake_deceleration_kmh_per_s": 16.0,
   "course_marker_sign_interval_m": 100.0,
   "course_marker_sign_max_remaining_m": 1800.0,
+  "course_marker_sign_visible_distance_m": 200.0,
   "contact_lateral_range_m": 1.5,
   "contact_longitudinal_range_m": 1.5,
   "draft_air_resistance_factor": 0.65,

@@ -50,7 +50,8 @@ func _ready() -> void:
 		EXPLORATION_DISTANCE_M,
 		float(layout["track_length_m"]),
 		LocalRaceMath.Config.number("course_marker_sign_interval_m"),
-		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m")
+		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m"),
+		LocalRaceMath.Config.number("course_marker_sign_visible_distance_m")
 	)
 	_guide_prefix = "\n".join(PackedStringArray([
 		"WASD／左スティック／十字ボタン　前後左右",

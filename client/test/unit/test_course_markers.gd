@@ -93,3 +93,22 @@ func test_signs_never_stand_close_together_on_any_route() -> void:
 				assert_gt(position.distance_to(other), interval * 0.8)
 			positions.append(position)
 		assert_eq(positions.size(), int(minf(max_remaining, total - interval) / interval))
+
+
+func test_every_part_of_a_sign_is_hidden_beyond_the_visible_distance() -> void:
+	var visible_m := LocalRaceMath.Config.number("course_marker_sign_visible_distance_m")
+	var track := Path3D.new()
+	LocalRaceMath.apply_course_to_path(track)
+	add_child_autofree(track)
+	var route: Dictionary = M5CourseBuilder.load_layout()["routes"][0]
+	var markers := CourseMarkers.new()
+	markers.place(
+		track, route, float(route["distance_m"]), LocalRaceMath.lap_length_m(),
+		LocalRaceMath.Config.number("course_marker_sign_interval_m"),
+		LocalRaceMath.Config.number("course_marker_sign_max_remaining_m"),
+		visible_m
+	)
+	var drawn := track.get_node("CourseMarkers").find_children("*", "GeometryInstance3D", true, false)
+	assert_gt(drawn.size(), 0)
+	for part: GeometryInstance3D in drawn:
+		assert_almost_eq(part.visibility_range_end, visible_m, 0.0001)

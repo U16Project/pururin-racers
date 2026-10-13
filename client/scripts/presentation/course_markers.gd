@@ -97,7 +97,8 @@ static func sign_center_height_m(size: Vector2) -> float:
 	return Parts.FENCE_HEIGHT_M + SIGN_GAP_ABOVE_FENCE_M + SIGN_FRAME_M + size.y * 0.5
 
 
-func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, sign_interval_m: float, sign_max_remaining_m: float) -> void:
+## sign_visible_distance_m：カメラからこの距離より遠い標識は、描かない（遠くの標識は豆粒で読めないのに、描く手間は同じなので）。
+func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, sign_interval_m: float, sign_max_remaining_m: float, sign_visible_distance_m: float) -> void:
 	if track == null or track.curve == null or route.is_empty():
 		return
 	if _root != null:
@@ -106,6 +107,16 @@ func place(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_
 	_root.name = "CourseMarkers"
 	track.add_child(_root)
 	_place_signs(track, route, race_distance_m, lap_length_m, sign_interval_m, sign_max_remaining_m)
+	for sign in _root.get_children():
+		limit_visible_distance(sign, sign_visible_distance_m)
+
+
+## その下にある、描く物すべてを、カメラから distance_m より遠いときは描かないようにする。
+static func limit_visible_distance(node: Node, distance_m: float) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).visibility_range_end = distance_m
+	for child in node.get_children():
+		limit_visible_distance(child, distance_m)
 
 
 ## コースの内側（周回の中心側）の向き。標識はこちら側に立てる。

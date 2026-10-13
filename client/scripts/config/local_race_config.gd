@@ -74,6 +74,7 @@ const NUMBER_RANGES := {
 	"course_marker_sign_interval_m": [10.0, 1000.0],
 	# 1周（2083.1m）より短くする。長いと、同じ場所に、1周目用と2周目用の標識が並ぶ。
 	"course_marker_sign_max_remaining_m": [100.0, 2000.0],
+	"course_marker_sign_visible_distance_m": [50.0, 3000.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
