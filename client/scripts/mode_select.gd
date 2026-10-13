@@ -49,7 +49,7 @@ func _ready() -> void:
 	_web_test_button.pressed.connect(go_to_web_test)
 	UIAudio.bind_button_sound(_web_test_button, "confirmation")
 	column.add_child(_web_test_button)
-	_online_button = _choice_button("📡オンラインフリー対戦（作成中）", "OnlineFreeRaceButton")
+	_online_button = _choice_button("オンラインフリー対戦", "OnlineFreeRaceButton")
 	_online_button.pressed.connect(go_to_online_lobby)
 	UIAudio.bind_button_sound(_online_button, "confirmation")
 	column.add_child(_online_button)
