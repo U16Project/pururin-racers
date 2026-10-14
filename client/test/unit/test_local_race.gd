@@ -2214,3 +2214,38 @@ func test_push_contest_multiplies_the_contact_load() -> void:
 	runner.call("apply_push_result", float(runner.call("get_offset")), false, false)
 	assert_almost_eq(float(runner.call("get_contact_heart_load_bpm_per_s")), normal, 0.0001)
 	runner.free()
+
+
+## ノッチ6・空力5・ひとりで、推進力と抵抗が釣り合う速さ（加速度が0になる速さ）を、二分探しで求める。
+func _solo_notch6_speed(top_speed: int) -> float:
+	var low := 20.0
+	var high := 120.0
+	for _step in 60:
+		var middle := (low + high) * 0.5
+		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(middle, 6.0, top_speed, 1.0)
+		var net := float(LocalRaceMath.drive_diagnostics_kmh_per_s(middle, 6.0, 0.0, 0.0, adjustment, 1.0)["net_force_acceleration_kmh_per_s"])
+		if net > 0.0:
+			low = middle
+		else:
+			high = middle
+	return (low + high) * 0.5
+
+
+func test_air_resistance_above_the_reference_slows_a_solo_runner_at_notch_six() -> void:
+	var original: Dictionary = LocalRaceMath.Config.values()
+	var reference := LocalRaceMath.Config.number("top_speed_reference_air_coefficient")
+	# 空気抵抗が基準と同じなら、ひとり・ノッチ6で、最高速の「自然に落ち着く速さ」に釣り合う。
+	var same := original.duplicate(true)
+	same["air_resistance_quadratic_coefficient"] = reference
+	LocalRaceMath.Config._cached = same
+	for top_speed: int in [1, 5, 15]:
+		assert_almost_eq(_solo_notch6_speed(top_speed), LocalRaceMath.top_speed_natural_speed_kmh(top_speed), 0.05)
+	# 空気抵抗を基準より強くすると、ひとりで風を受けて走る側は、素直に遅く釣り合う（勝手に力が足されない）。
+	var stronger := original.duplicate(true)
+	stronger["air_resistance_quadratic_coefficient"] = reference * 1.2
+	LocalRaceMath.Config._cached = stronger
+	for top_speed: int in [1, 5, 15]:
+		assert_lt(_solo_notch6_speed(top_speed), LocalRaceMath.top_speed_natural_speed_kmh(top_speed) - 1.0)
+	# 最高速の能力が高いほど速い、という並びは、そのまま。
+	assert_lt(_solo_notch6_speed(1), _solo_notch6_speed(15))
+	LocalRaceMath.Config._cached = original

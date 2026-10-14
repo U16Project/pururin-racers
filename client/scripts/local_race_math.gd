@@ -39,6 +39,10 @@ static var ROLLING_RESISTANCE_KMH_PER_S: float:
 static var AIR_RESISTANCE_QUADRATIC_COEFFICIENT: float:
 	get:
 		return Config.number("air_resistance_quadratic_coefficient")
+## 最高速の補正を決めるときの、基準の空気抵抗（実際の空気抵抗とは別。同じ値なら、自然に落ち着く速さは設定どおり）。
+static var TOP_SPEED_REFERENCE_AIR_COEFFICIENT: float:
+	get:
+		return Config.number("top_speed_reference_air_coefficient")
 static var AERO_AIR_RESISTANCE_REFERENCE_STAT: int:
 	get:
 		return int(Config.number("aero_air_resistance_reference_stat"))
@@ -794,7 +798,9 @@ static func top_speed_natural_speed_kmh(top_speed: int) -> float:
 	return lerpf(TOP_SPEED_NATURAL_MIN_KMH, TOP_SPEED_NATURAL_MAX_KMH, (clampi(top_speed, 1, 15) - 1) / 14.0)
 
 
-## ノッチ6・空力5・ドラフトなしでは、各最高速値の自然到達速度で推進力と抵抗が釣り合う。
+## ノッチ6・空力5・ドラフトなしで、空気抵抗が基準（top_speed_reference_air_coefficient）のとき、
+## 各最高速値の自然到達速度で推進力と抵抗が釣り合う。実際の空気抵抗が基準より強ければ、その分だけ遅く釣り合う
+## （空気抵抗を上げると、ひとりで風を受けて走る側が、素直に遅くなる）。
 ## 補正は速度の二乗に応じて現れる。空力は、実際に残る空気抵抗と同じ割合で入れる。
 ## ドラフトは補正に含めない。軽くなった空気抵抗の分だけ、速度は自然に自然最高速を超えて伸びる。
 static func top_speed_drive_adjustment_kmh_per_s(
@@ -810,7 +816,7 @@ static func top_speed_drive_adjustment_kmh_per_s(
 	var level_force := drive_force_kmh_per_s(level)
 	var natural_speed := top_speed_natural_speed_kmh(top_speed)
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
-	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + AIR_RESISTANCE_QUADRATIC_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier
+	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + TOP_SPEED_REFERENCE_AIR_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier
 	var level_share := level_force / maxf(max_drive_force, 0.001)
 	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
 	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio

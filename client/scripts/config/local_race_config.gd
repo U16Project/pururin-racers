@@ -21,6 +21,9 @@ const NUMBER_RANGES := {
 	"finish_cruise_speed_kmh": [1.0, 75.0],
 	"rolling_resistance_kmh_per_s": [0.0, 100.0],
 	"air_resistance_quadratic_coefficient": [0.0, 100.0],
+	# 最高速の「自然に落ち着く速さ」を決めるときの、基準の空気抵抗。実際の空気抵抗とは別にして、
+	# 空気抵抗を上げると、ひとりで風を受けて走る側が、素直に遅くなるようにする。
+	"top_speed_reference_air_coefficient": [0.0, 100.0],
 	"aero_air_resistance_reference_stat": [1.0, 15.0],
 	"handling_steer_reference_stat": [1.0, 15.0],
 	"front_block_lateral_m": [0.0, 15.0],

@@ -10,6 +10,7 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
+const OnlineRaceLog := preload("res://scripts/online/online_race_log.gd")
 
 ## 起動したときに、自分で待ち受けを始めるか（テストでは false にして、入口の番号を選ぶ）。
 @export var listen_on_ready := true
@@ -24,6 +25,7 @@ var _next_peer_id := 1
 ## "phase": 場面（ぷるりんを選ぶ所か、出走表か）, "confirmed": {「確定」を押した人の番号: true}, "entries": 出走表（枠順に並んだ出走の一覧）,
 ## "race": 走っているレース（無ければ null）, "state_wait_s": 次に状態を配るまでの秒数,
 ## "result_sent": 結果を配ったか, "linger_s": 結果を配ってからの秒数, "done": {結果を見終わって、画面を出た人の番号: true},
+## "log": レースの記録（OnlineRaceLog）,
 ## "ready": {レースの画面ができた人の番号: true}, "ready_wait_s": 全員の画面ができるのを待った秒数}
 var _rooms := {}
 var _next_room_id := 1
@@ -41,7 +43,9 @@ func _ready() -> void:
 			push_error("オンラインのサーバー：入口 %d で待ち受けられません（%s）" % [port, error_string(error)])
 			get_tree().quit(1)
 			return
+		var removed := OnlineRaceLog.remove_old(OnlineRaceLog.directory(), OnlineConfig.log_keep_days())
 		print("ぷるりんレーサーズ — オンラインのサーバー待機中（:%d、計算は1秒%d回まで、部屋は%dつまで、管理人の合い札は%s）" % [port, Engine.max_fps, OnlineConfig.max_rooms(), "あり" if not admin_token.is_empty() else "なし"])
+		print("レースの記録の置き場所：%s（%d日より古いものは消す。今回消した数：%d）" % [OnlineRaceLog.directory(), OnlineConfig.log_keep_days(), removed])
 
 
 ## 入口の番号を決めて、待ち受けを始める。
@@ -278,7 +282,7 @@ func _create(peer_id: int, data: Dictionary) -> void:
 		"host": peer_id, "order": [], "distance_m": RaceSession.DEFAULT_DISTANCE_M,
 		"field_size": Protocol.ROOM_CAPACITY, "cpu": true, "picks": {},
 		"phase": Protocol.PHASE_ROOM, "confirmed": {}, "entries": [], "cpu_picks": [],
-		"race": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0,
+		"race": null, "log": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0,
 		"result_sent": false, "linger_s": 0.0, "done": {},
 	}
 	_enter(peer_id, room)
@@ -342,6 +346,7 @@ func _leave_room(peer_id: int, how: String = Protocol.NOTICE_LEFT, by: String = 
 	# レース中に抜けた人の走者は、その個体のCPUトレーナーに任せる。
 	if room_race(room) != null:
 		room_race(room).call("release_remote_runner", peer_id)
+		_log_event(room, "left", {"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "how": how, "handed_to_cpu": true})
 	var order: Array = _rooms[room]["order"]
 	if order.is_empty():
 		_close_room(room)
@@ -739,6 +744,18 @@ func _start_race(peer_id: int, room: int) -> void:
 	_rooms[room]["result_sent"] = false
 	_rooms[room]["linger_s"] = 0.0
 	_rooms[room]["done"] = {}
+	# レースの記録を始める（部屋・出走・人の情報を、頭に入れる）。
+	var log := OnlineRaceLog.new()
+	var people: Array = []
+	for member: Dictionary in room_members(room):
+		var peer := int(member["peer_id"])
+		people.append({"peer_id": peer, "name": str(member["name"]), "pururin_id": str(member["pururin_id"]), "introduction": str(_peers[peer].get("introduction", "")), "icon_kind": str((_peers[peer].get("icon", {}) as Dictionary).get("kind", "none"))})
+	log.start({
+		"room_id": room, "room_name": str(_rooms[room]["name"]), "host_peer_id": int(_rooms[room]["host"]),
+		"distance_m": distance, "field_size": int(_rooms[room]["field_size"]), "cpu": bool(_rooms[room]["cpu"]),
+		"cpu_picks": room_cpus(room), "entries": entries, "people": people,
+	})
+	_rooms[room]["log"] = log
 	_send_room(room, Protocol.message(Protocol.RACE_START, {"distance_m": distance, "entries": entries}))
 	_announce_room(room)
 	_announce_rooms()
@@ -749,6 +766,9 @@ func _race_input(peer_id: int, room: int, data: Dictionary) -> void:
 	var race := room_race(room)
 	if race != null:
 		race.call("set_remote_input", peer_id, float(data.get("line", 0.0)), float(data.get("notch", 0.0)), bool(data.get("brake", false)))
+		var log: OnlineRaceLog = _rooms[room].get("log")
+		if log != null:
+			log.record_input(float(race.get("_race_elapsed")), peer_id, float(data.get("line", 0.0)), float(data.get("notch", 0.0)), bool(data.get("brake", false)))
 
 
 func _race_action(peer_id: int, room: int, data: Dictionary) -> void:
@@ -756,6 +776,7 @@ func _race_action(peer_id: int, room: int, data: Dictionary) -> void:
 	var kind := str(data.get("kind", ""))
 	if race != null and kind in [Protocol.ACTION_DASH, Protocol.ACTION_BOOST]:
 		race.call("trigger_remote_action", peer_id, kind)
+		_log_event(room, kind, {"peer_id": peer_id})
 
 
 ## 走っているレースの状態を、決めた回数で配る。終わったら、着順を配って、レースを片づける。
@@ -769,10 +790,12 @@ func _update_race(room: int, delta: float) -> void:
 		if not bool(_rooms[room]["result_sent"]):
 			_rooms[room]["result_sent"] = true
 			_send_room(room, Protocol.message(Protocol.RACE_RESULT, {"rows": race.call("online_result_rows")}))
+			_log_event(room, "result", {"rows": race.call("online_result_rows")})
 		_rooms[room]["linger_s"] = float(_rooms[room]["linger_s"]) + delta
 		# 決めた秒数がたつか、全員が結果を見終わって画面を出たら、レースを片づけて、ぷるりんを選ぶ所へ戻す。
 		if float(_rooms[room]["linger_s"]) >= OnlineConfig.result_linger_s() or everyone_done(room):
 			_send_room(room, Protocol.message(Protocol.RACE_END))
+			_finish_log(room)
 			_end_race(room)
 			_reset_to_room_phase(room)
 			_announce_room(room)
@@ -782,13 +805,38 @@ func _update_race(room: int, delta: float) -> void:
 		_rooms[room]["ready_wait_s"] = float(_rooms[room]["ready_wait_s"]) + delta
 		if everyone_ready(room) or float(_rooms[room]["ready_wait_s"]) >= Protocol.READY_TIMEOUT_S:
 			race.call("release_start_hold")
+	var log: OnlineRaceLog = _rooms[room].get("log")
+	if log != null:
+		log.record(float(race.get("_race_elapsed")), race.get("_runners"))
 	_rooms[room]["state_wait_s"] = float(_rooms[room]["state_wait_s"]) - delta
 	if float(_rooms[room]["state_wait_s"]) <= 0.0:
 		_rooms[room]["state_wait_s"] = 1.0 / Protocol.STATE_RATE_HZ
 		_send_room(room, Protocol.message(Protocol.RACE_STATE, race.call("online_state")))
 
 
+## レースの記録に、できごとを足す（レースが無ければ、何もしない）。
+func _log_event(room: int, kind: String, fields: Dictionary) -> void:
+	var race := room_race(room)
+	var log: OnlineRaceLog = _rooms[room].get("log") if _rooms.has(room) else null
+	if race != null and log != null:
+		log.record_event(float(race.get("_race_elapsed")), kind, fields)
+
+
+## レースの記録を、ファイルに書いて閉じる。途中で終わったレース（全員が抜けた）も、そこまでを残す。
+func _finish_log(room: int) -> void:
+	var race := room_race(room)
+	var log: OnlineRaceLog = _rooms[room].get("log") if _rooms.has(room) else null
+	if race == null or log == null or not log.is_recording():
+		return
+	var rows: Array = race.call("online_result_rows") if bool(race.call("is_race_over")) else []
+	var filename := log.finish(float(race.get("_race_elapsed")), race.get("_runners"), rows)
+	_rooms[room]["log"] = null
+	if not filename.is_empty():
+		print("レースの記録：%s" % filename)
+
+
 func _end_race(room: int) -> void:
+	_finish_log(room)
 	var race := room_race(room)
 	if race != null:
 		race.queue_free()

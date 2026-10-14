@@ -170,7 +170,7 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 	assert_between(float(OnlineConfig.server_max_fps()), fps_range.x, fps_range.y)
 	assert_gt(OnlineConfig.max_rooms(), 0)
 	assert_gt(OnlineConfig.chat_max_length(), 0)
-	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20}
+	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14}
 	assert_true(OnlineConfig.validate(good).is_empty())
 	for bad: Dictionary in [
 		{"server_url": "http://x"}, {"connect_timeout_s": 0.0},

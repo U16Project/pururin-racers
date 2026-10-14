@@ -7,7 +7,7 @@ const Protocol := preload("res://scripts/online/online_protocol.gd")
 const SERVER_MAX_FPS_RANGE := Vector2(10.0, 120.0)
 ## 整数の設定と、受け付ける範囲。max_rooms＝同時に作れる部屋の数、chat_max_length＝部屋のひとことの字数。
 ## result_linger_s＝結果が出たあと、サーバーがレースを走らせ続ける秒数（過ぎたら、レースを片づけて、全員を部屋へ戻す）。
-const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0)}
+const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0), "log_keep_days": Vector2(1.0, 365.0)}
 ## つなぐ先として受け付ける書き出し（暗号なし・暗号あり）。
 const URL_PREFIXES := ["ws://", "wss://"]
 
@@ -76,6 +76,11 @@ static func max_rooms() -> int:
 ## 結果が出たあと、サーバーがレースを走らせ続ける秒数。
 static func result_linger_s() -> float:
 	return float(values()["result_linger_s"])
+
+
+## オンラインのレースの記録を、何日残すか（古いものは、サーバーが消す）。
+static func log_keep_days() -> int:
+	return int(values()["log_keep_days"])
 
 
 ## 部屋のひとことの、字数の上限。
