@@ -4,9 +4,9 @@ extends RefCounted
 ## 板は、コースの上にはみ出さないように、柵の線から芝のほうへずらして立てる。
 ## 置く距離と標識の数字は静的関数で決め、ここのノードの寿命は配置先Pathが持つ。
 
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 ## 標識は、柵の上（コース幅15mの端の、少し外）。
 const SIGN_SIDE_OFFSET_M := Parts.FENCE_SIDE_OFFSET_M
@@ -88,7 +88,7 @@ static func sign_half_width_m(size: Vector2) -> float:
 
 ## 板を、柵の線から、コースの内側（芝のほう）へずらす量。板が、コースの上にはみ出さないようにする。
 static func sign_side_shift_m(size: Vector2) -> float:
-	var room := SIGN_SIDE_OFFSET_M - M2TrackMath.HALF_WIDTH_M - SIGN_TRACK_EDGE_MARGIN_M
+	var room := SIGN_SIDE_OFFSET_M - TrackMath.HALF_WIDTH_M - SIGN_TRACK_EDGE_MARGIN_M
 	return maxf(sign_half_width_m(size) - room, 0.0)
 
 
@@ -138,7 +138,7 @@ func _course_center(track: Path3D) -> Vector3:
 func _place_signs(track: Path3D, route: Dictionary, race_distance_m: float, lap_length_m: float, interval_m: float, max_remaining_m: float) -> void:
 	var center := _course_center(track)
 	for distance in marker_distances(race_distance_m, interval_m, max_remaining_m):
-		var pose := M5CourseBuilder.route_pose(track.curve, route, distance, lap_length_m)
+		var pose := CourseBuilder.route_pose(track.curve, route, distance, lap_length_m)
 		if pose.is_empty():
 			continue
 		var travel: Vector3 = pose["travel"]

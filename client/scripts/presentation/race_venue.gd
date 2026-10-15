@@ -4,7 +4,7 @@ extends RefCounted
 ## 置き場所は毎回同じ（決まった種の乱数）。生成ノードの寿命は配置先Pathが所有する。
 
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 const ROOT_NAME := "RaceVenue"
 const RANDOM_SEED := 20261009
@@ -116,7 +116,7 @@ static func stand_block_centers(before_goal_m: float, past_goal_m: float) -> Arr
 	return centers
 
 
-## layout は、コースの定義（shared/course_layout_m5.json）。route は、今のレースのルート。
+## layout は、コースの定義（client/data/course_layout.json）。route は、今のレースのルート。
 ## ground_material は、シーンの地面の素材（外へ広げる地面にも、同じものを使う）。
 ## course_only が true なら、コースまわり（地面と柵）だけを作る。観客席・町・遠くの景色などは作らない。
 func place(track: Path3D, ground_material: Material, layout: Dictionary, route: Dictionary, course_only: bool = false) -> void:
@@ -610,7 +610,7 @@ void fragment() {
 	var bed_z := -range_m.y
 	while bed_z < range_m.x:
 		for _i in 26:
-			var p := Vector3(-(M2TrackMath.HALF_WIDTH_M + 4.6) + _rng.randf_range(-1.1, 1.1), 0.0, bed_z + _rng.randf_range(-4.5, 4.5)) + ground
+			var p := Vector3(-(TrackMath.HALF_WIDTH_M + 4.6) + _rng.randf_range(-1.1, 1.1), 0.0, bed_z + _rng.randf_range(-4.5, 4.5)) + ground
 			bushes.append(Transform3D(Basis.IDENTITY.scaled(Vector3(0.55, 0.42, 0.55)), p + Vector3(0.0, 0.25, 0.0)))
 			for _j in 3:
 				flowers.append(Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * _rng.randf_range(0.1, 0.16)), p + Vector3(_rng.randf_range(-0.35, 0.35), _rng.randf_range(0.45, 0.66), _rng.randf_range(-0.35, 0.35))))
@@ -635,7 +635,7 @@ func _build_pond_and_trees() -> void:
 	for _i in 260:
 		var along := _rng.randf_range(-_straight * 0.5 - _radius, _straight * 0.5 + _radius)
 		var across := _rng.randf_range(-_radius, _radius)
-		if distance_outside_track(along, across, _straight, _radius) > -(M2TrackMath.HALF_WIDTH_M + 14.0):
+		if distance_outside_track(along, across, _straight, _radius) > -(TrackMath.HALF_WIDTH_M + 14.0):
 			continue
 		if Vector2(along / (pond_radius.x + 12.0), across / (pond_radius.y + 12.0)).length() < 1.0:
 			continue

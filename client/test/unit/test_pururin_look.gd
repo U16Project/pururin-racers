@@ -15,7 +15,7 @@ const Portrait := preload("res://scripts/menu/pururin_portrait.gd")
 const PortraitCache := preload("res://scripts/presentation/pururin_portrait_cache.gd")
 const FaceParts := preload("res://scripts/presentation/pururin_parts/face_parts.gd")
 const BodyParts := preload("res://scripts/presentation/pururin_parts/body_parts.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 const SWAP_PARTS := "res://test/fixtures/pururin/parts_swap.json"
 const SWAP_LOOKS := "res://test/fixtures/pururin/looks_swap.json"
 
@@ -48,7 +48,7 @@ func test_the_game_look_files_load_without_errors() -> void:
 
 
 func test_every_body_is_as_wide_as_the_collision_circle_whatever_its_height() -> void:
-	assert_eq(Surface.BODY_RADIUS, M2TrackMath.BODY_RADIUS_M, "体の半径は、当たり判定と同じ")
+	assert_eq(Surface.BODY_RADIUS, TrackMath.BODY_RADIUS_M, "体の半径は、当たり判定と同じ")
 	for height in [0.8, 1.02, 1.3]:
 		var shape := {"height": height, "base_height": 0.2}
 		var widest := 0.0

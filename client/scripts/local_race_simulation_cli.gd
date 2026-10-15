@@ -83,13 +83,10 @@ func _run_batch(path: String, output_dir: String) -> void:
 	var failed := 0
 	for condition: Dictionary in cases:
 		var result := simulator.run_case(get_root(), condition)
-		var record := {"id": condition.id, "mode": condition.get("mode", "race"), "file": str(condition.id) + ".json", "execution_time_s": result.get("execution_time_s", 0.0)}
+		var record := {"id": condition.id, "file": str(condition.id) + ".json", "execution_time_s": result.get("execution_time_s", 0.0)}
 		if result.has("error"):
 			failed += 1
 			record["error"] = result.error
-		elif str(condition.get("mode", "race")) == "isolated":
-			record["metrics"] = result.metrics
-			record["effective_stats"] = result.effective_stats
 		else:
 			record["finish_snapshots"] = result.finish_snapshots
 			record["goal_assessment"] = result.goal_assessment

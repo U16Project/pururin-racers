@@ -4,11 +4,11 @@ extends RefCounted
 
 
 const Config := preload("res://scripts/config/local_race_config.gd")
-const CourseLayout := preload("res://scripts/m5_course_builder.gd")
-const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const CourseLayout := preload("res://scripts/course_builder.gd")
+const DraftRules := preload("res://scripts/config/draft_rules.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 ## ローカル2000mは M5 共有コース定義を正本にする。
 const RACE_DISTANCE_M := 2000.0
@@ -153,9 +153,6 @@ static var TOP_SPEED_NATURAL_MIN_KMH: float:
 static var TOP_SPEED_NATURAL_MAX_KMH: float:
 	get:
 		return Config.number("top_speed_natural_max_kmh")
-static var ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S: float:
-	get:
-		return Config.number("acceleration_drive_force_bonus_per_stat_kmh_per_s")
 
 ## 接触箱。寸法はローカルレース設定で調整する。
 static var BLOCK_LATERAL_M: float:
@@ -248,10 +245,10 @@ static func step_drive_level(level: float, direction: float) -> float:
 	return clamp_drive_level(level + sign_direction * DRIVE_LEVEL_STEP)
 
 
-static func drive_force_kmh_per_s(drive_level: float, acceleration_bonus_kmh_per_s: float = 0.0) -> float:
+static func drive_force_kmh_per_s(drive_level: float) -> float:
 	# 負ノッチは制動側で扱う。配列の末尾参照にならないよう0未満を0にする。
 	var level_index := maxi(int(round(clamp_drive_level(drive_level))), 0)
-	return maxf(float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index]) + acceleration_bonus_kmh_per_s, 0.0)
+	return maxf(float(DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level_index]), 0.0)
 
 
 ## 出力走行の内訳。HUD・ログ・速度更新が同じ計算結果を使う。
@@ -259,7 +256,6 @@ static func drive_diagnostics_kmh_per_s(
 	speed_kmh: float,
 	drive_level: float,
 	draft_factor: float = 0.0,
-	acceleration_bonus_kmh_per_s: float = 0.0,
 	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
 	propulsion_efficiency: float = 1.0,
 	air_resistance_multiplier: float = 1.0,
@@ -273,7 +269,7 @@ static func drive_diagnostics_kmh_per_s(
 		# ブレーキ中は推進力の代わりに制動寄与を負値で入れる。
 		drive_contribution = -BRAKE_DECELERATION_KMH_PER_S
 	elif level > 0.0:
-		drive_contribution = drive_force_kmh_per_s(level, acceleration_bonus_kmh_per_s) + top_speed_drive_adjustment_kmh_per_s
+		drive_contribution = drive_force_kmh_per_s(level) + top_speed_drive_adjustment_kmh_per_s
 	if drive_contribution > 0.0:
 		# ダッシュ・ブーストは、推進力そのものを一時的に増やす（抵抗には触れない）。
 		drive_contribution *= maxf(drive_boost_multiplier, 0.0) * clampf(propulsion_efficiency, 0.0, 1.0)
@@ -303,7 +299,7 @@ static func drive_resistance_kmh_per_s(
 	draft_factor: float = 0.0,
 	air_resistance_multiplier: float = 1.0
 ) -> float:
-	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor, 0.0, 0.0, 1.0, air_resistance_multiplier)
+	var diagnostics := drive_diagnostics_kmh_per_s(speed_kmh, 0.0, draft_factor, 0.0, 1.0, air_resistance_multiplier)
 	return float(diagnostics["rolling_resistance_kmh_per_s"]) + float(diagnostics["air_resistance_kmh_per_s"]) - float(diagnostics["draft_air_reduction_kmh_per_s"])
 
 
@@ -390,7 +386,7 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 		pos.append(float(entry["offset"]))
 	var contest := {}
 	var lost := {}
-	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var max_abs := TrackMath.MAX_ABS_OFFSET_M
 	for pass_index in PUSH_PASSES:
 		var correction: Array[float] = []
 		correction.resize(count)
@@ -480,7 +476,7 @@ static func lateral_move_stamina_load_l(distance_m: float, handling_stat: int = 
 static func line_speed_multiplier(offset: float, curvature: float, speed_kmh: float, handling_stat: int = 5) -> float:
 	if absf(curvature) < 0.00001:
 		return 1.0
-	var ratio := clampf(absf(offset) / M2TrackMath.MAX_ABS_OFFSET_M, 0.0, 1.0)
+	var ratio := clampf(absf(offset) / TrackMath.MAX_ABS_OFFSET_M, 0.0, 1.0)
 	var side := Config.number("line_speed_penalty_inner_ratio") if offset * curvature < 0.0 else 1.0
 	var speed_factor := maxf(speed_kmh, 0.0) / maxf(Config.number("line_speed_penalty_reference_speed_kmh"), 0.001)
 	var stat := clampi(handling_stat, 1, 15)
@@ -760,15 +756,12 @@ static func _empty_draft_details() -> Dictionary:
 static func advance_drive_speed_kmh(
 	current_kmh: float,
 	drive_level: float,
-	max_speed_kmh: float,
 	delta: float,
 	draft_factor: float = 0.0,
-	acceleration_bonus_kmh_per_s: float = 0.0,
 	top_speed_drive_adjustment_kmh_per_s: float = 0.0,
 	propulsion_efficiency: float = 1.0,
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
-	simulation_legacy_speed_cap: bool = false,
 	braking: bool = false,
 	drive_boost_multiplier: float = 1.0
 ) -> float:
@@ -779,7 +772,6 @@ static func advance_drive_speed_kmh(
 		current_kmh,
 		level,
 		draft_factor,
-		acceleration_bonus_kmh_per_s,
 		top_speed_drive_adjustment_kmh_per_s,
 		propulsion_efficiency,
 		air_resistance_multiplier,
@@ -788,9 +780,6 @@ static func advance_drive_speed_kmh(
 		drive_boost_multiplier
 	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
-	# 通常は自然到達速度で切らない。旧挙動の比較測定時だけ明示的に上限を再現する。
-	if simulation_legacy_speed_cap:
-		return clampf(next_speed, MIN_SPEED_KMH, maxf(max_speed_kmh, MIN_SPEED_KMH))
 	return maxf(next_speed, MIN_SPEED_KMH)
 
 
@@ -820,11 +809,6 @@ static func top_speed_drive_adjustment_kmh_per_s(
 	var level_share := level_force / maxf(max_drive_force, 0.001)
 	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
 	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio
-
-
-static func stat_acceleration_force_bonus_kmh_per_s(acceleration: int) -> float:
-	# 旧モデル比較用。現行設定では係数0で、常時推進加算を無効にする。
-	return (acceleration - 5) * ACCELERATION_DRIVE_FORCE_BONUS_PER_STAT_KMH_PER_S
 
 
 static func stat_acceleration_response_multiplier(acceleration: int) -> float:
@@ -885,16 +869,16 @@ static func cpu_open_line_target_offset_m(
 	overtake_bias: float = 0.0,
 	curvature: float = 0.0
 ) -> Dictionary:
-	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var max_abs := TrackMath.MAX_ABS_OFFSET_M
 	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
 	var preferred_line := lerpf(max_abs, -max_abs, clampf(line_pref, 0.0, 1.0))
-	var current := M2TrackMath.clamp_offset(self_offset)
+	var current := TrackMath.clamp_offset(self_offset)
 	var candidate_offsets := [
 		current,
 		current - spacing,
 		current + spacing,
 		preferred_line,
-		M2TrackMath.clamp_offset(lerpf(
+		TrackMath.clamp_offset(lerpf(
 			current,
 			preferred_line,
 			Config.number("cpu_follow_slot_inner_midpoint_blend")
@@ -905,7 +889,7 @@ static func cpu_open_line_target_offset_m(
 	var best_score := INF
 	var selected_offset := current
 	for offset_value in candidate_offsets:
-		var slot_offset := M2TrackMath.clamp_offset(float(offset_value))
+		var slot_offset := TrackMath.clamp_offset(float(offset_value))
 		var inner_distance := absf(slot_offset - preferred_line) / max_abs
 		var field_density := _cpu_follow_slot_field_density(
 			self_race_progress, slot_offset, "", others
@@ -944,13 +928,13 @@ static func cpu_follow_slot(
 ) -> Dictionary:
 	if not bool(follow_candidate.get("found", false)):
 		return {"found": false}
-	var leader_offset := M2TrackMath.clamp_offset(float(follow_candidate.get("offset", 0.0)))
+	var leader_offset := TrackMath.clamp_offset(float(follow_candidate.get("offset", 0.0)))
 	var leader_progress := float(follow_candidate.get("race_progress", self_race_progress))
 	var leader_id := str(follow_candidate.get("id", ""))
 	var preferred_gap := Config.number("cpu_follow_preferred_gap_m")
 	var slot_progress := leader_progress - preferred_gap
 	var spacing := Config.number("cpu_follow_slot_lateral_spacing_m")
-	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var max_abs := TrackMath.MAX_ABS_OFFSET_M
 	var inside_reference := Config.number("cpu_inward_target_offset_m")
 	var slots := [
 		{"name": "center", "offset": leader_offset, "progress": slot_progress, "tie_rank": 1, "forward": false},
@@ -1010,7 +994,7 @@ static func cpu_follow_slot(
 	var selected := {"found": false}
 	for slot_value in slots:
 		var slot: Dictionary = slot_value
-		var slot_offset := M2TrackMath.clamp_offset(float(slot["offset"]))
+		var slot_offset := TrackMath.clamp_offset(float(slot["offset"]))
 		var candidate_progress := float(slot.get("progress", slot_progress))
 		# 前方スロットが接触範囲に入るなら、無理に割り込まず後方候補へ戻す。
 		if bool(slot.get("forward", false)):
@@ -1023,7 +1007,7 @@ static func cpu_follow_slot(
 		var open_forward := _cpu_follow_slot_open_forward_score(
 			candidate_progress, slot_offset, leader_id, others
 		)
-		var inner_distance := absf(slot_offset - inside_reference) / M2TrackMath.MAX_ABS_OFFSET_M
+		var inner_distance := absf(slot_offset - inside_reference) / TrackMath.MAX_ABS_OFFSET_M
 		# 現在ラインからの移動も、空き・混雑・内側志向と同じ候補評価に含める。
 		var distance_score := follow_distance_score
 		if bool(slot.get("forward", false)):
@@ -1059,7 +1043,7 @@ static func cpu_follow_slot(
 		return {
 			"found": true,
 			"name": "hold_current",
-			"offset": M2TrackMath.clamp_offset(self_offset),
+			"offset": TrackMath.clamp_offset(self_offset),
 			"score": INF,
 			"tie_rank": 99,
 			"progress": self_race_progress,
@@ -1072,7 +1056,7 @@ static func cpu_follow_slot(
 ## 直線(curvature=0)では全候補が0になり、内外差を発生させない。
 ## スタミナ・心拍・速度計算には使わず、既存の距離倍率だけを再利用する。
 static func cpu_line_distance_advantage_score(offset: float, curvature: float) -> float:
-	return (M2TrackMath.distance_multiplier(offset, curvature) - 1.0) \
+	return (TrackMath.distance_multiplier(offset, curvature) - 1.0) \
 		* Config.number("cpu_line_distance_advantage_weight")
 
 
@@ -1146,9 +1130,9 @@ static func cpu_follow_target_offset_m(
 	blend: float = -1.0
 ) -> float:
 	var safe_blend := Config.number("cpu_follow_offset_blend") if blend < 0.0 else clampf(blend, 0.0, 1.0)
-	return M2TrackMath.clamp_offset(lerpf(
+	return TrackMath.clamp_offset(lerpf(
 		current_target_offset,
-		M2TrackMath.clamp_offset(slot_offset),
+		TrackMath.clamp_offset(slot_offset),
 		safe_blend
 	))
 
@@ -1431,7 +1415,7 @@ static func centerline_delta_from_kmh(
 	offset: float,
 	curvature: float
 ) -> float:
-	var mult := M2TrackMath.distance_multiplier(offset, curvature)
+	var mult := TrackMath.distance_multiplier(offset, curvature)
 	# コースはメートルなので、進む量だけ km/h → m/s 相当にする。
 	return (speed_kmh / 3.6) * delta / mult
 
@@ -1468,7 +1452,7 @@ static func format_race_time(seconds: float) -> String:
 
 ## 最内＝枠1。offset は負が内側。8プルを可動幅に等間隔。
 static func starting_offset_for_gate(gate_index: int, field_size: int = FIELD_SIZE) -> float:
-	var max_abs := M2TrackMath.MAX_ABS_OFFSET_M
+	var max_abs := TrackMath.MAX_ABS_OFFSET_M
 	if field_size <= 1:
 		return -max_abs
 	var t := float(gate_index) / float(field_size - 1)

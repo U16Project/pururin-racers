@@ -7,8 +7,8 @@ extends RefCounted
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
 const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 const ROOT_NAME := "StartGate"
 ## 枠の数。
@@ -42,7 +42,7 @@ static func board_offset_m(gate_index: int) -> float:
 
 ## 台のまん中の横位置（コースの中心線からの距離）。
 static func cart_offset_m() -> float:
-	return M2TrackMath.HALF_WIDTH_M + CART_GAP_FROM_TRACK_M + CART_SIZE_M.x * 0.5
+	return TrackMath.HALF_WIDTH_M + CART_GAP_FROM_TRACK_M + CART_SIZE_M.x * 0.5
 
 
 func place(track: Path3D, route: Dictionary, lap_length_m: float) -> void:
@@ -55,7 +55,7 @@ func place(track: Path3D, route: Dictionary, lap_length_m: float) -> void:
 	_root = Node3D.new()
 	_root.name = ROOT_NAME
 	track.add_child(_root)
-	var pose := M5CourseBuilder.route_pose(track.curve, route, 0.0, lap_length_m)
+	var pose := CourseBuilder.route_pose(track.curve, route, 0.0, lap_length_m)
 	var travel: Vector3 = pose["travel"]
 	# ここから先は、x＝外側、y＝上、z＝手前（進む向きの逆）。
 	_root.transform = Parts.frame_at((pose["position"] as Vector3) + travel * AHEAD_OF_LINE_M, travel)

@@ -239,8 +239,9 @@ func test_full_field_puts_the_player_in_gate_one_and_the_rest_in_roster_order() 
 	assert_eq(RaceSession.user_slot(), 0)
 	assert_eq(RaceSession.selected_player_pururin_id(), ids[3])
 	var expected: Array[String] = []
+	# 枠の数より個体が多いときは、ロスター順で枠が埋まるところまで。
 	for identifier in ids:
-		if identifier != ids[3]:
+		if identifier != ids[3] and expected.size() < RaceSession.SLOT_COUNT - 1:
 			expected.append(identifier)
 	assert_eq(RaceSession.selected_opponent_ids(), expected)
 

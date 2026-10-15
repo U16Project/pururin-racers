@@ -1,7 +1,7 @@
 [gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/camera_exploration.gd" id="1_controller"]
-[ext_resource type="Script" path="res://scripts/m2_track_path.gd" id="2_track"]
+[ext_resource type="Script" path="res://scripts/track_path.gd" id="2_track"]
 [ext_resource type="Script" path="res://scripts/exploration_camera.gd" id="3_camera"]
 [ext_resource type="FontFile" uid="uid://c1ffkwb3lm864" path="res://fonts/NotoSansJP-Regular.otf" id="4_font"]
 

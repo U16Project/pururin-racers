@@ -3,8 +3,8 @@ extends GutTest
 const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 
 func test_marker_distances_are_spaced_and_stay_before_the_goal() -> void:
@@ -63,7 +63,7 @@ func test_signs_do_not_hang_over_the_track() -> void:
 	for size: Vector2 in [CourseMarkers.SIGN_SIZE_M, CourseMarkers.SIGN_LARGE_SIZE_M]:
 		# 板の、コース側の端（コースの中心線から）。
 		var track_side_edge := CourseMarkers.SIGN_SIDE_OFFSET_M + CourseMarkers.sign_side_shift_m(size) - CourseMarkers.sign_half_width_m(size)
-		assert_gt(track_side_edge, M2TrackMath.HALF_WIDTH_M)
+		assert_gt(track_side_edge, TrackMath.HALF_WIDTH_M)
 
 
 func test_marker_distances_skip_signs_farther_than_the_max_remaining() -> void:
@@ -84,11 +84,11 @@ func test_signs_never_stand_close_together_on_any_route() -> void:
 	var track := Path3D.new()
 	LocalRaceMath.apply_course_to_path(track)
 	add_child_autofree(track)
-	for route: Dictionary in M5CourseBuilder.load_layout()["routes"]:
+	for route: Dictionary in CourseBuilder.load_layout()["routes"]:
 		var total := float(route["distance_m"])
 		var positions: Array[Vector3] = []
 		for distance in CourseMarkers.marker_distances(total, interval, max_remaining):
-			var position: Vector3 = M5CourseBuilder.route_pose(track.curve, route, distance, lap)["position"]
+			var position: Vector3 = CourseBuilder.route_pose(track.curve, route, distance, lap)["position"]
 			for other in positions:
 				assert_gt(position.distance_to(other), interval * 0.8)
 			positions.append(position)
@@ -100,7 +100,7 @@ func test_every_part_of_a_sign_is_hidden_beyond_the_visible_distance() -> void:
 	var track := Path3D.new()
 	LocalRaceMath.apply_course_to_path(track)
 	add_child_autofree(track)
-	var route: Dictionary = M5CourseBuilder.load_layout()["routes"][0]
+	var route: Dictionary = CourseBuilder.load_layout()["routes"][0]
 	var markers := CourseMarkers.new()
 	markers.place(
 		track, route, float(route["distance_m"]), LocalRaceMath.lap_length_m(),

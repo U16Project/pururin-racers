@@ -65,18 +65,12 @@ Pururin Racing Game は、
 
 ---
 
-## 🛠️ 開発用 Cursor 設定（`.cursor`）
-
-**開発中は `.cursor/` を GitHub に置いて共有する**（ルール・エージェント・スキル）。  
-リポジトリを広く公開する段階では、`.cursor/` を削除または外す想定。詳細は [`.cursor/README.md`](.cursor/README.md)。
-
 ## 📁 リポジトリ構成（概要）
 
 | パス | 内容 |
 |------|------|
 | [`client/`](client/) | Godot アプリ（Steam / Play は同一プロジェクトから Export） |
-| [`server/`](server/) | Python ゲームサーバー |
-| [`shared/`](shared/) | 通信契約と標準コース定義 |
+| [`shared/`](shared/) | オンライン対戦の通信の決まり（サーバーは `client/` の画面なし起動） |
 | [`build/`](build/) | エクスポート成果物（Git 除外。linux / windows / android など） |
 | [`docs/`](docs/) | 設計案・検討事項 |
 | [`tools/godot/`](tools/godot/) | エディタ本体のローカル置き場（Git 除外。開発は Godot 4.7） |

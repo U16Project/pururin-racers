@@ -1,10 +1,10 @@
 extends GutTest
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
-const M2CourseBuilder := preload("res://scripts/m2_course_builder.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackCurveBuilder := preload("res://scripts/track_curve_builder.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
-const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
+const DraftRules := preload("res://scripts/config/draft_rules.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const LocalRaceCameraScript := preload("res://scripts/local_race_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
@@ -71,7 +71,7 @@ func test_local_course_uses_shared_m5_layout() -> void:
 	assert_almost_eq(expected, LocalRaceMath.lap_length_m(), 0.2)
 	assert_almost_eq(LocalRaceMath.straight_length_m(), 680.0, 0.001)
 	assert_almost_eq(LocalRaceMath.turn_radius_m(), 115.085, 0.001)
-	var curve := M2CourseBuilder.make_racecourse_curve(
+	var curve := TrackCurveBuilder.make_racecourse_curve(
 		LocalRaceMath.straight_length_m(),
 		LocalRaceMath.turn_radius_m(),
 		20,
@@ -202,15 +202,6 @@ func _drive_force(level: int) -> float:
 	return float(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level])
 
 
-## 1秒進めたあとの速度。駆動力 − 転がり抵抗 − 空気抵抗（ドラフト・補正なし）。
-func _expected_speed_after_one_second(speed_kmh: float, level: int) -> float:
-	return speed_kmh + _drive_force(level) - LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S - _air_resistance(speed_kmh)
-
-
-func test_player_speeds_are_kmh() -> void:
-	assert_eq(LocalRaceMath.PLAYER_MAX_SPEED_KMH, LocalRaceMath.Config.number("top_speed_natural_max_kmh"))
-
-
 func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> void:
 	var low := LocalRaceMath.Config.number("top_speed_natural_min_kmh")
 	var high := LocalRaceMath.Config.number("top_speed_natural_max_kmh")
@@ -218,8 +209,6 @@ func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> v
 	assert_almost_eq(LocalRaceMath.top_speed_natural_speed_kmh(5), lerpf(low, high, 4.0 / 14.0), 0.0001)
 	assert_almost_eq(LocalRaceMath.top_speed_natural_speed_kmh(8), lerpf(low, high, 7.0 / 14.0), 0.0001)
 	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(15), high)
-	assert_almost_eq(LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(5), 0.0, 0.001)
-	assert_almost_eq(LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(8), 0.0, 0.001)
 	assert_almost_eq(_natural_speed_after_sixty_seconds(1, 5), low, 0.05)
 	assert_almost_eq(_natural_speed_after_sixty_seconds(15, 5), high, 0.05)
 
@@ -233,7 +222,6 @@ func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> voi
 	assert_eq(stats["acceleration"], 5)
 	assert_almost_eq(player.call("get_natural_top_speed"), LocalRaceMath.top_speed_natural_speed_kmh(8), 0.001)
 	assert_almost_eq(player.call("get_max_speed"), LocalRaceMath.top_speed_natural_speed_kmh(8), 0.001)
-	assert_almost_eq(player.call("get_acceleration_force_bonus"), 0.0, 0.001)
 	race.free()
 
 
@@ -286,7 +274,6 @@ func test_cpu_telemetry_uses_trainer_drive_level_for_drive_diagnostics() -> void
 		60.0,
 		4.0,
 		0.0,
-		runner.call("get_acceleration_force_bonus"),
 		LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
 			60.0,
 			4.0,
@@ -311,10 +298,8 @@ func _natural_speed_after_sixty_seconds(top_speed: int, acceleration: int) -> fl
 		speed = LocalRaceMath.advance_drive_speed_kmh(
 			speed,
 			6.0,
-			LocalRaceMath.top_speed_natural_speed_kmh(15),
 			0.01,
 			0.0,
-			LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(acceleration),
 			top_speed_adjustment,
 			1.0,
 			1.0,
@@ -329,23 +314,23 @@ func test_acceleration_response_is_linear_and_does_not_raise_equilibrium() -> vo
 		for top_speed: int in [1, 5, 10, 15]:
 			assert_almost_eq(_natural_speed_after_sixty_seconds(top_speed, stat), LocalRaceMath.top_speed_natural_speed_kmh(top_speed), 0.05)
 	var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(50.0, 6.0, 5)
-	var low := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, 0.0, adjustment, 1.0, 1.0, 0.8)
-	var high := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, 0.0, adjustment, 1.0, 1.0, 1.5)
+	var low := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, adjustment, 1.0, 1.0, 0.8)
+	var high := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, adjustment, 1.0, 1.0, 1.5)
 	assert_gt(float(high["total_acceleration_kmh_per_s"]), float(low["total_acceleration_kmh_per_s"]))
 	assert_almost_eq(float(high["drive_contribution_kmh_per_s"]), float(low["drive_contribution_kmh_per_s"]), 0.00001)
 
 
 func test_acceleration_response_does_not_change_coasting_braking_or_positive_notch_deceleration() -> void:
 	for notch: float in [0.0, 3.0, 6.0]:
-		var low := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 0.8)
-		var high := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 1.5)
+		var low := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, 0.1, 0.0, 0.0, 1.0, 1.0, 0.8)
+		var high := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, 0.1, 0.0, 0.0, 1.0, 1.0, 1.5)
 		assert_almost_eq(low, high, 0.00001)
-	var braked_low := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 0.8, false, true)
-	var braked_high := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, INF, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 1.5, false, true)
+	var braked_low := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 0.1, 0.0, 0.0, 1.0, 1.0, 0.8, true)
+	var braked_high := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 0.1, 0.0, 0.0, 1.0, 1.0, 1.5, true)
 	assert_almost_eq(braked_low, braked_high, 0.00001)
 	var equilibrium_speed := LocalRaceMath.top_speed_natural_speed_kmh(5)
 	var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(equilibrium_speed, 6.0, 5)
-	assert_almost_eq(LocalRaceMath.advance_drive_speed_kmh(equilibrium_speed, 6.0, INF, 0.1, 0.0, 0.0, adjustment, 1.0, 1.0, 1.5), equilibrium_speed, 0.00001)
+	assert_almost_eq(LocalRaceMath.advance_drive_speed_kmh(equilibrium_speed, 6.0, 0.1, 0.0, adjustment, 1.0, 1.0, 1.5), equilibrium_speed, 0.00001)
 
 
 func test_runner_diagnostics_include_effective_acceleration_response() -> void:
@@ -371,8 +356,8 @@ func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_
 			for draft: float in [0.0, 0.33]:
 				for efficiency: float in [0.35, 1.0]:
 					for aero: float in [LocalRaceMath.aero_air_resistance_multiplier(15), LocalRaceMath.aero_air_resistance_multiplier(1)]:
-						var plain := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, 0.0, efficiency, aero, 1.0)
-						var responsive := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, 0.0, efficiency, aero, 1.5)
+						var plain := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, efficiency, aero, 1.0)
+						var responsive := LocalRaceMath.drive_diagnostics_kmh_per_s(speed, notch, draft, 0.0, efficiency, aero, 1.5)
 						for field: String in ["drive_contribution_kmh_per_s", "rolling_resistance_kmh_per_s", "air_resistance_kmh_per_s", "draft_air_reduction_kmh_per_s"]:
 							assert_almost_eq(float(plain[field]), float(responsive[field]), 0.00001)
 						var net := float(plain["total_acceleration_kmh_per_s"])
@@ -403,23 +388,17 @@ func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
 
 
 func test_drive_zero_level_naturally_slows_but_respects_floor() -> void:
-	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 1.0)
+	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 1.0)
 	assert_lt(coasting, 70.0)
-	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 75.0, 1.0), 40.0)
-
-
-func test_drive_maximum_output_uses_force_without_a_hard_speed_cap() -> void:
-	var accelerated := LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0)
-	assert_almost_eq(accelerated, _expected_speed_after_one_second(50.0, 6), 0.001)
-	assert_gt(LocalRaceMath.advance_drive_speed_kmh(74.0, 6.0, 75.0, 1.0, 1.0), 75.0)
+	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 1.0), 40.0)
 
 
 func test_drive_braking_slows_but_does_not_stop() -> void:
 	# 最低速度に当たらないよう、短い時間（0.1秒）で比べる。
-	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 0.1, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, true)
-	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 75.0, 0.1)
+	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 0.1, 0.0, 0.0, 1.0, 1.0, 1.0, true)
+	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 0.1)
 	assert_almost_eq(coasting - braked, LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S * 0.1, 0.001)
-	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 75.0, 1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, true), 40.0)
+	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, true), 40.0)
 
 
 func test_braking_overrides_the_notch_without_spending_fuel_or_raising_heart() -> void:
@@ -451,75 +430,6 @@ func test_cpu_cannot_brake() -> void:
 	runner.call("set_braking", true)
 	assert_false(runner.call("is_braking"))
 	runner.free()
-
-
-func test_drive_coefficients_are_moderate_for_one_second_step() -> void:
-	assert_eq(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S, LocalRaceMath.Config.values()["drive_force_by_level_kmh_per_s"])
-	assert_almost_eq(LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, LocalRaceMath.Config.number("brake_deceleration_kmh_per_s"), 0.001)
-	assert_almost_eq(
-		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0),
-		_expected_speed_after_one_second(50.0, 6),
-		0.001
-	)
-
-
-func test_drive_notches_use_force_minus_resistance_without_speed_bands() -> void:
-	assert_almost_eq(
-		LocalRaceMath.advance_drive_speed_kmh(50.0, 1.0, 75.0, 1.0),
-		_expected_speed_after_one_second(50.0, 1),
-		0.001
-	)
-	assert_almost_eq(
-		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0),
-		_expected_speed_after_one_second(50.0, 6),
-		0.001
-	)
-
-
-func test_drive_notch_one_holds_minimum_speed_when_resistance_exceeds_force() -> void:
-	var from_floor := LocalRaceMath.advance_drive_speed_kmh(40.0, 1.0, 75.0, 1.0)
-	var at_high_speed := LocalRaceMath.advance_drive_speed_kmh(75.0, 1.0, 75.0, 1.0)
-	# 40km/h時の抵抗（転がり＋空気）は、ノッチ1の駆動力を上回る。
-	var diagnostics := LocalRaceMath.drive_diagnostics_kmh_per_s(40.0, 1.0)
-	assert_almost_eq(float(diagnostics["air_resistance_kmh_per_s"]), _air_resistance(40.0), 0.001)
-	assert_almost_eq(float(diagnostics["total_acceleration_kmh_per_s"]), _drive_force(1) - LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S - _air_resistance(40.0), 0.001)
-	assert_lt(float(diagnostics["total_acceleration_kmh_per_s"]), 0.0)
-	assert_eq(from_floor, 40.0)
-	assert_lt(at_high_speed, 75.0)
-
-
-func test_drive_notches_one_and_two_stay_on_floor_and_three_leaves_it() -> void:
-	for level in [1.0, 2.0]:
-		assert_eq(
-			LocalRaceMath.advance_drive_speed_kmh(LocalRaceMath.MIN_SPEED_KMH, level, 75.0, 1.0),
-			LocalRaceMath.MIN_SPEED_KMH
-		)
-		assert_lt(LocalRaceMath.advance_drive_speed_kmh(75.0, level, 75.0, 1.0), 75.0)
-	var notch_three_from_floor := LocalRaceMath.advance_drive_speed_kmh(
-		LocalRaceMath.MIN_SPEED_KMH, 3.0, 75.0, 1.0
-	)
-	assert_gt(notch_three_from_floor, LocalRaceMath.MIN_SPEED_KMH)
-	assert_lt(LocalRaceMath.advance_drive_speed_kmh(75.0, 3.0, 75.0, 1.0), 75.0)
-
-
-func test_drive_notch_three_and_zero_have_different_deceleration() -> void:
-	var notch_three := LocalRaceMath.advance_drive_speed_kmh(75.0, 3.0, 75.0, 1.0)
-	var notch_zero := LocalRaceMath.advance_drive_speed_kmh(75.0, 0.0, 75.0, 1.0)
-	assert_lt(notch_three, 75.0)
-	# ノッチ3は駆動力が残るため、惰性（ノッチ0）より減速が弱い。
-	assert_lt(notch_zero, notch_three)
-
-
-func test_drive_notch_six_naturally_slows_when_resistance_exceeds_force() -> void:
-	var speed := LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0)
-	assert_almost_eq(speed, _expected_speed_after_one_second(50.0, 6), 0.001)
-	assert_lt(LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 75.0, 1.0), 75.0)
-
-
-func test_drive_notch_three_naturally_slows_near_personal_cap() -> void:
-	var next_speed := LocalRaceMath.advance_drive_speed_kmh(75.0, 3.0, 75.0, 1.0)
-	assert_lt(next_speed, 75.0)
-	assert_gt(next_speed, LocalRaceMath.advance_drive_speed_kmh(75.0, 0.0, 75.0, 1.0))
 
 
 func test_drive_diagnostics_explain_force_resistance_and_draft_reduction() -> void:
@@ -576,9 +486,9 @@ func test_aero_and_pack_stats_use_continuous_baseline_multipliers() -> void:
 	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(1), 1.0 + LocalRaceMath.AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT * 4.0, 0.001)
 	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(5), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.aero_air_resistance_multiplier(15), 1.0 - LocalRaceMath.AERO_AIR_RESISTANCE_MULTIPLIER_PER_STAT * 10.0, 0.001)
-	var aero_one := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(1))
-	var aero_five := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(5))
-	var aero_fifteen := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(15))
+	var aero_one := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(1))
+	var aero_five := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(5))
+	var aero_fifteen := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 0.0, 0.0, 0.0, 1.0, LocalRaceMath.aero_air_resistance_multiplier(15))
 	assert_almost_eq(float(aero_one["air_resistance_kmh_per_s"]), _air_resistance(50.0, LocalRaceMath.aero_air_resistance_multiplier(1)), 0.001)
 	assert_almost_eq(float(aero_five["air_resistance_kmh_per_s"]), _air_resistance(50.0), 0.001)
 	assert_almost_eq(float(aero_fifteen["air_resistance_kmh_per_s"]), _air_resistance(50.0, LocalRaceMath.aero_air_resistance_multiplier(15)), 0.001)
@@ -640,19 +550,6 @@ func test_quadratic_air_resistance_grows_with_speed_and_draft_keeps_rolling_resi
 	assert_lt(float(drafted["air_resistance_kmh_per_s"]) - float(drafted["draft_air_reduction_kmh_per_s"]), float(high["air_resistance_kmh_per_s"]))
 
 
-func test_high_speed_notches_change_by_force_curve_without_special_band() -> void:
-	var level_three := LocalRaceMath.drive_diagnostics_kmh_per_s(75.0, 3.0)
-	var level_four := LocalRaceMath.drive_diagnostics_kmh_per_s(75.0, 4.0)
-	var level_five := LocalRaceMath.drive_diagnostics_kmh_per_s(75.0, 5.0)
-	var level_six := LocalRaceMath.drive_diagnostics_kmh_per_s(75.0, 6.0)
-	assert_lt(float(level_three["total_acceleration_kmh_per_s"]), 0.0)
-	assert_lt(float(level_four["total_acceleration_kmh_per_s"]), 0.0)
-	assert_gt(float(level_five["total_acceleration_kmh_per_s"]), float(level_four["total_acceleration_kmh_per_s"]))
-	assert_gt(float(level_six["total_acceleration_kmh_per_s"]), float(level_five["total_acceleration_kmh_per_s"]))
-	assert_lt(float(level_five["total_acceleration_kmh_per_s"]), 0.0)
-	assert_lt(float(level_six["total_acceleration_kmh_per_s"]), 0.0)
-
-
 func test_cpu_lane_changes_stay_inside_configured_ranges() -> void:
 	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(0.0), 1.0, 0.001)
 	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(1.0), 2.0, 0.001)
@@ -686,7 +583,7 @@ func test_cpu_open_line_high_line_pref_moves_inside_when_current_line_is_blocked
 
 func test_cpu_open_line_moves_toward_inside_preference_when_nearby_space_is_open() -> void:
 	var line_pref := 0.8
-	var preferred := lerpf(M2TrackMath.MAX_ABS_OFFSET_M, -M2TrackMath.MAX_ABS_OFFSET_M, line_pref)
+	var preferred := lerpf(TrackMath.MAX_ABS_OFFSET_M, -TrackMath.MAX_ABS_OFFSET_M, line_pref)
 	var selected := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 2.0, [
 		{"id": "behind", "race_progress": 98.0, "offset": -4.1},
 	], line_pref)
@@ -716,8 +613,8 @@ func test_cpu_open_line_target_uses_an_open_side_when_current_line_is_dense() ->
 func test_cpu_follow_offset_is_bounded() -> void:
 	assert_almost_eq(LocalRaceMath.cpu_follow_target_offset_m(-2.0, 2.0), 0.6, 0.001)
 	assert_almost_eq(
-		LocalRaceMath.cpu_follow_target_offset_m(M2TrackMath.MAX_ABS_OFFSET_M, 99.0),
-		M2TrackMath.MAX_ABS_OFFSET_M,
+		LocalRaceMath.cpu_follow_target_offset_m(TrackMath.MAX_ABS_OFFSET_M, 99.0),
+		TrackMath.MAX_ABS_OFFSET_M,
 		0.001
 	)
 
@@ -748,10 +645,10 @@ func test_cpu_follow_slot_is_bounded_and_no_candidate_keeps_fallback_path() -> v
 	assert_false(no_candidate["found"])
 	var edge_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, {
 		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": M2TrackMath.MAX_ABS_OFFSET_M,
+		"forward_gap_m": 4.0, "offset": TrackMath.MAX_ABS_OFFSET_M,
 	}, [])
 	assert_true(edge_slot["found"])
-	assert_lte(absf(float(edge_slot["offset"])), M2TrackMath.MAX_ABS_OFFSET_M)
+	assert_lte(absf(float(edge_slot["offset"])), TrackMath.MAX_ABS_OFFSET_M)
 
 
 func test_cpu_follow_slot_positive_bias_uses_clear_forward_diagonal() -> void:
@@ -796,7 +693,7 @@ func test_follow_slot_targets_profile_inside_line_until_overtake_intent_is_stron
 	var field := [leader, {"id": "pack", "race_progress": 10.0, "offset": -1.0}]
 	var settling := LocalRaceMath.cpu_follow_slot(5.0, 6.75, leader, field, 0.0, 0.0, 0.90)
 	var passing := LocalRaceMath.cpu_follow_slot(5.0, 6.75, leader, field, 1.0, 0.0, 0.90)
-	var preferred := lerpf(M2TrackMath.MAX_ABS_OFFSET_M, -M2TrackMath.MAX_ABS_OFFSET_M, 0.90)
+	var preferred := lerpf(TrackMath.MAX_ABS_OFFSET_M, -TrackMath.MAX_ABS_OFFSET_M, 0.90)
 	assert_eq(str(settling["name"]), "inside_line")
 	assert_almost_eq(float(settling["offset"]), preferred, 0.001)
 	assert_true(str(passing["name"]).begins_with("overtake_"))
@@ -830,11 +727,11 @@ func test_cpu_follow_slot_zero_or_negative_bias_keeps_rear_slots() -> void:
 func test_cpu_follow_slot_forward_choice_stays_bounded_at_track_edge() -> void:
 	var leader := {
 		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": M2TrackMath.MAX_ABS_OFFSET_M,
+		"forward_gap_m": 4.0, "offset": TrackMath.MAX_ABS_OFFSET_M,
 	}
 	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], 1.0)
 	assert_true(selected["found"])
-	assert_lte(absf(float(selected["offset"])), M2TrackMath.MAX_ABS_OFFSET_M)
+	assert_lte(absf(float(selected["offset"])), TrackMath.MAX_ABS_OFFSET_M)
 
 
 func test_cpu_follow_slot_holds_current_line_when_forward_slots_are_blocked() -> void:
@@ -886,24 +783,17 @@ func test_cpu_line_move_speed_only_increases_for_escape_slots() -> void:
 
 func test_drafting_reduces_resistance_and_can_exceed_natural_top_speed() -> void:
 	var open_speed := LocalRaceMath.advance_drive_speed_kmh(
-		75.0, 5.0, 100.0, 1.0, 0.0
+		75.0, 5.0, 1.0, 0.0
 	)
 	var drafted_speed := LocalRaceMath.advance_drive_speed_kmh(
-		75.0, 5.0, 100.0, 1.0, 0.55
+		75.0, 5.0, 1.0, 0.55
 	)
 	assert_gt(drafted_speed, open_speed)
-	assert_gt(LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 75.0, 1.0, 1.0), 75.0)
+	assert_gt(LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 1.0, 1.0), 75.0)
 	assert_gt(
-		LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 120.0, 1.0, 1.0),
+		LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 1.0, 1.0),
 		90.0
 	)
-
-
-func test_simulation_legacy_speed_cap_is_explicit_and_off_by_default() -> void:
-	var without_cap := LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 75.0, 0.1, 1.0)
-	var with_cap := LocalRaceMath.advance_drive_speed_kmh(75.0, 6.0, 75.0, 0.1, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, true)
-	assert_gt(without_cap, 75.0)
-	assert_almost_eq(with_cap, 75.0, 0.00001)
 
 
 func test_real_runner_draft_lifts_speed_above_natural_speed_on_notch_six() -> void:
@@ -926,10 +816,6 @@ func test_real_runner_draft_lifts_speed_above_natural_speed_on_notch_six() -> vo
 	var hud: Label = race.get_node("UI/HudLabel")
 	assert_true(_detail_text(race).contains("加速応答 ×"))
 	assert_false(_detail_text(race).contains("推進補正"))
-	player.call("set_simulation_legacy_speed_cap", true)
-	player.set("_current_speed_kmh", 75.0)
-	player.call("_process", 0.016667)
-	assert_lte(float(player.call("get_current_speed")), float(player.call("get_max_speed")))
 	race.free()
 
 
@@ -938,7 +824,7 @@ func _notch_six_equilibrium_speed(stat: int, draft_factor: float, aero_multiplie
 	var natural_speed := LocalRaceMath.top_speed_natural_speed_kmh(stat)
 	for _tick in 1800:
 		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(speed, 6.0, stat, aero_multiplier)
-		speed = LocalRaceMath.advance_drive_speed_kmh(speed, 6.0, natural_speed, 0.1, draft_factor, 0.0, adjustment, 1.0, aero_multiplier, LocalRaceMath.stat_acceleration_response_multiplier(stat))
+		speed = LocalRaceMath.advance_drive_speed_kmh(speed, 6.0, 0.1, draft_factor, adjustment, 1.0, aero_multiplier, LocalRaceMath.stat_acceleration_response_multiplier(stat))
 	return speed
 
 
@@ -953,8 +839,8 @@ func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with
 		assert_gt(_notch_six_equilibrium_speed(stat, 0.4, LocalRaceMath.aero_air_resistance_multiplier(15)), _notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)))
 	var open_adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(60.0, 4.0, 10, 1.0)
 	var drafted_adjustment := open_adjustment
-	var open_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 70.0, 1.0, 0.0, 0.0, open_adjustment)
-	var drafted_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 70.0, 1.0, 0.4, 0.0, drafted_adjustment)
+	var open_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 1.0, 0.0, open_adjustment)
+	var drafted_notch_four := LocalRaceMath.advance_drive_speed_kmh(60.0, 4.0, 1.0, 0.4, drafted_adjustment)
 	assert_gt(drafted_notch_four, open_notch_four)
 
 
@@ -1140,7 +1026,7 @@ func test_lateral_move_adds_heart_and_stamina_load_to_the_runner() -> void:
 
 func test_line_speed_penalty_grows_toward_the_edge_of_the_course_in_corners() -> void:
 	var curvature := 1.0 / 164.0
-	var edge := M2TrackMath.MAX_ABS_OFFSET_M
+	var edge := TrackMath.MAX_ABS_OFFSET_M
 	var reference_speed := LocalRaceMath.Config.number("line_speed_penalty_reference_speed_kmh")
 	var outer_edge := LocalRaceMath.Config.number("line_speed_penalty_outer_edge")
 	# 中央では遅くならない。直線では、端でも遅くならない。
@@ -1283,7 +1169,7 @@ func test_overheat_exposure_continuously_reduces_propulsion_and_recovers_below_n
 	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-20.0, 20.0), LocalRaceMath.Config.number("stamina_debt_efficiency_min"), 0.001)
 	assert_almost_eq(LocalRaceMath.stamina_debt_efficiency(-35.0, 35.0), LocalRaceMath.Config.number("stamina_debt_efficiency_min"), 0.001)
 	assert_almost_eq(
-		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 75.0, 1.0, 0.0, 0.0, 0.0, 0.75),
+		LocalRaceMath.advance_drive_speed_kmh(50.0, 6.0, 1.0, 0.0, 0.0, 0.75),
 		50.0 + _drive_force(6) * 0.75 - LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S - _air_resistance(50.0),
 		0.001
 	)
@@ -1298,9 +1184,7 @@ func _speed_after_thirty_seconds_at_heart(heart_bpm: float) -> float:
 		speed = LocalRaceMath.advance_drive_speed_kmh(
 			speed,
 			6.0,
-			120.0,
 			0.05,
-			0.0,
 			0.0,
 			top_speed_adjustment,
 			LocalRaceMath.overheat_exposure_propulsion_efficiency(exposure)
@@ -1573,12 +1457,6 @@ func test_local_goal_display_matches_m5_layout() -> void:
 	race.free()
 
 
-func test_drive_has_no_curve_or_line_speed_penalty() -> void:
-	var straight := LocalRaceMath.advance_drive_speed_kmh(60.0, 2.0, 75.0, 1.0)
-	var draftless := LocalRaceMath.advance_drive_speed_kmh(60.0, 2.0, 75.0, 1.0, 0.0)
-	assert_eq(straight, draftless)
-
-
 func test_drafting_reduces_air_resistance_only() -> void:
 	var open := LocalRaceMath.drive_resistance_kmh_per_s(70.0, 0.0)
 	var drafted := LocalRaceMath.drive_resistance_kmh_per_s(70.0, 1.0)
@@ -1776,12 +1654,6 @@ func test_race_progress_finishes_at_2000() -> void:
 	assert_false(LocalRaceMath.has_finished(p))
 	p = LocalRaceMath.add_race_progress(p, 2.0)
 	assert_true(LocalRaceMath.has_finished(p))
-
-
-func test_kmh_advance_matches_divide_by_36() -> void:
-	# 36 km/h で 1 秒 → 10 m（曲率0・倍率1）。
-	var d := LocalRaceMath.centerline_delta_from_kmh(36.0, 1.0, 0.0, 0.0)
-	assert_almost_eq(d, 10.0, 0.001)
 
 
 func test_race_time_uses_competition_style_minutes() -> void:
@@ -2174,7 +2046,7 @@ func test_pushing_chains_to_the_next_runner() -> void:
 
 
 func test_push_cannot_move_a_runner_through_the_wall_and_the_other_gives_way() -> void:
-	var wall := M2TrackMath.MAX_ABS_OFFSET_M
+	var wall := TrackMath.MAX_ABS_OFFSET_M
 	var w := LocalRaceMath.BLOCK_LATERAL_M
 	var entries := [_push_entry("A", wall - w + 0.5, wall - w + 0.5, 15), _push_entry("B", wall, wall, 1)]
 	var result := LocalRaceMath.resolve_lateral_pushes(entries)
@@ -2223,7 +2095,7 @@ func _solo_notch6_speed(top_speed: int) -> float:
 	for _step in 60:
 		var middle := (low + high) * 0.5
 		var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(middle, 6.0, top_speed, 1.0)
-		var net := float(LocalRaceMath.drive_diagnostics_kmh_per_s(middle, 6.0, 0.0, 0.0, adjustment, 1.0)["net_force_acceleration_kmh_per_s"])
+		var net := float(LocalRaceMath.drive_diagnostics_kmh_per_s(middle, 6.0, 0.0, adjustment, 1.0)["net_force_acceleration_kmh_per_s"])
 		if net > 0.0:
 			low = middle
 		else:

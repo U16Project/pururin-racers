@@ -4,7 +4,7 @@ extends Node3D
 const EXPLORATION_DISTANCE_M := 1600.0
 const COURSE_WIDTH_M := 15.0
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 const CourseMarkers := preload("res://scripts/presentation/course_markers.gd")
 const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
@@ -27,14 +27,14 @@ var _guide_prefix := ""
 func _ready() -> void:
 	# ブラウザ版では、太陽の影を出さない（白っぽくなるため）。
 	SunShadow.apply($Sun as DirectionalLight3D)
-	var result := M5CourseBuilder.load_layout_result()
+	var result := CourseBuilder.load_layout_result()
 	if result.has("error"):
 		_guide_label.text = "コース設定を確認してください：%s\nEsc／B　タイトルへ戻る" % str(result["error"])
 		set_process(false)
 		return
 	LocalRaceMath.apply_course_to_path(_track)
 	var layout: Dictionary = result["layout"]
-	var route := M5CourseBuilder.route_for_distance(layout, EXPLORATION_DISTANCE_M)
+	var route := CourseBuilder.route_for_distance(layout, EXPLORATION_DISTANCE_M)
 	if route.is_empty():
 		_guide_label.text = "1600mルートが見つかりません。\nEsc／B　タイトルへ戻る"
 		set_process(false)
@@ -70,7 +70,7 @@ func _place_launch_straight(route: Dictionary, lap_length_m: float) -> void:
 		_launch_visual.visible = false
 		return
 	var launch_length := float(segments[0].get("distance_m", 0.0))
-	var join_pose := M5CourseBuilder.route_pose(_track.curve, route, launch_length, lap_length_m)
+	var join_pose := CourseBuilder.route_pose(_track.curve, route, launch_length, lap_length_m)
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(COURSE_WIDTH_M, 0.12, launch_length)
 	_launch_visual.mesh = mesh

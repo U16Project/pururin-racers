@@ -40,12 +40,13 @@ func test_saved_selection_matches_only_guid_and_platform() -> void:
 	assert_eq(options.save_options(path), OK)
 	options.selections.clear()
 	options.load_options(path)
-	assert_eq(options.profile_for(GUID).id, profile.id)
-	assert_true(options.profile_for("another-device").is_empty())
-	assert_true(options.profile_for(GUID, "Linux").is_empty())
+	# 登録してあるパッドは、決まった機械（OS）用。テストを動かす機械に関係なく、その OS で確かめる。
+	assert_eq(options.profile_for(GUID, profile.os).id, profile.id)
+	assert_true(options.profile_for("another-device", profile.os).is_empty())
+	assert_true(options.profile_for(GUID, "OtherOS").is_empty())
 	assert_eq(options.select_profile("another-device", profile.id), ERR_INVALID_PARAMETER)
 	options.selections[GUID] = "standard"
-	assert_true(options.profile_for(GUID).is_empty())
+	assert_true(options.profile_for(GUID, profile.os).is_empty())
 	DirAccess.remove_absolute(path)
 
 func test_face_buttons_shoulders_select_and_stick_clicks() -> void:
@@ -121,10 +122,12 @@ func test_diagnostics_keeps_raw_and_restores_correction_when_closed() -> void:
 	add_child(diagnostics)
 	assert_true(PadInputOptions.diagnostic_mode)
 	assert_false(PadInputOptions.correction_enabled())
-	if diagnostics.record.device == 0:
-		Input.parse_input_event(button(2))
-		assert_true(diagnostics.record.buttons.get(2, false), "補正前の番号で記録")
-		Input.parse_input_event(button(2, false))
+	# 実際にパッドがつながっているかに関係なく、ID 0 のパッドとして入力を渡して確かめる。
+	diagnostics.record.connected = true
+	diagnostics.record.device = 0
+	diagnostics._input(button(2))
+	assert_true(diagnostics.record.buttons.get(2, false), "補正前の番号で記録")
+	diagnostics._input(button(2, false))
 	diagnostics.free()
 	assert_false(PadInputOptions.diagnostic_mode)
 	PadInputOptions.refresh_active()

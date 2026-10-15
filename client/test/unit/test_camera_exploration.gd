@@ -3,7 +3,7 @@ extends GutTest
 
 const ExplorationScene := preload("res://scenes/camera_exploration.tscn")
 const ExplorationCamera := preload("res://scripts/exploration_camera.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 
 
 func test_exploration_scene_builds_existing_venue_without_runners() -> void:
@@ -45,13 +45,13 @@ func test_initial_camera_sees_whole_course_and_launch_straight() -> void:
 	add_child(screen)
 	var camera := screen.get_node("ExplorationCamera") as Camera3D
 	var track := screen.get_node("TrackPath") as Path3D
-	var layout := M5CourseBuilder.load_layout()
-	var route := M5CourseBuilder.route_for_distance(layout, 1600.0)
+	var layout := CourseBuilder.load_layout()
+	var route := CourseBuilder.route_for_distance(layout, 1600.0)
 	# 本線全体と専用直線の両端が、初期位置から画面に収まる。
 	for point: Vector3 in track.curve.get_baked_points():
 		assert_true(camera.is_position_in_frustum(track.to_global(point)))
 	for distance_m: float in [0.0, 160.0]:
-		var pose := M5CourseBuilder.route_pose(track.curve, route, distance_m, float(layout["track_length_m"]))
+		var pose := CourseBuilder.route_pose(track.curve, route, distance_m, float(layout["track_length_m"]))
 		assert_true(camera.is_position_in_frustum(track.to_global(pose["position"])))
 	screen.free()
 

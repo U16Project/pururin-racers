@@ -5,8 +5,8 @@ const StartGate := preload("res://scripts/presentation/start_gate.gd")
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const LocalRaceCamera := preload("res://scripts/local_race_camera.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 
 func _track() -> Path3D:
@@ -27,7 +27,7 @@ func _routes_by_launch(layout: Dictionary) -> Dictionary:
 
 func test_launch_strips_cover_only_routes_that_start_on_a_launch_straight() -> void:
 	var track := _track()
-	var layout := M5CourseBuilder.load_layout()
+	var layout := CourseBuilder.load_layout()
 	var routes := _routes_by_launch(layout)
 	assert_gt(routes["launch"].size(), 0)
 	var strips := RaceVenue.launch_strips(track.curve, layout["routes"], LocalRaceMath.lap_length_m())
@@ -70,7 +70,7 @@ func test_stand_blocks_stay_in_range_and_leave_room_for_the_royal_box() -> void:
 
 func test_fence_opens_for_the_launch_straight_only_when_the_route_uses_it() -> void:
 	var track := _track()
-	var layout := M5CourseBuilder.load_layout()
+	var layout := CourseBuilder.load_layout()
 	var routes := _routes_by_launch(layout)
 	var launch_route: Dictionary = routes["launch"][0]
 	var strip: Dictionary = RaceVenue.launch_strips(track.curve, [launch_route], LocalRaceMath.lap_length_m())[0]
@@ -80,28 +80,28 @@ func test_fence_opens_for_the_launch_straight_only_when_the_route_uses_it() -> v
 	venue.place(track, ground, layout, routes["mainline"][0])
 	var closed := 0
 	for point: Vector3 in venue.fence_post_positions():
-		if RaceVenue.in_strip(point, strip, M2TrackMath.HALF_WIDTH_M):
+		if RaceVenue.in_strip(point, strip, TrackMath.HALF_WIDTH_M):
 			closed += 1
 	assert_gt(closed, 0)
 	# 助走の直線から始まるルートでは、その上に柵の柱が無い。
 	venue.place(track, ground, layout, launch_route)
 	assert_gt(venue.fence_post_positions().size(), 0)
 	for point: Vector3 in venue.fence_post_positions():
-		assert_false(RaceVenue.in_strip(point, strip, M2TrackMath.HALF_WIDTH_M))
+		assert_false(RaceVenue.in_strip(point, strip, TrackMath.HALF_WIDTH_M))
 	# 置き直しても、景色は1つだけ。
 	assert_eq(track.get_child_count(), 1)
 
 
 func test_start_gate_moves_to_the_start_of_each_route() -> void:
 	var track := _track()
-	var layout := M5CourseBuilder.load_layout()
+	var layout := CourseBuilder.load_layout()
 	var lap := LocalRaceMath.lap_length_m()
 	var gate := StartGate.new()
 	var seen := []
 	for route: Dictionary in layout["routes"]:
 		gate.place(track, route, lap)
 		var root := track.get_node(StartGate.ROOT_NAME) as Node3D
-		var pose := M5CourseBuilder.route_pose(track.curve, route, 0.0, lap)
+		var pose := CourseBuilder.route_pose(track.curve, route, 0.0, lap)
 		var expected: Vector3 = (pose["position"] as Vector3) + (pose["travel"] as Vector3) * StartGate.AHEAD_OF_LINE_M
 		assert_almost_eq(root.position.distance_to(expected), 0.0, 0.001)
 		for other: Vector3 in seen:
@@ -112,7 +112,7 @@ func test_start_gate_moves_to_the_start_of_each_route() -> void:
 
 func test_start_gate_boards_hang_over_each_gate_below_the_chase_camera() -> void:
 	var track := _track()
-	var layout := M5CourseBuilder.load_layout()
+	var layout := CourseBuilder.load_layout()
 	var gate := StartGate.new()
 	gate.place(track, layout["routes"][0], LocalRaceMath.lap_length_m())
 	var root := track.get_node(StartGate.ROOT_NAME) as Node3D
@@ -123,14 +123,14 @@ func test_start_gate_boards_hang_over_each_gate_below_the_chase_camera() -> void
 	var camera_height := float(LocalRaceCamera.VIEW_SETTINGS[LocalRaceCamera.View.DEFAULT]["height"])
 	assert_lt(StartGate.beam_top_m(), camera_height)
 	# 台は、コースの端と柵のあいだに収まる。
-	assert_gt(StartGate.cart_offset_m() - StartGate.CART_SIZE_M.x * 0.5, M2TrackMath.HALF_WIDTH_M)
+	assert_gt(StartGate.cart_offset_m() - StartGate.CART_SIZE_M.x * 0.5, TrackMath.HALF_WIDTH_M)
 	assert_lt(StartGate.cart_offset_m() + StartGate.CART_SIZE_M.x * 0.5 + StartGate.WHEEL_WIDTH_M, Parts.FENCE_SIDE_OFFSET_M)
 
 
 func test_start_gate_is_cleared_after_the_start() -> void:
 	var track := _track()
 	var gate := StartGate.new()
-	gate.place(track, M5CourseBuilder.load_layout()["routes"][0], LocalRaceMath.lap_length_m())
+	gate.place(track, CourseBuilder.load_layout()["routes"][0], LocalRaceMath.lap_length_m())
 	assert_true(gate.is_out())
 	gate.clear_after_start(0.05)
 	await wait_seconds(0.3)

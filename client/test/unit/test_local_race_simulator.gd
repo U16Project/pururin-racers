@@ -131,7 +131,6 @@ func test_cpu_snapshots_keep_active_drive_level_aligned_with_diagnostics() -> vo
 			float(runner["speed_kmh"]),
 			drive_level,
 			0.0,
-			float(runner["acceleration_force_bonus_kmh_per_s"]),
 			float(runner["top_speed_drive_adjustment_kmh_per_s"]),
 			float(runner["propulsion_efficiency"])
 		)
@@ -193,28 +192,6 @@ func test_all_cpu_uses_roster_trainers_and_does_not_force_player_schedule() -> v
 	assert_gt(float(result.execution_time_s), 0.0)
 
 
-func test_isolated_reuses_actual_condition_update_and_restores_config() -> void:
-	var simulator := Simulator.new()
-	var old_coefficient := LocalRaceMath.Config.number("acceleration_response_multiplier_per_stat")
-	var condition := {"id": "isolated", "mode": "isolated", "config_overrides": {"acceleration_response_multiplier_per_stat": 0.025}, "isolated": {"effective_stats": {"cardio": 10, "stamina": 15}, "body_enabled": true, "duration_s": 0.1, "delta_s": 0.1, "sample_interval_s": 0.1, "drive_schedule": [{"start_s": 0.0, "drive_level": 6.0}]}}
-	var result := simulator.run_case(self, condition)
-	assert_false(result.has("error"), str(result.get("error", "")))
-	var expected_heart := LocalRaceMath.Config.number("heart_rate_min_bpm") + LocalRaceMath.heart_rate_net_rate_bpm_per_s(LocalRaceMath.Config.number("heart_rate_min_bpm"), 6, 10) * 0.1
-	assert_almost_eq(float(result.metrics.heart_rate_bpm), expected_heart, 0.0001)
-	var expected_stamina := LocalRaceMath.stamina_capacity_l(15) + LocalRaceMath.stamina_delta_l_per_s(6, expected_heart) * 0.1
-	assert_almost_eq(float(result.metrics.stamina), expected_stamina, 0.0001)
-	assert_eq(LocalRaceMath.Config.number("acceleration_response_multiplier_per_stat"), old_coefficient)
-	assert_eq(result.stats_basis, "fixed_effective_stats_without_allocation_attribute_or_style")
-
-
-func test_isolated_equal_cruise_and_different_acceleration_times() -> void:
-	var simulator := Simulator.new()
-	var slow := simulator.run_case(self, {"mode": "isolated", "isolated": {"effective_stats": {"acceleration": 1}, "duration_s": 300, "delta_s": 0.05}})
-	var fast := simulator.run_case(self, {"mode": "isolated", "isolated": {"effective_stats": {"acceleration": 15}, "duration_s": 300, "delta_s": 0.05}})
-	assert_almost_eq(float(slow.metrics.speed_kmh), float(fast.metrics.speed_kmh), 0.001)
-	assert_gt(float(slow.metrics.threshold_times.speed_60_s), float(fast.metrics.threshold_times.speed_60_s))
-
-
 func test_relative_without_reference_is_not_pass() -> void:
 	var simulator := Simulator.new()
 	var scenario := Simulator.scenario_by_id("notch6_sustain")
@@ -227,16 +204,14 @@ func test_invalid_case_types_do_not_change_config_or_session() -> void:
 	var simulator := Simulator.new()
 	var previous_config := LocalRaceMath.Config.values().duplicate(true)
 	var previous_session := Simulator.session_snapshot()
-	for key in ["scenario", "isolated"]:
-		for invalid_value: Variant in [[], "invalid", null]:
-			var condition := {"mode": "isolated", "config_overrides": {"acceleration_response_multiplier_per_stat": 0.025}, "scenario": {"distance_m": 1200}, "isolated": {"duration_s": 0.1}}
-			condition[key] = invalid_value
-			var result := simulator.run_case(self, condition)
-			assert_true(result.has("error"), "%s: %s" % [key, str(invalid_value)])
-			assert_eq(LocalRaceMath.Config.values(), previous_config)
-			assert_eq(Simulator.session_snapshot(), previous_session)
+	for invalid_value: Variant in [[], "invalid", null]:
+		var condition := {"config_overrides": {"acceleration_response_multiplier_per_stat": 0.025}, "scenario": invalid_value}
+		var result := simulator.run_case(self, condition)
+		assert_true(result.has("error"), str(invalid_value))
+		assert_eq(LocalRaceMath.Config.values(), previous_config)
+		assert_eq(Simulator.session_snapshot(), previous_session)
 	# 型が正しいトップレベルで、内部scheduleが不正な場合も復元する。
-	var result := simulator.run_case(self, {"mode": "isolated", "config_overrides": {"acceleration_response_multiplier_per_stat": 0.025}, "scenario": {"distance_m": 1200}, "isolated": {"drive_schedule": null}})
+	var result := simulator.run_case(self, {"config_overrides": {"acceleration_response_multiplier_per_stat": 0.025}, "scenario": {"distance_m": 1200, "player_drive_schedule": null}})
 	assert_true(result.has("error"))
 	assert_eq(LocalRaceMath.Config.values(), previous_config)
 	assert_eq(Simulator.session_snapshot(), previous_session)

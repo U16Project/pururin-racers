@@ -2,7 +2,7 @@ extends RefCounted
 ## ローカル出力操作の設定。JSONのみを初期値の正本とする。
 ## アプリ起動中に一度だけ読み込む。変更の反映はクライアント再起動時。
 
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 
 const PATH := "res://data/config/local_race.json"
 const NUMBER_RANGES := {
@@ -114,7 +114,6 @@ const NUMBER_RANGES := {
 	"cpu_trainer_reselect_seconds": [0.05, 60.0],
 	"top_speed_natural_min_kmh": [0.0, 300.0],
 	"top_speed_natural_max_kmh": [0.0, 300.0],
-	"acceleration_drive_force_bonus_per_stat_kmh_per_s": [0.0, 10.0],
 	"acceleration_response_multiplier_per_stat": [0.0, 0.1],
 	"heart_rate_min_bpm": [1.0, 300.0],
 	"heart_rate_normal_max_bpm": [1.0, 300.0],
@@ -211,13 +210,13 @@ static func validate(data: Variant) -> PackedStringArray:
 		errors.append("cpu_follow_preferred_gap_m: cpu_follow_forward_range_m 以下にしてください")
 	if float(data.top_speed_natural_min_kmh) > float(data.top_speed_natural_max_kmh):
 		errors.append("top_speed_natural_min_kmh: top_speed_natural_max_kmh 以下にしてください")
-	if absf(float(data.cpu_inward_target_offset_m)) > M2TrackMath.MAX_ABS_OFFSET_M:
+	if absf(float(data.cpu_inward_target_offset_m)) > TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_inward_target_offset_m: コースの可動範囲内にしてください")
-	if float(data.cpu_follow_slot_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
+	if float(data.cpu_follow_slot_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_follow_slot_lateral_spacing_m: コースの可動範囲内にしてください")
-	if float(data.cpu_overtake_slot_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
+	if float(data.cpu_overtake_slot_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_overtake_slot_lateral_spacing_m: コースの可動範囲内にしてください")
-	if float(data.cpu_overtake_escape_lateral_spacing_m) > M2TrackMath.MAX_ABS_OFFSET_M:
+	if float(data.cpu_overtake_escape_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
 		errors.append("cpu_overtake_escape_lateral_spacing_m: コースの可動範囲内にしてください")
 	var forces: Variant = data.get("drive_force_by_level_kmh_per_s")
 	if not forces is Array:

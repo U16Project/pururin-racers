@@ -6,7 +6,7 @@ const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
 const StartGate := preload("res://scripts/presentation/start_gate.gd")
 const FinishCelebration := preload("res://scripts/presentation/finish_celebration.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd")
 ## ローカル簡易レースの進行・UI・8プル生成。
@@ -220,15 +220,15 @@ func _ready() -> void:
 	# 着順の板のボタンは、どちらも決定の音。
 	UIAudio.bind_button_sound(_result_return_button, "confirmation")
 	UIAudio.bind_button_sound(_resume_button, "back")
-	var course_result := M5CourseBuilder.load_layout_result()
+	var course_result := CourseBuilder.load_layout_result()
 	if course_result.has("error"):
 		_hud_label.text = "コース設定を確認してください：" + str(course_result.error)
 		set_process(false)
 		return
 	LocalRaceMath.apply_course_to_path(_track)
 	_race_distance_m = RaceSession.selected_distance_m()
-	_race_route = M5CourseBuilder.route_for_distance(
-		M5CourseBuilder.load_layout(), _race_distance_m
+	_race_route = CourseBuilder.route_for_distance(
+		CourseBuilder.load_layout(), _race_distance_m
 	)
 	_launch_visual = MeshInstance3D.new()
 	_launch_visual.name = "RouteLaunchStraight"
@@ -816,7 +816,7 @@ func get_runners_for_simulation() -> Array:
 func _place_markers() -> void:
 	if _track == null or _track.curve == null:
 		return
-	var goal_pose := M5CourseBuilder.route_pose(
+	var goal_pose := CourseBuilder.route_pose(
 		_track.curve, _race_route, _race_distance_m, LocalRaceMath.lap_length_m()
 	)
 	var goal_path := float(goal_pose.get("mainline_distance", LocalRaceMath.goal_path_m()))
@@ -836,7 +836,7 @@ func _place_markers() -> void:
 		LocalRaceMath.Config.number("course_marker_sign_visible_distance_m")
 	)
 	_update_launch_visual()
-	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), M5CourseBuilder.load_layout(), _race_route, RaceSession.is_course_only())
+	_venue.place(_track, ($Ground as MeshInstance3D).get_surface_override_material(0), CourseBuilder.load_layout(), _race_route, RaceSession.is_course_only())
 	# ブラウザ版では、太陽の影を出さない（白っぽくなるため）。
 	SunShadow.apply($Sun as DirectionalLight3D)
 	if RaceSession.is_course_only():
@@ -905,7 +905,7 @@ func _warm_up_first_draw() -> void:
 
 
 func _place_route_marker(node: MeshInstance3D, route_distance_m: float, color: Color) -> void:
-	var pose := M5CourseBuilder.route_pose(
+	var pose := CourseBuilder.route_pose(
 		_track.curve, _race_route, route_distance_m, LocalRaceMath.lap_length_m()
 	)
 	if pose.is_empty():
@@ -933,7 +933,7 @@ func _update_launch_visual() -> void:
 		_launch_visual.visible = false
 		return
 	var launch_length := float(segments[0].get("distance_m", 0.0))
-	var join_pose := M5CourseBuilder.route_pose(
+	var join_pose := CourseBuilder.route_pose(
 		_track.curve, _race_route, launch_length, LocalRaceMath.lap_length_m()
 	)
 	var mesh := BoxMesh.new()
@@ -1146,7 +1146,10 @@ func _layout_overlay_labels() -> void:
 		label.add_theme_color_override("font_color", Color(0.96, 0.98, 1.0))
 		label.add_theme_color_override("font_outline_color", outline)
 		label.add_theme_constant_override("outline_size", 5)
-	var first_left := RaceHud.panel_left(get_viewport().get_visible_rect().size.x) + RaceHud.PANEL_WIDTH + 12.0
+	var screen_width := get_viewport().get_visible_rect().size.x
+	var first_left := RaceHud.panel_left(screen_width) + RaceHud.PANEL_WIDTH + 12.0
+	# 狭い画面では、2列が画面の右端からはみ出さないよう、列の幅を縮める。
+	column_width = minf(column_width, (screen_width - first_left - 16.0) * 0.5)
 	_hud_label.offset_left = first_left
 	_hud_label.offset_right = first_left + column_width
 	_hud_label_right.offset_left = first_left + column_width

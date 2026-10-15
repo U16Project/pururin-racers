@@ -1,14 +1,14 @@
 extends Node3D
-## ローカル簡易レース用ランナー。目標スピード追従・出力操作・左右・前方ブロック対応。
+## レースの走者。出力ノッチ・左右のライン・前方ブロック・心拍と体力に対応（オフラインもオンラインのサーバーも同じ）。
 ## 速度は km/h（検討事項 #24）。
 
 
 const ContactFeedback := preload("res://scripts/presentation/contact_feedback.gd")
 const RaceExpression := preload("res://scripts/presentation/race_expression.gd")
 const RaceAction := preload("res://scripts/presentation/race_action.gd")
-const M2TrackMath := preload("res://scripts/m2_track_math.gd")
+const TrackMath := preload("res://scripts/track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const CpuTrainerMath := preload("res://scripts/cpu_trainer_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
@@ -127,8 +127,6 @@ var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
 var _race_active: bool = false
 var _cpu_start_drive_remaining: float = 0.0
-## 比較測定専用。通常レースからは設定せず、自然最高速の旧ハード上限を再現する。
-var _simulation_legacy_speed_cap: bool = false
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
 ## このレースに出る人数（脚質の順位の判定に使う）。
@@ -153,7 +151,7 @@ func setup_for_race(
 	_pururin = pururin.duplicate(true)
 	# ランナー生成は画面の距離選択を書き換えない。
 	_race_distance_m = RaceSession.normalize_distance(race_distance_m)
-	_race_route = M5CourseBuilder.route_for_distance(
+	_race_route = CourseBuilder.route_for_distance(
 		LocalRaceMath.course_layout(), _race_distance_m
 	)
 	player_controlled = is_player
@@ -313,7 +311,6 @@ func get_drive_diagnostics() -> Dictionary:
 		_current_speed_kmh,
 		active_drive_level,
 		_draft_air_resistance_factor(),
-		get_acceleration_force_bonus(),
 		get_top_speed_drive_adjustment(),
 		get_propulsion_efficiency(),
 		_aero_air_resistance_multiplier(),
@@ -374,7 +371,7 @@ func apply_push_result(offset: float, in_contest: bool, lost: bool) -> void:
 	_in_push_contest = in_contest
 	_lost_push = lost
 	if not is_equal_approx(offset, _offset):
-		_offset = M2TrackMath.clamp_offset(offset)
+		_offset = TrackMath.clamp_offset(offset)
 		_apply_pose()
 
 
@@ -530,7 +527,7 @@ func _advance_puppet(delta: float) -> void:
 	var ahead_m := _net_speed_mps * _net_age_s if _race_active else 0.0
 	_race_progress = lerpf(_race_progress, _net_progress + ahead_m, follow)
 	_offset = lerpf(_offset, _net_offset, follow)
-	var pose := M5CourseBuilder.route_pose(_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m())
+	var pose := CourseBuilder.route_pose(_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m())
 	_distance = fposmod(float(pose.get("mainline_distance", _distance)), _path.curve.get_baked_length())
 	_apply_pose()
 
@@ -715,16 +712,8 @@ func get_handling_steer_multiplier() -> float:
 	return LocalRaceMath.handling_steer_multiplier(int(_effective_stats.get("handling", 5)))
 
 
-func get_acceleration_force_bonus() -> float:
-	return LocalRaceMath.stat_acceleration_force_bonus_kmh_per_s(int(_effective_stats.get("acceleration", 5)))
-
-
 func get_acceleration_response_multiplier() -> float:
 	return LocalRaceMath.stat_acceleration_response_multiplier(int(_effective_stats.get("acceleration", 5)))
-
-
-func set_simulation_legacy_speed_cap(enabled: bool) -> void:
-	_simulation_legacy_speed_cap = enabled
 
 
 func get_natural_top_speed() -> float:
@@ -753,7 +742,7 @@ func get_finish_time() -> float:
 
 
 ## 直前tickでゴール線を越えた時点が、tick終了の何秒前かを返す。
-## 同一tick内の複数到達を、配列順ではなく通過時刻で並べるために使う（M5サーバーと同じ補間）。
+## 同一tick内の複数到達を、配列順ではなく通過時刻で並べるために使う。
 func get_finish_crossing_lead_s(race_distance_m: float) -> float:
 	var progress_delta := _race_progress - _tick_start_progress
 	if progress_delta <= 0.0 or _last_tick_delta <= 0.0:
@@ -896,11 +885,11 @@ func _process(delta: float) -> void:
 	_tick_start_progress = _race_progress
 	_last_tick_delta = delta
 	var previous_offset := _offset
-	var route_pose := M5CourseBuilder.route_pose(
+	var route_pose := CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
 	)
 	var pose_distance := float(route_pose.get("mainline_distance", _distance))
-	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else M2TrackMath.curvature_at(_path.curve, pose_distance)
+	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else TrackMath.curvature_at(_path.curve, pose_distance)
 	_update_inputs(delta, curvature)
 	# 重なる位置へ動いたときは、動く前へ戻すのではなく、押し合いの勝負（コントローラ側）で解く。
 	_offset = LocalRaceMath.limit_offset_by_stronger_neighbors(
@@ -914,15 +903,12 @@ func _process(delta: float) -> void:
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			_active_drive_level(),
-			max_speed_kmh,
 			delta,
 			_draft_air_resistance_factor(),
-			get_acceleration_force_bonus(),
 			get_top_speed_drive_adjustment(),
 			get_propulsion_efficiency(),
 			_aero_air_resistance_multiplier(),
 			get_acceleration_response_multiplier(),
-			_simulation_legacy_speed_cap,
 			_braking,
 			get_drive_boost_multiplier()
 		)
@@ -934,15 +920,12 @@ func _process(delta: float) -> void:
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			LocalRaceMath.Config.number("cpu_start_drive_level"),
-			max_speed_kmh,
 			delta,
 			_draft_air_resistance_factor(),
-			get_acceleration_force_bonus(),
 			get_top_speed_drive_adjustment(),
 			get_propulsion_efficiency(),
 			_aero_air_resistance_multiplier(),
-			get_acceleration_response_multiplier(),
-			_simulation_legacy_speed_cap
+			get_acceleration_response_multiplier()
 		)
 		_cpu_start_drive_remaining = maxf(_cpu_start_drive_remaining - delta, 0.0)
 		_update_condition_for_drive_level(LocalRaceMath.Config.number("cpu_start_drive_level"), delta)
@@ -953,15 +936,12 @@ func _process(delta: float) -> void:
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			cpu_drive_level,
-			max_speed_kmh,
 			delta,
 			_draft_air_resistance_factor(),
-			get_acceleration_force_bonus(),
 			get_top_speed_drive_adjustment(),
 			get_propulsion_efficiency(),
 			_aero_air_resistance_multiplier(),
-			get_acceleration_response_multiplier(),
-			_simulation_legacy_speed_cap
+			get_acceleration_response_multiplier()
 		)
 		_update_condition_for_drive_level(cpu_drive_level, delta)
 	# カーブで、コースの中央から離れるほど少し遅くなる（操作性が高いほど小さい）。
@@ -981,7 +961,7 @@ func _process(delta: float) -> void:
 	)
 	# 前の走者にふさがれると、出力上の速度が高くても実際には進めない。
 	# 進んだ中心線距離を対地距離に戻し、1秒あたりの速さを少しなめらかにして保持する。
-	var ground_multiplier := M2TrackMath.distance_multiplier(_offset, curvature)
+	var ground_multiplier := TrackMath.distance_multiplier(_offset, curvature)
 	var moved_speed_kmh := (allowed_progress - _race_progress) * ground_multiplier / delta * 3.6
 	_actual_speed_kmh = lerpf(_actual_speed_kmh, moved_speed_kmh, minf(delta / ACTUAL_SPEED_SMOOTHING_S, 1.0))
 	# ふさがれている間に、出力上の速度だけが実際の速度を大きく上回って溜まるのを防ぐ。
@@ -990,7 +970,7 @@ func _process(delta: float) -> void:
 		_current_speed_kmh, _actual_speed_kmh, LocalRaceMath.BLOCKED_SPEED_EXCESS_MAX_KMH
 	)
 	_race_progress = allowed_progress
-	var next_pose := M5CourseBuilder.route_pose(
+	var next_pose := CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
 	)
 	_distance = fposmod(float(next_pose.get("mainline_distance", _distance)), path_len)
@@ -1014,7 +994,7 @@ func _clear_draft_details() -> void:
 func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 	if player_controlled:
 		var steer := _read_steer_axis()
-		_offset = M2TrackMath.clamp_offset(_offset + steer * steer_speed * get_handling_steer_multiplier() * delta)
+		_offset = TrackMath.clamp_offset(_offset + steer * steer_speed * get_handling_steer_multiplier() * delta)
 	else:
 		_cpu_steer_timer -= delta
 		if _cpu_steer_timer <= 0.0:
@@ -1055,7 +1035,7 @@ func _update_inputs(delta: float, curvature: float = 0.0) -> void:
 				_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 			# ライン選択と速度方針は独立。速度はトレーナーが定期的に決める。
 		_offset = move_toward(_offset, _target_offset, _cpu_line_move_speed_m_per_s * get_handling_steer_multiplier() * delta)
-		_offset = M2TrackMath.clamp_offset(_offset)
+		_offset = TrackMath.clamp_offset(_offset)
 		_cpu_trainer_timer -= delta
 		if _cpu_trainer_timer <= 0.0:
 			_cpu_trainer_timer = LocalRaceMath.Config.number("cpu_trainer_reselect_seconds")
@@ -1275,7 +1255,7 @@ func _read_steer_axis() -> float:
 func _apply_pose() -> void:
 	if _path == null or _path.curve == null:
 		return
-	var route_pose := M5CourseBuilder.route_pose(
+	var route_pose := CourseBuilder.route_pose(
 		_path.curve, _race_route, _race_progress, LocalRaceMath.lap_length_m()
 	)
 	if route_pose.is_empty():

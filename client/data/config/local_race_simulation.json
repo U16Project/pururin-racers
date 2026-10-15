@@ -1,6 +1,5 @@
 {
   "schema_version": 1,
-  "default_delta_s": 0.05,
   "default_max_time_s": 180.0,
   "default_sample_interval_s": 1.0,
   "scenarios": [

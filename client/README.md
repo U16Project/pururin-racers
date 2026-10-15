@@ -2,7 +2,7 @@
 
 Godot クライアント（プレイヤーが遊ぶアプリ）のルート。
 
-ローカル出力操作の係数は `data/config/local_race.json`、M5 共通ドラフト規則は `data/config/m5_draft_rules.json`（`shared/` の正本の写し）で管理します。編集方法・単位・適用範囲は [設定管理](../docs/設定管理.md) を参照してください。変更の反映にはクライアントの再起動が必要です。
+ローカル出力操作の係数は `data/config/local_race.json`、ドラフト規則は `data/config/draft_rules.json`（正本。オンラインのサーバーも読む）で管理します。編集方法・単位・適用範囲は [設定管理](../docs/設定管理.md) を参照してください。変更の反映にはクライアントの再起動が必要です。
 
 ## エンジンバージョン
 
@@ -11,42 +11,18 @@ Godot クライアント（プレイヤーが遊ぶアプリ）のルート。
 - パス例（このマシン）: `/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64`
 - 起動例: `Godot_v4.7-stable_linux.x86_64 --path client`
 
-API・メソッド・ノードは **4.7 の公式ドキュメントで確認したうえで**使う（古い 3.x / 4.0〜4.5 の記憶や記事をそのまま書かない）。エージェントは `.cursor/rules/godot-4.7.mdc` に従う。
-
-## M1 起動確認
-
-（疎通確認用。現行の main_scene は M2。）
-
-先にサーバーを起動してから（`server/README.md`、待ち受け `127.0.0.1:18765`）。
-
-リポジトリルートから:
-
-```bash
-/media/u16/Backup/Godot/Godot_v4.7-stable_linux.x86_64 --path client
-```
-
-完了の見方:
-
-- 緑の地面の上に灰色の帯（コース／Path）が見える
-- オレンジの箱（ランナー）が帯の上を周回する
-- 上部ラベル／コンソールに `pong を受け取ったよ` が出る
-- コンソールに `ぷるりんレーサーズ — M1 コースを走ります` も出る
-
-M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2 は `scenes/m2_run.tscn` に残してある（main_scene は `scenes/logo.tscn`）。
+API・メソッド・ノードは **4.7 の公式ドキュメントで確認したうえで**使う（古い 3.x / 4.0〜4.5 の記憶や記事をそのまま書かない）。
 
 ## 起動確認（ロゴ → タイトル → レース選択 → ローカルレース）
 
-起動すると、U16-Projectのロゴ（約2秒。どのボタンでも飛ばせる）のあと、タイトルが出ます。ゲーム選択で、「オフラインフリー対戦」（レース選択へ進み、距離と、枠ごとのキャラを選んで「レース開始」。ゲームパッドは START）、「ウェブ版オフラインテスト」（同じレースを、景色をコースまわりだけにして軽くしたもの）、「オンラインフリー対戦」（合言葉の部屋に入って、ほかの人と走る。サーバーは、画面なしの Godot。[`shared/protocol_online.md`](../shared/protocol_online.md)）を選びます。古いオンライン試作（M5）と控室の場面は残してありますが、メニューからは入れません。
+起動すると、U16-Projectのロゴ（約2秒。どのボタンでも飛ばせる）のあと、タイトルが出ます。ゲーム選択で、「オフラインフリー対戦」（レース選択へ進み、距離と、枠ごとのキャラを選んで「レース開始」。ゲームパッドは START）、「ウェブ版オフラインテスト」（同じレースを、景色をコースまわりだけにして軽くしたもの）、「オンラインフリー対戦」（合言葉の部屋に入って、ほかの人と走る。サーバーは、画面なしの Godot。[`shared/protocol_online.md`](../shared/protocol_online.md)）を選びます。
 
 - main_scene: `scenes/logo.tscn`（→ `scenes/title.tscn` → `scenes/race_select.tscn`）
 - メニュー（タイトル・レース選択）: 十字キー／左スティックで移動、A（`X`・`Enter`）で決定、B（`C`・`Esc`）で戻る、START でレース開始、L1・R1 で距離、SELECT（`L`）で施錠、X（`Z`）で選択解除、Y（`S`）で強制選択、L2・R2（`PageUp`・`PageDown`）で枠の移動
 - レース中（オフライン・オンライン共通）: `←→`／左スティックでライン、`↑↓`／十字キーで出力ノッチ（0〜6）、`X`・`Space`／A／左トリガーを押している間ブレーキ（ノッチ設定は保持）、`C`／B でダッシュ、`Z`／X でブースト、`S`／Y で視点の切り替え、右スティックで見回し（押し込み・`R` でリセット）、`Esc`／START で一時停止、`F3` で詳細表示（診断数値と操作ガイド）、`F2` で仮想パッド（画面のボタン。指で触る画面では最初から出る）。キーボードの S・Z・X・C は、ゲームパッドのひし形（Y・X・A・B）と同じ並び。一覧は [`docs/ぷるりんレーサーズ_設計案.md`](../docs/ぷるりんレーサーズ_設計案.md) の「操作方式」
 - **レース中の画面**: 左上に、自分の順位・残り距離・タイム。その下に、順位表（全走者。脚質の印・心拍・体力）。左下に、丸い操作盤（まん中のハート＝心拍、左のゲージ＝空気抵抗の軽減（緑＝空力と後方支援、青＝ドラフト）・速さ・ノッチ、右のゲージ＝ブースト・ダッシュ・体力、外の輪＝道のりと全員の位置、下に順位とタイム）。速さは「実際に進んでいる速さ」（前の走者にふさがれた分を引いた値）で、出力上の速度は F3 の詳細表示に併記する。上のまん中に、重さを確かめる表示（コマ数・処理・絵・描く回数。開発の目処がつくまで）。描画は `scripts/presentation/round_race_hud.gd`（操作盤）と `scripts/presentation/race_hud.gd`（順位表）。項目は [`docs/設定管理.md`](../docs/設定管理.md)
-- **レース開始**: `scenes/local_race.tscn`（サーバー不要。レース選択画面で選んだ2〜8プル・1200〜3000 m・標準コース。コースの寸法の正本は `shared/course_layout_m5.json` で、場面ファイルの中の数字は、起動時に作り直す）
+- **レース開始**: `scenes/local_race.tscn`（サーバー不要。レース選択画面で選んだ2〜8プル・1200〜3000 m・標準コース。コースの寸法の正本は `data/course_layout.json` で、場面ファイルの中の数字は、起動時に作り直す）
 - **ぷるりんの見た目**: 体は、`data/config/pururin_parts.json`（部品の一覧）と `data/config/pururin_looks.json`（個体ごとの見た目）から、プログラムで形を作って組み立てる（`scripts/presentation/pururin_body_builder.gd`）。部品は、用意したメッシュ（`.glb`）や画像（`.png`）に取り替えられる。項目は [`docs/設定管理.md`](../docs/設定管理.md) の「ぷるりんの見た目」
-- **控室へ進む**: サーバー起動時 `接続しています…` → `接続できました` → 控室入室結果
-- サーバー停止時（控室）: `接続できませんでした。サーバーを起動してください`
-- 契約: [`shared/protocol_m3.md`](../shared/protocol_m3.md)、ローカルレース [`shared/protocol_local_race.md`](../shared/protocol_local_race.md)
 
 ## ローカル簡易レース確認
 
@@ -56,35 +32,9 @@ M0 の空シーンは `main.tscn` / `main.gd`、M1 は `scenes/m1_run.tscn`、M2
 - HUD に経過タイム、結果画面にゴールタイムを `58.4` / `1:23.4` で表示
 - レース選択画面で、距離と、枠ごとのキャラを選ぶ。左が枠番号（1〜8）とキャラスロット（ユーザー1つ＋CPU7つ）、右が今見ているキャラの詳細（属性・脚質・属性補正後の出走前8ステータス）。最初は全部未選択。ユーザーと、CPUを1体以上選ぶと、レースを始められる。CPUは、各自のCPUトレーナー設定で走る。操作の一覧は `docs/設定管理.md`
 - 開始前は3秒のカウントダウン。選択した操作キャラがカメラ追従・開始ノッチ選択の対象で、初期ノッチ4から上下で開始出力を選ぶ。タイミング判定はなく、`START!` と同時に選択ノッチで走行を始める
-- レース開始後は左右／左スティック＝ライン、上下／十字キー＝出力ノッチ。V で目標スピード方式へ切り替え（上限 75 km/h）
+- レース開始後は左右／左スティック＝ライン、上下／十字キー＝出力ノッチ
 - Esc で一時停止→レース選択へ戻る。全員ゴール後に着順→レース選択へ戻る
-- コース正本は [`shared/course_layout_m5.json`](../shared/course_layout_m5.json)。詳細は検討事項 #23 / `protocol_local_race.md`
-
-## 古いオンライン試作（M5）の確認
-
-**今のメニューからは入れません。** 今のオンライン対戦は「オンラインフリー対戦」（上の説明）で、操作はオフラインと同じです。以下は、Python のサーバー（`server/`）を使う古い試作の記録です。
-
-- 標準コース。判定はサーバー、クライアントは描画と目標スピード・ラインの送信
-- ←→／左スティック＝ライン、↑↓／十字キー＝目標スピード、C／Y＝カメラ切替、Esc／Start＝メニュー
-- タイム表示は百分の一秒（`0:01.20`）
-- 契約: [`shared/protocol_m5.md`](../shared/protocol_m5.md)
-
-## M2 起動確認（内外＋控室）
-
-先にサーバーを起動してから（`server/README.md`、待ち受け `127.0.0.1:18765`）。
-
-- main_scene: `scenes/m2_run.tscn`
-- 競馬場形の仮コース（直線＋半円、幅 15m、機体 φ1.5m 想定）
-- ←→ / ゲームパッド十字左右で内外（左＝内）
-- C でカメラ切替（**後方追従**／**真上＋正射影**）
-- 橙＝操作、青＝最内／黄＝中心／紫＝最外のダミー（同対地速）
-- カーブでは距離倍率（幾何＋`GEOMETRIC_BLEND`）で内側が中心線を進みやすい。直線は内外同速
-- 上部ラベルに控室入室（例: `控室に入りました（waiting_room・いま N 人）`）
-
-通信契約:
-
-- M1 ping／pong: [`shared/protocol_m1.md`](../shared/protocol_m1.md)
-- M2 控室: [`shared/protocol_m2.md`](../shared/protocol_m2.md)
+- コース正本は [`data/course_layout.json`](data/course_layout.json)。詳細は検討事項 #23
 
 Windows 起動例（エディタパスは環境に合わせる）:
 
@@ -93,6 +43,18 @@ Windows 起動例（エディタパスは環境に合わせる）:
 ```
 
 または `tools/windows/start-godot-client.ps1` / VS Code タスク。
+
+## ブラウザ版（Web）
+
+リポジトリのルートで書き出す（Godot 4.7 の書き出しテンプレートが必要。出来上がりは `build/web/`）。
+
+```bash
+bash tools/export-pururin-web.sh
+```
+
+PC で確かめるときは `bash tools/serve-pururin-web.sh` で配信して、ブラウザで `http://127.0.0.1:8060/` を開く（`file://` では動かない）。止めるときは Ctrl+C。
+
+公開（GitHub Pages）は、`gh-pages` ブランチの中身を `build/web/` の全ファイルで置き換えて、プッシュする。`.nojekyll` は残す。画面右下の版の表示（`版 年-月-日 時:分`）は、書き出した日時。
 
 ## テスト（GUT）
 
@@ -110,7 +72,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
   --headless --path client -s addons/gut/gut_cmdln.gd -gexit
 ```
 
-M1 の distance 進行ロジックは `test/unit/test_m1_distance.gd`、M2 のコース／倍率は `test/unit/test_m2_track.gd`、ローカルレースは `test/unit/test_local_race.gd`、メニューの流れは `test/unit/test_menu_flow.gd`、ぷるりんの見た目は `test/unit/test_pururin_look.gd`、レース中の表情とアクションは `test/unit/test_race_expression.gd` でカバーする。全部で約4分かかる。1つのファイルだけ回すときは、末尾に `-gselect=test_pururin_look.gd` のように足す。
+コースの幅と内外の倍率は `test/unit/test_track.gd`、ローカルレースは `test/unit/test_local_race.gd`、メニューの流れは `test/unit/test_menu_flow.gd`、ぷるりんの見た目は `test/unit/test_pururin_look.gd`、レース中の表情とアクションは `test/unit/test_race_expression.gd` でカバーする。全部で約4分かかる。1つのファイルだけ回すときは、末尾に `-gselect=test_pururin_look.gd` のように足す。
 
 見た目のテストで使う、取り替えの確認用の素材（仮のメッシュ1つ・仮の画像1枚・設定2つ）は、`test/fixtures/pururin/` にある。ゲーム本体では使わない。
 
@@ -124,15 +86,11 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client \
   --batch-config /absolute/path/conditions.json --output-dir /absolute/path/new-results
 ```
 
-各caseは `id`、`mode`（`isolated` / `race`）、`config_overrides` を持ちます。設定差し替えは通常の設定検証を通し、case終了時に復元します。結果はcaseごとのJSONと `summary.json` に保存し、既存結果は上書きしません。実行エラーと数値目標のFAILは分離します。
+各caseは `id`、`scenario`、`config_overrides` を持ちます。設定差し替えは通常の設定検証を通し、case終了時に復元します。結果はcaseごとのJSONと `summary.json` に保存し、既存結果は上書きしません。実行エラーと数値目標のFAILは分離します。
 
-- `isolated`: `isolated.effective_stats` は1〜15の固定有効値。40点配分・属性・順位・区間補正・CPU・コースは適用しない因果比較です。`body_enabled`、`duration_s`、`distance_m`、`initial_speed_kmh`、`delta_s`、`sample_interval_s`、`draft_received_p`、`drive_schedule`（`start_s` / `drive_level`）を指定できます。速度は実走Math、心拍・スタミナ・超過負荷は実走Runnerの身体更新関数を使用します。`draft_received_p` は受取率そのもので、共有の受取上限では切りません。HUDと実効率の100%は、基準速度で真後ろの1走者が作る wake（現行 `wake_base_p + wake_speed_gain_p` = 0.18）です。身体無効時は健常な力の釣り合いを測ります。
-- `race`: `scenario` に `all_cpu:true`、`seed`、`distance_m`、`player_id`、`delta_s`、`max_time_s`、`sample_interval_s`、`gate_overrides` を指定できます。全頭CPUでは元プレイヤーもロスター指定トレーナーで判断し、固定ノッチ予定は適用しません。枠の重複は拒否するため、入れ替え相手も指定してください。
-- 旧上限を再現する比較だけ `isolated.legacy_speed_cap:true` / `scenario.legacy_speed_cap:true` を指定できます。通常はfalse。旧加算式と新加速応答式は設定上書きで比較し、上限あり／なしを区別してください。
+- `scenario` に `all_cpu:true`、`seed`、`distance_m`、`player_id`、`delta_s`、`max_time_s`、`sample_interval_s`、`gate_overrides` を指定できます。全頭CPUでは元プレイヤーもロスター指定トレーナーで判断し、固定ノッチ予定は適用しません。枠の重複は拒否するため、入れ替え相手も指定してください。
 
 統合結果には全設定、セッション、乱数seed、条件、実行秒数、全頭の時系列、初めてゴールしたtickの `finish_snapshots` を保存します。最終 `runners` は全頭完走時点なので、先にゴールした個体の心拍等はゴール後の値です。ゴール比較は `finish_snapshots` を使用してください。時間刻み既定値は1/60秒で、半刻み比較も同じ条件データでできます。未評価の相対条件は `NOT_EVALUATED` でありPASSではありません。
-
-従来の40点配分スイープは対象以外も再配分する**合法な配分全体の比較**です。単一ステータスの因果判定には使わず、上記 `isolated` を使用してください。
 
 描画・カメラ・入力を使わず、通常のローカルレースシーンを同じ `Runner`／`LocalRaceMath`／CPU判断／ドラフト処理で進め、結果をJSONで出力できます。
 

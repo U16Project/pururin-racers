@@ -1,8 +1,8 @@
 extends GutTest
 
 const Config := preload("res://scripts/config/local_race_config.gd")
-const DraftRules := preload("res://scripts/config/m5_draft_rules.gd")
-const M5CourseBuilder := preload("res://scripts/m5_course_builder.gd")
+const DraftRules := preload("res://scripts/config/draft_rules.gd")
+const CourseBuilder := preload("res://scripts/course_builder.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
 
@@ -60,13 +60,13 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 
 
 func test_m5_course_layout_rejects_missing_and_invalid_routes() -> void:
-	var shipped := M5CourseBuilder.load_file()
+	var shipped := CourseBuilder.load_file()
 	assert_true(shipped.has("layout"))
-	assert_true(M5CourseBuilder.validate_layout(shipped.layout).is_empty())
-	assert_true(M5CourseBuilder.parse_text('{"course_id":"broken"}', "broken_course.json").error.contains("track_length_m"))
+	assert_true(CourseBuilder.validate_layout(shipped.layout).is_empty())
+	assert_true(CourseBuilder.parse_text('{"course_id":"broken"}', "broken_course.json").error.contains("track_length_m"))
 	var invalid: Dictionary = shipped.layout.duplicate(true)
 	invalid.routes[0].segments[0].distance_m = 0.0
-	assert_true(";".join(M5CourseBuilder.validate_layout(invalid)).contains("distance_m"))
+	assert_true(";".join(CourseBuilder.validate_layout(invalid)).contains("distance_m"))
 
 
 func test_draft_hud_formatter_keeps_source_and_percent_lines() -> void:
@@ -186,9 +186,9 @@ func test_goal_repositions_without_duplicate_nodes_and_supports_width() -> void:
 	assert_gt(first_position.distance_to(moved.position), 29.0)
 
 func test_goal_counts_the_passes_left_before_the_finish_for_every_route() -> void:
-	var lap := float(M5CourseBuilder.load_layout()["track_length_m"])
+	var lap := float(CourseBuilder.load_layout()["track_length_m"])
 	var margin := GoalVisual.SWITCH_AFTER_PASS_M
-	for route: Dictionary in M5CourseBuilder.load_layout()["routes"]:
+	for route: Dictionary in CourseBuilder.load_layout()["routes"]:
 		var distance := float(route["distance_m"])
 		# 門をくぐるのは、ゴールの1周前、2周前…。スタートより後ろにあるものだけ。
 		var passes := 0
@@ -311,16 +311,15 @@ func test_invalid_configuration_prevents_race_start_and_displays_error() -> void
 	Config.last_error = saved_error
 
 
-func test_invalid_course_configuration_prevents_local_and_m5_start() -> void:
-	var saved_result := M5CourseBuilder._cached_result
-	var saved_attempted := M5CourseBuilder._attempted
-	M5CourseBuilder._attempted = true
-	M5CourseBuilder._cached_result = {"error": "course_layout_m5.json: track_length_m が不正です"}
-	for scene_path in ["res://scenes/local_race.tscn", "res://scenes/m5_online_race.tscn"]:
-		var race: Node = load(scene_path).instantiate()
-		add_child(race)
-		assert_false(race.is_processing())
-		assert_true(race.get_node("UI/HudLabel").text.contains("track_length_m"))
-		race.free()
-	M5CourseBuilder._cached_result = saved_result
-	M5CourseBuilder._attempted = saved_attempted
+func test_invalid_course_configuration_prevents_the_race_start() -> void:
+	var saved_result := CourseBuilder._cached_result
+	var saved_attempted := CourseBuilder._attempted
+	CourseBuilder._attempted = true
+	CourseBuilder._cached_result = {"error": "course_layout.json: track_length_m が不正です"}
+	var race: Node = load("res://scenes/local_race.tscn").instantiate()
+	add_child(race)
+	assert_false(race.is_processing())
+	assert_true(race.get_node("UI/HudLabel").text.contains("track_length_m"))
+	race.free()
+	CourseBuilder._cached_result = saved_result
+	CourseBuilder._attempted = saved_attempted

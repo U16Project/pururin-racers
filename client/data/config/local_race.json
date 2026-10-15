@@ -104,7 +104,6 @@
   "cpu_trainer_reselect_seconds": 0.8,
   "top_speed_natural_min_kmh": 66.0,
   "top_speed_natural_max_kmh": 80.0,
-  "acceleration_drive_force_bonus_per_stat_kmh_per_s": 0.0,
   "acceleration_response_multiplier_per_stat": 0.05,
   "cpu_trainer_profiles": [
     {"id": "front", "line_pref": 0.90},

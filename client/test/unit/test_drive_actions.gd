@@ -21,15 +21,15 @@ func _runner(stats: Dictionary = {}) -> Node3D:
 
 func test_drive_boost_multiplier_scales_only_the_drive_force() -> void:
 	var plain := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0)
-	var boosted := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.5)
+	var boosted := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.5)
 	assert_almost_eq(float(boosted["drive_contribution_kmh_per_s"]), float(plain["drive_contribution_kmh_per_s"]) * 1.5, 0.0001)
 	assert_almost_eq(float(boosted["air_resistance_kmh_per_s"]), float(plain["air_resistance_kmh_per_s"]), 0.0001)
 	assert_almost_eq(float(boosted["rolling_resistance_kmh_per_s"]), float(plain["rolling_resistance_kmh_per_s"]), 0.0001)
 	# 倍率1.0は、今までと同じ。
-	var same := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.0)
+	var same := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.0)
 	assert_almost_eq(float(same["total_acceleration_kmh_per_s"]), float(plain["total_acceleration_kmh_per_s"]), 0.0001)
 	# ブレーキ中は、倍率をかけない。
-	var braking := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, true, 1.5)
+	var braking := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 1.0, 1.0, 1.0, true, 1.5)
 	assert_almost_eq(float(braking["drive_contribution_kmh_per_s"]), -LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, 0.0001)
 
 
