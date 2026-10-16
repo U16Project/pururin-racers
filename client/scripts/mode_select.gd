@@ -18,6 +18,7 @@ const BUTTON_HEIGHT := 58.0
 
 var _offline_button: Button
 var _online_button: Button
+var _friend_button: Button
 var _guide_button: Button
 var _back_button: Button
 var _guide_overlay: Control
@@ -45,11 +46,11 @@ func _ready() -> void:
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -280.0
 	panel.offset_right = 280.0
-	panel.offset_top = -300.0
-	panel.offset_bottom = 300.0
+	panel.offset_top = -316.0
+	panel.offset_bottom = 316.0
 	add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
 	var heading := MenuStyle.label("ゲームモード設定", 30)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -58,10 +59,13 @@ func _ready() -> void:
 	_offline_button.pressed.connect(go_to_race_select)
 	UIAudio.bind_button_sound(_offline_button, "confirmation")
 	column.add_child(_offline_button)
-	_online_button = _choice_button("オンラインフリー対戦", "OnlineFreeRaceButton")
-	_online_button.pressed.connect(go_to_online_lobby)
-	UIAudio.bind_button_sound(_online_button, "confirmation")
+	_online_button = _choice_button("オンラインフリー対戦（未実装）", "OnlineFreeRaceButton")
+	_online_button.disabled = true
 	column.add_child(_online_button)
+	_friend_button = _choice_button("ともだち対戦", "FriendRaceButton")
+	_friend_button.pressed.connect(go_to_online_lobby)
+	UIAudio.bind_button_sound(_friend_button, "confirmation")
+	column.add_child(_friend_button)
 	_guide_button = _choice_button("操作ガイド", "ControlGuideButton", MenuStyle.COLOR_BUTTON_QUIET)
 	_guide_button.pressed.connect(_open_control_guide)
 	UIAudio.bind_button_sound(_guide_button, "confirmation")
@@ -81,10 +85,10 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	column.add_child(_back_button)
-	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_online_button)
-	_online_button.focus_neighbor_top = _online_button.get_path_to(_offline_button)
-	_online_button.focus_neighbor_bottom = _online_button.get_path_to(_guide_button)
-	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_online_button)
+	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_friend_button)
+	_friend_button.focus_neighbor_top = _friend_button.get_path_to(_offline_button)
+	_friend_button.focus_neighbor_bottom = _friend_button.get_path_to(_guide_button)
+	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_friend_button)
 	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(exploration)
 	exploration.focus_neighbor_top = exploration.get_path_to(_guide_button)
 	exploration.focus_neighbor_bottom = exploration.get_path_to(_quality_button)
@@ -105,7 +109,7 @@ func _choice_button(text: String, node_name: String, color: Color = MenuStyle.CO
 	return button
 
 
-## オンラインフリー対戦：部屋の画面へ（今は、合言葉の部屋に集まる所まで）。
+## ともだち対戦：部屋の画面へ（今は、合言葉の部屋に集まる所まで）。
 func go_to_online_lobby() -> void:
 	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE_PATH)
 

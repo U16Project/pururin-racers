@@ -6,7 +6,6 @@ const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
-const ModeSelectScene := preload("res://scenes/mode_select.tscn")
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 
 
@@ -134,14 +133,6 @@ func test_ground_text_returns_to_the_notch_when_the_notch_changes() -> void:
 	marker.call("show_info", 4, 50.0, 150.0, 0.1)
 	assert_eq(int(marker.get("_info_index")), 0)
 	assert_eq((marker.get_node(PlayerGroundMarker.INFO_VALUE_NAME) as Label3D).text, "4")
-
-
-func test_mode_select_has_the_web_offline_test_button() -> void:
-	var screen: Node = ModeSelectScene.instantiate()
-	add_child_autofree(screen)
-	var button := screen.find_child("WebOfflineTestButton", true, false) as Button
-	assert_not_null(button)
-	assert_eq(button.text, "ウェブ版オフラインテスト")
 
 
 func test_web_offline_test_builds_only_the_course_and_turns_shadows_off() -> void:

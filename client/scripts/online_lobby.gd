@@ -1,5 +1,5 @@
 extends Control
-## オンラインフリー対戦の、部屋の画面。3つの場面を、同じ画面の中で切り替える。
+## ともだち対戦の、部屋の画面。3つの場面を、同じ画面の中で切り替える。
 ## （1）つなぐ前：サーバーの場所を入れて、つなぐ。
 ## （2）部屋の一覧：部屋を選んで入る（施錠の印の部屋は、パスワードを聞く窓が出る）。「部屋を作る」で、作る窓が出る。
 ## （3）部屋の中：自分のぷるりんを選ぶ。部屋の主は、距離・出走数・CPUを入れるか・パスワードを決め、人を出し、レースを始める。
@@ -270,7 +270,7 @@ func _build() -> void:
 	var top := HBoxContainer.new()
 	column.add_child(top)
 	top.add_theme_constant_override("separation", 14)
-	var heading := MenuStyle.label("オンラインフリー対戦", 26)
+	var heading := MenuStyle.label("ともだち対戦", 26)
 	top.add_child(heading)
 	# 部屋の中では、見出しの横に、部屋の名前（と、施錠の印）を出す。
 	var title_row := HBoxContainer.new()

@@ -102,14 +102,17 @@ func test_profile_is_only_for_profile_editing_and_next_or_back() -> void:
 	assert_eq(menu.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
 	menu.free()
 
-func test_mode_select_offers_offline_play_and_the_online_button() -> void:
+func test_mode_select_offers_offline_play_and_friend_race() -> void:
 	var screen := ModeSelectScene.instantiate()
 	add_child(screen)
 	var offline := screen.get_node("Panel").find_child("OfflineFreeRaceButton", true, false) as Button
 	var online := screen.get_node("Panel").find_child("OnlineFreeRaceButton", true, false) as Button
 	assert_eq(offline.text, "オフラインフリー対戦")
-	assert_eq(online.text, "オンラインフリー対戦")
-	assert_false(online.disabled)
+	var friend := screen.get_node("Panel").find_child("FriendRaceButton", true, false) as Button
+	assert_eq(online.text, "オンラインフリー対戦（未実装）")
+	assert_true(online.disabled)
+	assert_eq(friend.text, "ともだち対戦")
+	assert_false(friend.disabled)
 	assert_eq(screen.get("RACE_SELECT_SCENE_PATH"), "res://scenes/race_select.tscn")
 	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/trainer_profile.tscn")
 	assert_eq(screen.get("ONLINE_LOBBY_SCENE_PATH"), "res://scenes/online_lobby.tscn")
@@ -121,27 +124,27 @@ func test_modes_use_accept_without_a_start_shortcut() -> void:
 	var screen := ModeSelectScene.instantiate()
 	add_child(screen)
 	var offline: Button = screen.find_child("OfflineFreeRaceButton", true, false)
-	var online: Button = screen.find_child("OnlineFreeRaceButton", true, false)
+	var friend: Button = screen.find_child("FriendRaceButton", true, false)
 	offline.pressed.disconnect(screen.go_to_race_select)
-	online.pressed.disconnect(screen.go_to_online_lobby)
+	friend.pressed.disconnect(screen.go_to_online_lobby)
 	watch_signals(offline)
-	watch_signals(online)
+	watch_signals(friend)
 	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
 	assert_signal_not_emitted(offline, "pressed")
-	online.grab_focus()
-	assert_null(online.get_node_or_null("ButtonMark"))
+	friend.grab_focus()
+	assert_null(friend.get_node_or_null("ButtonMark"))
 	assert_null(offline.get_node_or_null("ButtonMark"))
 	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
-	assert_signal_not_emitted(online, "pressed")
+	assert_signal_not_emitted(friend, "pressed")
 	screen._unhandled_input(_pad_button(JOY_BUTTON_A))
-	assert_signal_emit_count(online, "pressed", 1)
+	assert_signal_emit_count(friend, "pressed", 1)
 	var release := _pad_button(JOY_BUTTON_START)
 	release.pressed = false
 	screen._unhandled_input(release)
-	assert_signal_emit_count(online, "pressed", 1)
+	assert_signal_emit_count(friend, "pressed", 1)
 	screen._open_control_guide()
 	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
-	assert_signal_emit_count(online, "pressed", 1)
+	assert_signal_emit_count(friend, "pressed", 1)
 	screen.free()
 
 

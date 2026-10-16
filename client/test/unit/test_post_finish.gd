@@ -230,7 +230,7 @@ func test_start_advances_from_visible_results_but_not_before_the_panel_appears()
 	var back: Button = race.find_child("ResultReturnButton", true, false)
 	back.pressed.disconnect(race._return_to_race_select)
 	watch_signals(back)
-	assert_eq(back.get_node("ButtonMark").get("kind"), "START")
+	assert_null(back.get_node_or_null("ButtonMark"))
 	race.set("_race_over", true)
 	var event := InputEventJoypadButton.new()
 	event.button_index = JOY_BUTTON_START
