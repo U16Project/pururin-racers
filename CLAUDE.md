@@ -23,7 +23,7 @@
 - ゲーム本体は Godot 4.7（`client/`）。オンラインのサーバーも、同じ `client/` を画面なしで動かす（`scenes/online_server.tscn`）。通信の決まりは `shared/protocol_online.md`。
 - 仕様の正本は `docs/ぷるりんレーサーズ_設計案.md`、未決・決定ログは `docs/検討事項.md`。現行ローカルレースの計算は `docs/現行ローカルレース計算リファレンス.md`、設定項目は `docs/設定管理.md`。
 - 初期値の正本は JSON（`client/data/config/`）のみ。コード側に同じ初期値を重複して置かない。
-- ドラフト規則は `client/data/config/draft_rules.json` が正本（1か所だけ）。オフラインもオンラインのサーバーも、ここを読む。
+- 走りの係数とドラフト規則は `client/data/config/local_race.json` の1か所だけ。オフラインもオンラインのサーバーも、ここを読む。
 - 作ったものは、不要になったら削除する。使われない設定、関数、旧仕様を残さない。
 - 設定値を変えたら、ドキュメント（`docs/設定管理.md` など）と、設計案末尾の履歴も更新する。
 
@@ -35,4 +35,3 @@ cd client && ../tools/godot/Godot_v4.7-stable_linux.x86_64 --headless -s addons/
 ```
 
 - 期待値は、設定の現値に依存させず、設定や式から計算して作る（値を変えるたびにテストが壊れないように）。
-- ヘッドレスのレース測定は `client/scripts/local_race_simulation_cli.gd`（`--scenario <id>`）。

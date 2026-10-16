@@ -4,7 +4,6 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const TrackCurveBuilder := preload("res://scripts/track_curve_builder.gd")
 const TrackMath := preload("res://scripts/track_math.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
-const DraftRules := preload("res://scripts/config/draft_rules.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const LocalRaceCameraScript := preload("res://scripts/local_race_camera.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
@@ -468,10 +467,10 @@ func test_draft_response_curve_saturates_toward_full_effect() -> void:
 
 
 func test_draft_source_wake_grows_past_the_reference_speed_without_a_source_cap() -> void:
-	var saved := DraftRules._cached
-	var configured: Dictionary = DraftRules.load_file().data
-	configured["wake_speed_gain_p"] = 0.06
-	DraftRules._cached = configured
+	var saved := LocalRaceMath.Config._cached
+	var configured: Dictionary = saved.duplicate(true)
+	configured["draft_wake_speed_gain_p"] = 0.06
+	LocalRaceMath.Config._cached = configured
 	assert_almost_eq(LocalRaceMath.draft_wake_from_speed(75.0), 0.12, 0.001)
 	assert_almost_eq(LocalRaceMath.draft_wake_from_speed(300.0), 0.30, 0.001)
 	var details := LocalRaceMath.calculate_draft_details([
@@ -479,7 +478,7 @@ func test_draft_source_wake_grows_past_the_reference_speed_without_a_source_cap(
 		{"id": "source", "race_progress": 2.0, "offset": 0.0, "speed": 300.0, "own_wake_p": 0.50},
 	], 0)
 	assert_gt(float(details["direct_draft_p"]), LocalRaceMath.draft_response_reference_p())
-	DraftRules._cached = saved
+	LocalRaceMath.Config._cached = saved
 
 
 func test_aero_and_pack_stats_use_continuous_baseline_multipliers() -> void:

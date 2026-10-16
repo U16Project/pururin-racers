@@ -81,6 +81,15 @@ const NUMBER_RANGES := {
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
+	"draft_assist_max_kmh": [0.0, 90.0],
+	"draft_forward_min_m": [0.001, 1000.0],
+	"draft_forward_max_m": [0.001, 1000.0],
+	"draft_lateral_range_m": [0.001, 1000.0],
+	"draft_lateral_falloff_exponent": [0.001, 10.0],
+	"draft_chain_attenuation": [0.0, 1.0],
+	"draft_wake_base_p": [0.0, 1.0],
+	"draft_wake_speed_reference_kmh": [0.001, 300.0],
+	"draft_wake_speed_gain_p": [0.0, 1.0],
 	"drive_repeat_initial_s": [0.001, 10.0],
 	"drive_repeat_interval_s": [0.001, 10.0],
 	"cpu_steer_reselect_min_s": [0.001, 60.0],
@@ -189,6 +198,8 @@ static func validate(data: Variant) -> PackedStringArray:
 	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
 		if float(data[key]) < 0.0 or float(data[key]) > float(data.drive_level_max):
 			errors.append("%s: 0〜drive_level_max の範囲にしてください" % key)
+	if data.draft_forward_min_m > data.draft_forward_max_m:
+		errors.append("draft_forward_min_m: draft_forward_max_m 以下にしてください")
 	if data.heart_rate_min_bpm > data.heart_rate_normal_max_bpm:
 		errors.append("heart_rate_min_bpm: heart_rate_normal_max_bpm 以下にしてください")
 	if data.heart_rate_normal_max_bpm > data.heart_rate_overheat_max_bpm:

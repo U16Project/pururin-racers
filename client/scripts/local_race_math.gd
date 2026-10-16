@@ -5,7 +5,6 @@ extends RefCounted
 
 const Config := preload("res://scripts/config/local_race_config.gd")
 const CourseLayout := preload("res://scripts/course_builder.gd")
-const DraftRules := preload("res://scripts/config/draft_rules.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 
 const TrackMath := preload("res://scripts/track_math.gd")
@@ -61,13 +60,13 @@ static var BRAKE_DECELERATION_KMH_PER_S: float:
 		return Config.number("brake_deceleration_kmh_per_s")
 static var DRAFT_SPEED_BONUS_MAX_KMH: float:
 	get:
-		return DraftRules.number("assist_max_kmh")
+		return Config.number("draft_assist_max_kmh")
 static var DRAFT_CHAIN_ATTENUATION: float:
 	get:
-		return DraftRules.number("chain_attenuation")
+		return Config.number("draft_chain_attenuation")
 static var DRAFT_FORWARD_MIN_M: float:
 	get:
-		return DraftRules.number("forward_min_m")
+		return Config.number("draft_forward_min_m")
 static var DRAFT_AIR_RESISTANCE_FACTOR: float:
 	get:
 		return Config.number("draft_air_resistance_factor")
@@ -134,13 +133,13 @@ static var PACK_DRAFT_EFFECTIVE_MULTIPLIER_PER_STAT: float:
 		return Config.number("pack_draft_effective_multiplier_per_stat")
 static var DRAFT_FORWARD_MAX_M: float:
 	get:
-		return DraftRules.number("forward_max_m")
+		return Config.number("draft_forward_max_m")
 static var DRAFT_LATERAL_RANGE_M: float:
 	get:
-		return DraftRules.number("lateral_range_m")
+		return Config.number("draft_lateral_range_m")
 static var DRAFT_LATERAL_FALLOFF_EXPONENT: float:
 	get:
-		return DraftRules.number("lateral_falloff_exponent")
+		return Config.number("draft_lateral_falloff_exponent")
 static var DRIVE_REPEAT_INITIAL_S: float:
 	get:
 		return Config.number("drive_repeat_initial_s")
@@ -554,7 +553,7 @@ static func pack_draft_effective_multiplier(pack_stat: int = 5) -> float:
 ## 生の受取率をローカル走行へ載せる実効率へ変換する共通カーブ。
 ## 受取率は丸めない。実効率は x / (1 + x) で、増えるほど1へ近づく。
 static func draft_response_reference_p() -> float:
-	return DraftRules.wake_reference_p()
+	return maxf(Config.number("draft_wake_base_p") + Config.number("draft_wake_speed_gain_p"), 0.0001)
 
 
 static func draft_effective_ratio(received_draft_p: float, pack_stat: int = 5) -> float:
@@ -582,9 +581,9 @@ static func draft_assist_speed_kmh(received_draft_p: float, pack_stat: int = 5) 
 
 
 static func draft_wake_from_speed(speed_kmh: float) -> float:
-	var base := DraftRules.number("wake_base_p")
-	var reference := DraftRules.number("wake_speed_reference_kmh")
-	var gain := DraftRules.number("wake_speed_gain_p")
+	var base := Config.number("draft_wake_base_p")
+	var reference := Config.number("draft_wake_speed_reference_kmh")
+	var gain := Config.number("draft_wake_speed_gain_p")
 	return base + maxf(0.0, speed_kmh) / reference * gain
 
 

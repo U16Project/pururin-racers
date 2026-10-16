@@ -1,7 +1,7 @@
 extends GutTest
 
 const Config := preload("res://scripts/config/local_race_config.gd")
-const DraftRules := preload("res://scripts/config/draft_rules.gd")
+const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const CourseBuilder := preload("res://scripts/course_builder.gd")
 const DraftHudFormatter := preload("res://scripts/presentation/draft_hud_formatter.gd")
 const GoalVisual := preload("res://scripts/presentation/goal_visual.gd")
@@ -50,13 +50,10 @@ func test_shipped_config_is_valid_and_cached_read_only() -> void:
 	assert_eq(Config.number("heart_rate_normal_max_bpm"), 200.0)
 	assert_eq(Config.number("heart_rate_overheat_max_bpm"), 230.0)
 	assert_almost_eq(Config.number("overheat_exposure_recovery_per_s"), 2.5, 0.001)
-	var draft_result := DraftRules.load_file()
-	assert_true(draft_result.has("data"))
-	assert_true(DraftRules.validate(draft_result.data).is_empty())
-	assert_almost_eq(DraftRules.wake_reference_p(), 0.18, 0.001)
-	assert_eq(DraftRules.number("chain_attenuation"), 0.5)
-	assert_eq(DraftRules.number("lateral_range_m"), 3.0)
-	assert_almost_eq(DraftRules.number("lateral_falloff_exponent"), 1.0, 0.001)
+	assert_almost_eq(LocalRaceMath.draft_response_reference_p(), 0.18, 0.001)
+	assert_eq(Config.number("draft_chain_attenuation"), 0.5)
+	assert_eq(Config.number("draft_lateral_range_m"), 3.0)
+	assert_almost_eq(Config.number("draft_lateral_falloff_exponent"), 1.0, 0.001)
 
 
 func test_m5_course_layout_rejects_missing_and_invalid_routes() -> void:
@@ -85,19 +82,11 @@ func test_draft_hud_formatter_keeps_source_and_percent_lines() -> void:
 	]))
 
 
-func test_draft_rules_reject_invalid_range_and_unknown_key() -> void:
-	var data: Dictionary = DraftRules.load_file().data
-	data.forward_max_m = 0.0
-	assert_true(";".join(DraftRules.validate(data)).contains("forward_max_m"))
-	data = DraftRules.load_file().data
-	data.forward_min_m = data.forward_max_m + 0.1
-	assert_true(";".join(DraftRules.validate(data)).contains("forward_min_m"))
-	data = DraftRules.load_file().data
-	data.unexpected_rule = 1.0
-	assert_true(";".join(DraftRules.validate(data)).contains("unexpected_rule"))
-	data = DraftRules.load_file().data
-	data.max_sources = 3
-	assert_true(";".join(DraftRules.validate(data)).contains("max_sources"))
+func test_draft_forward_range_rejects_min_above_max() -> void:
+	var data: Dictionary = Config.values().duplicate(true)
+	data.draft_forward_min_m = data.draft_forward_max_m + 0.1
+	assert_true(";".join(Config.validate(data)).contains("draft_forward_min_m"))
+
 
 func test_errors_identify_file_and_setting() -> void:
 	assert_true(Config.load_file("res://missing_race_config.json").error.contains("missing_race_config.json"))

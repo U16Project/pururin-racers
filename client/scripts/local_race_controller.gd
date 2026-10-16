@@ -237,10 +237,6 @@ func _ready() -> void:
 		_hud_label.text = "レース設定を確認してください：" + LocalRaceMath.Config.last_error
 		set_process(false)
 		return
-	if LocalRaceMath.DraftRules.values().is_empty():
-		_hud_label.text = "ドラフト設定を確認してください：" + LocalRaceMath.DraftRules.last_error
-		set_process(false)
-		return
 	if PururinRosterConfig.values().is_empty():
 		_hud_label.text = "ぷるりん設定を確認してください：" + PururinRosterConfig.last_error
 		set_process(false)

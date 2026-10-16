@@ -2,7 +2,7 @@
 
 Godot クライアント（プレイヤーが遊ぶアプリ）のルート。
 
-ローカル出力操作の係数は `data/config/local_race.json`、ドラフト規則は `data/config/draft_rules.json`（正本。オンラインのサーバーも読む）で管理します。編集方法・単位・適用範囲は [設定管理](../docs/設定管理.md) を参照してください。変更の反映にはクライアントの再起動が必要です。
+走りの係数とドラフト規則は `data/config/local_race.json`（オンラインのサーバーも読む）で管理します。編集方法・単位・適用範囲は [設定管理](../docs/設定管理.md) を参照してください。変更の反映にはクライアントの再起動が必要です。
 
 ## エンジンバージョン
 
@@ -75,43 +75,6 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 \
 コースの幅と内外の倍率は `test/unit/test_track.gd`、ローカルレースは `test/unit/test_local_race.gd`、メニューの流れは `test/unit/test_menu_flow.gd`、ぷるりんの見た目は `test/unit/test_pururin_look.gd`、レース中の表情とアクションは `test/unit/test_race_expression.gd` でカバーする。全部で約4分かかる。1つのファイルだけ回すときは、末尾に `-gselect=test_pururin_look.gd` のように足す。
 
 見た目のテストで使う、取り替えの確認用の素材（仮のメッシュ1つ・仮の画像1枚・設定2つ）は、`test/fixtures/pururin/` にある。ゲーム本体では使わない。
-
-## ローカルレースのヘッドレス統合シミュレーション
-
-比較条件ごとにコードを増やさず、共通CLIへJSONの `cases` 配列を渡せます。
-
-```bash
-tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client \
-  --script scripts/local_race_simulation_cli.gd -- \
-  --batch-config /absolute/path/conditions.json --output-dir /absolute/path/new-results
-```
-
-各caseは `id`、`scenario`、`config_overrides` を持ちます。設定差し替えは通常の設定検証を通し、case終了時に復元します。結果はcaseごとのJSONと `summary.json` に保存し、既存結果は上書きしません。実行エラーと数値目標のFAILは分離します。
-
-- `scenario` に `all_cpu:true`、`seed`、`distance_m`、`player_id`、`delta_s`、`max_time_s`、`sample_interval_s`、`gate_overrides` を指定できます。全頭CPUでは元プレイヤーもロスター指定トレーナーで判断し、固定ノッチ予定は適用しません。枠の重複は拒否するため、入れ替え相手も指定してください。
-
-統合結果には全設定、セッション、乱数seed、条件、実行秒数、全頭の時系列、初めてゴールしたtickの `finish_snapshots` を保存します。最終 `runners` は全頭完走時点なので、先にゴールした個体の心拍等はゴール後の値です。ゴール比較は `finish_snapshots` を使用してください。時間刻み既定値は1/60秒で、半刻み比較も同じ条件データでできます。未評価の相対条件は `NOT_EVALUATED` でありPASSではありません。
-
-描画・カメラ・入力を使わず、通常のローカルレースシーンを同じ `Runner`／`LocalRaceMath`／CPU判断／ドラフト処理で進め、結果をJSONで出力できます。
-
-```bash
-tools/godot/Godot_v4.7-stable_linux.x86_64 \
-  --headless --path client \
-  --script scripts/local_race_simulation_cli.gd -- \
-  --scenario notch4_cruise
-```
-
-シナリオを省略すると `notch4_cruise`、利用可能な例は `data/config/local_race_simulation.json` にあります。
-
-- `notch4_cruise`: ノッチ4巡航
-- `notch6_sustain`: ノッチ6持続
-- `notch6_to_zero_recovery`: ノッチ6から0へ落として心拍回復を観測
-- `cpu_pack_and_draft`: CPU集団・ドラフトの観測
-
-各結果には、経過時間、完走数、各ランナーの距離・速度・順位・心拍・スタミナ・ドラフト情報、時系列サンプルが含まれます。
-時系列サンプルには、経路距離／レース進捗、座標・向き、現在／目標速度、自然最高速、ノッチ、心拍・スタミナ、オーバーヒート・推進効率、速度診断、ドラフト状態、完走状態を含みます。`test_local_race_simulator.gd` では4シナリオを実際に進行し、速度・距離・心拍・スタミナ・ノッチ・ドラフト率・順位／完走順などの範囲と整合性を検証します。
-
-各シナリオには、単なる範囲検証に加えて、設定ファイルの `goals` に定義した目標値・許容範囲・相対条件の判定結果を `goal_assessment` として出力します。`passed` と `status`（`PASS` / `FAIL`）、実測値、目標値、判定メッセージ、`summary` を確認できます。例えばノッチ4はゴール時スタミナ0%付近・心拍170〜195・オーバーヒートなし、ノッチ6は高負荷だが心拍230以下・スタミナ負債-100以内を確認します。ノッチ6とノッチ4の負荷比較のような相対条件は、両方の結果を参照して再評価できます。旧キー `goal_checks` も互換のため読み込めます。
 
 ## フォント
 
