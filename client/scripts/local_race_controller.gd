@@ -294,6 +294,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_control_guide):
 		return
 	if _race_over:
+		if RaceControllerInput.is_menu_pressed(event) and _result_panel.visible:
+			viewport.set_input_as_handled()
+			RaceControllerInput.activate_control(_result_return_button)
 		return
 	if RaceControllerInput.is_menu_pressed(event):
 		_set_paused(not _paused)
@@ -1478,6 +1481,7 @@ func _build_result_board() -> void:
 	buttons.add_child(_result_retry_button)
 	_result_return_button.reparent(buttons)
 	MenuStyle.style_button(_result_return_button, 20, MenuStyle.COLOR_BUTTON_QUIET)
+	MenuStyle.add_mark(_result_return_button, "START", 22.0)
 	_result_return_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_return_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_result_retry_button.focus_neighbor_right = _result_retry_button.get_path_to(_result_return_button)

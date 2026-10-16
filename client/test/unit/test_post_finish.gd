@@ -225,6 +225,26 @@ func test_the_result_board_offers_retry_and_return_and_both_sound_like_a_decisio
 	assert_true(source.contains('bind_button_sound(_result_retry_button, "confirmation")'))
 
 
+func test_start_advances_from_visible_results_but_not_before_the_panel_appears() -> void:
+	var race := _race()
+	var back: Button = race.find_child("ResultReturnButton", true, false)
+	back.pressed.disconnect(race._return_to_race_select)
+	watch_signals(back)
+	assert_eq(back.get_node("ButtonMark").get("kind"), "START")
+	race.set("_race_over", true)
+	var event := InputEventJoypadButton.new()
+	event.button_index = JOY_BUTTON_START
+	event.pressed = true
+	race._unhandled_input(event)
+	assert_signal_not_emitted(back, "pressed")
+	(race.get("_result_panel") as Control).show()
+	race._unhandled_input(event)
+	assert_signal_emit_count(back, "pressed", 1)
+	event.pressed = false
+	race._unhandled_input(event)
+	assert_signal_emit_count(back, "pressed", 1)
+
+
 func test_only_the_players_pururin_has_a_ground_marker_under_it() -> void:
 	var race := _race()
 	var player: Node3D = race.get("_player")

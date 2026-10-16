@@ -41,9 +41,9 @@ static var _locked: Array[bool] = _no_locks()
 static var _user_slot := 0
 ## レースからレース選択へ戻るところか（戻ったとき、選択の枠をレース開始ボタンに置くための印）。
 static var _returning_from_race := false
-## 「ウェブ版オフラインテスト」で始めたか。true のあいだ、レースの景色は、コースまわり（地面と柵）だけにする
+## 選択した画質が軽量か。true のあいだ、レースの景色は、コースまわり（地面と柵）だけにする
 ## （スマホのブラウザでも軽く動くように）。レースの中身は、同じ。
-static var _course_only := false
+static var _course_only := OS.has_feature("web")
 ## オンラインのサーバーが走らせるレースの、出走の一覧。空なら、ふつう（手元のレース選択）の出走を使う。
 ## 1体ぶんは field_entries と同じ形に、"peer_id"（通信ごしの人の番号。CPUは0）と "trainer_name" を足したもの。
 static var _online_entries: Array = []

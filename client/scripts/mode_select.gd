@@ -1,5 +1,5 @@
 extends Control
-## 遊び方の選択。オフラインフリー対戦はレース選択へ進む。オンラインは、まだ進まない。
+## 遊び方と画質の選択。
 
 const RACE_SELECT_SCENE_PATH := "res://scenes/race_select.tscn"
 const MENU_SCENE_PATH := "res://scenes/trainer_profile.tscn"
@@ -9,15 +9,25 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
+const CAMERA_EXPLORATION_SCENE_PATH := "res://scenes/camera_exploration.tscn"
+const BUTTON_OPACITY := 0.92
+const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
+const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
 const BUTTON_WIDTH := 460.0
 const BUTTON_HEIGHT := 58.0
 
 var _offline_button: Button
 var _online_button: Button
-var _web_test_button: Button
 var _guide_button: Button
 var _back_button: Button
 var _guide_overlay: Control
+var _screen_mode_label: Label
+var _screen_mode_index := -1
+var _screen_mode_row: HBoxContainer
+var _screen_direction_down := {"ui_left": false, "ui_right": false}
+var _quality_button: HBoxContainer
+var _quality_label: Label
+var _quality_direction_down := {"ui_left": false, "ui_right": false}
 
 
 func _ready() -> void:
@@ -35,23 +45,19 @@ func _ready() -> void:
 	panel.set_anchors_preset(Control.PRESET_CENTER)
 	panel.offset_left = -280.0
 	panel.offset_right = 280.0
-	panel.offset_top = -225.0
-	panel.offset_bottom = 225.0
+	panel.offset_top = -300.0
+	panel.offset_bottom = 300.0
 	add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
-	var heading := MenuStyle.label("ゲーム開始", 30)
+	var heading := MenuStyle.label("ゲームモード設定", 30)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(heading)
 	_offline_button = _choice_button("オフラインフリー対戦", "OfflineFreeRaceButton")
 	_offline_button.pressed.connect(go_to_race_select)
 	UIAudio.bind_button_sound(_offline_button, "confirmation")
 	column.add_child(_offline_button)
-	_web_test_button = _choice_button("ウェブ版オフラインテスト", "WebOfflineTestButton")
-	_web_test_button.pressed.connect(go_to_web_test)
-	UIAudio.bind_button_sound(_web_test_button, "confirmation")
-	column.add_child(_web_test_button)
 	_online_button = _choice_button("オンラインフリー対戦", "OnlineFreeRaceButton")
 	_online_button.pressed.connect(go_to_online_lobby)
 	UIAudio.bind_button_sound(_online_button, "confirmation")
@@ -60,19 +66,35 @@ func _ready() -> void:
 	_guide_button.pressed.connect(_open_control_guide)
 	UIAudio.bind_button_sound(_guide_button, "confirmation")
 	column.add_child(_guide_button)
+	var exploration := _choice_button("カメラで探検", "CameraExplorationButton", MenuStyle.COLOR_BUTTON_QUIET)
+	exploration.pressed.connect(go_to_camera_exploration)
+	UIAudio.bind_button_sound(exploration, "confirmation")
+	column.add_child(exploration)
+	_build_quality_selector(column)
+	_build_screen_mode_selector(column)
+	var quit_button := _choice_button("ゲームを終了", "QuitButton", MenuStyle.COLOR_BUTTON_QUIET)
+	quit_button.pressed.connect(func(): get_tree().quit())
+	UIAudio.bind_button_sound(quit_button, "confirmation")
+	column.add_child(quit_button)
 	_back_button = _choice_button("戻る", "BackButton", MenuStyle.COLOR_BUTTON_QUIET)
 	_back_button.pressed.connect(go_to_menu)
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	column.add_child(_back_button)
-	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_web_test_button)
-	_web_test_button.focus_neighbor_top = _web_test_button.get_path_to(_offline_button)
-	_web_test_button.focus_neighbor_bottom = _web_test_button.get_path_to(_online_button)
-	_online_button.focus_neighbor_top = _online_button.get_path_to(_web_test_button)
+	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_online_button)
+	_online_button.focus_neighbor_top = _online_button.get_path_to(_offline_button)
 	_online_button.focus_neighbor_bottom = _online_button.get_path_to(_guide_button)
 	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_online_button)
-	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_back_button)
-	_back_button.focus_neighbor_top = _back_button.get_path_to(_guide_button)
+	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(exploration)
+	exploration.focus_neighbor_top = exploration.get_path_to(_guide_button)
+	exploration.focus_neighbor_bottom = exploration.get_path_to(_quality_button)
+	_quality_button.focus_neighbor_top = _quality_button.get_path_to(exploration)
+	_quality_button.focus_neighbor_bottom = _quality_button.get_path_to(_screen_mode_row)
+	_screen_mode_row.focus_neighbor_top = _screen_mode_row.get_path_to(_quality_button)
+	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(quit_button)
+	quit_button.focus_neighbor_top = quit_button.get_path_to(_screen_mode_row)
+	quit_button.focus_neighbor_bottom = quit_button.get_path_to(_back_button)
+	_back_button.focus_neighbor_top = _back_button.get_path_to(quit_button)
 	_offline_button.grab_focus()
 
 
@@ -88,15 +110,68 @@ func go_to_online_lobby() -> void:
 	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE_PATH)
 
 
+func go_to_camera_exploration() -> void:
+	get_tree().change_scene_to_file(CAMERA_EXPLORATION_SCENE_PATH)
+
+
 func go_to_race_select() -> void:
-	RaceSession.set_course_only(false)
 	get_tree().change_scene_to_file(RACE_SELECT_SCENE_PATH)
 
 
-## ウェブ版オフラインテスト：オフラインフリー対戦と同じ。景色だけ、コースまわりだけにする（軽くするため）。
-func go_to_web_test() -> void:
-	RaceSession.set_course_only(true)
-	get_tree().change_scene_to_file(RACE_SELECT_SCENE_PATH)
+func step_quality() -> void:
+	RaceSession.set_course_only(not RaceSession.is_course_only())
+	_update_quality_text()
+
+
+func _update_quality_text() -> void:
+	_quality_label.text = "軽量" if RaceSession.is_course_only() else "標準"
+
+
+func _quality_input(event: InputEvent) -> void:
+	if not _quality_button.has_focus():
+		return
+	for action in ["ui_left", "ui_right"]:
+		if event.is_action(action):
+			var down := event.is_action_pressed(action, true, true)
+			if down and not _quality_direction_down[action] and not event.is_echo():
+				step_quality()
+				UIAudio.play_selection_cycle()
+			_quality_direction_down[action] = down
+			_quality_button.accept_event()
+
+
+func _build_quality_selector(column: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.name = "QualityButton"
+	_quality_button = row
+	row.focus_mode = Control.FOCUS_ALL
+	row.custom_minimum_size = Vector2(364, 30)
+	row.add_theme_constant_override("separation", 4)
+	row.gui_input.connect(_quality_input)
+	row.focus_entered.connect(row.queue_redraw)
+	row.focus_exited.connect(row.queue_redraw)
+	row.focus_exited.connect(func(): _quality_direction_down = {"ui_left": false, "ui_right": false})
+	row.draw.connect(func():
+		if row.has_focus():
+			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
+	)
+	column.add_child(row)
+	var caption := MenuStyle.label("画質", 14)
+	caption.custom_minimum_size.x = 128
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(caption)
+	row.add_child(_screen_mode_button("◀", "PreviousQualityButton", -1, true))
+	_quality_label = MenuStyle.label("", 14)
+	_quality_label.name = "QualityLabel"
+	_quality_label.custom_minimum_size.x = 140
+	_quality_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_quality_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_quality_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_quality_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_quality_label)
+	row.add_child(_screen_mode_button("▶", "NextQualityButton", 1, true))
+	_update_quality_text()
 
 
 func go_to_menu() -> void:
@@ -130,3 +205,113 @@ func _unhandled_input(event: InputEvent) -> void:
 		go_to_menu()
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
+
+
+func _build_screen_mode_selector(menu: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.name = "ScreenModeSelector"
+	_screen_mode_row = row
+	row.focus_mode = Control.FOCUS_ALL
+	row.custom_minimum_size = Vector2(364.0, 30.0)
+	row.gui_input.connect(_screen_mode_gui_input)
+	row.focus_entered.connect(row.queue_redraw)
+	row.focus_exited.connect(row.queue_redraw)
+	row.focus_exited.connect(func(): _screen_direction_down = {"ui_left": false, "ui_right": false})
+	row.draw.connect(func():
+		if row.has_focus():
+			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
+	)
+	row.add_theme_constant_override("separation", 4)
+	menu.add_child(row)
+	var caption := MenuStyle.label("ウィンドウサイズ", 14)
+	caption.name = "ModeCaption"
+	caption.custom_minimum_size.x = 128
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(caption)
+	row.add_child(_screen_mode_button("◀", "PreviousModeButton", -1))
+	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 14)
+	_screen_mode_label.name = "ModeLabel"
+	_screen_mode_label.custom_minimum_size.x = 140.0
+	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_screen_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_screen_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_screen_mode_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_screen_mode_label)
+	row.add_child(_screen_mode_button("▶", "NextModeButton", 1))
+	_sync_screen_mode()
+
+
+func _screen_mode_button(text: String, node_name: String, direction: int, quality: bool = false) -> Button:
+	var button := MenuStyle.button(text, 14, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
+	button.name = node_name
+	button.focus_mode = Control.FOCUS_NONE
+	button.custom_minimum_size = Vector2(36, 30)
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
+		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+		style.content_margin_left = 8.0
+		style.content_margin_right = 8.0
+		style.content_margin_top = 3.0
+		style.content_margin_bottom = 3.0
+		button.add_theme_stylebox_override(state, style)
+	button.pressed.connect(func() -> void:
+		if quality:
+			step_quality()
+			UIAudio.play_arrow_click()
+			return
+		var previous := _screen_mode_index
+		_cycle_screen_mode(direction)
+		if _screen_mode_index != previous:
+			UIAudio.play_arrow_click())
+	return button
+
+
+func _screen_mode_gui_input(event: InputEvent) -> void:
+	if not _screen_mode_row.has_focus():
+		return
+	for action in ["ui_left", "ui_right"]:
+		if not event.is_action(action):
+			continue
+		var down := event.is_action_pressed(action, true, true)
+		if down and not _screen_direction_down[action] and not event.is_echo():
+			var previous := _screen_mode_index
+			_cycle_screen_mode(-1 if action == "ui_left" else 1)
+			var sound_key := screen_mode_sound_key(event is InputEventJoypadButton or event is InputEventJoypadMotion, _screen_mode_index != previous)
+			if sound_key == "selection_cycle":
+				UIAudio.play_selection_cycle()
+		_screen_direction_down[action] = down
+		_screen_mode_row.accept_event()
+
+
+func _process(_delta: float) -> void:
+	_sync_screen_mode()
+
+
+func _sync_screen_mode() -> void:
+	var mode := DisplayServer.window_get_mode()
+	if mode == DisplayServer.WINDOW_MODE_MINIMIZED:
+		return
+	var index := screen_mode_index(mode)
+	if index != _screen_mode_index:
+		_screen_mode_index = index
+		_screen_mode_label.text = SCREEN_MODE_LABELS[index]
+
+
+static func screen_mode_index(mode: int) -> int:
+	if mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+		return 2
+	var index := SCREEN_MODES.find(mode)
+	return maxi(index, 0)
+
+
+static func screen_mode_sound_key(is_gamepad: bool, changed: bool) -> String:
+	return "selection_cycle" if is_gamepad and changed else ""
+
+
+static func cycled_screen_mode(mode: int, direction: int) -> int:
+	return SCREEN_MODES[posmod(screen_mode_index(mode) + direction, SCREEN_MODES.size())]
+
+
+func _cycle_screen_mode(direction: int) -> void:
+	DisplayServer.window_set_mode(cycled_screen_mode(DisplayServer.window_get_mode(), direction))
+	_sync_screen_mode()

@@ -218,7 +218,7 @@ static func set_icon_file(source_path: String) -> String:
 	square.resize(size_px, size_px, Image.INTERPOLATE_LANCZOS)
 	if square.save_png(_icon_path) != OK:
 		return "画像を保存できません: %s" % _icon_path
-	_data["icon"] = {"kind": "file", "id": ""}
+	_data["icon"] = {"kind": "file", "id": square.get_data().hex_encode().md5_text()}
 	_icon_texture = null
 	_save()
 	return ""
@@ -243,4 +243,82 @@ static func _save() -> void:
 		push_error(last_error)
 		return
 	file.store_string(JSON.stringify(_data, "  "))
+
+
+## 追加画像はプロフィールと同じ保存領域にコピーし、元ファイルは変更しない。
+static func custom_icon_directory() -> String:
+	return _save_path + ".icons"
+
+
+static func custom_icons() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var directory := DirAccess.open(custom_icon_directory())
+	if directory == null:
+		return result
+	var names := directory.get_files()
+	names.sort()
+	for filename in names:
+		var id := filename.get_basename()
+		if filename.ends_with(".png") and _valid_custom_id(id):
+			result.append({"id": id, "path": custom_icon_directory().path_join(filename)})
+	return result
+
+
+static func _valid_custom_id(id: String) -> bool:
+	if id.length() != 32:
+		return false
+	for character in id:
+		if character not in "0123456789abcdef":
+			return false
+	return true
+
+
+static func custom_icon_path(id: String) -> String:
+	return custom_icon_directory().path_join(id + ".png") if _valid_custom_id(id) else ""
+
+
+## 同じ画像は重複させない。失敗したときは error を返す。
+static func import_custom_icon(source_path: String) -> Dictionary:
+	var image := Image.load_from_file(source_path) if FileAccess.file_exists(source_path) else null
+	if image == null or image.is_empty():
+		return {"error": "画像を読めません"}
+	var side := mini(image.get_width(), image.get_height())
+	var square := image.get_region(Rect2i((image.get_width() - side) / 2, (image.get_height() - side) / 2, side, side))
+	square.resize(int(config()["icon_size_px"]), int(config()["icon_size_px"]), Image.INTERPOLATE_LANCZOS)
+	var id := square.get_data().hex_encode().md5_text()
+	var path := custom_icon_path(id)
+	if DirAccess.make_dir_recursive_absolute(custom_icon_directory()) != OK or square.save_png(path) != OK:
+		return {"error": "追加画像を保存できません"}
+	return {"id": id, "path": path}
+
+
+static func custom_icon_texture(id: String) -> Texture2D:
+	var path := custom_icon_path(id)
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return null
+	var image := Image.load_from_file(path)
+	return ImageTexture.create_from_image(image) if image != null and not image.is_empty() else null
+
+
+## 初期画像のIDや任意のファイルパスは受け付けない。
+static func delete_custom_icon(id: String) -> String:
+	var path := custom_icon_path(id)
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return "追加画像が見つかりません"
+	if DirAccess.remove_absolute(path) != OK:
+		return "追加画像を削除できません"
+	if str(icon().get("kind", "")) == "file" and str(icon().get("id", "")) == id:
+		clear_icon()
+	return ""
+
+
+## 以前の版の、登録済み画像1枚も一覧へ引き継ぐ。
+static func preserve_registered_icon() -> Dictionary:
+	if str(icon().get("kind", "")) != "file" or not FileAccess.file_exists(_icon_path):
+		return {}
+	var imported := import_custom_icon(_icon_path)
+	if not imported.has("error") and str(icon().get("id", "")) != str(imported["id"]):
+		_data["icon"]["id"] = imported["id"]
+		_save()
+	return imported
 
