@@ -111,6 +111,46 @@ func test_creating_a_room_makes_the_creator_the_host_and_lists_the_room() -> voi
 	assert_eq(int(b_lobby["peer_id"]) != int(welcome["peer_id"]), true)
 
 
+func test_peeking_a_listed_room_returns_its_host_description_and_people_without_joining() -> void:
+	await _enter_lobby("host")
+	await _enter_lobby("guest")
+	_clients["host"].create_room("朝の部屋", "ひみつ", "  のんびり走ります  ")
+	var welcome := await _wait_for("host", Protocol.WELCOME)
+	assert_eq(str(welcome["description"]), "のんびり走ります", "前後の空白は取る")
+	var room_id := int(welcome["room_id"])
+	_clients["guest"].peek_room(room_id)
+	var info := await _wait_for("guest", Protocol.ROOM_INFO)
+	assert_eq(int(info["room_id"]), room_id)
+	assert_eq(str(info["name"]), "朝の部屋")
+	assert_eq(str(info["host_name"]), "host")
+	assert_eq(str(info["description"]), "のんびり走ります")
+	assert_eq(int(info["count"]), 1)
+	assert_true(bool(info["locked"]))
+	assert_true(info["host_icon"] is Dictionary)
+	assert_false(info.has("password"), "パスワードそのものは返さない")
+	# 見ただけでは、入らない。
+	assert_eq(_server.room_members(room_id).size(), 1)
+	_clients["guest"].peek_room(room_id + 99)
+	assert_eq(await _error("guest"), Protocol.ERROR_NO_ROOM)
+
+
+func test_the_description_is_cut_to_the_limit_and_only_the_host_changes_it() -> void:
+	await _enter_lobby("host")
+	await _enter_lobby("guest")
+	_clients["host"].create_room("夜の部屋", "", "あ".repeat(Protocol.ROOM_DESCRIPTION_MAX_LENGTH + 20))
+	var welcome := await _wait_for("host", Protocol.WELCOME)
+	assert_eq(str(welcome["description"]).length(), Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
+	_clients["guest"].join_room(int(welcome["room_id"]))
+	await _wait_for("guest", Protocol.WELCOME)
+	_clients["guest"].send(Protocol.SETTINGS, {"description": "のっとり"})
+	assert_eq(await _error("guest"), Protocol.ERROR_NOT_HOST)
+	_clients["host"].send(Protocol.SETTINGS, {"description": "新しい紹介"})
+	var room := await _wait_for("guest", Protocol.ROOM)
+	while not room.is_empty() and str(room["description"]) != "新しい紹介":
+		room = await _wait_for("guest", Protocol.ROOM)
+	assert_eq(str(room.get("description", "")), "新しい紹介")
+
+
 func test_joining_needs_the_password_and_a_free_place() -> void:
 	await _enter_lobby("a")
 	await _enter_lobby("b")

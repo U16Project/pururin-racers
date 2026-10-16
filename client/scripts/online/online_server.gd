@@ -181,6 +181,9 @@ func _receive(peer_id: int, text: String) -> void:
 		Protocol.JOIN:
 			_join(peer_id, data)
 			return
+		Protocol.PEEK:
+			_peek(peer_id, data)
+			return
 		Protocol.LEAVE:
 			_leave_room(peer_id)
 			_send_lobby(peer_id)
@@ -279,6 +282,7 @@ func _create(peer_id: int, data: Dictionary) -> void:
 	_next_room_id += 1
 	_rooms[room] = {
 		"name": room_name, "password": Protocol.clean_text(data.get("password", ""), Protocol.PASSWORD_MAX_LENGTH),
+		"description": Protocol.clean_text(data.get("description", ""), Protocol.ROOM_DESCRIPTION_MAX_LENGTH),
 		"host": peer_id, "order": [], "distance_m": RaceSession.DEFAULT_DISTANCE_M,
 		"field_size": Protocol.ROOM_CAPACITY, "cpu": true, "picks": {},
 		"phase": Protocol.PHASE_ROOM, "confirmed": {}, "entries": [], "cpu_picks": [],
@@ -286,6 +290,22 @@ func _create(peer_id: int, data: Dictionary) -> void:
 		"result_sent": false, "linger_s": 0.0, "done": {},
 	}
 	_enter(peer_id, room)
+
+
+## 一覧の部屋の、くわしい紹介を返す（入る前に、入るか決めるため）。画像は大きいので、一覧には入れず、ここで返す。
+func _peek(peer_id: int, data: Dictionary) -> void:
+	var room := int(data.get("room_id", 0))
+	if not _rooms.has(room):
+		_refuse(peer_id, Protocol.ERROR_NO_ROOM)
+		return
+	var data_room: Dictionary = _rooms[room]
+	var host: Dictionary = _peers[int(data_room["host"])]
+	_send(peer_id, Protocol.message(Protocol.ROOM_INFO, {
+		"room_id": room, "name": str(data_room["name"]), "host_name": str(host["name"]), "host_icon": host["icon"],
+		"count": (data_room["order"] as Array).size(), "field_size": int(data_room["field_size"]),
+		"description": str(data_room["description"]), "locked": not str(data_room["password"]).is_empty(),
+		"racing": data_room["race"] != null, "in_entries": str(data_room["phase"]) == Protocol.PHASE_ENTRIES,
+	}))
 
 
 ## 部屋に入る。無い部屋・パスワード違い・満員・レース中は、断る。
@@ -497,6 +517,8 @@ func _set_settings(peer_id: int, room: int, data: Dictionary) -> void:
 		changes["cpu"] = bool(data["cpu"])
 	if data.has("password"):
 		changes["password"] = Protocol.clean_text(data["password"], Protocol.PASSWORD_MAX_LENGTH)
+	if data.has("description"):
+		changes["description"] = Protocol.clean_text(data["description"], Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
 	for key: String in changes:
 		_rooms[room][key] = changes[key]
 	# レースの中身（距離・出走数・CPU）が変わったら、全員の確定を外す（変わった内容で、もう一度確かめてもらう）。
@@ -856,7 +878,7 @@ func _room_fields(room: int, extra: Dictionary = {}) -> Dictionary:
 	var fields := {
 		"room_id": room, "room": str(data["name"]), "members": room_members(room), "host": int(data["host"]),
 		"distance_m": float(data["distance_m"]), "field_size": int(data["field_size"]), "cpu": bool(data["cpu"]),
-		"locked": not str(data["password"]).is_empty(), "racing": data["race"] != null,
+		"locked": not str(data["password"]).is_empty(), "racing": data["race"] != null, "description": str(data["description"]),
 		"phase": str(data["phase"]), "entries": data["entries"], "cpus": room_cpus(room),
 	}
 	fields.merge(extra)

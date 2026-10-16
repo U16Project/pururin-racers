@@ -129,9 +129,16 @@ var _open_create_button: Button
 var _create_dialog: Control
 var _room_name_edit: LineEdit
 var _create_password_edit: LineEdit
+var _create_description_edit: LineEdit
 ## パスワードを聞く窓（施錠の印の部屋を選んだとき）。
-var _password_dialog: Control
-var _password_dialog_title: Label
+var _join_dialog: Control
+var _join_icon: Control
+var _join_room_name: Label
+var _join_host_name: Label
+var _join_count: Label
+var _join_lock: Control
+var _join_description: Label
+var _join_password_row: HBoxContainer
 var _join_password_edit: LineEdit
 ## パスワードを聞いている部屋の番号。
 var _joining_room_id := 0
@@ -214,6 +221,9 @@ var _scenery_label: Label
 ## 部屋の主だけが押せるボタン（主でない人には、押せなくして見せる）。
 var _host_buttons: Array[Button] = []
 var _open_password_button: Button
+var _open_description_button: Button
+var _description_dialog: Control
+var _description_edit: LineEdit
 ## パスワードを確かめる・変える窓（部屋の主だけ）。
 var _change_dialog: Control
 var _current_password_label: Label
@@ -446,7 +456,6 @@ func _build_lobby(column: VBoxContainer) -> void:
 	gap.custom_minimum_size = Vector2(0.0, CREATE_BUTTON_GAP)
 	_lobby_box.add_child(gap)
 	_open_create_button = _big_button(_lobby_box, "＋　部屋を作る", "OpenCreateButton", open_create_dialog, MenuStyle.COLOR_BUTTON_ON)
-	MenuStyle.add_mark(_open_create_button, "START", 22.0)
 	_open_create_button.custom_minimum_size = Vector2(CREATE_BUTTON_WIDTH, BUTTON_HEIGHT + 6.0)
 	_open_create_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
@@ -527,18 +536,66 @@ func _build_dialogs() -> void:
 	_create_password_edit = _field(create_column, "パスワード", "CreatePasswordEdit", "", Protocol.PASSWORD_MAX_LENGTH)
 	_create_password_edit.placeholder_text = "空なら、だれでも入れます"
 	_create_password_edit.text_submitted.connect(func(_text: String) -> void: create_room())
-	var note := MenuStyle.label("作った人が、部屋の主になります。主は、距離・出走数・CPUを入れるか・パスワードを決められます。", 16, MenuStyle.COLOR_DIM)
+	_create_description_edit = _field(create_column, "部屋の紹介", "CreateDescriptionEdit", "", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
+	_create_description_edit.placeholder_text = "入る人に見えます（なくても作れます）"
+	_create_description_edit.text_submitted.connect(func(_text: String) -> void: create_room())
+	var note := MenuStyle.label("作った人が、部屋の主になります。主は、距離・出走数・CPUを入れるか・パスワード・部屋の紹介を決められます。", 16, MenuStyle.COLOR_DIM)
 	note.name = "CreateNote"
 	note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	create_column.add_child(note)
 	_dialog_buttons(create_column, "作る", "CreateButton", create_room)
-	var password := _dialog("PasswordDialog", "")
-	_password_dialog = password[0]
-	var password_column: VBoxContainer = password[1]
-	_password_dialog_title = password_column.get_node("Title")
-	_join_password_edit = _field(password_column, "パスワード", "JoinPasswordEdit", "", Protocol.PASSWORD_MAX_LENGTH)
+	var join := _dialog("JoinDialog", "")
+	_join_dialog = join[0]
+	var join_column: VBoxContainer = join[1]
+	join_column.get_node("Title").visible = false
+	var join_row := HBoxContainer.new()
+	join_row.add_theme_constant_override("separation", 18)
+	join_column.add_child(join_row)
+	var join_image_box := Control.new()
+	join_image_box.custom_minimum_size = Vector2(PROFILE_ICON_SIZE, PROFILE_ICON_SIZE)
+	join_image_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	join_image_box.clip_contents = true
+	join_row.add_child(join_image_box)
+	_join_icon = TrainerIcon.new()
+	_join_icon.name = "JoinHostIcon"
+	_join_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	join_image_box.add_child(_join_icon)
+	var join_text := VBoxContainer.new()
+	join_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	join_text.add_theme_constant_override("separation", 6)
+	join_row.add_child(join_text)
+	_join_room_name = MenuStyle.label("", 26)
+	_join_room_name.name = "JoinRoomName"
+	_join_room_name.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	join_text.add_child(_join_room_name)
+	_join_host_name = MenuStyle.label("", 18, MenuStyle.COLOR_FOCUS)
+	_join_host_name.name = "JoinHostName"
+	join_text.add_child(_join_host_name)
+	var join_count_row := HBoxContainer.new()
+	join_count_row.add_theme_constant_override("separation", 10)
+	join_text.add_child(join_count_row)
+	_join_count = MenuStyle.label("", 18)
+	_join_count.name = "JoinCount"
+	join_count_row.add_child(_join_count)
+	_join_lock = LockMark.new()
+	_join_lock.name = "JoinLock"
+	_join_lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	join_count_row.add_child(_join_lock)
+	_join_description = MenuStyle.label("", 17, MenuStyle.COLOR_DIM)
+	_join_description.name = "JoinDescription"
+	_join_description.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	join_column.add_child(_join_description)
+	_join_password_row = HBoxContainer.new()
+	_join_password_row.name = "JoinPasswordRow"
+	_join_password_row.add_theme_constant_override("separation", 10)
+	join_column.add_child(_join_password_row)
+	var join_password_label := MenuStyle.label("パスワード", 20)
+	join_password_label.custom_minimum_size = Vector2(LABEL_WIDTH, 0.0)
+	_join_password_row.add_child(join_password_label)
+	_join_password_edit = _line_edit("JoinPasswordEdit", "", Protocol.PASSWORD_MAX_LENGTH)
 	_join_password_edit.text_submitted.connect(func(_text: String) -> void: join_with_password())
-	_dialog_buttons(password_column, "入る", "JoinButton", join_with_password)
+	_join_password_row.add_child(_join_password_edit)
+	_dialog_buttons(join_column, "入室する", "JoinButton", join_with_password)
 	var change := _dialog("PasswordChangeDialog", "部屋のパスワード")
 	_change_dialog = change[0]
 	var change_column: VBoxContainer = change[1]
@@ -552,6 +609,16 @@ func _build_dialogs() -> void:
 	change_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	change_column.add_child(change_note)
 	_dialog_buttons(change_column, "変える", "PasswordChangeButton", change_password)
+	var description_parts := _dialog("DescriptionDialog", "部屋の紹介")
+	_description_dialog = description_parts[0]
+	var description_column: VBoxContainer = description_parts[1]
+	_description_edit = _line_edit("DescriptionEdit", "", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
+	_description_edit.placeholder_text = "入る人に見えます（空なら、紹介なし）"
+	_description_edit.text_submitted.connect(func(_text: String) -> void: change_description())
+	description_column.add_child(_description_edit)
+	var description_note := MenuStyle.label("部屋の一覧から、入る前の人に見える文です。", 16, MenuStyle.COLOR_DIM)
+	description_column.add_child(description_note)
+	_dialog_buttons(description_column, "変える", "DescriptionChangeButton", change_description)
 	var advance_parts := _dialog("AdvanceDialog", "")
 	_advance_dialog = advance_parts[0]
 	var advance_column: VBoxContainer = advance_parts[1]
@@ -634,11 +701,27 @@ func open_password_change_dialog() -> void:
 	_password_edit.grab_focus()
 
 
+## 部屋の主：部屋の紹介を書き換える窓を出す。
+func open_description_dialog() -> void:
+	close_dialogs()
+	_description_edit.text = str(_room.get("description", ""))
+	_description_dialog.visible = true
+	_description_edit.grab_focus()
+
+
+## 窓の「変える」：部屋の紹介を、入力らんの文字に変える（部屋の主だけ）。
+func change_description() -> void:
+	_client.send(Protocol.SETTINGS, {"description": _description_edit.text})
+	_set_status("部屋の紹介を変えました。" if not _description_edit.text.strip_edges().is_empty() else "部屋の紹介を空にしました。")
+	close_dialogs()
+
+
 ## 窓を、すべて閉じる。
 func close_dialogs() -> void:
 	_create_dialog.visible = false
-	_password_dialog.visible = false
+	_join_dialog.visible = false
 	_change_dialog.visible = false
+	_description_dialog.visible = false
 	_kick_dialog.visible = false
 	_advance_dialog.visible = false
 	_profile_dialog.visible = false
@@ -649,7 +732,7 @@ func close_dialogs() -> void:
 
 
 func is_dialog_open() -> bool:
-	return _create_dialog.visible or _password_dialog.visible or _change_dialog.visible or _kick_dialog.visible or _advance_dialog.visible or _profile_dialog.visible
+	return _create_dialog.visible or _join_dialog.visible or _change_dialog.visible or _description_dialog.visible or _kick_dialog.visible or _advance_dialog.visible or _profile_dialog.visible
 
 
 func _build_room(column: VBoxContainer) -> void:
@@ -740,6 +823,14 @@ func _build_room(column: VBoxContainer) -> void:
 	_open_password_button.pressed.connect(open_password_change_dialog)
 	UIAudio.bind_button_sound(_open_password_button, "confirmation")
 	rules_row.add_child(_open_password_button)
+	_open_description_button = MenuStyle.button("紹介", 14, MenuStyle.COLOR_BUTTON_QUIET)
+	_open_description_button.name = "OpenDescriptionButton"
+	_open_description_button.custom_minimum_size = Vector2(0.0, MINI_ARROW_SIZE.y)
+	_open_description_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_compact(_open_description_button, 1.0, 6.0)
+	_open_description_button.pressed.connect(open_description_dialog)
+	UIAudio.bind_button_sound(_open_description_button, "confirmation")
+	rules_row.add_child(_open_description_button)
 	# 出走表では、枠順の操作（主だけ）。
 	var gates := _card(left, "")
 	_gates_card = gates.get_parent()
@@ -1400,24 +1491,38 @@ func create_room() -> void:
 	if room_name.is_empty():
 		_set_status("部屋の名前を入れてください。")
 		return
-	_client.create_room(room_name, _create_password_edit.text)
+	_client.create_room(room_name, _create_password_edit.text, _create_description_edit.text)
 	close_dialogs()
 
 
-## 一覧の部屋を選んだ。施錠の印の部屋は、パスワードを聞く窓を出す。それ以外は、そのまま入る。
+## 一覧の部屋を選んだ：すぐには入らず、サーバーに、その部屋のくわしい紹介を聞く。届いたら、入室の窓を出す。
 func choose_room(room_id: int) -> void:
-	for entry: Dictionary in OnlineSession.rooms:
-		if int(entry["room_id"]) == room_id and bool(entry["locked"]):
-			close_dialogs()
-			_joining_room_id = room_id
-			_password_dialog_title.text = "「%s」のパスワード" % str(entry["name"])
-			_password_dialog.visible = true
-			_join_password_edit.grab_focus()
-			return
-	_client.join_room(room_id)
+	_joining_room_id = room_id
+	_client.peek_room(room_id)
 
 
-## パスワードを聞く窓の「入る」。
+## くわしい紹介が届いた：部屋の名前・主の名前と画像・人数・部屋の紹介の窓を出す。パスワード付きの部屋は、入力らんも出す。
+func _open_join_dialog(info: Dictionary) -> void:
+	close_dialogs()
+	_joining_room_id = int(info["room_id"])
+	_join_room_name.text = str(info.get("name", ""))
+	_join_host_name.text = "部屋の主　%s" % str(info.get("host_name", ""))
+	_join_count.text = "人数　%d／%d" % [int(info.get("count", 0)), int(info.get("field_size", 0))]
+	var locked := bool(info.get("locked", false))
+	_join_lock.visible = locked
+	var description := str(info.get("description", ""))
+	_join_description.text = description if not description.is_empty() else "（部屋の紹介は、ありません）"
+	var host := OnlineSession.profile_from({"name": info.get("host_name", ""), "icon": info.get("host_icon", {})})
+	_join_icon.call("show_icon", str(host["kind"]), str(host["id"]), host["texture"])
+	_join_password_row.visible = locked
+	_join_dialog.visible = true
+	if locked:
+		_join_password_edit.grab_focus()
+	else:
+		(_join_dialog.find_child("JoinButton", true, false) as Button).grab_focus()
+
+
+## 入室の窓の「入室する」。
 func join_with_password() -> void:
 	if _joining_room_id != 0:
 		_client.join_room(_joining_room_id, _join_password_edit.text)
@@ -1459,6 +1564,10 @@ func _on_message(data: Dictionary) -> void:
 			_show_chat()
 		Protocol.CHAT_MESSAGE:
 			_show_chat()
+		Protocol.ROOM_INFO:
+			# 押した部屋のくわしい紹介が届いた（押したあとに、別の部屋を押していたら、古い返事は使わない）。
+			if int(data["room_id"]) == _joining_room_id and OnlineSession.in_lobby():
+				_open_join_dialog(data)
 		Protocol.PROFILE_INFO:
 			# 紹介が届いた。いま出している人の画像なら、出し直す。
 			if int(data["peer_id"]) == int(_shown_person.get("peer_id", -1)):
@@ -1499,9 +1608,10 @@ func _refresh() -> void:
 	# 場面が変わったら、その場面のものでない窓は閉じる。
 	if not in_lobby:
 		_create_dialog.visible = false
-		_password_dialog.visible = false
+		_join_dialog.visible = false
 	if not in_room or not OnlineSession.is_host():
 		_change_dialog.visible = false
+		_description_dialog.visible = false
 	if not in_room and is_picker_open():
 		_picker.call("close")
 	if not in_room or not OnlineSession.is_host():
@@ -1601,10 +1711,9 @@ func _show_rooms() -> void:
 		button.pressed.connect(choose_room.bind(int(entry["room_id"])))
 		UIAudio.bind_button_sound(button, "confirmation")
 		_rooms_box.add_child(button)
-		MenuStyle.add_mark(button, "START", 22.0)
 		var columns := _room_columns(str(entry["name"]), str(entry["host_name"]), "%d／%d" % [int(entry["count"]), int(entry["field_size"])], MenuStyle.COLOR_TEXT, 19)
 		columns.set_anchors_preset(Control.PRESET_FULL_RECT)
-		columns.offset_left = 52.0
+		columns.offset_left = 16.0
 		columns.offset_right = -16.0
 		button.add_child(columns)
 		var state := columns.get_node("State") as HBoxContainer
@@ -1670,6 +1779,7 @@ func _show_room() -> void:
 		step_button.disabled = not host or in_entries
 		step_button.modulate.a = 1.0 if not step_button.disabled else 0.3
 	_open_password_button.visible = host
+	_open_description_button.visible = host
 	_rules_card.visible = not in_entries
 	_gates_card.visible = in_entries
 	if in_entries:
@@ -2114,9 +2224,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func start_button() -> Button:
 	if is_picker_open() or is_trainer_picker_open():
 		return null
-	for dialog: Control in [_create_dialog, _password_dialog, _advance_dialog]:
+	for dialog: Control in [_create_dialog, _join_dialog, _advance_dialog]:
 		if dialog.visible:
-			var button_name := {"CreateDialog": "CreateButton", "PasswordDialog": "JoinButton", "AdvanceDialog": "AdvanceButton"}
+			var button_name := {"CreateDialog": "CreateButton", "JoinDialog": "JoinButton", "AdvanceDialog": "AdvanceButton"}
 			return dialog.find_child(button_name[str(dialog.name)], true, false) as Button
 	if is_dialog_open():
 		return null
@@ -2129,6 +2239,5 @@ func start_button() -> Button:
 		if is_confirmed(OnlineSession.peer_id) and not (is_host() and everyone_confirmed()):
 			return null
 		return _confirm_button
-	if focused is Button and focused.get_parent() == _rooms_box:
-		return focused
-	return _open_create_button
+	# 部屋の一覧では、STARTで先へ進むものはない（部屋の窓を開くだけなので、STARTは使わない）。
+	return null

@@ -2,7 +2,7 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 5
+const VERSION := 6
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
@@ -15,6 +15,8 @@ const ROOM_NAME_MAX_LENGTH := 16
 const PASSWORD_MAX_LENGTH := 16
 ## 自己紹介の長さの上限と、相手に送るアイコンの画像（自分で入れた画像を、小さくしたもの）の大きさ。
 const INTRODUCTION_MAX_LENGTH := 70
+## 部屋の紹介文の長さの上限（部屋の主が書く）。
+const ROOM_DESCRIPTION_MAX_LENGTH := 70
 const ICON_IMAGE_SIDE_PX := 128
 ## 送るアイコンの画像（文字にしたあと）の長さの上限。超えたら、画像なしとして扱う。
 const ICON_IMAGE_MAX_CHARS := 60000
@@ -27,13 +29,15 @@ const HELLO := "hello"
 ## 同じ部屋の人の、紹介（名前・自己紹介・アイコン）を聞く（peer_id）。
 const PROFILE := "profile"
 const PING := "ping"
-## 部屋を作る（room_name、password。パスワードが空なら、だれでも入れる）。作った人が、部屋の主。
+## 一覧の部屋の、くわしい紹介を聞く（room_id。部屋に入る前に、入るか決めるため）。返事は room_info。
+const PEEK := "peek"
+## 部屋を作る（room_name、password、description＝部屋の紹介文。パスワードが空なら、だれでも入れる）。作った人が、部屋の主。
 const CREATE := "create"
 ## 部屋に入る（room_id、password）。
 const JOIN := "join"
 ## 部屋から出て、部屋の一覧の所へ戻る。
 const LEAVE := "leave"
-## 部屋の決めごとを変える（部屋の主だけ。distance_m・field_size・cpu・password のうち、変えたいものだけ）。
+## 部屋の決めごとを変える（部屋の主だけ。distance_m・field_size・cpu・password・description のうち、変えたいものだけ）。
 const SETTINGS := "settings"
 ## 部屋の人を出す（部屋の主だけ。peer_id）。
 const KICK := "kick"
@@ -72,6 +76,8 @@ const ROOMS := "rooms"
 ## 部屋に入れた（部屋のようす）。
 const WELCOME := "welcome"
 const ROOM := "room"
+## 一覧の部屋のくわしい紹介（room_id、name、host_name、host_icon、count、field_size、description、locked、racing、in_entries）。
+const ROOM_INFO := "room_info"
 ## 部屋の人の紹介（peer_id、name、introduction、icon）。
 const PROFILE_INFO := "profile_info"
 ## 部屋の人のひとこと（peer_id、name、text）。

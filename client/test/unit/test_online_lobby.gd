@@ -75,6 +75,21 @@ func _lobby_in_new_room(room_name: String, password: String = "") -> Control:
 	return lobby
 
 
+## 一覧の部屋を押して、入室の窓が出るのを待つ（押しただけでは、入らない）。
+func _open_join_dialog(lobby: Control, room_id: int) -> Control:
+	lobby.choose_room(room_id)
+	var dialog := lobby.find_child("JoinDialog", true, false) as Control
+	await _wait_until(func() -> bool: return dialog.visible)
+	return dialog
+
+
+## 一覧の部屋に入る（窓の「入室する」まで押す）。
+func _enter_listed_room(lobby: Control, room_id: int, password: String = "") -> void:
+	await _open_join_dialog(lobby, room_id)
+	(lobby.find_child("JoinPasswordEdit", true, false) as LineEdit).text = password
+	lobby.join_with_password()
+
+
 ## 画面を使わない、もう1人（名乗って、部屋の一覧の所にいる）。
 func _other(player_name: String) -> Node:
 	var other: Node = OnlineClient.new()
@@ -261,29 +276,54 @@ func test_listed_rooms_can_be_joined_and_locked_ones_need_the_password() -> void
 	assert_not_null(row.find_child("Lock", true, false))
 	# 作れる数ぶんの行を、いつも出す（残りは「空き」）。
 	assert_eq(lobby.find_child("Rooms", true, false).get_child_count(), OnlineConfig.max_rooms())
-	# 選ぶと、パスワードを聞く窓が出る。違うと、入れない。わけが出る。
-	var dialog := lobby.find_child("PasswordDialog", true, false) as Control
+	# 押しても、すぐには入らない。入室の窓が出て、部屋の名前・主の名前・人数・紹介が見える。
+	var dialog := lobby.find_child("JoinDialog", true, false) as Control
 	assert_false(dialog.visible)
 	row.pressed.emit()
+	await _wait_until(func() -> bool: return dialog.visible)
 	assert_true(dialog.visible)
-	assert_true((dialog.find_child("Title", true, false) as Label).text.contains("朝の部屋"))
+	assert_eq((dialog.find_child("JoinRoomName", true, false) as Label).text, "朝の部屋")
+	assert_true((dialog.find_child("JoinHostName", true, false) as Label).text.contains("ミナト"))
+	assert_true((dialog.find_child("JoinCount", true, false) as Label).text.contains("1／"))
+	assert_true((dialog.find_child("JoinLock", true, false) as Control).visible)
+	assert_true((dialog.find_child("JoinPasswordRow", true, false) as Control).visible)
+	assert_eq(_server.room_members(room_id).size(), 1)
+	# 違うパスワードでは、入れない。わけが出る。
 	(lobby.find_child("JoinPasswordEdit", true, false) as LineEdit).text = "ちがう"
 	lobby.join_with_password()
 	assert_false(dialog.visible)
 	await _wait_until(func() -> bool: return _status(lobby).contains("パスワード"))
 	assert_true(_status(lobby).contains("パスワード"))
 	# 「やめる」（戻る）は、窓だけを閉じる。
-	lobby.choose_room(room_id)
+	await _open_join_dialog(lobby, room_id)
 	lobby.go_back()
 	assert_false(dialog.visible)
 	assert_true((lobby.find_child("LobbyBox", true, false) as Control).visible)
-	lobby.choose_room(room_id)
-	(lobby.find_child("JoinPasswordEdit", true, false) as LineEdit).text = "ひみつ"
-	lobby.join_with_password()
+	await _enter_listed_room(lobby, room_id, "ひみつ")
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	assert_eq(lobby.my_slot(), 1)
 	assert_false(lobby.is_host())
 	assert_eq(_server.room_members(room_id).size(), 2)
+
+
+func test_the_join_dialog_shows_the_description_and_the_host_changes_it() -> void:
+	var owner := await _other("ミナト")
+	owner.create_room("昼の部屋", "", "のんびり走ります")
+	var lobby := await _connected_lobby()
+	var room_id := _first_room_id()
+	await _wait_until(func() -> bool: return lobby.find_child("Room%d" % room_id, true, false) != null)
+	var dialog := await _open_join_dialog(lobby, room_id)
+	assert_eq((dialog.find_child("JoinDescription", true, false) as Label).text, "のんびり走ります")
+	# 施錠のない部屋は、パスワードの欄も、施錠の印も出ない。
+	assert_false((dialog.find_child("JoinPasswordRow", true, false) as Control).visible)
+	assert_false((dialog.find_child("JoinLock", true, false) as Control).visible)
+	assert_eq(lobby.start_button(), dialog.find_child("JoinButton", true, false))
+	lobby.join_with_password()
+	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
+	# 主が、部屋の中で紹介を書き換えると、次に押した人に、新しい紹介が見える。
+	owner.send(Protocol.SETTINGS, {"description": "初心者歓迎"})
+	await _wait_until(func() -> bool: return str(lobby.get("_room").get("description", "")) == "初心者歓迎")
+	assert_eq(str(lobby.get("_room").get("description", "")), "初心者歓迎")
 
 
 func test_choosing_your_own_server_enables_the_field_and_is_remembered() -> void:
@@ -408,7 +448,7 @@ func test_a_guest_cannot_change_the_room_and_skips_pururins_others_took() -> voi
 	await wait_seconds(0.2)
 	owner.send(Protocol.PICK, {"pururin_id": first_id})
 	var lobby := await _connected_lobby()
-	lobby.choose_room(_first_room_id())
+	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	# 2人目は、主ではない。開始のボタンとパスワードの行は出ず、決めごとは替えられない。人を出すボタンも無い。
 	assert_false(lobby.is_host())
@@ -464,7 +504,7 @@ func test_being_put_out_returns_the_screen_to_the_room_list_with_the_reason() ->
 	var owner := await _other("主")
 	owner.create_room("出される部屋")
 	var lobby := await _connected_lobby()
-	lobby.choose_room(_first_room_id())
+	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	owner.send(Protocol.KICK, {"peer_id": OnlineSession.peer_id})
 	await _wait_until(func() -> bool: return (lobby.find_child("LobbyBox", true, false) as Control).visible)
@@ -641,7 +681,7 @@ func test_a_guest_cannot_move_the_distance() -> void:
 	var owner := await _other("主")
 	owner.create_room("客の距離")
 	var lobby := await _connected_lobby()
-	lobby.choose_room(_first_room_id())
+	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	# 主でない人は、距離の段にカーソルを置けない。自分の行から「上」を押しても、動かない。L1・R1 も効かない。
 	(lobby.get("_slots")[1] as Control).grab_focus()
@@ -726,7 +766,7 @@ func test_a_guest_cannot_pick_cpu_pururins() -> void:
 	var owner := await _other("主")
 	owner.create_room("客とCPU")
 	var lobby := await _connected_lobby()
-	lobby.choose_room(_first_room_id())
+	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	assert_false(lobby.is_cpu_row(2))
 	assert_eq((lobby.get("_slots")[2] as Control).focus_mode, Control.FOCUS_NONE)
@@ -739,7 +779,7 @@ func test_room_events_show_as_a_notice_and_in_the_chat() -> void:
 	var owner := await _other("主")
 	owner.create_room("知らせの部屋")
 	var lobby := await _connected_lobby()
-	lobby.choose_room(_first_room_id())
+	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	var chat := lobby.find_child("ChatLog", true, false) as RichTextLabel
 	# もう1人が入る：上の案内と、ひとことの欄の両方に出る。
@@ -797,7 +837,7 @@ func test_start_targets_the_visible_next_step_and_never_cancels_confirmation() -
 	var lobby := await _connected_lobby()
 	var create: Button = lobby.find_child("OpenCreateButton", true, false)
 	create.grab_focus()
-	assert_eq(lobby.start_button(), create)
+	assert_null(lobby.start_button(), "一覧では、STARTで先へ進むものはない")
 	lobby.open_create_dialog()
 	var confirm_create: Button = lobby.find_child("CreateButton", true, false)
 	assert_eq(lobby.start_button(), confirm_create)

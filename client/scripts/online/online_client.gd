@@ -49,9 +49,14 @@ func hello(player_name: String, introduction: String = "", icon: Dictionary = {}
 	return send(Protocol.HELLO, {"name": player_name, "introduction": introduction, "icon": icon})
 
 
-## 部屋を作る（パスワードが空なら、だれでも入れる部屋）。
-func create_room(room_name: String, password: String = "") -> bool:
-	return send(Protocol.CREATE, {"room_name": room_name, "password": password})
+## 部屋を作る（パスワードが空なら、だれでも入れる部屋）。description＝部屋の紹介文。
+func create_room(room_name: String, password: String = "", description: String = "") -> bool:
+	return send(Protocol.CREATE, {"room_name": room_name, "password": password, "description": description})
+
+
+## 一覧の部屋の、くわしい紹介を聞く（返事は room_info）。
+func peek_room(room_id: int) -> bool:
+	return send(Protocol.PEEK, {"room_id": room_id})
 
 
 ## 部屋に入る。

@@ -7,7 +7,7 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `5`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `6`）と、種類 `t` が入る。版が違う文は、`version` で断る。
 - 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋の出走数は2〜8体で、部屋の主が決める。人は、出走数まで入れる。
 - 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 部屋（各自がぷるりんを選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレース開始（`start`）。
 
@@ -24,11 +24,12 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `hello` | `name`（12字まで）、`introduction`（自己紹介。70字まで）、`icon`（`{kind, id, image}`。`kind` は `none`・`avatar`・`file`。`avatar` は `id` に用意された絵のID。`file` は `image` に、128×128のJPEGを文字（base64）にしたもの。6万字まで） | 名乗って、部屋の一覧の所に入る。返事は `lobby`。知らない種類・大きすぎる画像は、画像なしとして扱う |
 | `profile` | `peer_id` | 同じ部屋の人の紹介を聞く。返事は `profile_info` |
 | `ping` | `client_ts` | つながっているかの確認 |
-| `create` | `room_name`（16字まで）、`password`（16字まで。空なら、だれでも入れる） | 部屋を作って、入る。作った人が、部屋の主。同じ名前の部屋は作れない |
+| `create` | `room_name`（16字まで）、`password`（16字まで。空なら、だれでも入れる）、`description`（部屋の紹介文。70字まで。省いてよい） | 部屋を作って、入る。作った人が、部屋の主。同じ名前の部屋は作れない |
+| `peek` | `room_id` | 一覧の部屋の、くわしい紹介を聞く（入る前に、入るか決めるため）。返事は `room_info`。入りはしない。その部屋が無ければ `no_room` |
 | `join` | `room_id`、`password` | 部屋に入る。レース中・満員の部屋には入れない |
 | `leave` | — | 部屋を出て、部屋の一覧の所へ戻る。返事は `lobby` |
 | `pick` | `pururin_id` | 自分のぷるりんを選ぶ。部屋のほかの人が選んでいる個体は、選べない |
-| `settings` | `distance_m`・`field_size`（2〜8。今いる人数以上）・`cpu`（真偽）・`password` のうち、変えたいものだけ | 部屋の決めごとを変える。部屋の主だけ。1つでも受け付けられない値があれば、何も変えない |
+| `settings` | `distance_m`・`field_size`（2〜8。今いる人数以上）・`cpu`（真偽）・`password`・`description`（部屋の紹介文。70字まで）のうち、変えたいものだけ | 部屋の決めごとを変える。部屋の主だけ。1つでも受け付けられない値があれば、何も変えない |
 | `kick` | `peer_id` | 部屋の人を出す。部屋の主だけ |
 | `chat` | `text`（60字まで。`chat_max_length`） | 部屋の中で、ひとこと送る。レース中は送れない |
 | `cpu_pick` | 部屋では `index`（何番目のCPUか。0から）、出走表では `gate`（枠。0から）。`pururin_id`・`trainer_id` のうち、変えたいものだけ | CPUのぷるりん・トレーナーを決める。部屋の主だけ。ほかの人・ほかのCPUが使っている個体は、選べない（`taken`）。部屋では、空の文字で「おまかせ」に戻る。ぷるりんを替えると、トレーナーは、その個体のトレーナーに戻る。決めると、全員の確定が外れる |
@@ -53,6 +54,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `rooms` | `rooms` | 部屋の一覧が変わった（部屋に入っていない人に配る） |
 | `welcome` | `peer_id`、部屋のようす | 部屋に入れた |
 | `room` | 部屋のようす | 部屋のようすが変わった（部屋の全員に配る） |
+| `room_info` | `room_id`、`name`、`host_name`、`host_icon`（`hello` の `icon` と同じ形）、`count`、`field_size`、`description`、`locked`、`racing`、`in_entries` | `peek` の返事。パスワードそのものは入らない |
 | `profile_info` | `peer_id`、`name`、`introduction`、`icon` | 同じ部屋の人の紹介 |
 | `chat_message` | `peer_id`、`name`、`text` | 部屋の人のひとこと（送った本人にも届く） |
 | `kicked` | `by`（`host` か `admin`） | 部屋から出された。このあと `lobby` が届く |
@@ -67,7 +69,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 
 部屋のようす：`room_id`、`room`（部屋の名前）、`members`（入った順の `{peer_id, name, pururin_id, confirmed}`。まだ選んでいなければ `pururin_id` は空。`confirmed` は「確定」を押しているか）、
 `phase`（`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`cpus`（CPUの数ぶんの `{pururin_id, trainer_id}`。主が決めていない所は、空の文字＝おまかせ）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
-`host`（部屋の主の番号）、`distance_m`、`field_size`（出走数）、`cpu`（空いた枠をCPUで埋めるか）、`locked`（パスワードがあるか）、`password`（パスワードそのもの。**部屋の主に送る `room` にだけ**入る。ほかの人には配らない）、`racing`（レース中か）。
+`host`（部屋の主の番号）、`distance_m`、`field_size`（出走数）、`cpu`（空いた枠をCPUで埋めるか）、`locked`（パスワードがあるか）、`description`（部屋の紹介文）、`password`（パスワードそのもの。**部屋の主に送る `room` にだけ**入る。ほかの人には配らない）、`racing`（レース中か）。
 
 部屋の一覧（`rooms`）の1部屋ぶん：`room_id`、`name`、`host_name`、`count`（今いる人数）、`field_size`、`locked`、`racing`、`in_entries`（出走表を見ているか）。
 
