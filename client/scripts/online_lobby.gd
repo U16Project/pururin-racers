@@ -20,6 +20,7 @@ const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const OnlineConfig := preload("res://scripts/config/online_config.gd")
+const ServerChoice := preload("res://scripts/config/online_server_choice.gd")
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
@@ -115,6 +116,8 @@ var _status: Label
 var _back_button: Button
 ## （1）つなぐ前。
 var _connect_box: VBoxContainer
+var _default_server_radio: CheckBox
+var _custom_server_radio: CheckBox
 var _server_edit: LineEdit
 var _connect_button: Button
 ## （2）部屋の一覧。
@@ -331,10 +334,67 @@ func _build() -> void:
 func _build_connect(column: VBoxContainer) -> void:
 	_connect_box = _centered_column(column, "ConnectBox", LIST_WIDTH)
 	var card := _card(_connect_box, "サーバーにつなぐ")
-	_server_edit = _field(card, "サーバー", "ServerEdit", OnlineConfig.server_url(), 200)
+	var group := ButtonGroup.new()
+	var default_row := HBoxContainer.new()
+	default_row.add_theme_constant_override("separation", 10)
+	card.add_child(default_row)
+	_default_server_radio = _server_radio("標準のサーバー", "DefaultServerRadio", group)
+	default_row.add_child(_default_server_radio)
+	var default_url := MenuStyle.label(OnlineConfig.server_url(), 14, MenuStyle.COLOR_DIM)
+	default_url.name = "DefaultServerUrl"
+	default_url.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	default_url.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	default_row.add_child(default_url)
+	_custom_server_radio = _server_radio("自分で指定する", "CustomServerRadio", group)
+	card.add_child(_custom_server_radio)
+	_server_edit = _line_edit("ServerEdit", ServerChoice.custom_url(), 200)
+	_server_edit.placeholder_text = "wss://…"
+	card.add_child(_server_edit)
 	_server_edit.text_submitted.connect(func(_text: String) -> void: connect_to_server())
+	var custom := ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM
+	_default_server_radio.button_pressed = not custom
+	_custom_server_radio.button_pressed = custom
+	_default_server_radio.toggled.connect(func(_on: bool) -> void:
+		_on_server_choice_changed()
+		_update_focus_paths())
+	_on_server_choice_changed()
 	_connect_button = _big_button(card, "つなぐ", "ConnectButton", connect_to_server, MenuStyle.COLOR_BUTTON)
 	MenuStyle.add_mark(_connect_button, "START", 22.0)
+
+
+func _server_radio(text: String, node_name: String, group: ButtonGroup) -> CheckBox:
+	var radio := CheckBox.new()
+	radio.name = node_name
+	radio.text = text
+	radio.button_group = group
+	radio.add_theme_font_size_override("font_size", 20)
+	radio.add_theme_icon_override("radio_unchecked", _radio_icon(false))
+	radio.add_theme_icon_override("radio_checked", _radio_icon(true))
+	UIAudio.bind_button_sound(radio, "confirmation")
+	return radio
+
+
+static func _radio_icon(checked: bool) -> ImageTexture:
+	var dot := '<circle cx="11" cy="11" r="5" fill="#ffffff"/>' if checked else ""
+	var image := Image.new()
+	image.load_svg_from_string('<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><circle cx="11" cy="11" r="9" fill="#263344" stroke="#ffffff" stroke-width="2"/>%s</svg>' % dot)
+	return ImageTexture.create_from_image(image)
+
+
+## 「自分で指定する」を選んだときだけ、入力欄を使えるようにする。選びは、次の起動でも使うので保存する。
+func _on_server_choice_changed() -> void:
+	var custom := _custom_server_radio.button_pressed
+	_server_edit.editable = custom
+	_server_edit.focus_mode = Control.FOCUS_ALL if custom else Control.FOCUS_NONE
+	_server_edit.modulate = Color.WHITE if custom else Color(1.0, 1.0, 1.0, 0.45)
+	ServerChoice.save(ServerChoice.CHOICE_CUSTOM if custom else ServerChoice.CHOICE_DEFAULT, _server_edit.text)
+
+
+## 今、つなぐ先として選ばれているURL。
+func selected_server_url() -> String:
+	if _custom_server_radio.button_pressed:
+		return _server_edit.text.strip_edges()
+	return OnlineConfig.server_url()
 
 
 ## 画面のまん中に置く、決めた幅の縦の並び（画面いっぱいに広げないため）。
@@ -1313,7 +1373,8 @@ func _process(delta: float) -> void:
 
 ## 「サーバーにつなぐ」：つないで、名乗る。名乗ると、部屋の一覧が届く。
 func connect_to_server() -> void:
-	var url := _server_edit.text.strip_edges()
+	var url := selected_server_url()
+	ServerChoice.save(ServerChoice.CHOICE_CUSTOM if _custom_server_radio.button_pressed else ServerChoice.CHOICE_DEFAULT, _server_edit.text)
 	if not OnlineConfig.is_server_url(url):
 		_set_status("サーバーの場所は、ws:// か wss:// で始めてください。")
 		return
@@ -1465,7 +1526,10 @@ func _refresh() -> void:
 func _update_focus_paths() -> void:
 	var controls: Array[Control] = []
 	if _connect_box.visible:
-		controls.assign([_server_edit, _connect_button, _back_button])
+		controls.assign([_default_server_radio, _custom_server_radio])
+		if _server_edit.editable:
+			controls.append(_server_edit)
+		controls.append_array([_connect_button, _back_button])
 	elif _lobby_box.visible:
 		for child in _rooms_box.get_children():
 			if child is Button and not child.disabled:

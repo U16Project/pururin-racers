@@ -4,6 +4,7 @@ extends GutTest
 const Protocol := preload("res://scripts/online/online_protocol.gd")
 const OnlineServer := preload("res://scripts/online/online_server.gd")
 const OnlineConfig := preload("res://scripts/config/online_config.gd")
+const ServerChoice := preload("res://scripts/config/online_server_choice.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const LobbyScene := preload("res://scenes/online_lobby.tscn")
 const OnlineClient := preload("res://scripts/online/online_client.gd")
@@ -14,11 +15,15 @@ const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config
 
 const TEST_PORT := Protocol.DEFAULT_PORT + 1001
 const WAIT_S := 3.0
+const CHOICE_FILE := "user://test_online_server.json"
 
 var _server: Node
 
 
 func before_each() -> void:
+	# 本物のサーバーの選びに触らないように、テスト用の保存場所を使う。
+	DirAccess.remove_absolute(CHOICE_FILE)
+	ServerChoice.use_path(CHOICE_FILE)
 	_server = OnlineServer.new()
 	_server.listen_on_ready = false
 	add_child_autofree(_server)
@@ -26,6 +31,8 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	DirAccess.remove_absolute(CHOICE_FILE)
+	ServerChoice.use_path(ServerChoice.DEFAULT_SAVE_PATH)
 	# つながりは場面をまたいで残るので、テストごとに切る。
 	OnlineSession.close()
 
@@ -33,6 +40,7 @@ func after_each() -> void:
 func _lobby() -> Control:
 	var lobby: Control = LobbyScene.instantiate()
 	add_child_autofree(lobby)
+	(lobby.find_child("CustomServerRadio", true, false) as CheckBox).button_pressed = true
 	(lobby.find_child("ServerEdit", true, false) as LineEdit).text = "ws://127.0.0.1:%d" % TEST_PORT
 	return lobby
 
@@ -186,7 +194,11 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 func test_the_screen_starts_with_the_configured_server_and_the_trainer_name() -> void:
 	var lobby: Control = LobbyScene.instantiate()
 	add_child_autofree(lobby)
-	assert_eq((lobby.find_child("ServerEdit", true, false) as LineEdit).text, OnlineConfig.server_url())
+	# 初めは「標準のサーバー」が選ばれ、そのURLが見える。入力欄は、使えない。
+	assert_true((lobby.find_child("DefaultServerRadio", true, false) as CheckBox).button_pressed)
+	assert_eq((lobby.find_child("DefaultServerUrl", true, false) as Label).text, OnlineConfig.server_url())
+	assert_false((lobby.find_child("ServerEdit", true, false) as LineEdit).editable)
+	assert_eq(lobby.selected_server_url(), OnlineConfig.server_url())
 	assert_true((lobby.find_child("NameLabel", true, false) as Label).text.contains(TrainerProfile.trainer_name()))
 	# つなぐ前は、つなぐ所だけを出す。
 	assert_true((lobby.find_child("ConnectBox", true, false) as Control).visible)
@@ -272,6 +284,38 @@ func test_listed_rooms_can_be_joined_and_locked_ones_need_the_password() -> void
 	assert_eq(lobby.my_slot(), 1)
 	assert_false(lobby.is_host())
 	assert_eq(_server.room_members(room_id).size(), 2)
+
+
+func test_choosing_your_own_server_enables_the_field_and_is_remembered() -> void:
+	var lobby: Control = LobbyScene.instantiate()
+	add_child_autofree(lobby)
+	await wait_process_frames(2)
+	var edit := lobby.find_child("ServerEdit", true, false) as LineEdit
+	var custom := lobby.find_child("CustomServerRadio", true, false) as CheckBox
+	var connect := lobby.find_child("ConnectButton", true, false) as Button
+	# 標準のあいだは、入力欄にフォーカスが行かない。
+	assert_ne(custom.focus_neighbor_bottom, custom.get_path_to(edit))
+	custom.button_pressed = true
+	assert_true(edit.editable)
+	assert_eq(custom.focus_neighbor_bottom, custom.get_path_to(edit))
+	edit.text = "wss://example.test"
+	assert_eq(lobby.selected_server_url(), "wss://example.test")
+	lobby.connect_to_server()
+	assert_eq(ServerChoice.choice(), ServerChoice.CHOICE_CUSTOM)
+	assert_eq(ServerChoice.custom_url(), "wss://example.test")
+	OnlineSession.close()
+	# 開き直しても、選びと入力したURLが残っている。
+	var again: Control = LobbyScene.instantiate()
+	add_child_autofree(again)
+	assert_true((again.find_child("CustomServerRadio", true, false) as CheckBox).button_pressed)
+	assert_eq((again.find_child("ServerEdit", true, false) as LineEdit).text, "wss://example.test")
+	assert_eq(again.selected_server_url(), "wss://example.test")
+	# 標準に戻すと、標準のURLでつなぐ。入力した文字は残す。
+	(again.find_child("DefaultServerRadio", true, false) as CheckBox).button_pressed = true
+	assert_eq(again.selected_server_url(), OnlineConfig.server_url())
+	assert_eq(ServerChoice.choice(), ServerChoice.CHOICE_DEFAULT)
+	assert_eq(ServerChoice.custom_url(), "wss://example.test")
+	assert_not_null(connect)
 
 
 func test_a_bad_server_address_is_explained_without_connecting() -> void:
