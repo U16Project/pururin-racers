@@ -1,17 +1,13 @@
 extends Control
-## メニュー画面。左にトレーナーの登録、右にゲーム開始から終了までのボタン。
+## プロフィール編集専用画面。名前・紹介文・アイコンを編集し、次の設定画面へ進む。
 ## 画像は、なし／用意してある人の絵／自分の画像ファイル、から選ぶ。
-## 「ゲーム開始」で保存して遊び方の選択へ進む。「戻る」では、何も保存しない。
+## 「次へ」で保存してゲームモード設定へ進む。「戻る」では、何も保存しない。
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
 const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
-const CAMERA_EXPLORATION_SCENE_PATH := "res://scenes/camera_exploration.tscn"
-const PAD_DIAGNOSTICS_SCENE_PATH := "res://scenes/pad_diagnostics.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const BUTTON_OPACITY := 0.92
 const MENU_BUTTON_HEIGHT := 54.0
-const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
-const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
@@ -29,12 +25,12 @@ var _choice_buttons: Array[Button] = []
 var _file_button: Button
 var _game_start_button: Button
 var _file_dialog: FileDialog
-var _screen_mode_label: Label
-var _screen_mode_index := -1
-var _screen_mode_row: HBoxContainer
-var _screen_direction_down := {"ui_left": false, "ui_right": false}
 var _file_dialog_open := false
 var _registering := false
+var _choices: GridContainer
+var _delete_button: Button
+var _delete_dialog: Control
+var _delete_id := ""
 ## 選びかけの画像（登録するまでは、保存しない）。kind・id・path（file のときの、元のファイル）。
 var _pending := {"kind": "none", "id": "", "path": ""}
 
@@ -117,18 +113,34 @@ func _ready() -> void:
 	column.add_child(_introduction_edit)
 	_refresh_introduction_count()
 	column.add_child(MenuStyle.label("画像", 18, MenuStyle.COLOR_DIM))
-	var choices := HBoxContainer.new()
-	choices.add_theme_constant_override("separation", 8)
-	column.add_child(choices)
-	choices.add_child(_choice_button("none", ""))
-	for avatar: Dictionary in TrainerProfile.avatars():
-		choices.add_child(_choice_button("avatar", str(avatar["id"])))
+	var choice_scroll := ScrollContainer.new()
+	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * 2 + 12
+	choice_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	column.add_child(choice_scroll)
+	_choices = GridContainer.new()
+	_choices.name = "IconChoices"
+	_choices.columns = 8
+	_choices.add_theme_constant_override("h_separation", 8)
+	_choices.add_theme_constant_override("v_separation", 8)
+	choice_scroll.add_child(_choices)
+	var migrated := TrainerProfile.preserve_registered_icon()
+	if migrated.has("error"):
+		_problem_label.text = str(migrated["error"])
+	_rebuild_choices()
 	_file_button = MenuStyle.button("画像ファイルを選ぶ…", 18, MenuStyle.COLOR_BUTTON_QUIET)
 	_file_button.name = "FileButton"
 	_file_button.pressed.connect(_open_file_dialog)
 	UIAudio.bind_button_sound(_file_button, "confirmation")
 	column.add_child(_file_button)
+	_delete_button = MenuStyle.button("選択した追加画像を削除", 18, MenuStyle.COLOR_BUTTON_QUIET)
+	_delete_button.name = "DeleteIconButton"
+	_delete_button.pressed.connect(request_delete_icon)
+	column.add_child(_delete_button)
+	_file_button.focus_neighbor_bottom = _file_button.get_path_to(_delete_button)
+	_delete_button.focus_neighbor_top = _delete_button.get_path_to(_file_button)
 	_build_menu_column(columns)
+	_build_delete_dialog()
+	_rebuild_choices()
 	_file_dialog = FileDialog.new()
 	_file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
 	_file_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -158,7 +170,7 @@ func _choice_button(kind: String, id: String) -> Button:
 	icon.offset_top = 5.0
 	icon.offset_right = -5.0
 	icon.offset_bottom = -5.0
-	icon.call("show_icon", kind, id)
+	icon.call("show_icon", kind, id, TrainerProfile.custom_icon_texture(id) if kind == "file" else null)
 	button.add_child(icon)
 	button.pressed.connect(choose_icon.bind(kind, id))
 	UIAudio.bind_button_sound(button, "confirmation")
@@ -168,21 +180,21 @@ func _choice_button(kind: String, id: String) -> Button:
 
 ## 画像を選ぶ（なし、または、用意してある人の絵）。
 func choose_icon(kind: String, id: String = "") -> void:
-	_pending = {"kind": kind, "id": id, "path": ""}
+	_pending = {"kind": kind, "id": id, "path": TrainerProfile.custom_icon_path(id) if kind == "file" else ""}
 	_refresh_choices()
 
 
 ## 画像ファイルを選ぶ。読めないファイルなら、理由を出して、選びかけの画像は変えない。
 func choose_file(path: String) -> void:
 	_file_dialog_open = false
-	var image: Image = Image.load_from_file(path) if FileAccess.file_exists(path) else null
-	if image == null or image.is_empty():
-		_problem_label.text = "画像を読めません"
+	var imported := TrainerProfile.import_custom_icon(path)
+	if imported.has("error"):
+		_problem_label.text = str(imported["error"])
 		return
 	_problem_label.text = ""
-	_pending = {"kind": "file", "id": "", "path": path}
-	_refresh_choices()
-	_preview.call("show_icon", "file", "", ImageTexture.create_from_image(image))
+	_rebuild_choices()
+	choose_icon("file", str(imported["id"]))
+	_focus_pending_icon()
 
 
 func _open_file_dialog() -> void:
@@ -199,9 +211,12 @@ func _refresh_choices() -> void:
 		MenuStyle.style_button(button, 14, MenuStyle.COLOR_BUTTON_ON if selected else MenuStyle.COLOR_BUTTON_QUIET)
 	# 登録済みの画像ファイルを、そのまま使い続ける場合（選び直していない）は、登録してある絵を出す。
 	if str(_pending["kind"]) == "file":
-		_preview.call("show_icon", "file", "", TrainerProfile.icon_texture())
+		var texture := TrainerProfile.custom_icon_texture(str(_pending["id"]))
+		_preview.call("show_icon", "file", "", texture if texture != null else TrainerProfile.icon_texture())
 	else:
 		_preview.call("show_icon", str(_pending["kind"]), str(_pending["id"]))
+	if is_instance_valid(_delete_button):
+		_delete_button.disabled = str(_pending["kind"]) != "file" or TrainerProfile.custom_icon_texture(str(_pending["id"])) == null
 
 
 ## 選びかけの画像（kind・id・path）。
@@ -211,7 +226,7 @@ func pending_icon() -> Dictionary:
 
 ## 名前と画像を保存して、遊び方の選択へ進む。名前が決まりに合わないときは、理由を出して、何も保存しない。
 func register() -> void:
-	if _registering or _file_dialog_open or _file_dialog.visible:
+	if _registering or _file_dialog_open or _file_dialog.visible or _delete_dialog.visible:
 		return
 	var problem := TrainerProfile.name_problem(_name_edit.text)
 	if problem.is_empty():
@@ -243,6 +258,13 @@ func go_to_title() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
+	if _delete_dialog.visible:
+		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+			_close_delete_dialog()
+		elif RaceControllerInput.is_accept_pressed(event):
+			RaceControllerInput.activate_focused_control(viewport)
+		viewport.set_input_as_handled()
+		return
 	if RaceControllerInput.is_menu_pressed(event):
 		viewport.set_input_as_handled()
 		register()
@@ -269,40 +291,17 @@ func _build_menu_column(columns: HBoxContainer) -> void:
 	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	menu.add_theme_constant_override("separation", 8)
 	columns.add_child(menu)
-	_game_start_button = _menu_button("ゲーム開始", "FreeRaceButton", Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
+	_game_start_button = _menu_button("次へ", "FreeRaceButton", Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
 	_game_start_button.pressed.connect(register)
 	MenuStyle.add_mark(_game_start_button, "START")
 	menu.add_child(_game_start_button)
-	var exploration := _menu_button("カメラで探検", "CameraExplorationButton", Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
-	exploration.pressed.connect(go_to_camera_exploration)
-	UIAudio.bind_button_sound(exploration, "confirmation")
-	menu.add_child(exploration)
-	var diagnostics := _menu_button("ゲームパッド設定・入力確認", "PadDiagnosticsButton", MenuStyle.COLOR_BUTTON_QUIET)
-	diagnostics.add_theme_font_size_override("font_size", 16)
-	diagnostics.pressed.connect(go_to_pad_diagnostics)
-	UIAudio.bind_button_sound(diagnostics, "confirmation")
-	menu.add_child(diagnostics)
-	_build_screen_mode_selector(menu)
-	var quit_button := _menu_button("ゲームを終了", "QuitButton", Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
-	quit_button.pressed.connect(func(): get_tree().quit())
-	UIAudio.bind_button_sound(quit_button, "confirmation")
-	menu.add_child(quit_button)
 	var back := _menu_button("戻る", "BackButton", MenuStyle.COLOR_BUTTON_QUIET)
 	back.pressed.connect(go_to_title)
 	UIAudio.bind_button_sound(back, "back")
 	MenuStyle.add_mark(back, "B")
 	menu.add_child(back)
-	_game_start_button.focus_neighbor_bottom = _game_start_button.get_path_to(exploration)
-	exploration.focus_neighbor_top = exploration.get_path_to(_game_start_button)
-	exploration.focus_neighbor_bottom = exploration.get_path_to(diagnostics)
-	diagnostics.focus_neighbor_top = diagnostics.get_path_to(exploration)
-	diagnostics.focus_neighbor_bottom = diagnostics.get_path_to(_screen_mode_row)
-	_screen_mode_row.focus_neighbor_top = _screen_mode_row.get_path_to(diagnostics)
-	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(quit_button)
-	quit_button.focus_neighbor_top = quit_button.get_path_to(_screen_mode_row)
-	quit_button.focus_neighbor_bottom = quit_button.get_path_to(back)
-	back.focus_neighbor_top = back.get_path_to(quit_button)
-
+	_game_start_button.focus_neighbor_bottom = _game_start_button.get_path_to(back)
+	back.focus_neighbor_top = back.get_path_to(_game_start_button)
 
 func _menu_button(text: String, node_name: String, color: Color) -> Button:
 	var button := MenuStyle.button(text, 22, color)
@@ -311,115 +310,101 @@ func _menu_button(text: String, node_name: String, color: Color) -> Button:
 	return button
 
 
-func go_to_camera_exploration() -> void:
-	get_tree().change_scene_to_file(CAMERA_EXPLORATION_SCENE_PATH)
+func _rebuild_choices() -> void:
+	for child in _choices.get_children():
+		child.free()
+	_choice_buttons.clear()
+	_choices.add_child(_choice_button("none", ""))
+	for avatar: Dictionary in TrainerProfile.avatars():
+		_choices.add_child(_choice_button("avatar", str(avatar["id"])))
+	for entry: Dictionary in TrainerProfile.custom_icons():
+		_choices.add_child(_choice_button("file", str(entry["id"])))
+	for index in _choice_buttons.size():
+		var button := _choice_buttons[index]
+		button.focus_neighbor_left = button.get_path_to(_choice_buttons[maxi(index - 1, 0)])
+		button.focus_neighbor_right = button.get_path_to(_choice_buttons[mini(index + 1, _choice_buttons.size() - 1)])
+		if index >= _choices.columns:
+			button.focus_neighbor_top = button.get_path_to(_choice_buttons[index - _choices.columns])
+		if index + _choices.columns < _choice_buttons.size():
+			button.focus_neighbor_bottom = button.get_path_to(_choice_buttons[index + _choices.columns])
+		elif is_instance_valid(_file_button):
+			button.focus_neighbor_bottom = button.get_path_to(_file_button)
 
 
-func go_to_pad_diagnostics() -> void:
-	get_tree().change_scene_to_file(PAD_DIAGNOSTICS_SCENE_PATH)
+func _focus_pending_icon() -> void:
+	for button in _choice_buttons:
+		if bool(button.get_meta("selected", false)):
+			button.grab_focus()
+			return
 
 
-func _build_screen_mode_selector(menu: VBoxContainer) -> void:
-	var row := HBoxContainer.new()
-	row.name = "ScreenModeSelector"
-	_screen_mode_row = row
-	row.focus_mode = Control.FOCUS_ALL
-	row.custom_minimum_size = Vector2(364.0, 30.0)
-	row.gui_input.connect(_screen_mode_gui_input)
-	row.focus_entered.connect(row.queue_redraw)
-	row.focus_exited.connect(row.queue_redraw)
-	row.focus_exited.connect(func(): _screen_direction_down = {"ui_left": false, "ui_right": false})
-	row.draw.connect(func():
-		if row.has_focus():
-			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
-	)
-	row.add_theme_constant_override("separation", 4)
-	menu.add_child(row)
-	var caption := MenuStyle.label("ウィンドウサイズ", 14)
-	caption.name = "ModeCaption"
-	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(caption)
-	row.add_child(_screen_mode_button("◀", "PreviousModeButton", -1))
-	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 14)
-	_screen_mode_label.name = "ModeLabel"
-	_screen_mode_label.custom_minimum_size.x = 140.0
-	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_screen_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_screen_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_screen_mode_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(_screen_mode_label)
-	row.add_child(_screen_mode_button("▶", "NextModeButton", 1))
-	_sync_screen_mode()
+func _build_delete_dialog() -> void:
+	var shade := ColorRect.new()
+	shade.name = "DeleteIconDialog"
+	shade.color = Color(0, 0, 0, 0.8)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	shade.hide()
+	add_child(shade)
+	_delete_dialog = shade
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.add_child(center)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL))
+	center.add_child(panel)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 16)
+	panel.add_child(column)
+	column.add_child(MenuStyle.label("この追加画像を一覧から削除しますか？\n元の画像ファイルは削除しません。", 20))
+	var confirm := MenuStyle.button("削除する", 20)
+	confirm.name = "ConfirmDeleteIconButton"
+	confirm.pressed.connect(_confirm_delete_icon)
+	column.add_child(confirm)
+	var cancel := MenuStyle.button("やめる", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	cancel.name = "CancelDeleteIconButton"
+	cancel.pressed.connect(_close_delete_dialog)
+	MenuStyle.add_mark(cancel, "B")
+	column.add_child(cancel)
+	for button in [confirm, cancel]:
+		button.focus_neighbor_top = button.get_path_to(cancel if button == confirm else confirm)
+		button.focus_neighbor_bottom = button.focus_neighbor_top
+		button.focus_neighbor_left = button.get_path_to(button)
+		button.focus_neighbor_right = button.get_path_to(button)
+		button.focus_next = button.get_path_to(cancel if button == confirm else confirm)
+		button.focus_previous = button.focus_next
 
 
-func _screen_mode_button(text: String, node_name: String, direction: int) -> Button:
-	var button := MenuStyle.button(text, 14, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
-	button.name = node_name
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(36, 30)
-	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
-		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
-		style.content_margin_left = 8.0
-		style.content_margin_right = 8.0
-		style.content_margin_top = 3.0
-		style.content_margin_bottom = 3.0
-		button.add_theme_stylebox_override(state, style)
-	button.pressed.connect(func() -> void:
-		var previous := _screen_mode_index
-		_cycle_screen_mode(direction)
-		if _screen_mode_index != previous:
-			UIAudio.play_arrow_click())
-	return button
-
-
-func _screen_mode_gui_input(event: InputEvent) -> void:
-	if not _screen_mode_row.has_focus():
+func request_delete_icon() -> void:
+	if _delete_button.disabled:
 		return
-	for action in ["ui_left", "ui_right"]:
-		if not event.is_action(action):
-			continue
-		var down := event.is_action_pressed(action, true, true)
-		if down and not _screen_direction_down[action] and not event.is_echo():
-			var previous := _screen_mode_index
-			_cycle_screen_mode(-1 if action == "ui_left" else 1)
-			var sound_key := screen_mode_sound_key(event is InputEventJoypadButton or event is InputEventJoypadMotion, _screen_mode_index != previous)
-			if sound_key == "selection_cycle":
-				UIAudio.play_selection_cycle()
-		_screen_direction_down[action] = down
-		_screen_mode_row.accept_event()
+	UIAudio.play_confirmation()
+	_delete_id = str(_pending["id"])
+	_delete_dialog.show()
+	_delete_dialog.find_child("CancelDeleteIconButton", true, false).grab_focus()
 
 
-func _process(_delta: float) -> void:
-	_sync_screen_mode()
+func _close_delete_dialog(play_sound: bool = true) -> void:
+	if play_sound:
+		UIAudio.play_back()
+	_delete_dialog.hide()
+	_delete_id = ""
+	_focus_pending_icon()
 
 
-func _sync_screen_mode() -> void:
-	var mode := DisplayServer.window_get_mode()
-	if mode == DisplayServer.WINDOW_MODE_MINIMIZED:
+func _confirm_delete_icon() -> void:
+	if not _delete_dialog.visible or _delete_id.is_empty():
 		return
-	var index := screen_mode_index(mode)
-	if index != _screen_mode_index:
-		_screen_mode_index = index
-		_screen_mode_label.text = SCREEN_MODE_LABELS[index]
-
-
-static func screen_mode_index(mode: int) -> int:
-	if mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
-		return 2
-	var index := SCREEN_MODES.find(mode)
-	return maxi(index, 0)
-
-
-static func screen_mode_sound_key(is_gamepad: bool, changed: bool) -> String:
-	return "selection_cycle" if is_gamepad and changed else ""
-
-
-static func cycled_screen_mode(mode: int, direction: int) -> int:
-	return SCREEN_MODES[posmod(screen_mode_index(mode) + direction, SCREEN_MODES.size())]
-
-
-func _cycle_screen_mode(direction: int) -> void:
-	DisplayServer.window_set_mode(cycled_screen_mode(DisplayServer.window_get_mode(), direction))
-	_sync_screen_mode()
-
+	var problem := TrainerProfile.delete_custom_icon(_delete_id)
+	if not problem.is_empty():
+		_problem_label.text = problem
+		_close_delete_dialog(false)
+		UIAudio.play_error()
+		return
+	UIAudio.play_clear_selection()
+	_delete_dialog.hide()
+	_delete_id = ""
+	_pending = {"kind": "none", "id": "", "path": ""}
+	_rebuild_choices()
+	_refresh_choices()
+	_focus_pending_icon()

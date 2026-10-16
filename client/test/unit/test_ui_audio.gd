@@ -2,7 +2,7 @@ extends GutTest
 
 const UIAudio := preload("res://scripts/ui_audio.gd")
 const RaceSelect := preload("res://scripts/race_select.gd")
-const TrainerProfileScreen := preload("res://scripts/trainer_profile_screen.gd")
+const TrainerProfileScreen := preload("res://scripts/mode_select.gd")
 const Runner := preload("res://scripts/runner_local_race.gd")
 
 

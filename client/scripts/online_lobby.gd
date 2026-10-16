@@ -215,9 +215,9 @@ var _open_password_button: Button
 var _change_dialog: Control
 var _current_password_label: Label
 var _password_edit: LineEdit
-## 自分の画面の景色を、軽くするか（コースと柵だけ・影なし・紙ふぶきなし）。ブラウザ版は、最初から軽くする。
+## 自分の画面の景色を、軽くするか。ゲームモード設定の画質を引き継ぐ（コースと柵だけ・影なし・紙ふぶきなし）。
 ## 見た目だけの話なので、人によって違っていてよい（レースの計算は、サーバーがやる）。
-var _light_scenery := OS.has_feature("web")
+var _light_scenery := RaceSession.is_course_only()
 ## 部屋のようす（サーバーから届いた最後のもの。部屋に入っていなければ空）。
 var _room := {}
 var _members: Array = []
@@ -334,6 +334,7 @@ func _build_connect(column: VBoxContainer) -> void:
 	_server_edit = _field(card, "サーバー", "ServerEdit", OnlineConfig.server_url(), 200)
 	_server_edit.text_submitted.connect(func(_text: String) -> void: connect_to_server())
 	_connect_button = _big_button(card, "つなぐ", "ConnectButton", connect_to_server, MenuStyle.COLOR_BUTTON)
+	MenuStyle.add_mark(_connect_button, "START", 22.0)
 
 
 ## 画面のまん中に置く、決めた幅の縦の並び（画面いっぱいに広げないため）。
@@ -385,6 +386,7 @@ func _build_lobby(column: VBoxContainer) -> void:
 	gap.custom_minimum_size = Vector2(0.0, CREATE_BUTTON_GAP)
 	_lobby_box.add_child(gap)
 	_open_create_button = _big_button(_lobby_box, "＋　部屋を作る", "OpenCreateButton", open_create_dialog, MenuStyle.COLOR_BUTTON_ON)
+	MenuStyle.add_mark(_open_create_button, "START", 22.0)
 	_open_create_button.custom_minimum_size = Vector2(CREATE_BUTTON_WIDTH, BUTTON_HEIGHT + 6.0)
 	_open_create_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 
@@ -452,6 +454,8 @@ func _dialog_buttons(column: VBoxContainer, confirm_text: String, confirm_name: 
 		button.pressed.connect(spec[2])
 		UIAudio.bind_button_sound(button, str(spec[4]))
 		row.add_child(button)
+		if confirm_name in ["CreateButton", "JoinButton", "AdvanceButton"] and button.name == confirm_name:
+			MenuStyle.add_mark(button, "START", 22.0)
 
 
 func _build_dialogs() -> void:
@@ -776,6 +780,7 @@ func _build_room(column: VBoxContainer) -> void:
 	actions.add_child(_leave_button)
 	# 「確定」は全員にある。全員の確定がそろうと、主に「先へ進みますか」の窓が出る。
 	_confirm_button = _big_button(actions, "確定", "ConfirmButton", toggle_confirm, MenuStyle.COLOR_BUTTON)
+	MenuStyle.add_mark(_confirm_button, "START", 22.0)
 	_confirm_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# ぷるりんの一覧の窓（オフラインのレース選択と同じもの）。出走の行の上に重ねて出す。
@@ -1532,9 +1537,10 @@ func _show_rooms() -> void:
 		button.pressed.connect(choose_room.bind(int(entry["room_id"])))
 		UIAudio.bind_button_sound(button, "confirmation")
 		_rooms_box.add_child(button)
+		MenuStyle.add_mark(button, "START", 22.0)
 		var columns := _room_columns(str(entry["name"]), str(entry["host_name"]), "%d／%d" % [int(entry["count"]), int(entry["field_size"])], MenuStyle.COLOR_TEXT, 19)
 		columns.set_anchors_preset(Control.PRESET_FULL_RECT)
-		columns.offset_left = 16.0
+		columns.offset_left = 52.0
 		columns.offset_right = -16.0
 		button.add_child(columns)
 		var state := columns.get_node("State") as HBoxContainer
@@ -1827,6 +1833,7 @@ func _show_bottom_buttons() -> void:
 	_confirm_button.add_theme_stylebox_override("normal", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON if host and all_confirmed else (MenuStyle.COLOR_BUTTON_QUIET if confirmed else MenuStyle.COLOR_BUTTON), 10, 22.0, 10.0))
 	# 部屋では、ぷるりんを選んでからでないと、確定できない。
 	_confirm_button.disabled = not in_entries and my_pururin_id().is_empty()
+	_confirm_button.get_node("ButtonMark").visible = not confirmed or (host and all_confirmed)
 	if host and all_confirmed and not _advance_dismissed and not _advance_dialog.visible and not is_picker_open():
 		open_advance_dialog()
 
@@ -1904,6 +1911,7 @@ func kick(peer_id: int) -> void:
 ## 画質を、標準と軽量で切り替える（どちら向きに押しても、切り替わる）。
 func step_scenery(_direction: int) -> void:
 	_light_scenery = not _light_scenery
+	RaceSession.set_course_only(_light_scenery)
 	_scenery_label.text = scenery_text()
 
 
@@ -2019,7 +2027,10 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
-	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+	if RaceControllerInput.is_menu_pressed(event):
+		viewport.set_input_as_handled()
+		RaceControllerInput.activate_control(start_button())
+	elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_back()
@@ -2033,3 +2044,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		step_distance(RaceControllerInput.distance_step(event), "gamepad")
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
+
+
+## STARTは、その段階の先へ進む操作だけ。別の窓やチャット入力から、背後を動かさない。
+func start_button() -> Button:
+	if is_picker_open() or is_trainer_picker_open():
+		return null
+	for dialog: Control in [_create_dialog, _password_dialog, _advance_dialog]:
+		if dialog.visible:
+			var button_name := {"CreateDialog": "CreateButton", "PasswordDialog": "JoinButton", "AdvanceDialog": "AdvanceButton"}
+			return dialog.find_child(button_name[str(dialog.name)], true, false) as Button
+	if is_dialog_open():
+		return null
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit or focused is TextEdit:
+		return _connect_button if _connect_box.visible else null
+	if _connect_box.visible:
+		return _connect_button
+	if OnlineSession.in_room():
+		if is_confirmed(OnlineSession.peer_id) and not (is_host() and everyone_confirmed()):
+			return null
+		return _confirm_button
+	if focused is Button and focused.get_parent() == _rooms_box:
+		return focused
+	return _open_create_button

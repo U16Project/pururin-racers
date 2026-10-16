@@ -57,6 +57,11 @@ func after_each() -> void:
 
 
 func _remove_files() -> void:
+	var directory := DirAccess.open(SAVE + ".icons")
+	if directory != null:
+		for filename in directory.get_files():
+			DirAccess.remove_absolute((SAVE + ".icons").path_join(filename))
+		DirAccess.remove_absolute(SAVE + ".icons")
 	for path: String in [SAVE, ICON]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
@@ -204,11 +209,13 @@ func test_a_picture_file_can_be_chosen_and_an_unreadable_one_is_refused() -> voi
 	source.save_png(source_path)
 	screen.call("choose_file", source_path)
 	assert_eq(screen.call("pending_icon")["kind"], "file")
-	assert_eq(screen.call("pending_icon")["path"], source_path)
+	var copied_path: String = screen.call("pending_icon")["path"]
+	assert_ne(copied_path, source_path)
+	assert_true(FileAccess.file_exists(copied_path))
 	assert_eq(TrainerProfile.icon()["kind"], "none", "選んだだけでは、保存しない")
 	screen.call("choose_file", "user://no_such_picture.png")
 	assert_ne((screen.find_child("ProblemLabel", true, false) as Label).text, "")
-	assert_eq(screen.call("pending_icon")["path"], source_path, "読めないファイルでは、選びかけを変えない")
+	assert_eq(screen.call("pending_icon")["path"], copied_path, "読めないファイルでは、選びかけを変えない")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(source_path))
 
 
@@ -218,7 +225,7 @@ func test_game_start_goes_to_the_trainer_screen_and_then_to_mode_select() -> voi
 	assert_eq((title.find_child("PressAnyButton", true, false) as Label).text, "ー　PRESS ANY BUTTON　ー")
 	assert_eq(title.call("next_scene_path"), "res://scenes/trainer_profile.tscn")
 	var screen := _screen()
-	assert_eq((screen.find_child("FreeRaceButton", true, false) as Button).text, "ゲーム開始")
+	assert_eq((screen.find_child("FreeRaceButton", true, false) as Button).text, "次へ")
 	assert_eq(screen.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
 	assert_true(ResourceLoader.exists(screen.get("MODE_SELECT_SCENE_PATH")))
 
@@ -289,3 +296,152 @@ func test_the_screen_edits_the_introduction_and_refuses_a_too_long_one() -> void
 	screen.call("register")
 	assert_ne((screen.find_child("ProblemLabel", true, false) as Label).text, "")
 	assert_eq(TrainerProfile.introduction(), "はじめまして。")
+
+
+func test_imported_icons_remain_in_the_list_and_deletion_requires_confirmation() -> void:
+	var source_path := "user://test_gallery_original.png"
+	var image := Image.create(60, 40, false, Image.FORMAT_RGBA8)
+	image.fill(Color.ORANGE)
+	assert_eq(image.save_png(source_path), OK)
+	var screen := _screen()
+	var delete_button: Button = screen.find_child("DeleteIconButton", true, false)
+	assert_true(delete_button.disabled, "初期画像は削除できない")
+	screen.choose_file(source_path)
+	var id: String = screen.pending_icon()["id"]
+	assert_not_null(screen.find_child("Choice_file_" + id, true, false))
+	assert_eq(TrainerProfile.custom_icons().size(), 1)
+	screen.choose_file(source_path)
+	assert_eq(TrainerProfile.custom_icons().size(), 1, "同じ画像を重複追加しない")
+	screen.request_delete_icon()
+	var dialog: Control = screen.find_child("DeleteIconDialog", true, false)
+	assert_true(dialog.visible)
+	assert_eq(get_viewport().gui_get_focus_owner().name, "CancelDeleteIconButton")
+	var start := InputEventJoypadButton.new()
+	start.button_index = JOY_BUTTON_START
+	start.pressed = true
+	screen._unhandled_input(start)
+	assert_true(dialog.visible, "STARTで背後の次へに進まない")
+	assert_eq(TrainerProfile.custom_icons().size(), 1)
+	var back := InputEventJoypadButton.new()
+	back.button_index = JOY_BUTTON_B
+	back.pressed = true
+	screen._unhandled_input(back)
+	assert_false(dialog.visible)
+	assert_eq(TrainerProfile.custom_icons().size(), 1, "Bでは削除しない")
+	# 画面を開き直しても追加画像は残る。
+	var reopened := _screen()
+	assert_not_null(reopened.find_child("Choice_file_" + id, true, false))
+	reopened.choose_icon("file", id)
+	reopened.request_delete_icon()
+	var confirm: Button = reopened.find_child("ConfirmDeleteIconButton", true, false)
+	confirm.grab_focus()
+	var accept := InputEventJoypadButton.new()
+	accept.button_index = JOY_BUTTON_A
+	accept.pressed = true
+	reopened._unhandled_input(accept)
+	assert_eq(TrainerProfile.custom_icons().size(), 0)
+	assert_true(FileAccess.file_exists(source_path), "元ファイルは残す")
+	assert_null(reopened.find_child("Choice_file_" + id, true, false))
+	assert_eq(reopened.pending_icon()["kind"], "none")
+	assert_ne(TrainerProfile.delete_custom_icon(str(TrainerProfile.avatars()[0]["id"])), "")
+	DirAccess.remove_absolute(source_path)
+
+
+func test_a_legacy_file_is_preserved_and_can_be_deleted_without_reappearing() -> void:
+	var source_path := "user://test_gallery_legacy.png"
+	var image := Image.create(40, 40, false, Image.FORMAT_RGBA8)
+	image.fill(Color.PURPLE)
+	image.save_png(source_path)
+	assert_eq(TrainerProfile.set_icon_file(source_path), "")
+	var screen := _screen()
+	var id: String = screen.pending_icon()["id"]
+	assert_not_null(screen.find_child("Choice_file_" + id, true, false))
+	assert_eq(TrainerProfile.delete_custom_icon(id), "")
+	assert_eq(TrainerProfile.icon()["kind"], "none")
+	assert_true(TrainerProfile.preserve_registered_icon().is_empty())
+	assert_true(TrainerProfile.custom_icons().is_empty())
+	DirAccess.remove_absolute(source_path)
+
+
+func test_icon_delete_plays_open_cancel_success_and_error_sounds() -> void:
+	var source := "user://test_gallery_sound.png"
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	image.fill(Color.PINK)
+	image.save_png(source)
+	var screen := _screen()
+	screen.choose_file(source)
+	var players: Dictionary = UIAudio.get("_players")
+	for player: AudioStreamPlayer in players.values():
+		player.stop()
+	screen.request_delete_icon()
+	assert_true((players["confirmation"] as AudioStreamPlayer).playing)
+	screen._close_delete_dialog()
+	assert_true((players["back"] as AudioStreamPlayer).playing)
+	assert_eq(TrainerProfile.custom_icons().size(), 1)
+	screen.request_delete_icon()
+	screen.set("_delete_id", "0".repeat(32))
+	screen._confirm_delete_icon()
+	assert_true((players["error"] as AudioStreamPlayer).playing)
+	assert_false((players["clear_selection"] as AudioStreamPlayer).playing)
+	assert_eq(TrainerProfile.custom_icons().size(), 1)
+	screen.request_delete_icon()
+	screen._confirm_delete_icon()
+	assert_true((players["clear_selection"] as AudioStreamPlayer).playing)
+	assert_true(TrainerProfile.custom_icons().is_empty())
+	DirAccess.remove_absolute(source)
+
+
+func _keyboard(key: Key, target: Viewport = null) -> void:
+	var viewport := target if target != null else get_viewport()
+	var event := InputEventKey.new()
+	event.keycode = key
+	event.physical_keycode = key
+	event.pressed = true
+	viewport.push_input(event)
+	event.pressed = false
+	viewport.push_input(event)
+
+
+func test_mouse_can_open_confirmation_and_keyboard_can_cancel_or_delete() -> void:
+	var source := "user://test_gallery_controls.png"
+	var image := Image.create(32, 32, false, Image.FORMAT_RGBA8)
+	image.fill(Color.GREEN)
+	image.save_png(source)
+	var screen := _screen()
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(1152, 648)
+	add_child_autofree(viewport)
+	screen.reparent(viewport)
+	screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.choose_file(source)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var button: Button = screen.find_child("DeleteIconButton", true, false)
+	var position := button.get_global_rect().get_center()
+	var motion := InputEventMouseMotion.new()
+	motion.position = position
+	viewport.push_input(motion)
+	var click := InputEventMouseButton.new()
+	click.position = position
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	viewport.push_input(click)
+	click.pressed = false
+	viewport.push_input(click)
+	var dialog: Control = screen.find_child("DeleteIconDialog", true, false)
+	assert_true(dialog.visible, "マウスで確認を開く")
+	if not dialog.visible:
+		return
+	_keyboard(KEY_ESCAPE, viewport)
+	assert_false(dialog.visible)
+	assert_eq(TrainerProfile.custom_icons().size(), 1)
+	button.grab_focus()
+	_keyboard(KEY_ENTER, viewport)
+	assert_true(dialog.visible, "キーボードで確認を開く")
+	_keyboard(KEY_UP, viewport)
+	assert_eq(viewport.gui_get_focus_owner().name, "ConfirmDeleteIconButton")
+	_keyboard(KEY_ENTER, viewport)
+	assert_false(dialog.visible)
+	assert_true(TrainerProfile.custom_icons().is_empty())
+	assert_true(FileAccess.file_exists(source))
+	DirAccess.remove_absolute(source)

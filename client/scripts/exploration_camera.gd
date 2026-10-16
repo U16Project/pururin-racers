@@ -4,7 +4,7 @@ const RaceControllerInput := preload("res://scripts/input/race_controller_input.
 
 signal move_speed_changed(speed_mps: float)
 
-const TITLE_SCENE_PATH := "res://scenes/title.tscn"
+const TITLE_SCENE_PATH := "res://scenes/mode_select.tscn"
 const DEVICE := 0
 const STICK_DEADZONE := 0.25
 const MIN_HEIGHT_M := 1.2

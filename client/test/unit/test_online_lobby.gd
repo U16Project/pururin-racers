@@ -732,9 +732,10 @@ func test_chat_lines_show_in_the_room() -> void:
 
 func test_scenery_is_a_personal_choice_that_the_race_screen_reads() -> void:
 	var course_only_before := RaceSession.is_course_only()
+	RaceSession.set_course_only(not OS.has_feature("web"))
 	var lobby := await _lobby_in_new_room("景色の部屋")
-	# ブラウザ版は、最初から軽い。それ以外は、フル。
-	assert_eq(lobby.is_light_scenery(), OS.has_feature("web"))
+	# ゲームモード設定で選んだ画質を引き継ぐ。
+	assert_eq(lobby.is_light_scenery(), not OS.has_feature("web"))
 	var label := lobby.find_child("SceneryLabel", true, false) as Label
 	assert_eq(label.text, lobby.scenery_text())
 	# 切り替えると、レースの画面が読む「軽い景色か」に、その選択が入る。
@@ -746,3 +747,23 @@ func test_scenery_is_a_personal_choice_that_the_race_screen_reads() -> void:
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
 	RaceSession.set_course_only(course_only_before)
+
+
+func test_start_targets_the_visible_next_step_and_never_cancels_confirmation() -> void:
+	var lobby := await _connected_lobby()
+	var create: Button = lobby.find_child("OpenCreateButton", true, false)
+	create.grab_focus()
+	assert_eq(lobby.start_button(), create)
+	lobby.open_create_dialog()
+	var confirm_create: Button = lobby.find_child("CreateButton", true, false)
+	assert_eq(lobby.start_button(), confirm_create)
+	assert_eq(confirm_create.get_node("ButtonMark").get("kind"), "START")
+	(lobby.find_child("RoomNameEdit", true, false) as LineEdit).text = "START確認"
+	_press_pad(JOY_BUTTON_START)
+	await _wait_until(func() -> bool: return OnlineSession.in_room())
+	assert_true(OnlineSession.in_room())
+	var confirm: Button = lobby.find_child("ConfirmButton", true, false)
+	assert_eq(lobby.start_button(), confirm)
+	assert_true(confirm.disabled, "未選択のまま確定はできない")
+	(lobby.find_child("ChatEdit", true, false) as LineEdit).grab_focus()
+	assert_null(lobby.start_button(), "チャット入力中は先へ進まない")
