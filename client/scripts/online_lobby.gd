@@ -12,15 +12,21 @@ const LockMark := preload("res://scripts/menu/lock_mark.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
+const PururinPortrait := preload("res://scripts/menu/pururin_portrait.gd")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
-const TrainerPicker := preload("res://scripts/menu/cpu_trainer_picker.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const OnlineConfig := preload("res://scripts/config/online_config.gd")
 const ServerChoice := preload("res://scripts/config/online_server_choice.gd")
+const LocalServer := preload("res://scripts/online/local_server.gd")
+## このPCのサーバーが起動するのを待つ秒数（その間は、つながらなくても、つなぎ直す）。
+const LOCAL_SERVER_START_TIMEOUT_S := 12.0
+const LOCAL_SERVER_RETRY_S := 0.8
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
@@ -29,11 +35,7 @@ const Protocol := preload("res://scripts/online/online_protocol.gd")
 const PANEL_WIDTH := 1040.0
 ## 板と、画面の上下の端のあいだ。
 const PANEL_SCREEN_MARGIN := 8.0
-## 左右2列の、列のあいだ。
-const COLUMN_GAP := 28
-const ARROW_BUTTON_SIZE := Vector2(52.0, 34.0)
 const BUTTON_HEIGHT := 40.0
-const ROW_BUTTON_HEIGHT := 40.0
 const FIELD_HEIGHT := 34.0
 const LABEL_WIDTH := 110.0
 const DIALOG_WIDTH := 520.0
@@ -50,41 +52,85 @@ const CREATE_BUTTON_WIDTH := 320.0
 const COLOR_CARD := Color(1.0, 1.0, 1.0, 0.055)
 const COLOR_ROW_EMPTY := Color(1.0, 1.0, 1.0, 0.03)
 const COLOR_CHIP := Color(0.1, 0.16, 0.26, 0.95)
-## 部屋の中の、左の列（決めごと・人）の幅。右は、ぷるりんの詳細。
-const ROOM_LEFT_WIDTH := 500.0
-const GATE_BADGE_SIZE := 28.0
 const DISTANCE_BUTTON_HEIGHT := 36.0
 ## 距離を1つ動かすボタン（‹ L1・R1 ›）。オフラインのレース選択と同じ見た目。
-const DISTANCE_STEP_BUTTON_WIDTH := 70.0
+const DISTANCE_STEP_BUTTON_WIDTH := 62.0
 const DISTANCE_MARK_SIZE := 20.0
 const COLOR_STEP_BUTTON := Color(0.36, 0.23, 0.13, 1.0)
 const COLOR_STEP_BUTTON_BORDER := Color(0.62, 0.43, 0.25, 1.0)
 ## 行の右の、確定の印の幅と、「︙」（主が、その人を退出させる窓を開く）の幅。出さない行も、同じ幅だけ空ける。
 const CONFIRM_BADGE_WIDTH := 46.0
 const MEMBER_MENU_WIDTH := 24.0
-## 行の、名前の札の幅（全角12文字の名前が、そのままの大きさで入る）。
-const NAME_TAG_WIDTH := 176.0
-## ひとことの記録の高さ。
-const CHAT_LOG_HEIGHT := 70.0
 ## 決めごとの行の、小さい矢印ボタン。
 const MINI_ARROW_SIZE := Vector2(26.0, 28.0)
-## ぷるりんの板の右上の、人の画像の大きさと、板の端からの間。紹介の窓の中の画像の大きさ。
-const PERSON_BUTTON_SIZE := 72.0
-const PERSON_BUTTON_MARGIN := 14.0
 const PROFILE_ICON_SIZE := 132.0
 const STYLE_NAMES := {"escape": "逃げ", "pace": "先行", "stalk": "差し", "closer": "追い込み"}
-## ぷるりんの詳細の、最低の高さ（能力の棒が、つぶれない高さ）。
-const DETAIL_MIN_HEIGHT := 300.0
 const COLOR_CONFIRMED := Color(0.3, 0.8, 0.5, 1.0)
 ## 取り返しのつかない操作（退出させる）のボタンの色。
 const COLOR_DANGER_BUTTON := Color(0.72, 0.26, 0.24, 1.0)
 ## ほかの人の名前の色（自分は、枠の行の「ユーザー」の色）。
 const COLOR_OTHER_PLAYER := Color(1.0, 0.93, 0.6, 1.0)
-const CPU_SLOT_TEXT := "おまかせ"
-const WAITING_SLOT_TEXT := "ー選び中ー"
-const CLOSED_SLOT_TEXT := "ー"
 const PICKER_MARGIN := 8.0
-const LEAVE_BUTTON_WIDTH := 168.0
+## 待機室：席の並び（4列×2行）・席の高さ・アイコンの大きさ・紹介文の吹き出しの幅・紹介の欄の高さ（3行ぶん）。
+const WAITING_SEAT_COLUMNS := 4
+const WAITING_SEAT_HEIGHT := 72.0
+const WAITING_ICON_SIZE := 34.0
+const WAITING_POPUP_WIDTH := 220.0
+const WAITING_DESCRIPTION_HEIGHT := 66.0
+const COLOR_SEAT := Color(1.0, 1.0, 1.0, 0.07)
+const COLOR_SEAT_EMPTY := Color(1.0, 1.0, 1.0, 0.025)
+## ルームチャットの背景（濃い、透ける色）。
+const COLOR_CHAT_PANEL := Color(0.02, 0.03, 0.06, 0.72)
+## ルームチャットの欄の、いちばん狭い幅（本体の中身が広い画面でも、入力らんが切れないように）。
+const CHAT_PANEL_MIN_WIDTH := 360.0
+const CHAT_PANEL_TOP_MARGIN := 14
+## 部屋主がレース開始を押したときの知らせ（出す時間と、文）。
+const RACE_OPEN_POPUP_MSEC := 2000
+const RACE_OPEN_POPUP_WIDTH := 640.0
+const RACE_OPEN_TEXT := "部屋主が「レース設定へ」を押したので、レース設定に進みます。"
+## 部屋主の操作で画面が切り替わるときの知らせ（切り替わる前の画面 → あとの画面）。
+const VIEW_CHANGE_TEXTS := {
+	"settings>pick": "部屋主が「次へ」を押したので、プル選択に進みます。",
+	"pick>paddock": "部屋主が「パドックへ」を押したので、パドックに進みます。",
+	"paddock>pick": "部屋主が「選び直す」を押したので、プル選択に戻ります。",
+	"settings>waiting": "部屋主が「待機室へ戻る」を押したので、待機室に戻ります。",
+	"pick>waiting": "部屋主が「待機室へ戻る」を押したので、待機室に戻ります。",
+	"paddock>waiting": "部屋主が「待機室へ戻る」を押したので、待機室に戻ります。",
+}
+## 部屋の中の流れの道しるべ（順番）と、画面ごとの今の場所。
+const ROOM_STEPS := ["待機室", "レース設定", "プル選択", "パドック", "レース"]
+const VIEW_STEP_INDEX := {"waiting": 0, "settings": 1, "pick": 2, "paddock": 3}
+const STEP_LINE_WIDTH := 22.0
+const COLOR_STEP_NOW := Color(1.0, 0.86, 0.3, 1.0)
+const COLOR_STEP_OTHER := Color(1.0, 1.0, 1.0, 0.06)
+const COLOR_STEP_DONE := Color(0.45, 0.85, 0.6, 1.0)
+## 待機室の、レース中の帯の色。
+const COLOR_RACE_BAND := Color(0.85, 0.45, 0.15, 0.35)
+## 先に進んでいる人たちが、いまいる画面の呼び名。
+const PHASE_NAMES := {"settings": "レース設定", "room": "プル選択", "entries": "パドック"}
+const RACE_START_TEXT := "部屋主が「レース開始」を押したので、レースが始まります。"
+const RACE_OPEN_STAY_TEXT := "部屋主が「レース設定へ」を押しました。準備OKでなかったので、待機室で次のレースを待ちます。"
+## プル選択：横長の席の高さ・絵の大きさ（自分の席は大きく、上下に余白）・名前の幅・自分の席の色。
+const PICK_ROW_HEIGHT := 36.0
+const PICK_ROW_HEIGHT_MINE := 74.0
+const PICK_ICON_SIZE := 30.0
+const PICK_ICON_SIZE_MINE := 56.0
+const PICK_MINE_MARGIN := 6.0
+const PICK_WHO_WIDTH := 170.0
+const PICK_PURURIN_NAME_WIDTH := 110.0
+const PICK_CHEVRON_SCALE := 0.9
+const COLOR_PICK_MINE := Color(0.18, 0.42, 0.58, 0.85)
+## パドック：大きな枠の高さ・絵の大きさ・枠番号の札の大きさ、詳細の窓の幅と、その左（人）の幅。
+const PADDOCK_ROW_HEIGHT := 42.0
+const PADDOCK_ICON_SIZE := 34.0
+const PADDOCK_BADGE_SIZE := 28.0
+const PADDOCK_DIALOG_WIDTH := 900.0
+## 窓の中のプルの詳細の高さ（オフラインのレース選択の詳細に近い高さにして、バーを読みやすくする）と、プル選択の窓の幅。
+const DETAIL_DIALOG_HEIGHT := 440.0
+const PICK_DIALOG_WIDTH := 600.0
+const PADDOCK_PERSON_WIDTH := 240.0
+## 部屋の紹介の入力欄の高さ（3行ぶん）。
+const DESCRIPTION_EDIT_HEIGHT := 112.0
 const COLOR_DIALOG := Color(0.07, 0.1, 0.16, 0.98)
 const COLOR_DIALOG_SHADE := Color(0.0, 0.0, 0.0, 0.55)
 
@@ -120,6 +166,12 @@ var _default_server_radio: CheckBox
 var _custom_server_radio: CheckBox
 var _server_edit: LineEdit
 var _connect_button: Button
+var _local_server_card: Control
+var _local_server_button: Button
+var _local_server_address: Label
+## このPCのサーバーを起動してからの秒数（つながるまで。待っていなければ -1）。
+var _local_wait_s := -1.0
+var _local_retry_s := 0.0
 ## （2）部屋の一覧。
 var _lobby_box: VBoxContainer
 var _rooms_title: Label
@@ -129,7 +181,7 @@ var _open_create_button: Button
 var _create_dialog: Control
 var _room_name_edit: LineEdit
 var _create_password_edit: LineEdit
-var _create_description_edit: LineEdit
+var _create_description_edit: TextEdit
 ## パスワードを聞く窓（施錠の印の部屋を選んだとき）。
 var _join_dialog: Control
 var _join_icon: Control
@@ -142,50 +194,25 @@ var _join_password_row: HBoxContainer
 var _join_password_edit: LineEdit
 ## パスワードを聞いている部屋の番号。
 var _joining_room_id := 0
-## （3）部屋の中。
-var _room_box: HBoxContainer
-var _room_box_outer: VBoxContainer
+var _room_header: VBoxContainer
+var _room_name_row: HBoxContainer
 var _room_title: Label
 var _room_lock: Control
+var _room_info: Label
+var _step_pills: Array[PanelContainer] = []
+var _step_lines: Array[ColorRect] = []
 ## 距離のボタン（オフラインと同じ、横並び）。距離 → ボタン。
 var _distance_buttons := {}
 var _distance_step_buttons: Array[Button] = []
-## 1〜8枠の行（オフラインのレース選択と同じ部品）と、その右の「出す」ボタン。
-var _slots: Array[Control] = []
-var _badges: Array[Control] = []
-var _confirm_marks: Array[Label] = []
-var _menu_buttons: Array[Button] = []
-## 行ごとの中身（その行が、だれ・何を出しているか）。{"peer_id": 人の番号（CPU・閉じた行は0）, "pururin_id": 個体}
-var _row_infos: Array = []
 ## 出走表で、カーソルを置いている枠（入れ替えの相手を選ぶため。無ければ -1）。
 var _selected_gate := -1
 ## 案内を出した、いまの場面（部屋か、出走表か）。
 var _shown_phase := ""
 ## 最後に出した、部屋のできごとの知らせと、その時刻。
 var _notice_text := ""
-var _notice_msec := -100000
-const NOTICE_KEEP_MSEC := 3000
-## 枠の下の板：部屋の決めごと（部屋）と、枠順の操作（出走表）。
-var _rules_card: Control
-var _gates_card: Control
-var _gates_note: Label
-var _gate_buttons: Array[Button] = []
-var _confirm_button: Button
 ## いちばん下の行（「戻る」）。部屋の中では出さない（「部屋を出る」と「確定」は、右の列の下に置く）。
 var _bottom_row: Control
 var _filler: Control
-var _leave_button: Button
-## 全員が確定したときに、主に出す窓（「出走表へ」「レース開始」を押してもらう）。
-var _advance_dialog: Control
-var _advance_title: Label
-var _advance_note: Label
-var _advance_button: Button
-## 主が、その窓を「まだ進まない」で閉じたか（だれかの確定が外れると、戻る）。
-var _advance_dismissed := false
-## ぷるりんの板の右上の、その人（CPUはトレーナー）の画像。押すと、その人の紹介の窓が出る。
-var _person_button: Button
-var _person_icon: Control
-var _person_portrait: TextureRect
 ## いま右に出している人。{"peer_id": 人の番号（CPUは0）, "trainer_id": CPUトレーナー（人は空）}。だれも出していなければ空。
 var _shown_person := {}
 ## 紹介の窓。
@@ -195,35 +222,14 @@ var _profile_portrait: TextureRect
 var _profile_name: Label
 var _profile_note: Label
 var _profile_introduction: Label
-## 紹介の窓の「トレーナーを変える」（主が、CPUの紹介を見ているときだけ出る）。
-var _profile_trainer_button: Button
-## CPUトレーナーを選ぶ窓（オフラインのレース選択と同じもの）。
-var _trainer_picker: Control
-## 一覧の窓・トレーナーの窓で、いま選んでいる行（自分の行か、CPUの行）。
-var _picking_row := -1
-## 人の画像の下の、「(Y) 詳細」の案内。
-var _person_hint: Control
-## マウスを乗せている行（無ければ -1）。乗せているあいだ、その行のぷるりんを、右の詳細に出す。
-var _hovered_row := -1
 ## 退出させる窓と、その相手の番号。
 var _kick_dialog: Control
 var _kick_dialog_title: Label
 var _kick_target := 0
-## ひとこと。
-var _chat_log: RichTextLabel
-var _chat_edit: LineEdit
-## 自分のぷるりんの詳細（能力・見た目）。一覧の窓を開いているあいだは、カーソルの個体を出す。
-var _detail: Control
 var _picker: Control
-var _field_size_label: Label
-var _cpu_label: Label
-var _scenery_label: Label
 ## 部屋の主だけが押せるボタン（主でない人には、押せなくして見せる）。
-var _host_buttons: Array[Button] = []
-var _open_password_button: Button
-var _open_description_button: Button
 var _description_dialog: Control
-var _description_edit: LineEdit
+var _description_edit: TextEdit
 ## パスワードを確かめる・変える窓（部屋の主だけ）。
 var _change_dialog: Control
 var _current_password_label: Label
@@ -235,6 +241,91 @@ var _light_scenery := RaceSession.is_course_only()
 var _room := {}
 var _members: Array = []
 var _connect_wait_s := -1.0
+## 待機室。
+var _waiting_box: HBoxContainer
+## 待機室・レース設定では、上の案内（_status）の代わりに、左の本体の上に案内を出す。
+var _waiting_status: Label
+var _waiting_race_band: PanelContainer
+var _waiting_race_text: Label
+var _settings_status: Label
+var _waiting_description: Label
+var _waiting_host_buttons: Array[Button] = []
+## 待機室の席（1席ぶんは {button, icon, portrait, name, mark, kick, peer＝その人の番号。空き席は0}）。
+var _seats: Array = []
+## 席・部屋の紹介文の吹き出しと、いま出している相手。
+var _hover_popup: PanelContainer
+var _hover_popup_label: Label
+var _hover_target: Control
+## ルームチャットの記録の欄（待機室・レース設定・ぷるりんを選ぶ所の、全部）。
+var _chat_logs: Array[RichTextLabel] = []
+var _ready_button: Button
+var _waiting_leave_button: Button
+var _race_open_button: Button
+var _waiting_note: Label
+var _lobby_chat_log: RichTextLabel
+var _lobby_chat_edit: LineEdit
+var _race_open_popup: CenterContainer
+var _race_open_label: Label
+var _race_open_until_msec := 0
+var _race_open_pending := false
+## 画面の切り替えを、知らせを出しているあいだ待たせる。出している画面（"waiting"・"settings"・"pick"・"paddock"）と、待たせる終わりの時刻。
+var _held_view := ""
+var _hold_until_msec := 0
+## さっきまで出していた画面（切り替わったかを見るため）。
+var _last_view := ""
+## 自分で「待機室へ戻る」を押した（自分の操作なので、知らせを出さずに、すぐ戻る）。
+var _self_back := false
+## さっきまで、部屋でレースが走っていたか（レースが終わって待機室へ戻るときは、知らせを出さない）。
+var _last_racing := false
+## レースの始まりの知らせを出してから、レースの画面へ進むまで、届いた中身を持っておく。
+var _race_start_data := {}
+## レース設定。
+var _settings_box: HBoxContainer
+var _settings_note: Label
+var _settings_seats: Array = []
+var _settings_chat_edit: LineEdit
+## プル選択。
+## パドック。
+var _paddock_box: HBoxContainer
+var _paddock_info: Label
+var _paddock_status: Label
+var _paddock_rows: Array = []
+var _paddock_gate_buttons: Array[Button] = []
+var _paddock_back_button: Button
+var _paddock_confirm_button: Button
+var _paddock_start_button: Button
+var _paddock_chat_edit: LineEdit
+var _paddock_dialog: Control
+var _paddock_dialog_title: Label
+var _paddock_person_icon: Control
+var _paddock_person_portrait: TextureRect
+var _paddock_person_name: Label
+var _paddock_person_note: Label
+var _paddock_person_intro: Label
+var _paddock_dialog_detail: Control
+var _pick_box: HBoxContainer
+var _pick_info: Label
+var _pick_status: Label
+var _pick_rows: Array = []
+var _pick_back_button: Button
+var _pick_confirm_button: Button
+var _pick_paddock_button: Button
+var _pick_chat_edit: LineEdit
+var _pick_dialog: Control
+var _pick_dialog_title: Label
+var _pick_dialog_detail: Control
+var _pick_dialog_empty: Label
+var _pick_change_button: Button
+## いまステータスの窓・プル選択の窓で見ている席（{"kind": "self"・"cpu"・"player", "cpu_index", "row", "pururin_id"}）。
+var _pick_target := {}
+## プル選択の窓で押した、選びかけのプル（ステータスの窓で確かめてから決める）。空なら、今の席のプルを見ているだけ。
+var _pick_candidate := ""
+## プル選択に入ったとき、いつものプルを1回だけ送ったか。
+var _auto_pick_sent := false
+var _settings_count: Label
+var _settings_leave_button: Button
+var _settings_back_button: Button
+var _settings_next_button: Button
 
 
 func _ready() -> void:
@@ -243,6 +334,8 @@ func _ready() -> void:
 	_client.message_received.connect(_on_message)
 	_client.closed.connect(_on_closed)
 	_build()
+	_last_view = live_view()
+	_last_racing = bool(OnlineSession.room.get("racing", false)) if OnlineSession.in_room() else false
 	# レースから戻ってきたときは、部屋に入ったまま。
 	if OnlineSession.in_room():
 		# レースから戻ってきた。ほかの人が、まだ結果を見ているあいだは、次の準備ができない。
@@ -280,24 +373,33 @@ func _build() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 3)
 	panel.add_child(column)
+	# いちばん上：小さく「ともだち対戦」。右に、ほかの人に見える自分の名前。
 	var top := HBoxContainer.new()
 	column.add_child(top)
 	top.add_theme_constant_override("separation", 14)
-	var heading := MenuStyle.label("ともだち対戦", 26)
+	var heading := MenuStyle.label("ともだち対戦", 17, MenuStyle.COLOR_DIM)
+	heading.name = "Heading"
+	heading.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	top.add_child(heading)
-	# 部屋の中では、見出しの横に、部屋の名前（と、施錠の印）を出す。
-	var title_row := HBoxContainer.new()
-	title_row.name = "RoomTitleRow"
-	title_row.add_theme_constant_override("separation", 8)
-	title_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top.add_child(title_row)
-	_room_title = MenuStyle.label("", 22, MenuStyle.COLOR_FOCUS)
+	# 部屋の中では、となりに、部屋の名前（大きく）・施錠の印・部屋主と人数。
+	_room_name_row = HBoxContainer.new()
+	_room_name_row.name = "RoomNameRow"
+	_room_name_row.add_theme_constant_override("separation", 12)
+	_room_name_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(_room_name_row)
+	_room_title = MenuStyle.label("", 26, MenuStyle.COLOR_FOCUS)
 	_room_title.name = "RoomTitle"
-	title_row.add_child(_room_title)
+	_room_name_row.add_child(_room_title)
 	_room_lock = LockMark.new()
 	_room_lock.name = "RoomLock"
 	_room_lock.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	title_row.add_child(_room_lock)
+	_room_name_row.add_child(_room_lock)
+	_room_info = MenuStyle.label("", 15, MenuStyle.COLOR_DIM)
+	_room_info.name = "RoomInfo"
+	_room_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_room_info.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_room_info.clip_text = true
+	_room_name_row.add_child(_room_info)
 	# 右上：オンラインで、ほかの人に見える、自分の名前（トレーナー登録の名前）。
 	var chip := PanelContainer.new()
 	chip.name = "NameChip"
@@ -306,10 +408,11 @@ func _build() -> void:
 	var chip_row := HBoxContainer.new()
 	chip_row.add_theme_constant_override("separation", 10)
 	chip.add_child(chip_row)
-	chip_row.add_child(MenuStyle.label("あなたの名前", 15, MenuStyle.COLOR_DIM))
-	var name_label := MenuStyle.label(TrainerProfile.trainer_name(), 20)
+	chip_row.add_child(MenuStyle.label("あなた", 14, MenuStyle.COLOR_DIM))
+	var name_label := MenuStyle.label(TrainerProfile.trainer_name(), 18)
 	name_label.name = "NameLabel"
 	chip_row.add_child(name_label)
+	_build_room_header(column)
 	_status = MenuStyle.label("", 18)
 	_status.name = "Status"
 	_status.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
@@ -318,7 +421,10 @@ func _build() -> void:
 	column.add_child(_status)
 	_build_connect(column)
 	_build_lobby(column)
-	_build_room(column)
+	_build_waiting(column)
+	_build_race_settings(column)
+	_build_pick(column)
+	_build_paddock(column)
 	# つなぐ前・部屋の一覧では、下の「戻る」を、板の下に押し付けるための、すき間。部屋の中では、出さない（部屋の中身が、板の下まで使う）。
 	_filler = Control.new()
 	_filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -329,7 +435,7 @@ func _build() -> void:
 	_back_button.pressed.connect(go_back)
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
-	# いちばん下の行：左に「戻る」、右に「レース開始」（部屋の主にだけ出る）。
+	# いちばん下の行：左に「戻る」。
 	var bottom := HBoxContainer.new()
 	bottom.name = "BottomRow"
 	column.add_child(bottom)
@@ -339,6 +445,56 @@ func _build() -> void:
 	bottom.add_child(bottom_gap)
 	_bottom_row = bottom
 	_build_dialogs()
+
+
+## 部屋の中で、上に出す見出し：部屋の名前（施錠の印）・部屋主と人数、その下に、流れの道しるべ（今どこにいるか）。
+func _build_room_header(column: VBoxContainer) -> void:
+	_room_header = VBoxContainer.new()
+	_room_header.name = "RoomHeader"
+	_room_header.add_theme_constant_override("separation", 4)
+	column.add_child(_room_header)
+	var steps := HBoxContainer.new()
+	steps.name = "RoomSteps"
+	steps.add_theme_constant_override("separation", 6)
+	_room_header.add_child(steps)
+	for index in ROOM_STEPS.size():
+		if index > 0:
+			var line := ColorRect.new()
+			line.custom_minimum_size = Vector2(STEP_LINE_WIDTH, 2.0)
+			line.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			steps.add_child(line)
+			_step_lines.append(line)
+		var pill := PanelContainer.new()
+		pill.name = "Step%d" % (index + 1)
+		pill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		steps.add_child(pill)
+		var label := MenuStyle.label("%d  %s" % [index + 1, str(ROOM_STEPS[index])], 15)
+		label.name = "StepLabel"
+		# 明るい札の上でも、文字がにじまないよう、ふちどりは付けない。
+		label.add_theme_constant_override("outline_size", 0)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pill.add_child(label)
+		_step_pills.append(pill)
+
+
+## 部屋の中の見出しを出し直す。view は今の画面（"waiting"・"settings"・"pick"・"paddock"）。
+func _show_room_header(view: String) -> void:
+	_room_title.text = str(_room.get("room", ""))
+	_room_lock.visible = bool(_room.get("locked", false))
+	var count := OnlineSession.all_members().size()
+	_room_info.text = "部屋主 %s　%d／%d人" % [member_name(int(_room.get("host", 0))), count, Protocol.ROOM_CAPACITY]
+	var current := int(VIEW_STEP_INDEX.get(view, 0))
+	for index in _step_pills.size():
+		var pill := _step_pills[index]
+		var label: Label = pill.get_node("StepLabel")
+		var state := "now" if index == current else ("done" if index < current else "next")
+		pill.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_STEP_NOW if state == "now" else COLOR_STEP_OTHER, 14, 14.0, 3.0))
+		label.text = ("✓ " if state == "done" else "%d  " % (index + 1)) + str(ROOM_STEPS[index])
+		label.add_theme_color_override("font_color", MenuStyle.COLOR_OUTLINE if state == "now" else (COLOR_STEP_DONE if state == "done" else Color(MenuStyle.COLOR_DIM, 0.5)))
+		pill.set_meta("state", state)
+	for index in _step_lines.size():
+		_step_lines[index].color = Color(COLOR_STEP_DONE, 0.8) if index < current else Color(1.0, 1.0, 1.0, 0.15)
 
 
 func _build_connect(column: VBoxContainer) -> void:
@@ -370,6 +526,21 @@ func _build_connect(column: VBoxContainer) -> void:
 	_on_server_choice_changed()
 	_connect_button = _big_button(card, "つなぐ", "ConnectButton", connect_to_server, MenuStyle.COLOR_BUTTON)
 	MenuStyle.add_mark(_connect_button, "START", 22.0)
+	# このPCをサーバーにする：サーバーを裏で起動して、自分もそのままつないで遊ぶ。ブラウザ版では出さない。
+	var local := _card(_connect_box, "このPCをサーバーにする")
+	_local_server_card = local.get_parent()
+	_local_server_card.name = "LocalServerCard"
+	_local_server_card.visible = LocalServer.is_supported()
+	var note := MenuStyle.label("このPCでサーバーを動かして、自分もそのまま遊べます。同じWi-Fiの人は、下の場所につなぎます（PC版だけ。ブラウザ版からは、つなげません）。", 15, MenuStyle.COLOR_DIM)
+	note.name = "LocalServerNote"
+	note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	local.add_child(note)
+	_local_server_address = MenuStyle.label("", 15)
+	_local_server_address.name = "LocalServerAddress"
+	_local_server_address.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	local.add_child(_local_server_address)
+	_local_server_button = _big_button(local, "", "LocalServerButton", toggle_local_server, MenuStyle.COLOR_BUTTON_QUIET)
+	_show_local_server()
 
 
 func _server_radio(text: String, node_name: String, group: ButtonGroup) -> CheckBox:
@@ -536,10 +707,11 @@ func _build_dialogs() -> void:
 	_create_password_edit = _field(create_column, "パスワード", "CreatePasswordEdit", "", Protocol.PASSWORD_MAX_LENGTH)
 	_create_password_edit.placeholder_text = "空なら、だれでも入れます"
 	_create_password_edit.text_submitted.connect(func(_text: String) -> void: create_room())
-	_create_description_edit = _field(create_column, "部屋の紹介", "CreateDescriptionEdit", "", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
+	create_column.add_child(MenuStyle.label("部屋の紹介", 20))
+	_create_description_edit = _text_area("CreateDescriptionEdit", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
 	_create_description_edit.placeholder_text = "入る人に見えます（なくても作れます）"
-	_create_description_edit.text_submitted.connect(func(_text: String) -> void: create_room())
-	var note := MenuStyle.label("作った人が、部屋の主になります。主は、距離・出走数・CPUを入れるか・パスワード・部屋の紹介を決められます。", 16, MenuStyle.COLOR_DIM)
+	create_column.add_child(_create_description_edit)
+	var note := MenuStyle.label("作った人が、部屋の主になります。主は、パスワード・部屋の紹介を変えられ、レースを始めるときに、距離と、人の足りない席にCPUを入れるかを決めます。", 16, MenuStyle.COLOR_DIM)
 	note.name = "CreateNote"
 	note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	create_column.add_child(note)
@@ -612,24 +784,12 @@ func _build_dialogs() -> void:
 	var description_parts := _dialog("DescriptionDialog", "部屋の紹介")
 	_description_dialog = description_parts[0]
 	var description_column: VBoxContainer = description_parts[1]
-	_description_edit = _line_edit("DescriptionEdit", "", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
+	_description_edit = _text_area("DescriptionEdit", Protocol.ROOM_DESCRIPTION_MAX_LENGTH)
 	_description_edit.placeholder_text = "入る人に見えます（空なら、紹介なし）"
-	_description_edit.text_submitted.connect(func(_text: String) -> void: change_description())
 	description_column.add_child(_description_edit)
-	var description_note := MenuStyle.label("部屋の一覧から、入る前の人に見える文です。", 16, MenuStyle.COLOR_DIM)
+	var description_note := MenuStyle.label("部屋に入る前の人と、待機室の上に出る文です。", 16, MenuStyle.COLOR_DIM)
 	description_column.add_child(description_note)
 	_dialog_buttons(description_column, "変える", "DescriptionChangeButton", change_description)
-	var advance_parts := _dialog("AdvanceDialog", "")
-	_advance_dialog = advance_parts[0]
-	var advance_column: VBoxContainer = advance_parts[1]
-	_advance_title = advance_column.get_node("Title")
-	_advance_note = MenuStyle.label("", 17, MenuStyle.COLOR_DIM)
-	_advance_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	advance_column.add_child(_advance_note)
-	_dialog_buttons(advance_column, "出走表へ", "AdvanceButton", advance)
-	_advance_button = advance_column.find_child("AdvanceButton", true, false)
-	(advance_column.find_child("AdvanceCancelButton", true, false) as Button).text = "まだ進まない"
-	(advance_column.find_child("AdvanceCancelButton", true, false) as Button).pressed.connect(func() -> void: _advance_dismissed = true)
 	var profile_parts := _dialog("ProfileDialog", "")
 	_profile_dialog = profile_parts[0]
 	var profile_column: VBoxContainer = profile_parts[1]
@@ -662,12 +822,6 @@ func _build_dialogs() -> void:
 	_profile_introduction.name = "ProfileIntroduction"
 	_profile_introduction.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	profile_text.add_child(_profile_introduction)
-	_profile_trainer_button = MenuStyle.button("トレーナーを変える", 18, MenuStyle.COLOR_BUTTON)
-	_profile_trainer_button.name = "ProfileTrainerButton"
-	_profile_trainer_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_profile_trainer_button.pressed.connect(open_trainer_picker)
-	UIAudio.bind_button_sound(_profile_trainer_button, "confirmation")
-	profile_column.add_child(_profile_trainer_button)
 	var profile_close := MenuStyle.button("閉じる", 20, MenuStyle.COLOR_BUTTON_QUIET)
 	profile_close.name = "ProfileCloseButton"
 	profile_close.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
@@ -711,7 +865,7 @@ func open_description_dialog() -> void:
 
 ## 窓の「変える」：部屋の紹介を、入力らんの文字に変える（部屋の主だけ）。
 func change_description() -> void:
-	_client.send(Protocol.SETTINGS, {"description": _description_edit.text})
+	_client.send(Protocol.SETTINGS, {"description": _description_edit.text.replace("\n", " ")})
 	_set_status("部屋の紹介を変えました。" if not _description_edit.text.strip_edges().is_empty() else "部屋の紹介を空にしました。")
 	close_dialogs()
 
@@ -723,8 +877,10 @@ func close_dialogs() -> void:
 	_change_dialog.visible = false
 	_description_dialog.visible = false
 	_kick_dialog.visible = false
-	_advance_dialog.visible = false
 	_profile_dialog.visible = false
+	_pick_dialog.visible = false
+	_paddock_dialog.visible = false
+	_pick_candidate = ""
 	_kick_target = 0
 	_joining_room_id = 0
 	_join_password_edit.text = ""
@@ -732,243 +888,25 @@ func close_dialogs() -> void:
 
 
 func is_dialog_open() -> bool:
-	return _create_dialog.visible or _join_dialog.visible or _change_dialog.visible or _description_dialog.visible or _kick_dialog.visible or _advance_dialog.visible or _profile_dialog.visible
+	return _create_dialog.visible or _join_dialog.visible or _change_dialog.visible or _description_dialog.visible or _kick_dialog.visible or _profile_dialog.visible or _pick_dialog.visible or _paddock_dialog.visible
 
 
-func _build_room(column: VBoxContainer) -> void:
-	# 並びは、オフラインのレース選択に合わせる：上に距離、左に出走の行、右にぷるりんの詳細。
-	# 同じ並びを、2つの場面で使う。「部屋」＝だれが何を選んだか（枠順は出さない）。「出走表」＝枠順つきの全出走。
-	_room_box_outer = VBoxContainer.new()
-	_room_box_outer.name = "RoomBox"
-	_room_box_outer.add_theme_constant_override("separation", 6)
-	_room_box_outer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(_room_box_outer)
-	_room_box_outer.add_child(_build_distance_row())
-	_room_box = HBoxContainer.new()
-	_room_box.name = "RoomColumns"
-	_room_box.add_theme_constant_override("separation", COLUMN_GAP - 8)
-	_room_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_room_box_outer.add_child(_room_box)
-	var left := VBoxContainer.new()
-	left.name = "SlotColumn"
-	left.custom_minimum_size = Vector2(ROOM_LEFT_WIDTH, 0.0)
-	left.add_theme_constant_override("separation", 1)
-	_room_box.add_child(left)
-	for slot in RaceSession.SLOT_COUNT:
-		var line := HBoxContainer.new()
-		line.add_theme_constant_override("separation", 6)
-		left.add_child(line)
-		# 枠番号の札は、出走表でだけ出す。
-		var badge: Control = GateBadge.new()
-		badge.call("setup", slot, GATE_BADGE_SIZE)
-		line.add_child(badge)
-		_badges.append(badge)
-		var row: Control = PururinSlot.new()
-		row.call("setup", slot)
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.connect("cycle_requested", func(row_index: int, direction: int, _source: String) -> void: step_row_pururin(row_index, direction))
-		row.connect("pick_requested", open_picker_for_row)
-		# X：CPUの行を「おまかせ」に戻す。Y：その行の人（CPUはトレーナー）の紹介。
-		row.connect("clear_requested", clear_cpu_row)
-		row.connect("force_requested", func(row_index: int) -> void:
-			_on_row_focused(row_index)
-			open_profile_dialog())
-		row.connect("slot_focused", _on_row_focused)
-		# マウスを乗せているあいだも、その行の人とぷるりんを、右に出す。
-		row.mouse_entered.connect(_on_row_hovered.bind(slot))
-		row.mouse_exited.connect(_on_row_unhovered.bind(slot))
-		line.add_child(row)
-		_slots.append(row)
-		# 確定した人の行に出す印。
-		var mark := Label.new()
-		mark.name = "Confirmed%d" % (slot + 1)
-		mark.text = "確定"
-		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		mark.add_theme_font_size_override("font_size", 13)
-		mark.add_theme_color_override("font_color", MenuStyle.COLOR_OUTLINE)
-		mark.add_theme_stylebox_override("normal", MenuStyle.box(COLOR_CONFIRMED, 6, 5.0, 1.0))
-		mark.custom_minimum_size = Vector2(CONFIRM_BADGE_WIDTH, 0.0)
-		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		line.add_child(mark)
-		_confirm_marks.append(mark)
-		# 部屋の主にだけ出る、小さな「︙」。押すと、その人を退出させるかを確かめる窓が出る。
-		var menu := Button.new()
-		menu.name = "MemberMenu%d" % (slot + 1)
-		menu.text = "︙"
-		menu.flat = true
-		menu.focus_mode = Control.FOCUS_NONE
-		menu.tooltip_text = "この人について"
-		menu.add_theme_font_size_override("font_size", 16)
-		menu.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
-		menu.custom_minimum_size = Vector2(MEMBER_MENU_WIDTH, 26.0)
-		menu.pressed.connect(open_kick_dialog.bind(slot))
-		line.add_child(menu)
-		_menu_buttons.append(menu)
-		_row_infos.append({"peer_id": 0, "pururin_id": ""})
-	# 行の下：部屋では、決めごと（出走数・CPU・パスワード。主だけが変えられる）と、自分の画面の画質を、1行に小さく並べる。
-	var rules := _card(left, "")
-	_rules_card = rules.get_parent()
-	var rules_row := HBoxContainer.new()
-	rules_row.name = "RulesRow"
-	rules_row.add_theme_constant_override("separation", 10)
-	rules.add_child(rules_row)
-	_field_size_label = _mini_chooser(rules_row, "出走数", "FieldSize", step_field_size, 40.0, _host_buttons)
-	_cpu_label = _mini_chooser(rules_row, "CPU", "Cpu", step_cpu, 40.0, _host_buttons)
-	_scenery_label = _mini_chooser(rules_row, "画質", "Scenery", step_scenery, 40.0)
-	_open_password_button = MenuStyle.button("パスワード", 14, MenuStyle.COLOR_BUTTON_QUIET)
-	_open_password_button.name = "OpenPasswordButton"
-	_open_password_button.custom_minimum_size = Vector2(0.0, MINI_ARROW_SIZE.y)
-	_open_password_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_compact(_open_password_button, 1.0, 6.0)
-	_open_password_button.pressed.connect(open_password_change_dialog)
-	UIAudio.bind_button_sound(_open_password_button, "confirmation")
-	rules_row.add_child(_open_password_button)
-	_open_description_button = MenuStyle.button("紹介", 14, MenuStyle.COLOR_BUTTON_QUIET)
-	_open_description_button.name = "OpenDescriptionButton"
-	_open_description_button.custom_minimum_size = Vector2(0.0, MINI_ARROW_SIZE.y)
-	_open_description_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_compact(_open_description_button, 1.0, 6.0)
-	_open_description_button.pressed.connect(open_description_dialog)
-	UIAudio.bind_button_sound(_open_description_button, "confirmation")
-	rules_row.add_child(_open_description_button)
-	# 出走表では、枠順の操作（主だけ）。
-	var gates := _card(left, "")
-	_gates_card = gates.get_parent()
-	_gates_note = MenuStyle.label("", 16, MenuStyle.COLOR_DIM)
-	_gates_note.name = "GatesNote"
-	_gates_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
-	gates.add_child(_gates_note)
-	var gate_row := HBoxContainer.new()
-	gate_row.add_theme_constant_override("separation", 8)
-	gates.add_child(gate_row)
-	for spec: Array in [["くじを引き直す", "ShuffleButton", shuffle_gates], ["▲ 上へ", "GateUpButton", move_selected_gate.bind(-1)], ["▼ 下へ", "GateDownButton", move_selected_gate.bind(1)], ["選び直す", "BackToRoomButton", back_to_room_phase]]:
-		var button := MenuStyle.button(str(spec[0]), 16, MenuStyle.COLOR_BUTTON_QUIET)
-		button.name = str(spec[1])
-		button.custom_minimum_size = Vector2(0.0, MINI_ARROW_SIZE.y)
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.tooltip_text = {"ShuffleButton": "枠順のくじを、引き直す", "GateUpButton": "選んでいる行を、上の枠と入れ替える", "GateDownButton": "選んでいる行を、下の枠と入れ替える", "BackToRoomButton": "全員が、ぷるりんを選ぶ所へ戻る"}[str(spec[1])]
-		_compact(button, 1.0, 4.0)
-		button.pressed.connect(spec[2])
-		UIAudio.bind_button_sound(button, "confirmation")
-		gate_row.add_child(button)
-		_gate_buttons.append(button)
-	# ひとこと（部屋でも、出走表でも、みんなで話せる）。左の列の、残りの高さを全部使う。
-	var chat := _card(left, "")
-	(chat.get_parent() as Control).size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_chat_log = RichTextLabel.new()
-	_chat_log.name = "ChatLog"
-	_chat_log.custom_minimum_size = Vector2(0.0, CHAT_LOG_HEIGHT)
-	_chat_log.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_chat_log.scroll_following = true
-	_chat_log.add_theme_font_size_override("normal_font_size", 15)
-	_chat_log.mouse_filter = Control.MOUSE_FILTER_PASS
-	chat.add_child(_chat_log)
-	var chat_row := HBoxContainer.new()
-	chat_row.add_theme_constant_override("separation", 8)
-	chat.add_child(chat_row)
-	_chat_edit = _line_edit("ChatEdit", "", OnlineConfig.chat_max_length())
-	_chat_edit.placeholder_text = "ひとこと（Enterで送る）"
-	_chat_edit.text_submitted.connect(func(_text: String) -> void: send_chat())
-	chat_row.add_child(_chat_edit)
-	var send := MenuStyle.button("送る", 16, MenuStyle.COLOR_BUTTON)
-	send.name = "ChatSendButton"
-	send.custom_minimum_size = Vector2(72.0, FIELD_HEIGHT)
-	_compact(send, 2.0, 8.0)
-	send.pressed.connect(send_chat)
-	chat_row.add_child(send)
-	var right := _half(_room_box)
-	# 右の列は、全部、ぷるりんの詳細（見た目・属性・脚質・能力）に使う。
-	_detail = PururinDetail.new()
-	_detail.name = "Detail"
-	_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	right.add_child(_detail)
-	# 板の右上のすみに、その人（CPUはトレーナー）の画像。押す・カーソルを合わせて決定で、紹介の窓が出る。
-	_person_button = Button.new()
-	_person_button.name = "PersonButton"
-	_person_button.flat = true
-	_person_button.tooltip_text = "この人の紹介を見る"
-	_person_button.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_person_button.offset_left = -PERSON_BUTTON_SIZE - PERSON_BUTTON_MARGIN
-	_person_button.offset_right = -PERSON_BUTTON_MARGIN
-	_person_button.offset_top = PERSON_BUTTON_MARGIN
-	_person_button.offset_bottom = PERSON_BUTTON_MARGIN + PERSON_BUTTON_SIZE
-	_person_button.add_theme_stylebox_override("focus", MenuStyle.focus_box(12))
-	_person_button.pressed.connect(open_profile_dialog)
-	UIAudio.bind_button_sound(_person_button, "confirmation")
-	_detail.add_child(_person_button)
-	_person_icon = TrainerIcon.new()
-	_person_icon.name = "PersonIcon"
-	_person_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_person_button.add_child(_person_icon)
-	_person_portrait = _portrait_rect("PersonPortrait")
-	_person_button.add_child(_person_portrait)
-	# 画像の下に、「(Y) 詳細」。Yボタン（キーボードはS）でも、紹介の窓が開く。
-	var hint := HBoxContainer.new()
-	hint.name = "PersonHint"
-	hint.alignment = BoxContainer.ALIGNMENT_CENTER
-	hint.add_theme_constant_override("separation", 4)
-	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	hint.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	hint.offset_left = -PERSON_BUTTON_SIZE - PERSON_BUTTON_MARGIN
-	hint.offset_right = -PERSON_BUTTON_MARGIN
-	hint.offset_top = PERSON_BUTTON_MARGIN + PERSON_BUTTON_SIZE + 2.0
-	hint.offset_bottom = hint.offset_top + 20.0
-	hint.add_child(MenuStyle.mark("Y", 18.0))
-	hint.add_child(MenuStyle.label("詳細", 14, MenuStyle.COLOR_DIM))
-	_detail.add_child(hint)
-	_person_hint = hint
-	# 右の列の下：小さめの「部屋を出る」と、「確定」。左の列（ひとこと）は、板の下まで使える。
-	var actions := HBoxContainer.new()
-	actions.name = "RoomActions"
-	actions.add_theme_constant_override("separation", 10)
-	right.add_child(actions)
-	_leave_button = MenuStyle.button("　 部屋を出る", 16, MenuStyle.COLOR_BUTTON_QUIET)
-	_leave_button.name = "LeaveButton"
-	_leave_button.custom_minimum_size = Vector2(LEAVE_BUTTON_WIDTH, BUTTON_HEIGHT)
-	_leave_button.pressed.connect(go_back)
-	UIAudio.bind_button_sound(_leave_button, "back")
-	MenuStyle.add_mark(_leave_button, "B", 22.0)
-	actions.add_child(_leave_button)
-	# 「確定」は全員にある。全員の確定がそろうと、主に「先へ進みますか」の窓が出る。
-	_confirm_button = _big_button(actions, "確定", "ConfirmButton", toggle_confirm, MenuStyle.COLOR_BUTTON)
-	MenuStyle.add_mark(_confirm_button, "START", 22.0)
-	_confirm_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	# ぷるりんの一覧の窓（オフラインのレース選択と同じもの）。出走の行の上に重ねて出す。
-	_picker = PururinPicker.new()
-	_picker.name = "Picker"
-	add_child(_picker)
-	_picker.connect("picked", _on_picker_picked)
-	_picker.connect("tile_focused", _on_picker_tile_focused)
-	_picker.connect("closed", _on_picker_closed)
-	_trainer_picker = TrainerPicker.new()
-	_trainer_picker.name = "TrainerPicker"
-	_trainer_picker.visible = false
-	add_child(_trainer_picker)
-	_trainer_picker.picked.connect(_on_trainer_picked)
-	_trainer_picker.closed.connect(func() -> void:
-		if _picking_row >= 0 and _slots[_picking_row].focus_mode != Control.FOCUS_NONE:
-			_slots[_picking_row].grab_focus())
-
-
-## 距離は、横に並べたボタンから1つ選ぶ（オフラインのレース選択と同じ見た目・同じ操作）。変えられるのは、部屋の主だけ。
-## 左右で動かすと、そのまま選ばれる（決定を押さなくてよい）。両端の「‹ L1」「R1 ›」と、ゲームパッドの L1・R1 でも動く。
 func _build_distance_row() -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.name = "DistanceRow"
-	row.add_theme_constant_override("separation", 10)
-	var caption := MenuStyle.label("距離", 20, MenuStyle.COLOR_DIM)
-	caption.custom_minimum_size = Vector2(56.0, 0.0)
+	row.add_theme_constant_override("separation", 6)
+	# レース設定の本体（画面の5分の3）に収まるよう、文字と余白は小さめ。
+	var caption := MenuStyle.label("距離", 18, MenuStyle.COLOR_DIM)
 	row.add_child(caption)
 	row.add_child(_distance_step_button(-1))
 	for distance_m: float in RaceSession.supported_distances_m():
-		var button := MenuStyle.button("%d m" % int(distance_m), 20, MenuStyle.COLOR_BUTTON_QUIET)
+		var button := MenuStyle.button("%d m" % int(distance_m), 17, MenuStyle.COLOR_BUTTON_QUIET)
 		button.name = "Distance%d" % int(distance_m)
 		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(0.0, DISTANCE_BUTTON_HEIGHT)
-		_compact(button, 4.0)
+		_compact(button, 4.0, 6.0)
 		for state: String in ["pressed", "hover_pressed"]:
-			button.add_theme_stylebox_override(state, MenuStyle.box(MenuStyle.COLOR_BUTTON_ON, 10, 22.0, 4.0))
+			button.add_theme_stylebox_override(state, MenuStyle.box(MenuStyle.COLOR_BUTTON_ON, 10, 6.0, 4.0))
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.set_meta("ui_audio_focus_sound", "selection_cycle")
 		button.pressed.connect(set_distance.bind(distance_m))
@@ -1026,7 +964,7 @@ static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
 
 ## 部屋の主が、距離を変えられる場面か（部屋の場面だけ。出走表では、変えられない）。
 func can_set_distance() -> bool:
-	return OnlineSession.in_room() and is_host() and not OnlineSession.in_entries()
+	return OnlineSession.in_room() and is_host() and OnlineSession.phase() == Protocol.PHASE_SETTINGS
 
 
 ## 距離のボタンにカーソルが来た：変えられる人なら、そのまま、その距離にする。
@@ -1054,18 +992,6 @@ func step_distance(direction: int, source: String = "gamepad") -> void:
 		(_distance_buttons[float(distances[next])] as Button).grab_focus()
 
 
-## 行の「︙」：その人を退出させるかを確かめる窓を出す（部屋の主だけ）。
-func open_kick_dialog(row_index: int) -> void:
-	var target := int(_row_infos[row_index]["peer_id"])
-	if target == 0 or target == OnlineSession.peer_id or not is_host():
-		return
-	close_dialogs()
-	_kick_target = target
-	_kick_dialog_title.text = "%s さん" % member_name(target)
-	_kick_dialog.visible = true
-
-
-## 退出させる窓の「退出させる」。
 func confirm_kick() -> void:
 	if _kick_target != 0:
 		kick(_kick_target)
@@ -1073,7 +999,7 @@ func confirm_kick() -> void:
 
 
 func member_name(peer_id: int) -> String:
-	for member: Dictionary in _members:
+	for member: Dictionary in OnlineSession.all_members():
 		if int(member["peer_id"]) == peer_id:
 			return str(member["name"])
 	return ""
@@ -1099,7 +1025,15 @@ func _show_person_image(person: Dictionary, icon: Control, portrait: TextureRect
 		var path := str(CpuTrainers.by_id(str(person.get("trainer_id", ""))).get("portrait_path", ""))
 		portrait.texture = load(path) if ResourceLoader.exists(path) else null
 		return
-	var profile: Dictionary = OnlineSession.profiles.get(int(person["peer_id"]), {})
+	var peer_id := int(person["peer_id"])
+	var profile: Dictionary = OnlineSession.profiles.get(peer_id, {})
+	# 紹介がまだ届いていなくても、用意された絵のアイコンなら、部屋のようすに入っている種類と番号で、すぐ出す。
+	if profile.is_empty():
+		for member: Dictionary in OnlineSession.all_members():
+			if int(member["peer_id"]) == peer_id and member.get("icon") is Dictionary:
+				profile = {"kind": str(member["icon"].get("kind", "none")), "id": str(member["icon"].get("id", "")), "texture": null}
+		if str(profile.get("kind", "")) == "file":
+			profile = {}
 	icon.call("show_icon", str(profile.get("kind", "none")), str(profile.get("id", "")), profile.get("texture"))
 
 
@@ -1111,7 +1045,6 @@ func open_profile_dialog() -> void:
 	_show_person_image(_shown_person, _profile_icon, _profile_portrait)
 	var peer_id := int(_shown_person.get("peer_id", 0))
 	# 主は、CPUのトレーナーを、ここから変えられる。
-	_profile_trainer_button.visible = peer_id == 0 and is_host() and _shown_person.has("row")
 	if peer_id == 0:
 		var trainer := CpuTrainers.by_id(str(_shown_person.get("trainer_id", "")))
 		_profile_name.text = str(trainer.get("name", "CPU"))
@@ -1131,217 +1064,21 @@ func open_profile_dialog() -> void:
 	(_profile_dialog.find_child("ProfileCloseButton", true, false) as Button).grab_focus()
 
 
-## 行にカーソルが来た。その行の人とぷるりんを、右に出す。出走表では、入れ替えの相手にもなる。
-func _on_row_focused(row_index: int) -> void:
-	_selected_gate = row_index
-	_show_row_detail(row_index)
-	if OnlineSession.in_entries():
-		_show_gate_controls()
-	# 人の画像から「左」で、この行へ戻れるように、行き先を決め直す。
-	if OnlineSession.in_room():
-		_link_room_focus()
-
-
-func _on_row_hovered(row_index: int) -> void:
-	if int(_row_infos[row_index]["peer_id"]) == 0 and str(_row_infos[row_index]["pururin_id"]).is_empty():
-		return
-	_hovered_row = row_index
-	if not is_picker_open():
-		_show_row_detail(row_index)
-
-
-func _on_row_unhovered(row_index: int) -> void:
-	if _hovered_row != row_index:
-		return
-	_hovered_row = -1
-	if not is_picker_open():
-		_show_current_detail()
-
-
-## 右に出す行：マウスを乗せている行 → カーソルの行 → 自分の行、の順。
-func _show_current_detail() -> void:
-	var row_index := _hovered_row if _hovered_row >= 0 else _selected_gate
-	if row_index < 0 or (int(_row_infos[row_index]["peer_id"]) == 0 and str(_row_infos[row_index]["pururin_id"]).is_empty()):
-		row_index = my_row()
-	if row_index >= 0:
-		_show_row_detail(row_index)
-
-
-## 自分が出ている行（部屋では入った順、出走表では枠順。いなければ -1）。
-func my_row() -> int:
-	for index in _row_infos.size():
-		if int(_row_infos[index]["peer_id"]) == OnlineSession.peer_id:
-			return index
-	return -1
-
-
-## その行のぷるりんを、右に出す。板の右上には、その人（CPUはトレーナー）の画像を出す。
-func _show_row_detail(row_index: int) -> void:
-	var info: Dictionary = _row_infos[row_index]
-	var peer_id := int(info["peer_id"])
-	var pururin_id := str(info["pururin_id"])
-	_detail.call("show_pururin", pururin_id, "", false, false)
-	if peer_id != 0:
-		_show_person({"peer_id": peer_id, "trainer_id": ""})
-	elif not pururin_id.is_empty():
-		_show_person({"peer_id": 0, "trainer_id": str(info.get("trainer_id", "")), "row": row_index})
-	else:
-		_show_person({})
-
-
-## 板の右上の画像を、その人に替える（空の辞書なら、出さない）。
+## 紹介の窓で見せる人を決める（席を押したとき）。
 func _show_person(person: Dictionary) -> void:
 	_shown_person = person
-	_person_button.visible = not person.is_empty()
-	_person_hint.visible = not person.is_empty()
-	if not person.is_empty():
-		_show_person_image(person, _person_icon, _person_portrait)
-
-
-## 「一覧から選ぶ」：ぷるりんの一覧の窓を、左の列の上に開く。右の詳細は、カーソルの個体に替わる。
-func open_picker() -> void:
-	open_picker_for_row(my_row())
-
-
-## その行が、主の決められるCPUの行か（主だけ。部屋では「おまかせ」の行も含む）。
-func is_cpu_row(row_index: int) -> bool:
-	if row_index < 0 or row_index >= _row_infos.size():
-		return false
-	return is_host() and bool(_row_infos[row_index].get("cpu", false))
-
-
-## その行で、ぷるりんを選べるか（部屋の場面の自分の行と、主にとってのCPUの行）。
-func can_choose_row(row_index: int) -> bool:
-	if row_index < 0 or row_index >= _row_infos.size():
-		return false
-	return is_cpu_row(row_index) or (not OnlineSession.in_entries() and int(_row_infos[row_index]["peer_id"]) == OnlineSession.peer_id)
-
-
-## その行のぷるりんを、一覧の窓から選ぶ。
-func open_picker_for_row(row_index: int) -> void:
-	if not can_choose_row(row_index):
-		return
-	close_dialogs()
-	_picking_row = row_index
-	var area := _room_box.get_global_rect()
-	_picker.global_position = area.position + Vector2(0.0, PICKER_MARGIN)
-	_picker.size = Vector2(minf(float(PururinPicker.window_width()), ROOM_LEFT_WIDTH), area.size.y - PICKER_MARGIN * 2.0)
-	_picker.call("open_choices", "CPUのぷるりんを選ぶ" if is_cpu_row(row_index) else "ぷるりんを選ぶ", str(_row_infos[row_index]["pururin_id"]), taken_except(row_index))
 
 
 func is_picker_open() -> bool:
 	return bool(_picker.call("is_open"))
 
 
-## その行のほかで、使われている個体（個体 → その行の番目。0から）。
-func taken_except(row_index: int) -> Dictionary:
-	var taken := {}
-	for index in _row_infos.size():
-		var pururin_id := str(_row_infos[index]["pururin_id"])
-		if index != row_index and not pururin_id.is_empty():
-			taken[pururin_id] = index
-	return taken
-
-
-## ほかの人・CPUが使っている個体（自分の行のほか）。
-func taken_by_others() -> Dictionary:
-	return taken_except(my_row())
-
-
-## その行に、その個体を入れるよう、サーバーに頼む（自分の行＝自分のぷるりん。CPUの行＝主が決める）。
-func send_row_pururin(row_index: int, pururin_id: String) -> void:
-	if not is_cpu_row(row_index):
-		_client.send(Protocol.PICK, {"pururin_id": pururin_id})
-	elif OnlineSession.in_entries():
-		_client.send(Protocol.CPU_PICK, {"gate": row_index, "pururin_id": pururin_id})
-	else:
-		_client.send(Protocol.CPU_PICK, {"index": int(_row_infos[row_index]["cpu_index"]), "pururin_id": pururin_id})
-
-
 func _on_picker_picked(pururin_id: String) -> void:
-	send_row_pururin(_picking_row, pururin_id)
 	_picker.call("close")
+	if not _pick_target.is_empty():
+		_open_pick_candidate(pururin_id)
 
 
-## 行の ◀▶：その行のぷるりんを、次（1）か前（-1）の、空いている個体に替える。
-## 部屋の場面のCPUの行では、「おまかせ」も、並びの中に入る。
-func step_row_pururin(row_index: int, direction: int) -> void:
-	if not can_choose_row(row_index):
-		UIAudio.play_error()
-		return
-	var taken := taken_except(row_index)
-	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
-	if is_cpu_row(row_index) and not OnlineSession.in_entries():
-		ids.push_front("")
-	var index := ids.find(str(_row_infos[row_index]["pururin_id"]))
-	# まだ選んでいないとき、次へ＝最初の個体、前へ＝最後の個体から始める。
-	if index < 0:
-		index = -1 if direction > 0 else ids.size()
-	for _attempt in ids.size():
-		index = posmod(index + direction, ids.size())
-		if not taken.has(ids[index]):
-			send_row_pururin(row_index, ids[index])
-			return
-
-
-## X：CPUの行を「おまかせ」に戻す（主だけ。部屋の場面だけ）。
-func clear_cpu_row(row_index: int) -> void:
-	if not is_cpu_row(row_index) or OnlineSession.in_entries() or str(_row_infos[row_index]["pururin_id"]).is_empty():
-		UIAudio.play_error()
-		return
-	UIAudio.play_clear_selection()
-	send_row_pururin(row_index, "")
-
-
-## 紹介の窓の「トレーナーを変える」：CPUトレーナーを選ぶ窓を開く（主だけ）。
-func open_trainer_picker() -> void:
-	var row_index := int(_shown_person.get("row", -1))
-	if not is_cpu_row(row_index):
-		return
-	close_dialogs()
-	_picking_row = row_index
-	_trainer_picker.size = Vector2(680.0, 540.0)
-	_trainer_picker.position = (get_viewport_rect().size - _trainer_picker.size) * 0.5
-	_trainer_picker.call("open", row_index, str(_row_infos[row_index].get("trainer_id", "")))
-
-
-func is_trainer_picker_open() -> bool:
-	return _trainer_picker.visible
-
-
-func _on_trainer_picked(trainer_id: String) -> void:
-	if is_cpu_row(_picking_row):
-		if OnlineSession.in_entries():
-			_client.send(Protocol.CPU_PICK, {"gate": _picking_row, "trainer_id": trainer_id})
-		else:
-			_client.send(Protocol.CPU_PICK, {"index": int(_row_infos[_picking_row]["cpu_index"]), "trainer_id": trainer_id})
-	_trainer_picker.call("close")
-
-
-func _on_picker_tile_focused(pururin_id: String) -> void:
-	_show_detail(pururin_id)
-
-
-func _on_picker_closed() -> void:
-	_show_current_detail()
-	var mine := my_slot()
-	if mine >= 0:
-		_slots[mine].grab_focus()
-
-
-## 右の詳細に、その個体を出す。ほかの人が選んでいる個体なら、「◯◯が使用中」を付ける（奪えないので、強制選択のボタンは出さない）。
-func _show_detail(pururin_id: String) -> void:
-	# 一覧の窓で見ているあいだは、だれのぷるりんでもないので、人の画像は出さない。
-	if is_picker_open():
-		_show_person({})
-	var holder := ""
-	for member: Dictionary in _members:
-		if int(member["peer_id"]) != OnlineSession.peer_id and str(member["pururin_id"]) == pururin_id and not pururin_id.is_empty():
-			holder = str(member["name"])
-	_detail.call("show_pururin", pururin_id, holder, false, false)
-
-
-## ボタンの中の余白を詰める（行の高さを抑えるため）。
 static func _compact(button: Button, margin_y: float, margin_x: float = -1.0) -> void:
 	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
 		var box := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
@@ -1353,16 +1090,6 @@ static func _compact(button: Button, margin_y: float, margin_x: float = -1.0) ->
 			box.content_margin_left = margin_x
 			box.content_margin_right = margin_x
 		button.add_theme_stylebox_override(state, box)
-
-
-## 左右2列の、1列ぶん。
-func _half(parent: HBoxContainer) -> VBoxContainer:
-	var half := VBoxContainer.new()
-	half.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	half.size_flags_stretch_ratio = 1.0
-	half.add_theme_constant_override("separation", 4)
-	parent.add_child(half)
-	return half
 
 
 func _big_button(parent: Control, text: String, node_name: String, action: Callable, color: Color) -> Button:
@@ -1386,6 +1113,22 @@ func _line_edit(node_name: String, text: String, max_length: int) -> LineEdit:
 	return edit
 
 
+## 3行ぶんの入力らん（部屋の紹介）。決めた字数を超えたぶんは、切る。
+func _text_area(node_name: String, max_length: int) -> TextEdit:
+	var edit := TextEdit.new()
+	edit.name = node_name
+	edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	edit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	edit.custom_minimum_size = Vector2(0.0, DESCRIPTION_EDIT_HEIGHT)
+	edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	edit.add_theme_font_size_override("font_size", 18)
+	edit.text_changed.connect(func() -> void:
+		if edit.text.length() > max_length:
+			edit.text = edit.text.left(max_length)
+			edit.set_caret_column(edit.text.length()))
+	return edit
+
+
 ## 「名前　入力らん」の1行を足して、入力らんを返す。
 func _field(column: VBoxContainer, title: String, node_name: String, text: String, max_length: int) -> LineEdit:
 	var row := HBoxContainer.new()
@@ -1399,57 +1142,20 @@ func _field(column: VBoxContainer, title: String, node_name: String, text: Strin
 	return edit
 
 
-## 小さい「名前 ◀ 値 ▶」を、横の並びに足して、値のラベルを返す（部屋の決めごとの行）。押すと step に -1 か 1 を渡す。
-func _mini_chooser(parent: HBoxContainer, title: String, node_name: String, step: Callable, value_width: float, buttons: Array[Button] = []) -> Label:
-	var group := HBoxContainer.new()
-	group.add_theme_constant_override("separation", 3)
-	parent.add_child(group)
-	group.add_child(MenuStyle.label(title, 14, MenuStyle.COLOR_DIM))
-	var value := MenuStyle.label("", 15)
-	value.name = node_name + "Label"
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	value.custom_minimum_size = Vector2(value_width, 0.0)
-	for direction: int in [-1, 1]:
-		var button := MenuStyle.button("◀" if direction < 0 else "▶", 12, MenuStyle.COLOR_BUTTON_QUIET)
-		button.name = node_name + ("Previous" if direction < 0 else "Next")
-		_compact(button, 1.0, 4.0)
-		button.custom_minimum_size = MINI_ARROW_SIZE
-		button.pressed.connect(step.bind(direction))
-		UIAudio.bind_button_sound(button, "confirmation")
-		buttons.append(button)
-		if direction > 0:
-			group.add_child(value)
-		group.add_child(button)
-	return value
-
-
-## 「名前　◀　今の値　▶」の1行を足して、今の値のラベルを返す。押すと step に -1 か 1 を渡す。
-func _chooser(parent: VBoxContainer, title: String, node_name: String, step: Callable, buttons: Array[Button] = []) -> Label:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	parent.add_child(row)
-	var label := MenuStyle.label(title, 20)
-	label.custom_minimum_size = Vector2(LABEL_WIDTH, 0.0)
-	row.add_child(label)
-	var value := MenuStyle.label("", 20)
-	value.name = node_name + "Label"
-	value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for direction: int in [-1, 1]:
-		var button := MenuStyle.button("◀" if direction < 0 else "▶", 20, MenuStyle.COLOR_BUTTON_QUIET)
-		button.name = node_name + ("Previous" if direction < 0 else "Next")
-		button.custom_minimum_size = ARROW_BUTTON_SIZE
-		_compact(button, 2.0)
-		button.pressed.connect(step.bind(direction))
-		UIAudio.bind_button_sound(button, "confirmation")
-		buttons.append(button)
-		if direction > 0:
-			row.add_child(value)
-		row.add_child(button)
-	return value
-
-
 func _process(delta: float) -> void:
+	_wait_for_local_server(delta)
+	if _race_open_popup.visible and Time.get_ticks_msec() >= _race_open_until_msec:
+		_race_open_popup.visible = false
+		if not _race_start_data.is_empty():
+			var data := _race_start_data
+			_race_start_data = {}
+			_go_to_race(data)
+			return
+	# 知らせを出し終えたら、待たせていた画面の切り替えをする。
+	if not _held_view.is_empty() and Time.get_ticks_msec() >= _hold_until_msec:
+		_held_view = ""
+		_set_status(phase_guide(OnlineSession.phase()))
+		_refresh()
 	# つながるのを待つのは、決めた秒数まで。
 	if _connect_wait_s >= 0.0:
 		_connect_wait_s += delta
@@ -1461,6 +1167,68 @@ func _process(delta: float) -> void:
 
 
 # ---------------------------------------------------------------- つなぐ・部屋の一覧
+
+## 「このPCをサーバーにする」のボタン：止まっていれば起動して、つなぐ。動いていれば、止める。
+func toggle_local_server() -> void:
+	if LocalServer.is_running():
+		stop_local_server()
+	else:
+		start_local_server()
+
+
+## このPCのサーバーを起動する。起動しきるまで、つなぎ直しながら待つ。
+func start_local_server() -> void:
+	if LocalServer.start(get_tree()) != OK:
+		_set_status("このPCでサーバーを起動できませんでした。")
+		return
+	_local_wait_s = 0.0
+	_local_retry_s = LOCAL_SERVER_RETRY_S
+	_set_status("このPCでサーバーを起動しています…")
+	_show_local_server()
+
+
+## このPCのサーバーを止める（つないでいたら、切る）。
+func stop_local_server() -> void:
+	_local_wait_s = -1.0
+	if _client.is_open():
+		_client.disconnect_from_server()
+	LocalServer.stop()
+	_set_status("このPCのサーバーを止めました。")
+	_show_local_server()
+
+
+func _wait_for_local_server(delta: float) -> void:
+	if _local_wait_s < 0.0 or _client.is_open():
+		return
+	_local_wait_s += delta
+	_local_retry_s -= delta
+	if _local_wait_s >= LOCAL_SERVER_START_TIMEOUT_S or not LocalServer.is_running():
+		_local_wait_s = -1.0
+		_set_status("このPCのサーバーにつながりません。もう一度「始める」を押してください。")
+		_show_local_server()
+		return
+	if _local_retry_s <= 0.0:
+		_local_retry_s = LOCAL_SERVER_RETRY_S
+		_client.connect_to(LocalServer.local_url())
+
+
+## このPCがサーバーのときの、案内の頭（ほかの人がつなぐ場所）。サーバーでなければ空。
+func local_server_note() -> String:
+	if not LocalServer.is_running():
+		return ""
+	var urls := LocalServer.lan_urls()
+	return "このPCがサーバーです（同じWi-Fiの人は %s につなぎます）。" % urls[0] if not urls.is_empty() else "このPCがサーバーです。"
+
+
+## 「このPCをサーバーにする」の欄を、今の状態に合わせる。
+func _show_local_server() -> void:
+	if _local_server_button == null:
+		return
+	var running := LocalServer.is_running()
+	_local_server_button.text = "このPCのサーバーを止める" if running else "このPCでサーバーを始めて、つなぐ"
+	var urls := LocalServer.lan_urls()
+	_local_server_address.text = "ほかの人がつなぐ場所：%s" % ("　".join(urls) if not urls.is_empty() else "（このPCの番号が見つかりません）")
+
 
 ## 「サーバーにつなぐ」：つないで、名乗る。名乗ると、部屋の一覧が届く。
 func connect_to_server() -> void:
@@ -1482,6 +1250,9 @@ func connect_to_server() -> void:
 
 func _on_connected() -> void:
 	_connect_wait_s = -1.0
+	if _local_wait_s >= 0.0:
+		_local_wait_s = -1.0
+		_set_status("このPCのサーバーにつながりました。")
 	_client.hello(TrainerProfile.trainer_name(), TrainerProfile.introduction(), OnlineSession.my_icon_to_send())
 
 
@@ -1491,7 +1262,7 @@ func create_room() -> void:
 	if room_name.is_empty():
 		_set_status("部屋の名前を入れてください。")
 		return
-	_client.create_room(room_name, _create_password_edit.text, _create_description_edit.text)
+	_client.create_room(room_name, _create_password_edit.text, _create_description_edit.text.replace("\n", " "))
 	close_dialogs()
 
 
@@ -1507,7 +1278,7 @@ func _open_join_dialog(info: Dictionary) -> void:
 	_joining_room_id = int(info["room_id"])
 	_join_room_name.text = str(info.get("name", ""))
 	_join_host_name.text = "部屋の主　%s" % str(info.get("host_name", ""))
-	_join_count.text = "人数　%d／%d" % [int(info.get("count", 0)), int(info.get("field_size", 0))]
+	_join_count.text = "人数　%d／%d" % [int(info.get("count", 0)), int(info.get("capacity", 0))]
 	var locked := bool(info.get("locked", false))
 	_join_lock.visible = locked
 	var description := str(info.get("description", ""))
@@ -1538,30 +1309,39 @@ func _on_message(data: Dictionary) -> void:
 	match str(data["t"]):
 		Protocol.LOBBY:
 			if not _status.text in KICKED_TEXTS.values():
-				_set_status("部屋を選ぶか、作ってください。")
+				_set_status(local_server_note() + "部屋を選ぶか、作ってください。")
 			_refresh()
 		Protocol.ROOMS:
 			_refresh()
 		Protocol.WELCOME:
-			_shown_phase = str(data.get("phase", Protocol.PHASE_ROOM))
-			_set_status("部屋「%s」に入りました。ぷるりんを選んで、「確定」を押してください。" % str(data["room"]))
+			_shown_phase = str(data.get("phase", Protocol.PHASE_LOBBY))
+			_last_view = live_view()
+			_held_view = ""
+			_set_status("部屋に入りました。" + phase_guide(OnlineSession.phase()))
 			_refresh()
 		Protocol.ROOM:
+			_hold_view_change()
+			if _race_open_pending:
+				_race_open_pending = false
+				if not OnlineSession.am_racer():
+					show_race_open_popup()
 			# 場面が替わったら、することを案内する。
 			var phase := str(data.get("phase", ""))
 			if phase != _shown_phase:
 				_shown_phase = phase
-				var guide := "出走表です。枠順と、みんなのぷるりんを確かめて、「確定」を押してください。" if phase == Protocol.PHASE_ENTRIES else "ぷるりんを選んで、「確定」を押してください。"
-				# 直前に、部屋のできごとの知らせが出ていたら、消さずに、そのあとに続ける（だれかが抜けて、部屋へ戻ったとき）。
-				var recent_notice := Time.get_ticks_msec() - _notice_msec < NOTICE_KEEP_MSEC and not _notice_text.is_empty()
-				_set_status(_notice_text + "　" + guide if recent_notice else guide)
+				# 場面が替わったら、することの案内だけにする（できごとの知らせは、チャットに残っている）。
+				# 知らせを出して前の画面を見せているあいだは、案内も替えず、切り替わってから替える。
+				if _held_view.is_empty():
+					_set_status(phase_guide(phase))
 			_refresh()
 		Protocol.NOTICE:
 			# 部屋のできごと（入った・出た・主が替わった）：上の案内と、ひとことの欄の両方に出す。
 			_notice_text = OnlineSession.notice_text(data)
-			_notice_msec = Time.get_ticks_msec()
 			_set_status(_notice_text)
 			_show_chat()
+			if str(data.get("kind", "")) == Protocol.NOTICE_RACE_OPEN:
+				# 知らせは、部屋のようす（レースに出る人）が届いてから出す。
+				_race_open_pending = true
 		Protocol.CHAT_MESSAGE:
 			_show_chat()
 		Protocol.ROOM_INFO:
@@ -1569,26 +1349,99 @@ func _on_message(data: Dictionary) -> void:
 			if int(data["room_id"]) == _joining_room_id and OnlineSession.in_lobby():
 				_open_join_dialog(data)
 		Protocol.PROFILE_INFO:
-			# 紹介が届いた。いま出している人の画像なら、出し直す。
+			# 紹介（アイコンの画像）が届いた。席・行の画像を出し直す。
 			if int(data["peer_id"]) == int(_shown_person.get("peer_id", -1)):
 				_show_person(_shown_person)
+			if OnlineSession.in_room():
+				_refresh()
 		Protocol.KICKED:
 			_set_status(str(KICKED_TEXTS.get(str(data.get("by", "")), "部屋から退出させられました。")))
 		Protocol.RACE_START:
-			_go_to_race(data)
+			# まず知らせを出し、少し待ってから、レースの画面へ進む。
+			_race_start_data = data
+			_show_popup_text(RACE_START_TEXT)
 		Protocol.ERROR:
 			_set_status(str(ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。")))
 
 
 func _on_closed() -> void:
+	# このPCのサーバーが起動しきるまでは、つながらなくても、黙ってつなぎ直す。
+	if _local_wait_s >= 0.0:
+		return
 	var was_waiting := _connect_wait_s >= 0.0
 	_connect_wait_s = -1.0
 	_set_status("サーバーにつながりません。サーバーの場所を確かめてください。" if was_waiting else "サーバーとのつながりが切れました。")
 	_refresh()
 
 
+## いま出すべき画面（部屋の場面と、自分がレースに出る人か、で決まる）。部屋の外では空。
+func live_view() -> String:
+	if not OnlineSession.in_room():
+		return ""
+	if OnlineSession.in_waiting_room():
+		return "waiting"
+	match OnlineSession.phase():
+		Protocol.PHASE_SETTINGS:
+			return "settings"
+		Protocol.PHASE_ENTRIES:
+			return "paddock"
+	return "pick"
+
+
+## 部屋主の操作で画面が切り替わるときは、知らせを2秒ほど出して、そのあいだは前の画面のままにする。
+## 自分で「待機室へ戻る」を押したとき、知らせの決まっていない切り替わりは、すぐ切り替える。
+func _hold_view_change() -> void:
+	var now_view := live_view()
+	var before := _held_view if not _held_view.is_empty() else _last_view
+	_last_view = now_view
+	var racing_before := _last_racing
+	_last_racing = bool(OnlineSession.room.get("racing", false))
+	if before.is_empty() or before == now_view or racing_before:
+		_held_view = ""
+		return
+	if _self_back:
+		_self_back = false
+		_held_view = ""
+		return
+	var text := str(VIEW_CHANGE_TEXTS.get("%s>%s" % [before, now_view], ""))
+	if before == "waiting" and now_view == "settings":
+		text = RACE_OPEN_TEXT
+	if text.is_empty():
+		_held_view = ""
+		return
+	_held_view = before
+	_hold_until_msec = Time.get_ticks_msec() + RACE_OPEN_POPUP_MSEC
+	_show_popup_text(text)
+
+
+## 画面のまん中に、知らせを2秒ほど出す。
+func _show_popup_text(text: String) -> void:
+	_race_open_label.text = text
+	_race_open_popup.visible = true
+	_race_open_until_msec = Time.get_ticks_msec() + RACE_OPEN_POPUP_MSEC
+
+
+## 場面ごとの、することの案内。
+func phase_guide(phase: String) -> String:
+	if OnlineSession.in_waiting_room():
+		if phase != Protocol.PHASE_LOBBY:
+			return "いまレース中です。「準備OK」を押しておくと、次のレースに出られます。"
+		return "準備ができたら「準備OK」を押してください。" if not is_host() else "そろったら「レース設定へ」を押してください。準備OKの人がレースに進みます。"
+	match phase:
+		Protocol.PHASE_SETTINGS:
+			return "距離と、人の足りない席にCPUを入れるかを決めて、「次へ」を押してください。" if is_host() else "部屋主が、距離と出走する席を決めています。"
+		Protocol.PHASE_ENTRIES:
+			return "枠順とプルを確かめて、「確定」を押してください。"
+	return "プルが決まったら「確定」。全員そろったら「パドックへ」を押してください。" if is_host() else "プルが決まったら「確定」を押してください。"
+
+
 func _set_status(text: String) -> void:
 	_status.text = text
+	if _waiting_status != null:
+		_waiting_status.text = text
+		_settings_status.text = text
+		_pick_status.text = text
+		_paddock_status.text = text
 
 
 ## 今の場面（つなぐ前・部屋の一覧・部屋の中）に合わせて、画面を出し直す。
@@ -1599,12 +1452,34 @@ func _refresh() -> void:
 	var in_room := OnlineSession.in_room()
 	var in_lobby := OnlineSession.in_lobby() and not in_room
 	_room = OnlineSession.room if in_room else {}
-	_members = _room.get("members", [])
+	_members = OnlineSession.members() if in_room else []
+	# 知らせを出しているあいだは、前の画面のまま。
+	var view := (_held_view if not _held_view.is_empty() else live_view()) if in_room else ""
+	var waiting := view == "waiting"
+	var settings := view == "settings"
+	var picking := view == "pick"
+	if not picking:
+		_auto_pick_sent = false
+		_pick_dialog.visible = false
 	_connect_box.visible = not in_room and not in_lobby
+	_show_local_server()
 	_lobby_box.visible = in_lobby
-	_room_box_outer.visible = in_room
-	_room_title.visible = in_room
-	_room_lock.visible = in_room and bool(OnlineSession.room.get("locked", false))
+	_waiting_box.visible = waiting
+	_settings_box.visible = settings
+	# 待機室・レース設定では、案内は、左のパネルの中に出す（上には出さない）。
+	_status.visible = not waiting and not settings and not picking and view != "paddock"
+	_pick_box.visible = picking
+	_paddock_box.visible = view == "paddock"
+	if view != "paddock":
+		_paddock_dialog.visible = false
+	_room_header.visible = in_room
+	_room_name_row.visible = in_room
+	if in_room:
+		_show_room_header(view)
+	if not waiting and not settings and not in_lobby:
+		_hover_popup.visible = false
+	if not picking and is_picker_open() and not _pick_target.is_empty():
+		_picker.call("close")
 	# 場面が変わったら、その場面のものでない窓は閉じる。
 	if not in_lobby:
 		_create_dialog.visible = false
@@ -1618,12 +1493,20 @@ func _refresh() -> void:
 		_kick_dialog.visible = false
 	_bottom_row.visible = not in_room
 	_filler.visible = not in_room
-	if not in_room or not OnlineSession.is_host():
-		_advance_dialog.visible = false
 	if in_lobby:
 		_show_rooms()
-	if in_room:
-		_show_room()
+	if waiting:
+		_show_waiting()
+		_show_chat()
+	elif settings:
+		_show_settings()
+		_show_chat()
+	elif picking:
+		_show_pick()
+		_show_chat()
+	elif view == "paddock":
+		_show_paddock()
+		_show_chat()
 	_update_focus_paths()
 	if not focused_room.is_empty() and in_lobby:
 		var rebuilt := _rooms_box.get_node_or_null(NodePath(focused_room)) as Button
@@ -1639,7 +1522,10 @@ func _update_focus_paths() -> void:
 		controls.assign([_default_server_radio, _custom_server_radio])
 		if _server_edit.editable:
 			controls.append(_server_edit)
-		controls.append_array([_connect_button, _back_button])
+		controls.append(_connect_button)
+		if _local_server_card.visible:
+			controls.append(_local_server_button)
+		controls.append(_back_button)
 	elif _lobby_box.visible:
 		for child in _rooms_box.get_children():
 			if child is Button and not child.disabled:
@@ -1681,19 +1567,33 @@ func _restore_focus() -> void:
 			_open_create_button.grab_focus()
 		else:
 			_back_button.grab_focus()
-	elif OnlineSession.in_entries() and _selected_gate >= 0:
-		_slots[_selected_gate].grab_focus()
-	elif my_slot() >= 0:
-		_slots[my_slot()].grab_focus()
-	elif OnlineSession.in_room():
-		_leave_button.grab_focus()
+	elif _waiting_box.visible:
+		(_race_open_button if is_host() else _ready_button).grab_focus()
+	elif _settings_box.visible:
+		(_settings_next_button if is_host() else _settings_leave_button).grab_focus()
+	elif _paddock_box.visible:
+		var target := _selected_gate if _selected_gate >= 0 else 0
+		for index in (_room.get("entries", []) as Array).size():
+			if int(_room["entries"][index].get("peer_id", 0)) == OnlineSession.peer_id and _selected_gate < 0:
+				target = index
+		(_paddock_rows[mini(target, _paddock_rows.size() - 1)]["button"] as Button).grab_focus()
+	elif _pick_box.visible:
+		for row: Dictionary in _pick_rows:
+			if str(row["kind"]) == "self":
+				(row["button"] as Button).grab_focus()
+				return
+		_pick_back_button.grab_focus()
 	else:
 		_back_button.grab_focus()
 
 
-## 部屋の一覧を出す。1部屋が1つのボタンで、押すと入る（施錠の印の部屋は、パスワードを聞く）。満員・レース中の部屋は、押せない。
+## 部屋の一覧を出す。1部屋が1つのボタンで、押すと入る（施錠の印の部屋は、パスワードを聞く）。満員の部屋は、押せない。
+## レース中の部屋にも入れる（入った人は、待機室で次のレースを待つ）。
 ## 作れる数ぶんの行を、いつも出す（空いている行は、うすく「空き」）。
 func _show_rooms() -> void:
+	# 行は作り直すので、吹き出しは、いったん消す。
+	_hover_popup.visible = false
+	_hover_target = null
 	for child in _rooms_box.get_children():
 		child.free()
 	var rooms: Array = OnlineSession.rooms
@@ -1707,11 +1607,18 @@ func _show_rooms() -> void:
 		var button := MenuStyle.button("", 18, MenuStyle.COLOR_BUTTON)
 		button.name = "Room%d" % int(entry["room_id"])
 		button.custom_minimum_size = Vector2(0.0, ROOM_ROW_HEIGHT)
-		button.disabled = bool(entry["racing"]) or int(entry["count"]) >= int(entry["field_size"])
+		button.disabled = int(entry["count"]) >= int(entry["capacity"])
 		button.pressed.connect(choose_room.bind(int(entry["room_id"])))
 		UIAudio.bind_button_sound(button, "confirmation")
 		_rooms_box.add_child(button)
-		var columns := _room_columns(str(entry["name"]), str(entry["host_name"]), "%d／%d" % [int(entry["count"]), int(entry["field_size"])], MenuStyle.COLOR_TEXT, 19)
+		# カーソル・マウスを乗せると、部屋の紹介文を、吹き出しで出す。
+		var description := str(entry.get("description", ""))
+		var popup_text := description if not description.is_empty() else "（部屋の紹介は、ありません）"
+		button.focus_entered.connect(_show_hover_popup.bind(button, popup_text))
+		button.mouse_entered.connect(_show_hover_popup.bind(button, popup_text))
+		button.focus_exited.connect(_hide_hover_popup.bind(button))
+		button.mouse_exited.connect(_hide_hover_popup.bind(button))
+		var columns := _room_columns(str(entry["name"]), str(entry["host_name"]), "%d／%d" % [int(entry["count"]), int(entry["capacity"])], MenuStyle.COLOR_TEXT, 19)
 		columns.set_anchors_preset(Control.PRESET_FULL_RECT)
 		columns.offset_left = 16.0
 		columns.offset_right = -16.0
@@ -1746,130 +1653,1307 @@ func _empty_room_row(index: int) -> Control:
 static func room_state_text(entry: Dictionary) -> String:
 	if bool(entry["racing"]):
 		return "レース中"
-	if int(entry["count"]) >= int(entry["field_size"]):
+	if int(entry["count"]) >= int(entry["capacity"]):
 		return "満員"
 	return ""
 
 
-# ---------------------------------------------------------------- 部屋の中
+# ---------------------------------------------------------------- 待機室
 
-func _show_room() -> void:
-	var in_entries := OnlineSession.in_entries()
-	_room_title.text = "／　部屋「%s」%s" % [str(_room.get("room", "")), "　出走表" if in_entries else ""]
-	var mine := my_pururin_id()
-	_scenery_label.text = scenery_text()
-	_field_size_label.text = "%d体" % int(_room.get("field_size", 0))
-	_cpu_label.text = "あり" if bool(_room.get("cpu", true)) else "なし"
-	# 部屋の決めごとは、部屋の主だけ。出走表では、変えられない。
+## 待機室：左の5分の3が本体（上段＝部屋の名前・紹介・決まり、中段＝4列×2行の席、下段＝準備OK・部屋を出る・レース開始・説明）、
+## 右の5分の2がルームチャット。
+func _build_waiting(column: VBoxContainer) -> void:
+	_waiting_box = HBoxContainer.new()
+	_waiting_box.name = "WaitingRoom"
+	_waiting_box.add_theme_constant_override("separation", 16)
+	_waiting_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_waiting_box)
+	var main := _main_column(_waiting_box, "WaitingMain")
+	_waiting_status = _panel_status(main, "WaitingStatus")
+	# 上段：部屋の紹介。主には「紹介を変える」「パスワード」（部屋の名前・部屋主・人数は、上の見出しに出す）。
+	var top := _card(main, "")
+	var head_row := HBoxContainer.new()
+	head_row.add_theme_constant_override("separation", 10)
+	top.add_child(head_row)
+	var caption := MenuStyle.label("部屋の紹介", 14, MenuStyle.COLOR_DIM)
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	head_row.add_child(caption)
+	_waiting_description = MenuStyle.label("", 16)
+	_waiting_description.name = "WaitingDescription"
+	_waiting_description.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_waiting_description.max_lines_visible = 3
+	_waiting_description.custom_minimum_size = Vector2(0.0, WAITING_DESCRIPTION_HEIGHT)
+	top.add_child(_waiting_description)
+	var info_row := head_row
+	for spec: Array in [["紹介を変える", "WaitingDescriptionButton", open_description_dialog], ["パスワード", "WaitingPasswordButton", open_password_change_dialog]]:
+		var button := MenuStyle.button(str(spec[0]), 14, MenuStyle.COLOR_BUTTON_QUIET)
+		button.name = str(spec[1])
+		button.custom_minimum_size = Vector2(0.0, MINI_ARROW_SIZE.y)
+		_compact(button, 1.0, 10.0)
+		button.pressed.connect(spec[2])
+		UIAudio.bind_button_sound(button, "confirmation")
+		info_row.add_child(button)
+		_waiting_host_buttons.append(button)
+	# 中段：4列×2行の席。入った順に埋まる。カーソル・マウスを乗せると、その人の紹介文を小さく出す。
+	_seats = _seat_grid(main, "WaitingSeats", "Seat", _on_seat_pressed, true)
+	# 席の下：ほかの人が先の画面（レース設定〜レース）に進んでいるときの、今のようす。
+	_waiting_race_band = PanelContainer.new()
+	_waiting_race_band.name = "WaitingRaceBand"
+	_waiting_race_band.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_RACE_BAND, 10, 14.0, 5.0))
+	_waiting_race_band.visible = false
+	main.add_child(_waiting_race_band)
+	_waiting_race_text = MenuStyle.label("", 15)
+	_waiting_race_text.name = "WaitingRaceText"
+	_waiting_race_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_waiting_race_band.add_child(_waiting_race_text)
+	# 下段：準備OK → 部屋を出る → レース開始（主だけ押せる）→ 説明。席との間は、空ける（下段は、板の下に寄せる）。
+	var gap := Control.new()
+	gap.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(gap)
+	# 下のボタンは1行：左から「部屋を出る」「準備OK」「レース設定へ」（先へ進むボタンは右端）。その下に、説明。
+	var bottom := VBoxContainer.new()
+	bottom.name = "WaitingBottom"
+	bottom.add_theme_constant_override("separation", 4)
+	main.add_child(bottom)
+	var actions := HBoxContainer.new()
+	actions.name = "WaitingActions"
+	actions.add_theme_constant_override("separation", 8)
+	bottom.add_child(actions)
+	_waiting_leave_button = _row_button(actions, "部屋を出る", "WaitingLeaveButton", go_back, MenuStyle.COLOR_BUTTON_QUIET, "back", "B")
+	_ready_button = _row_button(actions, "準備OK", "ReadyButton", toggle_lobby_ready, MenuStyle.COLOR_BUTTON, "confirmation", "START")
+	_race_open_button = _row_button(actions, "レース設定へ", "RaceOpenButton", open_race, MenuStyle.COLOR_BUTTON_ON, "confirmation", "START")
+	_waiting_note = MenuStyle.label("部屋主が「レース設定へ」を押すと、準備OKのプレーヤーが次へ進みます。", 14, MenuStyle.COLOR_DIM)
+	_waiting_note.name = "WaitingNote"
+	_waiting_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_waiting_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bottom.add_child(_waiting_note)
+	# 右：ルームチャット。
+	var chat := _room_chat(_waiting_box, "RoomChat")
+	_lobby_chat_log = chat[0]
+	_lobby_chat_edit = chat[1]
+	# 席・部屋の紹介文の吹き出し（席・部屋の行の下に、小さく出す）。
+	_hover_popup = PanelContainer.new()
+	_hover_popup.name = "HoverPopup"
+	_hover_popup.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_DIALOG, 8, 10.0, 6.0))
+	_hover_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hover_popup.top_level = true
+	_hover_popup.visible = false
+	_hover_popup.z_index = 10
+	add_child(_hover_popup)
+	_hover_popup_label = MenuStyle.label("", 13)
+	_hover_popup_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_hover_popup_label.custom_minimum_size = Vector2(WAITING_POPUP_WIDTH, 0.0)
+	_hover_popup.add_child(_hover_popup_label)
+	# 部屋主がレース開始を押したときの、2秒ほどの知らせ。画面のまん中に出す（後ろの操作は、止めない）。
+	_race_open_popup = CenterContainer.new()
+	_race_open_popup.name = "RaceOpenPopup"
+	_race_open_popup.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_race_open_popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_race_open_popup.visible = false
+	_race_open_popup.z_index = 20
+	add_child(_race_open_popup)
+	var popup_panel := PanelContainer.new()
+	popup_panel.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_DIALOG, 16, 30.0, 22.0))
+	popup_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_race_open_popup.add_child(popup_panel)
+	_race_open_label = MenuStyle.label("", 22)
+	_race_open_label.name = "RaceOpenText"
+	_race_open_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_race_open_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_race_open_label.custom_minimum_size = Vector2(RACE_OPEN_POPUP_WIDTH, 0.0)
+	popup_panel.add_child(_race_open_label)
+
+
+## 左の本体の上に置く、案内の行（上の案内と同じ文を、左のパネルの中に出す）。
+func _panel_status(parent: Control, node_name: String) -> Label:
+	var label := MenuStyle.label("", 15, MenuStyle.COLOR_FOCUS)
+	label.name = node_name
+	label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	parent.add_child(label)
+	return label
+
+
+## 下の1行に並べるボタン（横幅は、同じ割合で分ける）。mark は、左に付けるボタンの印（"B"・"START"。空なら付けない）。
+func _row_button(parent: HBoxContainer, text: String, node_name: String, action: Callable, color: Color, sound: String, mark: String) -> Button:
+	var button := MenuStyle.button(text, 17, color)
+	button.name = node_name
+	button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.clip_text = true
+	button.pressed.connect(action)
+	UIAudio.bind_button_sound(button, sound)
+	if not mark.is_empty():
+		# 印は左。文字は、印のぶん右へ寄せて、重ならないようにする（左右の余白を、印の幅だけ足す）。
+		var node := MenuStyle.add_mark(button, mark, 20.0)
+		var mark_width := node.offset_right
+		for state: String in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
+			var box := button.get_theme_stylebox(state)
+			if box == null:
+				continue
+			box = box.duplicate()
+			box.content_margin_left = mark_width + 8.0
+			box.content_margin_right = 8.0
+			button.add_theme_stylebox_override(state, box)
+	parent.add_child(button)
+	return button
+
+
+## 左の5分の3の本体の列。
+func _main_column(parent: HBoxContainer, node_name: String) -> VBoxContainer:
+	var main := VBoxContainer.new()
+	main.name = node_name
+	main.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main.size_flags_stretch_ratio = 3.0
+	main.add_theme_constant_override("separation", 6)
+	parent.add_child(main)
+	return main
+
+
+## 右の5分の2の、ルームチャット（濃い透ける背景。上から、見出し・メッセージ・入力欄）。返すのは [記録の欄, 入力らん]。
+func _room_chat(parent: HBoxContainer, prefix: String) -> Array:
+	# 上の見出し（流れの道しるべ）とくっつかないよう、上にすき間を取る。
+	var outer := MarginContainer.new()
+	outer.name = prefix + "Outer"
+	outer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	outer.size_flags_stretch_ratio = 2.0
+	outer.add_theme_constant_override("margin_top", CHAT_PANEL_TOP_MARGIN)
+	parent.add_child(outer)
+	var panel := PanelContainer.new()
+	panel.name = prefix
+	panel.custom_minimum_size = Vector2(CHAT_PANEL_MIN_WIDTH, 0.0)
+	panel.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_CHAT_PANEL, 14, 16.0, 14.0))
+	outer.add_child(panel)
+	var chat := VBoxContainer.new()
+	chat.add_theme_constant_override("separation", 10)
+	panel.add_child(chat)
+	var head := MenuStyle.label("ルームチャット", 20)
+	head.name = prefix + "Title"
+	chat.add_child(head)
+	var rule := ColorRect.new()
+	rule.color = Color(1.0, 1.0, 1.0, 0.12)
+	rule.custom_minimum_size = Vector2(0.0, 1.0)
+	chat.add_child(rule)
+	var log := RichTextLabel.new()
+	log.name = prefix + "Log"
+	log.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	log.scroll_following = true
+	log.add_theme_font_size_override("normal_font_size", 15)
+	log.add_theme_constant_override("line_separation", 4)
+	log.mouse_filter = Control.MOUSE_FILTER_PASS
+	chat.add_child(log)
+	_chat_logs.append(log)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	chat.add_child(row)
+	var edit := _line_edit(prefix + "Edit", "", OnlineConfig.chat_max_length())
+	edit.placeholder_text = "メッセージ（Enterで送る）"
+	edit.add_theme_stylebox_override("normal", MenuStyle.box(Color(1.0, 1.0, 1.0, 0.08), 8, 10.0, 4.0))
+	edit.text_submitted.connect(func(_text: String) -> void: send_chat(edit))
+	row.add_child(edit)
+	var send := MenuStyle.button("送る", 16, MenuStyle.COLOR_BUTTON)
+	send.name = prefix + "SendButton"
+	send.custom_minimum_size = Vector2(72.0, FIELD_HEIGHT)
+	_compact(send, 2.0, 8.0)
+	send.pressed.connect(func() -> void: send_chat(edit))
+	row.add_child(send)
+	return [log, edit]
+
+
+## 4列×2行の席を作る。1席ぶんは {button, icon, portrait, name, mark, kick}。
+## with_popup なら、カーソル・マウスを乗せたとき、その人の紹介文を出す。
+func _seat_grid(parent: Control, node_name: String, prefix: String, on_pressed: Callable, with_popup: bool) -> Array:
+	var grid := GridContainer.new()
+	grid.name = node_name
+	grid.columns = WAITING_SEAT_COLUMNS
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	parent.add_child(grid)
+	var seats: Array = []
+	for seat in Protocol.ROOM_CAPACITY:
+		var button := Button.new()
+		button.name = "%s%d" % [prefix, seat + 1]
+		button.custom_minimum_size = Vector2(0.0, WAITING_SEAT_HEIGHT)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		MenuStyle.style_button(button, 14, COLOR_SEAT)
+		button.pressed.connect(on_pressed.bind(seat))
+		grid.add_child(button)
+		var inner := VBoxContainer.new()
+		inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+		inner.offset_top = 6.0
+		inner.offset_bottom = -4.0
+		inner.alignment = BoxContainer.ALIGNMENT_CENTER
+		inner.add_theme_constant_override("separation", 4)
+		inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		button.add_child(inner)
+		var icon_box := CenterContainer.new()
+		icon_box.name = "SeatIconBox"
+		icon_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(icon_box)
+		var icon_frame := Control.new()
+		icon_frame.custom_minimum_size = Vector2(WAITING_ICON_SIZE, WAITING_ICON_SIZE)
+		icon_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_box.add_child(icon_frame)
+		var icon: Control = TrainerIcon.new()
+		icon.name = "SeatIcon"
+		icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+		icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_frame.add_child(icon)
+		var portrait := _portrait_rect("SeatPortrait")
+		icon_frame.add_child(portrait)
+		var name_label := MenuStyle.label("", 15)
+		name_label.name = "SeatName"
+		name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_label.clip_text = true
+		name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		inner.add_child(name_label)
+		var mark := Label.new()
+		mark.name = "SeatReady"
+		mark.text = "準備OK"
+		mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		mark.add_theme_font_size_override("font_size", 12)
+		mark.add_theme_color_override("font_color", MenuStyle.COLOR_OUTLINE)
+		mark.add_theme_stylebox_override("normal", MenuStyle.box(COLOR_CONFIRMED, 6, 6.0, 1.0))
+		mark.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		mark.offset_left = 6.0
+		mark.offset_top = 6.0
+		mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		mark.visible = false
+		button.add_child(mark)
+		# 部屋の主にだけ出る、小さな「︙」。押すと、その人を退出させるかを確かめる窓が出る。
+		var kick := Button.new()
+		kick.name = "SeatMenu"
+		kick.text = "︙"
+		kick.flat = true
+		kick.focus_mode = Control.FOCUS_NONE
+		kick.tooltip_text = "この人について"
+		kick.add_theme_font_size_override("font_size", 16)
+		kick.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
+		kick.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+		kick.offset_left = -MEMBER_MENU_WIDTH - 4.0
+		kick.offset_right = -4.0
+		kick.offset_top = 2.0
+		kick.offset_bottom = 28.0
+		kick.visible = false
+		kick.pressed.connect(_open_seat_kick.bind(seat))
+		button.add_child(kick)
+		var parts := {"button": button, "icon": icon, "portrait": portrait, "name": name_label, "mark": mark, "kick": kick, "peer": 0}
+		seats.append(parts)
+		if with_popup:
+			button.focus_entered.connect(_show_seat_popup.bind(parts))
+			button.mouse_entered.connect(_show_seat_popup.bind(parts))
+			button.focus_exited.connect(_hide_hover_popup.bind(button))
+			button.mouse_exited.connect(_hide_hover_popup.bind(button))
+	return seats
+
+
+## 1席に、人を出す（絵・名前。自分は青、ほかの人は黄、主には［主］）。
+func _show_person_seat(parts: Dictionary, member: Dictionary) -> void:
+	var peer := int(member["peer_id"])
+	parts["peer"] = peer
+	(parts["name"] as Label).text = str(member["name"]) + ("［主］" if peer == int(_room.get("host", 0)) else "")
+	(parts["name"] as Label).add_theme_color_override("font_color", PururinSlot.COLOR_USER if peer == OnlineSession.peer_id else COLOR_OTHER_PLAYER)
+	(parts["icon"] as Control).get_parent().get_parent().visible = true
+	_show_person_image({"kind": "player", "peer_id": peer}, parts["icon"], parts["portrait"])
+	MenuStyle.style_button(parts["button"], 14, COLOR_SEAT)
+
+
+## 1席に、人のいない表示（空き・CPU・入れない）を出す。
+func _show_empty_seat(parts: Dictionary, text: String, color: Color, alpha: float) -> void:
+	parts["peer"] = 0
+	(parts["name"] as Label).text = text
+	(parts["name"] as Label).add_theme_color_override("font_color", Color(MenuStyle.COLOR_TEXT, alpha))
+	(parts["icon"] as Control).get_parent().get_parent().visible = false
+	(parts["mark"] as Control).visible = false
+	(parts["kick"] as Control).visible = false
+	MenuStyle.style_button(parts["button"], 16, color)
+
+
+## 待機室を出し直す。
+func _show_waiting() -> void:
+	var all := OnlineSession.all_members()
+	var host_id := int(_room.get("host", 0))
+	var description := str(_room.get("description", ""))
+	_waiting_description.text = description if not description.is_empty() else "（部屋の紹介は、ありません）"
+	_waiting_description.modulate.a = 1.0 if not description.is_empty() else 0.55
+	var racing := OnlineSession.phase() != Protocol.PHASE_LOBBY
 	var host := is_host()
-	for button: Button in _host_buttons:
-		button.disabled = not host
+	for button: Button in _waiting_host_buttons:
+		button.visible = host
+	for seat in _seats.size():
+		var parts: Dictionary = _seats[seat]
+		if seat >= all.size():
+			_show_empty_seat(parts, "空き", COLOR_SEAT_EMPTY, 0.5)
+			continue
+		var member: Dictionary = all[seat]
+		_show_person_seat(parts, member)
+		# 先に進んでいる人の席には「出走中」、待機室で準備OKの人には「準備OK」。
+		var mark := parts["mark"] as Label
+		var in_race := racing and bool(member.get("racer", false))
+		mark.text = "出走中" if in_race else "準備OK"
+		mark.add_theme_stylebox_override("normal", MenuStyle.box(COLOR_STEP_NOW if in_race else COLOR_CONFIRMED, 6, 6.0, 1.0))
+		mark.visible = in_race or bool(member.get("ready", false))
+		(parts["kick"] as Control).visible = host and int(member["peer_id"]) != OnlineSession.peer_id
+	_waiting_race_band.visible = racing
+	if racing:
+		var names: Array[String] = []
+		for member: Dictionary in all:
+			if bool(member.get("racer", false)):
+				names.append(str(member["name"]))
+		var doing := "走っています" if bool(_room.get("racing", false)) else "「%s」に進んでいます" % str(PHASE_NAMES.get(OnlineSession.phase(), ""))
+		_waiting_race_text.text = "現在レース中：%s（%d人）が%s。\nレースが終わると、全員この待機室に戻ります。" % ["、".join(names), names.size(), doing]
+	var ready := OnlineSession.my_lobby_ready()
+	_ready_button.text = "取り消す" if ready else "準備OK"
+	var ready_box := MenuStyle.box(MenuStyle.COLOR_BUTTON_QUIET if ready else MenuStyle.COLOR_BUTTON, 10, 8.0, 10.0)
+	ready_box.content_margin_left = (_ready_button.get_node("ButtonMark") as Control).offset_right + 8.0
+	_ready_button.add_theme_stylebox_override("normal", ready_box)
+	_ready_button.get_node("ButtonMark").visible = not ready and not host
+	# レース開始は、主だけが押せる（ほかの人には、押せない形で見せる）。レースの最中は、だれも押せない。
+	_race_open_button.disabled = not host or racing
+	_race_open_button.get_node("ButtonMark").visible = host and not racing
+	_race_open_button.modulate.a = 1.0 if not _race_open_button.disabled else 0.45
+	# 主は、準備OKを押さなくても、必ずレースに出る。
+	_ready_button.disabled = host
+	_ready_button.modulate.a = 1.0 if not host else 0.45
+	_link_waiting_focus()
+
+
+## 待機室の上下左右の行き先：席（4列×2行）→ 準備OK → 部屋を出る → レース開始。右のチャットへは、右で移る。
+func _link_waiting_focus() -> void:
+	var actions: Array[Control] = []
+	for button: Button in [_waiting_leave_button, _ready_button, _race_open_button]:
+		if not button.disabled:
+			actions.append(button)
+	var first_action: Control = actions.back() if not actions.is_empty() else _waiting_leave_button
+	_link_seat_grid(_seats, _lobby_chat_edit, null, first_action)
+	var above: Control = _seats[Protocol.ROOM_CAPACITY - WAITING_SEAT_COLUMNS]["button"]
+	for index in actions.size():
+		var button := actions[index]
+		_link(button, actions[maxi(index - 1, 0)], actions[index + 1] if index < actions.size() - 1 else _lobby_chat_edit, above, button)
+	_link_chat(_lobby_chat_edit, _seats[WAITING_SEAT_COLUMNS - 1]["button"])
+
+
+## 4列×2行の席の行き先。右端の席の右は、チャット。上の段の上は above（無ければ、その席）、下の段の下は below。
+func _link_seat_grid(seats: Array, chat_edit: Control, above: Control, below: Control) -> void:
+	var buttons: Array[Control] = []
+	for parts: Dictionary in seats:
+		buttons.append(parts["button"])
+	for seat in buttons.size():
+		var column_index := seat % WAITING_SEAT_COLUMNS
+		var left: Control = buttons[seat - 1] if column_index > 0 else buttons[seat]
+		var right: Control = buttons[seat + 1] if column_index < WAITING_SEAT_COLUMNS - 1 else chat_edit
+		var up: Control = buttons[seat - WAITING_SEAT_COLUMNS] if seat >= WAITING_SEAT_COLUMNS else (above if above != null else buttons[seat])
+		var down: Control = buttons[seat + WAITING_SEAT_COLUMNS] if seat + WAITING_SEAT_COLUMNS < buttons.size() else below
+		_link(buttons[seat], left, right, up, down)
+
+
+## チャットの入力らんと「送る」の行き先。左は、本体へ戻る。
+func _link_chat(edit: LineEdit, back_to: Control) -> void:
+	var send: Control = edit.get_parent().get_node(NodePath(str(edit.name).replace("Edit", "SendButton")))
+	_link(edit, back_to, send, edit, edit)
+	_link(send, edit, send, send, send)
+
+
+## 席にカーソル・マウスが来た：その人の紹介文を、席の下に小さく出す。空き席では出さない。
+func _show_seat_popup(parts: Dictionary) -> void:
+	var peer := int(parts["peer"])
+	if peer == 0:
+		_hover_popup.visible = false
+		return
+	var introduction := ""
+	for member: Dictionary in OnlineSession.all_members():
+		if int(member["peer_id"]) == peer:
+			introduction = str(member.get("introduction", ""))
+	_show_hover_popup(parts["button"], introduction if not introduction.is_empty() else "（紹介文は、ありません）")
+
+
+## 部品の下に、小さな吹き出しを出す（下に入らなければ、上に出す）。
+## 作り直した直後の行は、まだ位置が決まっていないので、1コマ待ってから置く。
+func _show_hover_popup(target: Control, text: String) -> void:
+	_hover_target = target
+	await get_tree().process_frame
+	if _hover_target != target or not is_instance_valid(target) or not target.is_visible_in_tree():
+		return
+	_hover_popup_label.text = text
+	_hover_popup.size = Vector2.ZERO
+	_hover_popup.reset_size()
+	var rect := target.get_global_rect()
+	var popup_size := _hover_popup.get_combined_minimum_size()
+	var x := clampf(rect.position.x + (rect.size.x - popup_size.x) * 0.5, 8.0, get_viewport_rect().size.x - popup_size.x - 8.0)
+	var y := rect.end.y + 4.0
+	if y + popup_size.y > get_viewport_rect().size.y - 8.0:
+		y = rect.position.y - popup_size.y - 4.0
+	_hover_popup.position = Vector2(x, y)
+	_hover_popup.visible = true
+	_hover_target = target
+
+
+## カーソルもマウスも離れたら、吹き出しを消す。
+func _hide_hover_popup(target: Control) -> void:
+	if _hover_target != target:
+		return
+	if target.has_focus() or (target is BaseButton and (target as BaseButton).is_hovered()):
+		return
+	_hover_popup.visible = false
+	_hover_target = null
+
+
+## 席を押した：その人の紹介の窓を出す（空き席では、何もしない）。
+func _on_seat_pressed(seat: int) -> void:
+	var peer := int(_seats[seat]["peer"])
+	if peer == 0:
+		return
+	_show_person({"kind": "player", "peer_id": peer, "name": member_name(peer)})
+	open_profile_dialog()
+
+
+## 席の「︙」：その人を退出させるかを確かめる（部屋の主だけ）。
+func _open_seat_kick(seat: int) -> void:
+	var target := int(_seats[seat]["peer"])
+	if target == 0 or target == OnlineSession.peer_id or not is_host():
+		return
+	close_dialogs()
+	_kick_target = target
+	_kick_dialog_title.text = "%s さんを退出させますか" % member_name(target)
+	_kick_dialog.visible = true
+	(_kick_dialog.find_child("KickConfirmCancelButton", true, false) as Button).grab_focus()
+
+
+## 待機室の「準備OK」を押す・取り消す。
+func toggle_lobby_ready() -> void:
+	if is_host():
+		return
+	_client.set_lobby_ready(not OnlineSession.my_lobby_ready())
+
+
+## 待機室の「レース設定へ」（部屋の主だけ）。準備OKの人と主が、レース設定へ進む。
+func open_race() -> void:
+	if not is_host():
+		return
+	_client.send(Protocol.RACE_OPEN)
+
+
+## 部屋主がレース開始を押したことを、2秒ほど出す。レースに出る人と、待機室に残る人で、文を分ける。
+func show_race_open_popup() -> void:
+	_race_open_label.text = RACE_OPEN_TEXT if OnlineSession.am_racer() else RACE_OPEN_STAY_TEXT
+	_race_open_popup.visible = true
+	_race_open_until_msec = Time.get_ticks_msec() + RACE_OPEN_POPUP_MSEC
+
+
+func is_race_open_popup_visible() -> bool:
+	return _race_open_popup.visible
+
+
+# ---------------------------------------------------------------- レース設定
+
+## レース設定：部屋主が、距離と、人の足りない席にCPUを入れるかを決める。レースに出る人だけが見る。
+## 左の5分の3が本体（距離・4列×2行の席・下のボタン）、右の5分の2がルームチャット（待機室と同じ）。
+func _build_race_settings(column: VBoxContainer) -> void:
+	_settings_box = HBoxContainer.new()
+	_settings_box.name = "RaceSettings"
+	_settings_box.add_theme_constant_override("separation", 16)
+	_settings_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_settings_box)
+	var main := _main_column(_settings_box, "RaceSettingsMain")
+	_settings_status = _panel_status(main, "SettingsStatus")
+	_settings_note = MenuStyle.label("", 15, MenuStyle.COLOR_DIM)
+	_settings_note.name = "RaceSettingsNote"
+	_settings_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	main.add_child(_settings_note)
+	main.add_child(_build_distance_row())
+	main.add_child(MenuStyle.label("出走する席", 16, MenuStyle.COLOR_DIM))
+	_settings_seats = _seat_grid(main, "SettingsSeats", "SettingsSeat", toggle_seat, true)
+	_settings_count = MenuStyle.label("", 16)
+	_settings_count.name = "RaceSettingsCount"
+	main.add_child(_settings_count)
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(filler)
+	# 下のボタンは1行：左から「部屋を出る」「待機室へ戻る」「次へ」（先へ進むボタンは右端）。
+	var actions := HBoxContainer.new()
+	actions.name = "RaceSettingsActions"
+	actions.add_theme_constant_override("separation", 8)
+	main.add_child(actions)
+	_settings_leave_button = _row_button(actions, "部屋を出る", "SettingsLeaveButton", go_back, MenuStyle.COLOR_BUTTON_QUIET, "back", "B")
+	_settings_back_button = _row_button(actions, "待機室へ戻る", "SettingsBackButton", back_to_room_phase, MenuStyle.COLOR_BUTTON_QUIET, "back", "")
+	_settings_next_button = _row_button(actions, "次へ（プル選択）", "SettingsNextButton", open_pick, MenuStyle.COLOR_BUTTON_ON, "confirmation", "START")
+	_settings_next_button.text = "次へ"
+	var chat := _room_chat(_settings_box, "SettingsChat")
+	_settings_chat_edit = chat[1]
+
+
+## レース設定を出し直す。人の席は、待機室と同じ絵と名前。人の足りない席は「CPU」か「入れない」。主は、押して切り替えられる。
+## 主でない人にも「待機室へ戻る」（自分だけ、待機室へ戻る）と「次へ」（押せない）を見せる。
+func _show_settings() -> void:
+	var host := is_host()
+	_settings_note.text = "人の足りない席は、押すと「CPU」と「入れない」が切り替わります。" if host else ""
+	_settings_note.visible = host
+	_show_distance_buttons(host)
+	var racers := OnlineSession.members()
+	var seats: Array = _room.get("seats", [])
+	for seat in _settings_seats.size():
+		var parts: Dictionary = _settings_seats[seat]
+		var button: Button = parts["button"]
+		if seat < racers.size():
+			_show_person_seat(parts, racers[seat])
+			(parts["mark"] as Control).visible = false
+			(parts["kick"] as Control).visible = false
+			button.focus_mode = Control.FOCUS_ALL
+			continue
+		var cpu_index := seat - racers.size()
+		var with_cpu: bool = bool(seats[cpu_index]) if cpu_index < seats.size() else false
+		_show_empty_seat(parts, "CPU" if with_cpu else "入れない", MenuStyle.COLOR_BUTTON if with_cpu else COLOR_SEAT_EMPTY, 1.0 if with_cpu else 0.5)
+		# 主だけ、押して切り替えられる。ほかの人は、カーソルも置けない。
+		button.focus_mode = Control.FOCUS_ALL if host and cpu_index < seats.size() else Control.FOCUS_NONE
+		button.mouse_filter = Control.MOUSE_FILTER_STOP if host else Control.MOUSE_FILTER_IGNORE
+	_settings_count.text = "出走　%d体（人 %d・CPU %d）" % [int(_room.get("field_size", 0)), racers.size(), seats.count(true)]
+	_settings_next_button.disabled = not host
+	_settings_next_button.get_node("ButtonMark").visible = host
+	_settings_next_button.modulate.a = 1.0 if host else 0.45
+	_link_settings_focus()
+
+
+## レース設定の上下左右の行き先：距離 → 席（4列×2行）→ 下のボタン。右端の席の右は、チャット。
+func _link_settings_focus() -> void:
+	var distance_button: Control = _focused_distance_button()
+	var first_seat: Control = _settings_seats[0]["button"]
+	var distances: Array = _distance_buttons.keys()
+	for index in distances.size():
+		var button: Button = _distance_buttons[distances[index]]
+		_link(button, _distance_buttons[distances[maxi(index - 1, 0)]], _distance_buttons[distances[mini(index + 1, distances.size() - 1)]], button, first_seat)
+	_link_seat_grid(_settings_seats, _settings_chat_edit, distance_button, _settings_leave_button)
+	var above: Control = _settings_seats[Protocol.ROOM_CAPACITY - WAITING_SEAT_COLUMNS]["button"]
+	var next_usable := not _settings_next_button.disabled
+	_link(_settings_leave_button, _settings_leave_button, _settings_back_button, above, _settings_leave_button)
+	_link(_settings_back_button, _settings_leave_button, _settings_next_button if next_usable else _settings_chat_edit, above, _settings_back_button)
+	_link(_settings_next_button, _settings_back_button, _settings_chat_edit, above, _settings_next_button)
+	_link_chat(_settings_chat_edit, _settings_seats[WAITING_SEAT_COLUMNS - 1]["button"])
+
+
+## 人の足りない席の、CPUを入れる・入れないを切り替える（部屋の主だけ）。人の席は、押すと、その人の紹介。
+func toggle_seat(seat: int) -> void:
+	var cpu_index := seat - OnlineSession.members().size()
+	if cpu_index < 0:
+		var peer := int(_settings_seats[seat]["peer"])
+		if peer != 0:
+			_show_person({"kind": "player", "peer_id": peer, "name": member_name(peer)})
+			open_profile_dialog()
+		return
+	var seats: Array = (_room.get("seats", []) as Array).duplicate()
+	if not is_host() or cpu_index >= seats.size():
+		return
+	seats[cpu_index] = not bool(seats[cpu_index])
+	_client.send(Protocol.SETTINGS, {"seats": seats})
+
+
+## レース設定の「次へ」：ぷるりんを選ぶ所へ進む（部屋の主だけ）。
+func open_pick() -> void:
+	if is_host():
+		_client.send(Protocol.PICK_OPEN)
+
+
+## 距離のボタンを、決まっている距離に合わせる。変えられる人だけ、カーソルを置ける。
+func _show_distance_buttons(can_change: bool) -> void:
 	var distance := float(_room.get("distance_m", 0.0))
 	for distance_m: float in _distance_buttons:
 		var button: Button = _distance_buttons[distance_m]
 		button.set_pressed_no_signal(is_equal_approx(distance_m, distance))
-		# 押せない人・押せない場面でも、決まっている距離は、色を付けて、はっきり見せる。ほかは、うすくする。
-		button.disabled = not host or in_entries
-		# 変えられない人は、距離の段にカーソルを置けない。
+		# 押せない人でも、決まっている距離は、色を付けて、はっきり見せる。ほかは、うすくする。
+		button.disabled = not can_change
 		button.focus_mode = Control.FOCUS_ALL if not button.disabled else Control.FOCUS_NONE
-		button.add_theme_stylebox_override("disabled", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON if button.button_pressed else MenuStyle.COLOR_BUTTON_QUIET, 10, 22.0, 4.0))
+		button.add_theme_stylebox_override("disabled", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON if button.button_pressed else MenuStyle.COLOR_BUTTON_QUIET, 10, 6.0, 4.0))
 		button.add_theme_color_override("font_disabled_color", MenuStyle.COLOR_TEXT)
 		button.modulate.a = 1.0 if not button.disabled or button.button_pressed else 0.4
 	for step_button: Button in _distance_step_buttons:
-		step_button.disabled = not host or in_entries
+		step_button.disabled = not can_change
 		step_button.modulate.a = 1.0 if not step_button.disabled else 0.3
-	_open_password_button.visible = host
-	_open_description_button.visible = host
-	_rules_card.visible = not in_entries
-	_gates_card.visible = in_entries
-	if in_entries:
-		_show_entry_rows()
-		# 出走表では、主のCPUの行だけ、一覧の窓を使える。それ以外で開いていたら、閉じる。
-		if is_picker_open():
-			if can_choose_row(_picking_row):
-				_picker.call("open_choices", "CPUのぷるりんを選ぶ", str(_row_infos[_picking_row]["pururin_id"]), taken_except(_picking_row))
-			else:
-				_picker.call("close")
-		_show_gate_controls()
-		_show_current_detail()
-	else:
-		_selected_gate = -1
-		_show_member_rows()
-		# 一覧の窓を開いているあいだは、詳細はカーソルの個体のまま。窓のタイルの状態は、開き直して合わせる。
-		if is_picker_open() and can_choose_row(_picking_row):
-			_picker.call("open_choices", "CPUのぷるりんを選ぶ" if is_cpu_row(_picking_row) else "ぷるりんを選ぶ", str(_row_infos[_picking_row]["pururin_id"]), taken_except(_picking_row))
-		else:
-			_show_current_detail()
-	_show_bottom_buttons()
-	_show_chat()
-	_link_room_focus()
 
 
-## 部屋の中の、上下左右の行き先を、はっきり決める（決めておかないと、位置から自動で選ばれて、思わぬ所へ飛ぶ）。
-## 上から：距離の段（主だけ）→ 出走の行 → 行の下のボタン（決めごと・枠順）→ ひとこと。
-## 行から右へ：ぷるりんの板の右上の、人の画像。その下に「部屋を出る」と「確定」。
-func _link_room_focus() -> void:
-	var rows: Array[Control] = []
-	for row: Control in _slots:
-		if row.focus_mode != Control.FOCUS_NONE:
-			rows.append(row)
-	var distance_button: Control = null
+## 決まっている距離のボタン（カーソルを置けるときだけ。置けなければ null）。
+func _focused_distance_button() -> Control:
 	for distance_m: float in _distance_buttons:
 		var button: Button = _distance_buttons[distance_m]
 		if button.button_pressed and button.focus_mode != Control.FOCUS_NONE:
-			distance_button = button
-	# 行の下の、最初に止まれるボタン（決めごと・枠順のうち、押せるもの）。無ければ、ひとこと。
-	var below: Control = _chat_edit
-	var below_buttons: Array[Control] = []
-	for button: Button in (_gate_buttons if OnlineSession.in_entries() else _settings_buttons()):
-		if button.is_visible_in_tree() and not button.disabled:
-			below_buttons.append(button)
-	if not below_buttons.is_empty():
-		below = below_buttons[0]
-	var first_row: Control = rows[0] if not rows.is_empty() else below
-	var last_row: Control = rows.back() if not rows.is_empty() else (distance_button if distance_button != null else below)
-	var distances: Array = _distance_buttons.keys()
-	for index in distances.size():
-		var button: Button = _distance_buttons[distances[index]]
-		_link(button, _distance_buttons[distances[maxi(index - 1, 0)]], _distance_buttons[distances[mini(index + 1, distances.size() - 1)]], button, first_row)
+			return button
+	return null
+
+
+# ---------------------------------------------------------------- プル選択
+
+## プル選択：左の5分の3が本体（案内・距離と出走数・横長の席 1列×8行・下のボタン）、右の5分の2がルームチャット。
+## 自分の席は大きく目立たせて、押すと、プルのステータスの窓（変更・もどる）が出る。プルは、ほかの人やCPUと重なってもよい。
+func _build_pick(column: VBoxContainer) -> void:
+	_pick_box = HBoxContainer.new()
+	_pick_box.name = "PickScreen"
+	_pick_box.add_theme_constant_override("separation", 16)
+	_pick_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_pick_box)
+	var main := _main_column(_pick_box, "PickMain")
+	var head_row := HBoxContainer.new()
+	head_row.add_theme_constant_override("separation", 12)
+	main.add_child(head_row)
+	_pick_info = MenuStyle.label("", 15, MenuStyle.COLOR_DIM)
+	_pick_info.name = "PickInfo"
+	_pick_info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick_info.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	head_row.add_child(_pick_info)
+	_pick_status = _panel_status(main, "PickStatus")
+	var rows := VBoxContainer.new()
+	rows.name = "PickRows"
+	rows.add_theme_constant_override("separation", 4)
+	main.add_child(rows)
+	for index in Protocol.ROOM_CAPACITY:
+		_pick_rows.append(_pick_row(rows, index))
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(filler)
+	var actions := HBoxContainer.new()
+	actions.name = "PickActions"
+	actions.add_theme_constant_override("separation", 8)
+	main.add_child(actions)
+	_pick_back_button = MenuStyle.button("待機室へ戻る", 16, MenuStyle.COLOR_BUTTON_QUIET)
+	_pick_back_button.name = "PickBackButton"
+	_pick_back_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_pick_back_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick_back_button.pressed.connect(back_to_room_phase)
+	UIAudio.bind_button_sound(_pick_back_button, "back")
+	actions.add_child(_pick_back_button)
+	_pick_confirm_button = MenuStyle.button("確定", 18, MenuStyle.COLOR_BUTTON)
+	_pick_confirm_button.name = "PickConfirmButton"
+	_pick_confirm_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_pick_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick_confirm_button.pressed.connect(toggle_pick_confirm)
+	UIAudio.bind_button_sound(_pick_confirm_button, "confirmation")
+	actions.add_child(_pick_confirm_button)
+	_pick_paddock_button = MenuStyle.button("パドックへ", 18, MenuStyle.COLOR_BUTTON_ON)
+	_pick_paddock_button.name = "PickPaddockButton"
+	_pick_paddock_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_pick_paddock_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick_paddock_button.pressed.connect(open_paddock)
+	UIAudio.bind_button_sound(_pick_paddock_button, "confirmation")
+	actions.add_child(_pick_paddock_button)
+	var chat := _room_chat(_pick_box, "PickChat")
+	_pick_chat_edit = chat[1]
+	# プルを選ぶ窓（オフラインのレース選択と同じもの）。
+	_picker = PururinPicker.new()
+	_picker.name = "Picker"
+	add_child(_picker)
+	_picker.connect("picked", _on_picker_picked)
+	# プルのステータスの窓（変更・もどる）。
+	var parts := _dialog("PickDialog", "")
+	_pick_dialog = parts[0]
+	var dialog_column: VBoxContainer = parts[1]
+	_pick_dialog_title = dialog_column.get_node("Title")
+	_pick_dialog_detail = PururinDetail.new()
+	_pick_dialog_detail.name = "PickDetail"
+	_pick_dialog_detail.custom_minimum_size = Vector2(0.0, DETAIL_DIALOG_HEIGHT)
+	(dialog_column.get_parent() as Control).custom_minimum_size = Vector2(PICK_DIALOG_WIDTH, 0.0)
+	dialog_column.add_child(_pick_dialog_detail)
+	# CPUの「おまかせ」の席では、詳細の代わりに、この文だけを出す（「キャラを選択してください」は出さない）。
+	_pick_dialog_empty = MenuStyle.label("おまかせ\nパドックへ進むときに、空いているプルが入ります", 19)
+	_pick_dialog_empty.name = "PickDialogEmpty"
+	_pick_dialog_empty.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pick_dialog_empty.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_pick_dialog_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pick_dialog_empty.custom_minimum_size = Vector2(0.0, DETAIL_DIALOG_HEIGHT)
+	dialog_column.add_child(_pick_dialog_empty)
+	var dialog_row := HBoxContainer.new()
+	dialog_row.add_theme_constant_override("separation", 12)
+	dialog_column.add_child(dialog_row)
+	_pick_change_button = MenuStyle.button("変更", 20, MenuStyle.COLOR_BUTTON_ON)
+	_pick_change_button.name = "PickChangeButton"
+	_pick_change_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	_pick_change_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pick_change_button.pressed.connect(_on_pick_change_pressed)
+	UIAudio.bind_button_sound(_pick_change_button, "confirmation")
+	dialog_row.add_child(_pick_change_button)
+	var dialog_back := MenuStyle.button("もどる", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	dialog_back.name = "PickDialogBackButton"
+	dialog_back.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	dialog_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dialog_back.pressed.connect(_on_pick_dialog_back)
+	UIAudio.bind_button_sound(dialog_back, "back")
+	dialog_row.add_child(dialog_back)
+
+
+## 横長の席を1つ作る。1席ぶんは {button, frame, icon, portrait, who, pururin, mark, note, kind（"self"・"player"・"cpu"・""）, peer, cpu_index, pururin_id}。
+func _pick_row(parent: VBoxContainer, index: int) -> Dictionary:
+	# 自分の席だけ、上下に余白を取る（余白の大きさは、出し直すときに決める）。
+	var margin := MarginContainer.new()
+	margin.name = "PickRowMargin%d" % (index + 1)
+	parent.add_child(margin)
+	var button := Button.new()
+	button.name = "PickRow%d" % (index + 1)
+	button.custom_minimum_size = Vector2(0.0, PICK_ROW_HEIGHT)
+	MenuStyle.style_button(button, 14, COLOR_SEAT)
+	button.pressed.connect(open_pick_dialog.bind(index))
+	margin.add_child(button)
+	var line := HBoxContainer.new()
+	line.set_anchors_preset(Control.PRESET_FULL_RECT)
+	line.offset_left = 10.0
+	line.offset_right = -10.0
+	line.add_theme_constant_override("separation", 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(line)
+	var frame := Control.new()
+	frame.name = "PickIconFrame"
+	frame.custom_minimum_size = Vector2(PICK_ICON_SIZE, PICK_ICON_SIZE)
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(frame)
+	var icon: Control = TrainerIcon.new()
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(icon)
+	var portrait := _portrait_rect("PickPortrait")
+	frame.add_child(portrait)
+	var who := MenuStyle.label("", 15)
+	who.name = "PickWho"
+	who.custom_minimum_size = Vector2(PICK_WHO_WIDTH, 0.0)
+	who.clip_text = true
+	who.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	who.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(who)
+	# 選んでいるプルの絵（おまかせ・未選択では出さない）。
+	var portrait_frame := Control.new()
+	portrait_frame.name = "PickPururinFrame"
+	portrait_frame.custom_minimum_size = Vector2(PICK_ICON_SIZE, PICK_ICON_SIZE)
+	portrait_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	portrait_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(portrait_frame)
+	var pururin_portrait: Control = PururinPortrait.new()
+	pururin_portrait.name = "PickPururinPortrait"
+	pururin_portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pururin_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	portrait_frame.add_child(pururin_portrait)
+	var texts := VBoxContainer.new()
+	texts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	texts.alignment = BoxContainer.ALIGNMENT_CENTER
+	texts.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(texts)
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 10)
+	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texts.add_child(name_row)
+	var pururin := MenuStyle.label("", 17)
+	pururin.name = "PickPururin"
+	pururin.custom_minimum_size = Vector2(PICK_PURURIN_NAME_WIDTH, 0.0)
+	pururin.clip_text = true
+	pururin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(pururin)
+	# 脚質：オフラインのレース選択・詳細と同じ、矢印の印。となりに名前。
+	var style_mark := Control.new()
+	style_mark.name = "PickStyleMark"
+	style_mark.custom_minimum_size = Vector2(RaceHud.STYLE_CHEVRON_STEP * PICK_CHEVRON_SCALE * PururinStatsMath.rank_group_count() + 4.0, 0.0)
+	style_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(style_mark)
+	var style := MenuStyle.label("", 14, MenuStyle.COLOR_DIM)
+	style.name = "PickStyle"
+	style.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	style.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(style)
+	var note := MenuStyle.label("押すと、プルを変更できます", 13, MenuStyle.COLOR_FOCUS)
+	note.name = "PickNote"
+	note.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texts.add_child(note)
+	var mark := Label.new()
+	mark.name = "PickConfirmed"
+	mark.text = "確定"
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mark.add_theme_font_size_override("font_size", 13)
+	mark.add_theme_color_override("font_color", MenuStyle.COLOR_OUTLINE)
+	mark.add_theme_stylebox_override("normal", MenuStyle.box(COLOR_CONFIRMED, 6, 6.0, 1.0))
+	mark.custom_minimum_size = Vector2(CONFIRM_BADGE_WIDTH, 0.0)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(mark)
+	style_mark.draw.connect(func() -> void:
+		var style_id := str(style_mark.get_meta("style_id", ""))
+		if style_id.is_empty():
+			return
+		RaceHud.draw_style_chevrons(style_mark, Vector2(2.0, style_mark.size.y * 0.5), RaceHud.COLOR_STYLE_MATCH, PururinStatsMath.rank_group_count(), PururinStatsMath.style_rank_group_index(style_id), PICK_CHEVRON_SCALE))
+	return {"margin": margin, "button": button, "frame": frame, "icon": icon, "portrait": portrait, "who": who, "pururin_frame": portrait_frame, "pururin_portrait": pururin_portrait, "pururin": pururin, "style": style, "style_mark": style_mark, "mark": mark, "note": note, "kind": "", "peer": 0, "cpu_index": -1, "pururin_id": ""}
+
+
+## プル選択を出し直す。並びは、レースに出る人（レース開始のときの並び）、そのあとCPUの席。
+func _show_pick() -> void:
+	var host := is_host()
+	var racers := OnlineSession.members()
+	var cpus: Array = _room.get("cpus", [])
+	_pick_info.text = "距離 %dm　出走 %d体" % [int(_room.get("distance_m", 0.0)), int(_room.get("field_size", 0))]
+	var mine := my_pururin_id()
+	# 入ったばかりのときは、サーバーが一覧の1番目のプルを入れてある。前に使ったプルがあれば、それに替える（1回だけ）。
+	if OnlineSession.am_racer() and not _auto_pick_sent:
+		_auto_pick_sent = true
+		if not OnlineSession.last_pick.is_empty() and OnlineSession.last_pick != mine:
+			_client.send(Protocol.PICK, {"pururin_id": OnlineSession.last_pick})
+	elif not mine.is_empty():
+		OnlineSession.last_pick = mine
+	for index in _pick_rows.size():
+		var row: Dictionary = _pick_rows[index]
+		var button: Button = row["button"]
+		var mine_row := false
+		row["visible"] = true
+		if index < racers.size():
+			var member: Dictionary = racers[index]
+			var peer := int(member["peer_id"])
+			mine_row = peer == OnlineSession.peer_id
+			row["kind"] = "self" if mine_row else "player"
+			row["peer"] = peer
+			row["cpu_index"] = -1
+			row["pururin_id"] = str(member["pururin_id"])
+			(row["who"] as Label).text = str(member["name"]) + ("［主］" if peer == int(_room.get("host", 0)) else "")
+			(row["who"] as Label).add_theme_color_override("font_color", PururinSlot.COLOR_USER if mine_row else COLOR_OTHER_PLAYER)
+			_show_person_image({"kind": "player", "peer_id": peer}, row["icon"], row["portrait"])
+			(row["mark"] as Control).modulate.a = 1.0 if bool(member.get("confirmed", false)) else 0.0
+		elif index - racers.size() < cpus.size():
+			var cpu_index := index - racers.size()
+			var cpu_pururin := PururinRosterConfig.pururin_by_id(str(cpus[cpu_index]["pururin_id"]))
+			row["kind"] = "cpu"
+			row["peer"] = 0
+			row["cpu_index"] = cpu_index
+			row["pururin_id"] = str(cpus[cpu_index]["pururin_id"])
+			var trainer := CpuTrainers.by_id(str(cpu_pururin.get("trainer_id", "")))
+			(row["who"] as Label).text = "CPU" if cpu_pururin.is_empty() else "CPU %s" % str(trainer.get("name", ""))
+			(row["who"] as Label).add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
+			_show_person_image({"peer_id": 0, "trainer_id": str(cpu_pururin.get("trainer_id", ""))}, row["icon"], row["portrait"])
+			(row["mark"] as Control).modulate.a = 0.0
+		else:
+			row["kind"] = ""
+			row["visible"] = false
+		(row["margin"] as Control).visible = bool(row["visible"])
+		var pururin_id := str(row["pururin_id"])
+		var pururin := PururinRosterConfig.pururin_by_id(pururin_id)
+		(row["pururin"] as Label).text = pururin_name(pururin_id) if not pururin_id.is_empty() else ("おまかせ" if str(row["kind"]) == "cpu" else "ー未選択ー")
+		var style_id := str(pururin.get("running_style", ""))
+		(row["style"] as Label).text = str(STYLE_NAMES.get(style_id, ""))
+		(row["style_mark"] as Control).set_meta("style_id", style_id)
+		(row["style_mark"] as Control).visible = not pururin.is_empty()
+		(row["style_mark"] as Control).queue_redraw()
+		(row["pururin_frame"] as Control).visible = not pururin.is_empty()
+		(row["pururin_frame"] as Control).custom_minimum_size = Vector2.ONE * (PICK_ICON_SIZE_MINE if mine_row else PICK_ICON_SIZE)
+		if not pururin.is_empty() and str((row["pururin_portrait"] as Control).get("_pururin").get("id", "")) != pururin_id:
+			(row["pururin_portrait"] as Control).call("set_pururin", pururin)
+		# 自分の席：背が高く、目立つ色で、上下に余白。中に「押すと、プルを変更できます」。
+		(row["note"] as Control).visible = mine_row
+		(row["frame"] as Control).custom_minimum_size = Vector2.ONE * (PICK_ICON_SIZE_MINE if mine_row else PICK_ICON_SIZE)
+		button.custom_minimum_size = Vector2(0.0, PICK_ROW_HEIGHT_MINE if mine_row else PICK_ROW_HEIGHT)
+		MenuStyle.style_button(button, 14, COLOR_PICK_MINE if mine_row else COLOR_SEAT)
+		for side: String in ["margin_top", "margin_bottom"]:
+			(row["margin"] as MarginContainer).add_theme_constant_override(side, int(PICK_MINE_MARGIN) if mine_row else 0)
+	var confirmed := is_confirmed(OnlineSession.peer_id)
+	_pick_confirm_button.text = "確定を取り消す" if confirmed else "確定"
+	_pick_confirm_button.disabled = mine.is_empty()
+	_pick_confirm_button.add_theme_stylebox_override("normal", MenuStyle.box(MenuStyle.COLOR_BUTTON_QUIET if confirmed else MenuStyle.COLOR_BUTTON, 10, 22.0, 10.0))
+	_pick_back_button.text = "待機室へ戻る（全員）" if host else "待機室へ戻る"
+	# パドックへは、部屋主だけ。全員が確定してから押せる。
+	_pick_paddock_button.disabled = not host or not everyone_confirmed()
+	_pick_paddock_button.modulate.a = 1.0 if not _pick_paddock_button.disabled else 0.45
+	_link_pick_focus()
+
+
+## プル選択の上下左右の行き先：席（上から下）→ 下のボタン。右は、チャット。
+func _link_pick_focus() -> void:
+	var buttons: Array[Control] = []
+	for row: Dictionary in _pick_rows:
+		if bool(row.get("visible", false)):
+			buttons.append(row["button"])
+	var actions: Array[Control] = []
+	for button: Button in [_pick_back_button, _pick_confirm_button, _pick_paddock_button]:
+		if not button.disabled:
+			actions.append(button)
+	var first_action: Control = actions[0] if not actions.is_empty() else _pick_back_button
+	for index in buttons.size():
+		_link(buttons[index], buttons[index], _pick_chat_edit, buttons[maxi(index - 1, 0)], buttons[index + 1] if index < buttons.size() - 1 else first_action)
+	var last_row: Control = buttons.back() if not buttons.is_empty() else first_action
+	for index in actions.size():
+		_link(actions[index], actions[maxi(index - 1, 0)], actions[index + 1] if index < actions.size() - 1 else _pick_chat_edit, last_row, actions[index])
+	_link_chat(_pick_chat_edit, buttons[0] if not buttons.is_empty() else first_action)
+
+
+## 席を押した：そのプルのステータスの窓を出す。自分の席、部屋主のCPUの席では「変更」も出す。
+func open_pick_dialog(index: int) -> void:
+	var row: Dictionary = _pick_rows[index]
+	var kind := str(row["kind"])
+	if kind.is_empty():
+		return
+	close_dialogs()
+	var can_change := kind == "self" or (kind == "cpu" and is_host())
+	_pick_candidate = ""
+	_pick_change_button.text = "変更"
+	_pick_target = {"kind": kind, "cpu_index": int(row["cpu_index"]), "row": index, "pururin_id": str(row["pururin_id"])}
+	_pick_dialog_title.text = str((row["who"] as Label).text)
+	var pururin_id := str(row["pururin_id"])
+	_pick_dialog_detail.visible = not pururin_id.is_empty()
+	_pick_dialog_empty.visible = pururin_id.is_empty()
+	if not pururin_id.is_empty():
+		_pick_dialog_detail.call("show_pururin", pururin_id, "", false, false)
+	_pick_change_button.visible = can_change
+	_pick_dialog.visible = true
+	(_pick_change_button if can_change else _pick_dialog.find_child("PickDialogBackButton", true, false) as Button).grab_focus()
+
+
+## ステータスの窓の「変更」：プル選択の窓を出す（ほかと重なってもよいので、選べないプルは無い）。
+func open_pick_picker() -> void:
+	var target := _pick_target.duplicate()
+	close_dialogs()
+	_pick_target = target
+	var area := _pick_box.get_global_rect()
+	_picker.global_position = area.position + Vector2(0.0, PICKER_MARGIN)
+	_picker.size = Vector2(minf(float(PururinPicker.window_width()), area.size.x), area.size.y - PICKER_MARGIN * 2.0)
+	_picker.call("open_choices", "CPUのプルを選ぶ" if str(target.get("kind", "")) == "cpu" else "プルを選ぶ", str(target.get("pururin_id", "")), {})
+
+
+## プル選択の窓でプルを押した：そのプルのステータスを見せて、「このプルにする」か「もどる」（窓へ戻る）を選んでもらう。
+func _open_pick_candidate(pururin_id: String) -> void:
+	var target := _pick_target.duplicate()
+	close_dialogs()
+	_pick_target = target
+	_pick_candidate = pururin_id
+	_pick_dialog_title.text = "このプルにしますか"
+	_pick_dialog_detail.visible = true
+	_pick_dialog_empty.visible = false
+	_pick_dialog_detail.call("show_pururin", pururin_id, "", false, false)
+	_pick_change_button.text = "このプルにする"
+	_pick_change_button.visible = true
+	_pick_dialog.visible = true
+	_pick_change_button.grab_focus()
+
+
+## ステータスの窓の左のボタン：見ているだけなら「変更」（プル選択の窓へ）、選びかけなら「このプルにする」（決める）。
+func _on_pick_change_pressed() -> void:
+	if _pick_candidate.is_empty():
+		open_pick_picker()
+		return
+	var pururin_id := _pick_candidate
+	_pick_candidate = ""
+	_pick_dialog.visible = false
+	_send_pick_target(pururin_id)
+
+
+## ステータスの窓の「もどる」：選びかけなら、プル選択の窓へ戻る（そのプルにカーソル）。見ているだけなら、窓を閉じる。
+func _on_pick_dialog_back() -> void:
+	if _pick_candidate.is_empty():
+		close_dialogs()
+		return
+	_pick_target["pururin_id"] = _pick_candidate
+	_pick_candidate = ""
+	open_pick_picker()
+
+
+## プルを決めた（ステータスの窓の「このプルにする」）。自分なら pick、CPUなら cpu_pick。
+func _send_pick_target(pururin_id: String) -> void:
+	if str(_pick_target.get("kind", "")) == "cpu":
+		_client.send(Protocol.CPU_PICK, {"index": int(_pick_target["cpu_index"]), "pururin_id": pururin_id})
+	elif str(_pick_target.get("kind", "")) == "self":
+		_client.send(Protocol.PICK, {"pururin_id": pururin_id})
+	var row := int(_pick_target.get("row", -1))
+	_pick_target = {}
+	if row >= 0:
+		(_pick_rows[row]["button"] as Button).grab_focus()
+
+
+## 「確定」を押す・取り消す。
+func toggle_pick_confirm() -> void:
+	_client.send(Protocol.CONFIRM, {"on": not is_confirmed(OnlineSession.peer_id)})
+
+
+## 「パドックへ」（部屋主だけ。全員が確定していること）。
+func open_paddock() -> void:
+	if is_host() and everyone_confirmed():
+		_client.send(Protocol.ENTRIES)
+
+
+# ---------------------------------------------------------------- パドック
+
+## パドック：左の5分の3が本体（案内・距離と出走数・大きな枠 1列×8行・枠順のボタン・下のボタン）、右の5分の2がルームチャット。
+## 枠を押すと、その人（CPUはトレーナー）とプルの、両方の詳細を出す。枠順を変えられるのは、部屋主だけ。プルの選び直しは、ここではしない。
+func _build_paddock(column: VBoxContainer) -> void:
+	_paddock_box = HBoxContainer.new()
+	_paddock_box.name = "PaddockScreen"
+	_paddock_box.add_theme_constant_override("separation", 16)
+	_paddock_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(_paddock_box)
+	var main := _main_column(_paddock_box, "PaddockMain")
+	_paddock_info = MenuStyle.label("", 15, MenuStyle.COLOR_DIM)
+	_paddock_info.name = "PaddockInfo"
+	main.add_child(_paddock_info)
+	_paddock_status = _panel_status(main, "PaddockStatus")
+	var rows := VBoxContainer.new()
+	rows.name = "PaddockRows"
+	rows.add_theme_constant_override("separation", 4)
+	main.add_child(rows)
+	for index in Protocol.ROOM_CAPACITY:
+		_paddock_rows.append(_paddock_row(rows, index))
+	# 枠順のボタン（部屋主だけ押せる）：ランダム（X）・上へ（L1）・下へ（R1）。
+	var gates := HBoxContainer.new()
+	gates.name = "PaddockGateButtons"
+	gates.add_theme_constant_override("separation", 8)
+	main.add_child(gates)
+	_paddock_gate_buttons = [
+		_row_button(gates, "ランダム", "PaddockShuffleButton", shuffle_gates, MenuStyle.COLOR_BUTTON_QUIET, "confirmation", "X"),
+		_row_button(gates, "上へ", "PaddockUpButton", move_selected_gate.bind(-1), MenuStyle.COLOR_BUTTON_QUIET, "confirmation", "L1"),
+		_row_button(gates, "下へ", "PaddockDownButton", move_selected_gate.bind(1), MenuStyle.COLOR_BUTTON_QUIET, "confirmation", "R1"),
+	]
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	main.add_child(filler)
+	var actions := HBoxContainer.new()
+	actions.name = "PaddockActions"
+	actions.add_theme_constant_override("separation", 8)
+	main.add_child(actions)
+	_paddock_back_button = _row_button(actions, "待機室へ戻る", "PaddockBackButton", back_to_waiting, MenuStyle.COLOR_BUTTON_QUIET, "back", "B")
+	_paddock_confirm_button = _row_button(actions, "確定", "PaddockConfirmButton", toggle_pick_confirm, MenuStyle.COLOR_BUTTON, "confirmation", "")
+	_paddock_start_button = _row_button(actions, "レース開始", "PaddockStartButton", start_race, MenuStyle.COLOR_BUTTON_ON, "confirmation", "START")
+	var chat := _room_chat(_paddock_box, "PaddockChat")
+	_paddock_chat_edit = chat[1]
+	# 枠の詳細の窓：左に、その人（CPUはトレーナー）、右に、プル。
+	var parts := _dialog("PaddockDialog", "")
+	_paddock_dialog = parts[0]
+	var dialog_column: VBoxContainer = parts[1]
+	(dialog_column.get_parent() as Control).custom_minimum_size = Vector2(PADDOCK_DIALOG_WIDTH, 0.0)
+	_paddock_dialog_title = dialog_column.get_node("Title")
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 18)
+	dialog_column.add_child(body)
+	var person := VBoxContainer.new()
+	person.custom_minimum_size = Vector2(PADDOCK_PERSON_WIDTH, 0.0)
+	person.add_theme_constant_override("separation", 6)
+	body.add_child(person)
+	var image_box := Control.new()
+	image_box.custom_minimum_size = Vector2(PROFILE_ICON_SIZE, PROFILE_ICON_SIZE)
+	image_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	image_box.clip_contents = true
+	person.add_child(image_box)
+	_paddock_person_icon = TrainerIcon.new()
+	_paddock_person_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	image_box.add_child(_paddock_person_icon)
+	_paddock_person_portrait = _portrait_rect("PaddockPersonPortrait")
+	image_box.add_child(_paddock_person_portrait)
+	_paddock_person_name = MenuStyle.label("", 22)
+	_paddock_person_name.name = "PaddockPersonName"
+	_paddock_person_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	person.add_child(_paddock_person_name)
+	_paddock_person_note = MenuStyle.label("", 14, MenuStyle.COLOR_FOCUS)
+	_paddock_person_note.name = "PaddockPersonNote"
+	_paddock_person_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	person.add_child(_paddock_person_note)
+	_paddock_person_intro = MenuStyle.label("", 15)
+	_paddock_person_intro.name = "PaddockPersonIntro"
+	_paddock_person_intro.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	person.add_child(_paddock_person_intro)
+	_paddock_dialog_detail = PururinDetail.new()
+	_paddock_dialog_detail.name = "PaddockDetail"
+	_paddock_dialog_detail.custom_minimum_size = Vector2(0.0, DETAIL_DIALOG_HEIGHT)
+	_paddock_dialog_detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(_paddock_dialog_detail)
+	var close := MenuStyle.button("もどる", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	close.name = "PaddockDialogBackButton"
+	close.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
+	close.pressed.connect(close_dialogs)
+	UIAudio.bind_button_sound(close, "back")
+	dialog_column.add_child(close)
+
+
+## 大きな枠を1つ作る。1枠ぶんは {button, badge, icon, portrait, who, pururin_frame, pururin_portrait, pururin, style_mark, style, mark, entry}。
+func _paddock_row(parent: VBoxContainer, index: int) -> Dictionary:
+	var button := Button.new()
+	button.name = "PaddockRow%d" % (index + 1)
+	button.custom_minimum_size = Vector2(0.0, PADDOCK_ROW_HEIGHT)
+	MenuStyle.style_button(button, 14, COLOR_SEAT)
+	button.pressed.connect(open_paddock_dialog.bind(index))
+	button.focus_entered.connect(func() -> void: _selected_gate = index)
+	parent.add_child(button)
+	var line := HBoxContainer.new()
+	line.set_anchors_preset(Control.PRESET_FULL_RECT)
+	line.offset_left = 8.0
+	line.offset_right = -10.0
+	line.add_theme_constant_override("separation", 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	button.add_child(line)
+	var badge: Control = GateBadge.new()
+	badge.call("setup", index, PADDOCK_BADGE_SIZE)
+	badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(badge)
+	var frame := Control.new()
+	frame.custom_minimum_size = Vector2(PADDOCK_ICON_SIZE, PADDOCK_ICON_SIZE)
+	frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(frame)
+	var icon: Control = TrainerIcon.new()
+	icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.add_child(icon)
+	var portrait := _portrait_rect("PaddockPortrait")
+	frame.add_child(portrait)
+	var who := MenuStyle.label("", 16)
+	who.name = "PaddockWho"
+	who.custom_minimum_size = Vector2(PICK_WHO_WIDTH, 0.0)
+	who.clip_text = true
+	who.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	who.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(who)
+	var pururin_frame := Control.new()
+	pururin_frame.custom_minimum_size = Vector2(PADDOCK_ICON_SIZE, PADDOCK_ICON_SIZE)
+	pururin_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pururin_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(pururin_frame)
+	var pururin_portrait: Control = PururinPortrait.new()
+	pururin_portrait.set_anchors_preset(Control.PRESET_FULL_RECT)
+	pururin_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pururin_frame.add_child(pururin_portrait)
+	var pururin := MenuStyle.label("", 18)
+	pururin.name = "PaddockPururin"
+	pururin.custom_minimum_size = Vector2(PICK_PURURIN_NAME_WIDTH, 0.0)
+	pururin.clip_text = true
+	pururin.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	pururin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(pururin)
+	var style_mark := Control.new()
+	style_mark.custom_minimum_size = Vector2(RaceHud.STYLE_CHEVRON_STEP * PICK_CHEVRON_SCALE * PururinStatsMath.rank_group_count() + 4.0, 0.0)
+	style_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(style_mark)
+	style_mark.draw.connect(func() -> void:
+		var style_id := str(style_mark.get_meta("style_id", ""))
+		if style_id.is_empty():
+			return
+		RaceHud.draw_style_chevrons(style_mark, Vector2(2.0, style_mark.size.y * 0.5), RaceHud.COLOR_STYLE_MATCH, PururinStatsMath.rank_group_count(), PururinStatsMath.style_rank_group_index(style_id), PICK_CHEVRON_SCALE))
+	var style := MenuStyle.label("", 14, MenuStyle.COLOR_DIM)
+	style.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	style.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	style.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(style)
+	var mark := Label.new()
+	mark.name = "PaddockConfirmed"
+	mark.text = "確定"
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	mark.add_theme_font_size_override("font_size", 13)
+	mark.add_theme_color_override("font_color", MenuStyle.COLOR_OUTLINE)
+	mark.add_theme_stylebox_override("normal", MenuStyle.box(COLOR_CONFIRMED, 6, 6.0, 1.0))
+	mark.custom_minimum_size = Vector2(CONFIRM_BADGE_WIDTH, 0.0)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(mark)
+	return {"button": button, "badge": badge, "icon": icon, "portrait": portrait, "who": who, "pururin_frame": pururin_frame, "pururin_portrait": pururin_portrait, "pururin": pururin, "style_mark": style_mark, "style": style, "mark": mark, "entry": {}}
+
+
+## パドックを出し直す。枠順に、全出走（人とCPU）を並べる。
+func _show_paddock() -> void:
+	var host := is_host()
+	var entries: Array = _room.get("entries", [])
+	_paddock_info.text = "距離 %dm　出走 %d体" % [int(_room.get("distance_m", 0.0)), entries.size()]
+	for index in _paddock_rows.size():
+		var row: Dictionary = _paddock_rows[index]
+		var button: Button = row["button"]
+		button.visible = index < entries.size()
+		if not button.visible:
+			continue
+		var entry: Dictionary = entries[index]
+		row["entry"] = entry
+		var peer := int(entry.get("peer_id", 0))
+		var mine := peer != 0 and peer == OnlineSession.peer_id
+		if peer != 0:
+			(row["who"] as Label).text = member_name(peer) + ("［主］" if peer == int(_room.get("host", 0)) else "")
+			(row["who"] as Label).add_theme_color_override("font_color", PururinSlot.COLOR_USER if mine else COLOR_OTHER_PLAYER)
+		else:
+			(row["who"] as Label).text = "CPU %s" % str(entry.get("trainer_name", ""))
+			(row["who"] as Label).add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
+		_show_person_image({"peer_id": peer, "trainer_id": str(entry.get("trainer_id", ""))}, row["icon"], row["portrait"])
+		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"]))
+		(row["pururin"] as Label).text = pururin_name(str(entry["id"]))
+		var style_id := str(pururin.get("running_style", ""))
+		(row["style"] as Label).text = str(STYLE_NAMES.get(style_id, ""))
+		(row["style_mark"] as Control).set_meta("style_id", style_id)
+		(row["style_mark"] as Control).queue_redraw()
+		if str((row["pururin_portrait"] as Control).get("_pururin").get("id", "")) != str(entry["id"]):
+			(row["pururin_portrait"] as Control).call("set_pururin", pururin)
+		(row["mark"] as Control).modulate.a = 1.0 if peer != 0 and is_confirmed(peer) else 0.0
+		MenuStyle.style_button(button, 14, COLOR_PICK_MINE if mine else COLOR_SEAT)
+	# 枠順のボタンは、部屋主だけ。上へ・下へは、選んでいる枠があるときだけ。
+	for gate_button: Button in _paddock_gate_buttons:
+		gate_button.disabled = not host
+		gate_button.modulate.a = 1.0 if host else 0.45
+	var confirmed := is_confirmed(OnlineSession.peer_id)
+	_paddock_confirm_button.text = "取り消す" if confirmed else "確定"
+	_paddock_start_button.disabled = not host or not everyone_confirmed()
+	_paddock_start_button.get_node("ButtonMark").visible = not _paddock_start_button.disabled
+	_paddock_start_button.modulate.a = 1.0 if not _paddock_start_button.disabled else 0.45
+	_link_paddock_focus()
+
+
+## パドックの上下左右の行き先：枠（上から下）→ 枠順のボタン → 下のボタン。右は、チャット。
+func _link_paddock_focus() -> void:
+	var rows: Array[Control] = []
+	for row: Dictionary in _paddock_rows:
+		if (row["button"] as Control).visible:
+			rows.append(row["button"])
+	var gate_buttons: Array[Control] = []
+	for button: Button in _paddock_gate_buttons:
+		if not button.disabled:
+			gate_buttons.append(button)
+	var actions: Array[Control] = []
+	for button: Button in [_paddock_back_button, _paddock_confirm_button, _paddock_start_button]:
+		if not button.disabled:
+			actions.append(button)
+	var below_rows: Control = gate_buttons[0] if not gate_buttons.is_empty() else (actions[0] if not actions.is_empty() else _paddock_back_button)
 	for index in rows.size():
-		var row := rows[index]
-		var above: Control = rows[index - 1] if index > 0 else (distance_button if distance_button != null else row)
-		_link(row, row, _person_button, above, rows[index + 1] if index < rows.size() - 1 else below)
-	for index in below_buttons.size():
-		var button := below_buttons[index]
-		_link(button, below_buttons[maxi(index - 1, 0)], below_buttons[index + 1] if index < below_buttons.size() - 1 else _person_button, last_row, _chat_edit)
-	var send: Control = _chat_edit.get_parent().get_node("ChatSendButton")
-	_link(_chat_edit, _chat_edit, send, below if below != _chat_edit else last_row, _chat_edit)
-	_link(send, _chat_edit, _leave_button, below if below != _chat_edit else last_row, send)
-	var selected_row: Control = _slots[_selected_gate] if _selected_gate >= 0 and _slots[_selected_gate].focus_mode != Control.FOCUS_NONE else first_row
-	_link(_person_button, selected_row, _person_button, _person_button, _confirm_button)
-	_link(_leave_button, send, _confirm_button, _person_button, _leave_button)
-	_link(_confirm_button, _leave_button, _confirm_button, _person_button, _confirm_button)
+		_link(rows[index], rows[index], _paddock_chat_edit, rows[maxi(index - 1, 0)], rows[index + 1] if index < rows.size() - 1 else below_rows)
+	var last_row: Control = rows.back() if not rows.is_empty() else below_rows
+	var first_action: Control = actions[0] if not actions.is_empty() else _paddock_back_button
+	for index in gate_buttons.size():
+		_link(gate_buttons[index], gate_buttons[maxi(index - 1, 0)], gate_buttons[index + 1] if index < gate_buttons.size() - 1 else _paddock_chat_edit, last_row, first_action)
+	var above_actions: Control = gate_buttons[0] if not gate_buttons.is_empty() else last_row
+	for index in actions.size():
+		_link(actions[index], actions[maxi(index - 1, 0)], actions[index + 1] if index < actions.size() - 1 else _paddock_chat_edit, above_actions, actions[index])
+	_link_chat(_paddock_chat_edit, rows[0] if not rows.is_empty() else first_action)
 
 
-## 行の下の、部屋の決めごとのボタン（左から右の順）。
-func _settings_buttons() -> Array[Button]:
-	var buttons: Array[Button] = []
-	for node in _rules_card.find_children("*", "Button", true, false):
-		buttons.append(node as Button)
-	return buttons
+## 枠を押した：その人（CPUはトレーナー）と、プルの、両方の詳細を出す。
+func open_paddock_dialog(index: int) -> void:
+	var entry: Dictionary = _paddock_rows[index]["entry"]
+	if entry.is_empty():
+		return
+	close_dialogs()
+	_selected_gate = index
+	var peer := int(entry.get("peer_id", 0))
+	_paddock_dialog_title.text = "%d枠" % (index + 1)
+	_show_person_image({"peer_id": peer, "trainer_id": str(entry.get("trainer_id", ""))}, _paddock_person_icon, _paddock_person_portrait)
+	if peer == 0:
+		var trainer := CpuTrainers.by_id(str(entry.get("trainer_id", "")))
+		_paddock_person_name.text = str(trainer.get("name", "CPU"))
+		_paddock_person_note.text = "CPUトレーナー　得意脚質：%s" % str(STYLE_NAMES.get(str(trainer.get("favorite_running_style", "")), ""))
+		_paddock_person_intro.text = str(trainer.get("introduction", ""))
+	else:
+		var profile: Dictionary = OnlineSession.profiles.get(peer, {})
+		_paddock_person_name.text = str(profile.get("name", member_name(peer)))
+		var notes: PackedStringArray = []
+		if peer == OnlineSession.peer_id:
+			notes.append("あなた")
+		if peer == int(_room.get("host", 0)):
+			notes.append("部屋主")
+		_paddock_person_note.text = "・".join(notes) if not notes.is_empty() else "プレイヤー"
+		var introduction := str(profile.get("introduction", ""))
+		_paddock_person_intro.text = introduction if not introduction.is_empty() else "（自己紹介は、ありません）"
+	_paddock_dialog_detail.call("show_pururin", str(entry["id"]), "", false, false)
+	_paddock_dialog.visible = true
+	(_paddock_dialog.find_child("PaddockDialogBackButton", true, false) as Button).grab_focus()
 
 
-## 1つの部品の、左・右・上・下の行き先を決める。
+## パドックの「レース開始」（部屋主だけ。全員が確定していること）。
+func start_race() -> void:
+	if is_host() and everyone_confirmed():
+		_client.send(Protocol.START)
+
+
+# ---------------------------------------------------------------- 部屋の中
+
 static func _link(node: Control, left: Control, right: Control, top: Control, bottom: Control) -> void:
 	node.focus_neighbor_left = node.get_path_to(left)
 	node.focus_neighbor_right = node.get_path_to(right)
 	node.focus_neighbor_top = node.get_path_to(top)
 	node.focus_neighbor_bottom = node.get_path_to(bottom)
-
-
-## 自分の行（0から。部屋に入った順。いなければ -1）。
-func my_slot() -> int:
-	for index in _members.size():
-		if int(_members[index]["peer_id"]) == OnlineSession.peer_id:
-			return index
-	return -1
 
 
 func is_confirmed(peer_id: int) -> bool:
@@ -1886,145 +2970,6 @@ func everyone_confirmed() -> bool:
 	return not _members.is_empty()
 
 
-## 行の右の、確定の印と「︙」を、その行の人に合わせる（CPU・閉じた行は、どちらも出さない）。
-func _show_row_side(row_index: int, peer_id: int) -> void:
-	var mark := _confirm_marks[row_index]
-	mark.modulate.a = 1.0 if peer_id != 0 and is_confirmed(peer_id) else 0.0
-	var menu := _menu_buttons[row_index]
-	var can_open := peer_id != 0 and peer_id != OnlineSession.peer_id and is_host()
-	menu.modulate.a = 1.0 if can_open else 0.0
-	menu.disabled = not can_open
-
-
-## 部屋の場面：人を、入った順に並べる（枠順は、まだ決まっていないので、枠番号は出さない）。
-## そのあとは、CPU（入れる部屋だけ。出走数まで）。出走数より先の行は、閉じた見た目にする。
-func _show_member_rows() -> void:
-	var field_size := int(_room.get("field_size", Protocol.ROOM_CAPACITY))
-	var with_cpu := bool(_room.get("cpu", true))
-	for index in _slots.size():
-		var row := _slots[index]
-		_badges[index].visible = false
-		row.modulate.a = 1.0
-		var info := {"peer_id": 0, "pururin_id": ""}
-		if index < _members.size():
-			var member: Dictionary = _members[index]
-			var is_me := int(member["peer_id"]) == OnlineSession.peer_id
-			info = {"peer_id": int(member["peer_id"]), "pururin_id": str(member["pururin_id"])}
-			row.call("set_role", is_me)
-			row.call("set_view", name_tag(member), PururinSlot.COLOR_USER if is_me else COLOR_OTHER_PLAYER, PururinSlot.EMPTY_TEXT if is_me else WAITING_SLOT_TEXT, is_me, true, NAME_TAG_WIDTH)
-			row.call("set_pururin", PururinRosterConfig.pururin_by_id(str(member["pururin_id"])))
-		elif with_cpu and index < field_size:
-			# CPUの行：主は、ぷるりんを決められる（◀▶・決定で一覧・Xで「おまかせ」）。決めていなければ「おまかせ」。
-			var cpu_index := index - _members.size()
-			var cpus: Array = _room.get("cpus", [])
-			var cpu: Dictionary = cpus[cpu_index] if cpu_index < cpus.size() else {"pururin_id": "", "trainer_id": ""}
-			var cpu_pururin := PururinRosterConfig.pururin_by_id(str(cpu["pururin_id"]))
-			var trainer_id := str(cpu["trainer_id"]) if not str(cpu["trainer_id"]).is_empty() else str(cpu_pururin.get("trainer_id", ""))
-			info = {"peer_id": 0, "pururin_id": str(cpu["pururin_id"]), "trainer_id": trainer_id if not cpu_pururin.is_empty() else "", "cpu": true, "cpu_index": cpu_index}
-			var tag := PururinSlot.CPU_TAG if cpu_pururin.is_empty() else "CPU %s" % str(CpuTrainers.by_id(trainer_id).get("name", ""))
-			row.call("set_role", false)
-			row.call("set_view", tag, MenuStyle.COLOR_DIM, CPU_SLOT_TEXT, is_host(), not cpu_pururin.is_empty(), NAME_TAG_WIDTH)
-			row.call("set_pururin", cpu_pururin)
-		else:
-			row.call("set_role", false)
-			row.call("set_view", "", MenuStyle.COLOR_DIM, CLOSED_SLOT_TEXT, false, false, NAME_TAG_WIDTH)
-			row.call("set_pururin", {})
-			row.modulate.a = 0.35
-		_row_infos[index] = info
-		_show_row_side(index, int(info["peer_id"]))
-
-
-## 行の左の札に出す名前（部屋の主には、印を付ける）。
-func name_tag(member: Dictionary) -> String:
-	return str(member["name"]) + ("［主］" if int(member["peer_id"]) == int(_room.get("host", 0)) else "")
-
-
-## 出走表の場面：枠順に、全出走（人とCPU）を並べる。どの行にもカーソルを置けて、右の詳細で能力を見られる。
-func _show_entry_rows() -> void:
-	var entries: Array = _room.get("entries", [])
-	for index in _slots.size():
-		var row := _slots[index]
-		var info := {"peer_id": 0, "pururin_id": ""}
-		_badges[index].visible = true
-		_badges[index].modulate.a = 1.0 if index < entries.size() else 0.25
-		row.modulate.a = 1.0
-		if index < entries.size():
-			var entry: Dictionary = entries[index]
-			var peer_id := int(entry["peer_id"])
-			var is_me := peer_id == OnlineSession.peer_id
-			info = {"peer_id": peer_id, "pururin_id": str(entry["id"]), "trainer_id": str(entry.get("trainer_id", "")), "cpu": peer_id == 0}
-			var tag := str(entry["trainer_name"])
-			var color := MenuStyle.COLOR_DIM
-			if peer_id != 0:
-				tag += "［主］" if peer_id == int(_room.get("host", 0)) else ""
-				color = PururinSlot.COLOR_USER if is_me else COLOR_OTHER_PLAYER
-			row.call("set_role", is_me)
-			if peer_id == 0:
-				tag = "CPU " + tag
-			# 主は、CPUの枠のぷるりんを、ここでも替えられる。
-			row.call("set_view", tag, color, CLOSED_SLOT_TEXT, peer_id == 0 and is_host(), true, NAME_TAG_WIDTH)
-			row.call("set_pururin", PururinRosterConfig.pururin_by_id(str(entry["id"])))
-		else:
-			row.call("set_role", false)
-			row.call("set_view", "", MenuStyle.COLOR_DIM, CLOSED_SLOT_TEXT, false, false, NAME_TAG_WIDTH)
-			row.call("set_pururin", {})
-			row.modulate.a = 0.35
-		_row_infos[index] = info
-		_show_row_side(index, int(info["peer_id"]))
-	# 最初は、自分の枠を選んでおく（自分のぷるりんが、右に出る）。
-	if _selected_gate < 0 or _selected_gate >= entries.size():
-		_selected_gate = my_row()
-
-
-## 出走表の、枠順の操作（主だけ押せる）と、その説明。
-func _show_gate_controls() -> void:
-	var host := is_host()
-	var count := (_room.get("entries", []) as Array).size()
-	# 主には、ボタンだけを出す（行を選んで▲▼で、となりの枠と入れ替える。「選び直す」で、全員が部屋へ戻る）。
-	_gates_note.text = "枠順は、くじで決まりました。主が、引き直しや入れ替えをできます。"
-	_gates_note.visible = not host
-	for button: Button in _gate_buttons:
-		button.visible = host
-	if host:
-		(_gate_buttons[1] as Button).disabled = _selected_gate <= 0
-		(_gate_buttons[2] as Button).disabled = _selected_gate < 0 or _selected_gate >= count - 1
-
-
-## いちばん下の「確定」を、今の場面に合わせる。全員が確定したら、主に「先へ進みますか」の窓を出す。
-func _show_bottom_buttons() -> void:
-	var in_entries := OnlineSession.in_entries()
-	var confirmed := is_confirmed(OnlineSession.peer_id)
-	var all_confirmed := everyone_confirmed()
-	var host := is_host()
-	if not all_confirmed:
-		_advance_dismissed = false
-		_advance_dialog.visible = false
-	# 主は、全員が確定したあと（窓を「まだ進まない」で閉じたあと）は、このボタンで、もう一度窓を開ける。
-	if host and all_confirmed:
-		_confirm_button.text = "レース開始へ…" if in_entries else "出走表へ…"
-	else:
-		_confirm_button.text = "確定を取り消す" if confirmed else "確定"
-	_confirm_button.add_theme_stylebox_override("normal", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON if host and all_confirmed else (MenuStyle.COLOR_BUTTON_QUIET if confirmed else MenuStyle.COLOR_BUTTON), 10, 22.0, 10.0))
-	# 部屋では、ぷるりんを選んでからでないと、確定できない。
-	_confirm_button.disabled = not in_entries and my_pururin_id().is_empty()
-	_confirm_button.get_node("ButtonMark").visible = not confirmed or (host and all_confirmed)
-	if host and all_confirmed and not _advance_dismissed and not _advance_dialog.visible and not is_picker_open():
-		open_advance_dialog()
-
-
-## 主に出す窓：全員が確定した。部屋では「出走表へ」、出走表では「レース開始」。
-func open_advance_dialog() -> void:
-	if not is_host() or not everyone_confirmed():
-		return
-	close_dialogs()
-	var in_entries := OnlineSession.in_entries()
-	_advance_title.text = "全員が確定しました"
-	_advance_note.text = "この枠順で、レースを始めますか。" if in_entries else "出走表へ進みますか。CPUのぷるりんと、枠順（くじ）が決まります。"
-	_advance_button.text = "レース開始" if in_entries else "出走表へ"
-	_advance_dialog.visible = true
-	_advance_button.grab_focus()
-
-
 func is_host() -> bool:
 	return OnlineSession.is_host()
 
@@ -2034,40 +2979,14 @@ func my_pururin_id() -> String:
 	return OnlineSession.my_pururin_id()
 
 
-func everyone_picked() -> bool:
-	for member: Dictionary in _members:
-		if str(member["pururin_id"]).is_empty():
-			return false
-	return not _members.is_empty()
-
-
 static func pururin_name(pururin_id: String) -> String:
 	return str(PururinRosterConfig.pururin_by_id(pururin_id).get("display_name", pururin_id))
 
 
-## ぷるりんを、次（1）か前（-1）の個体に替える。ほかの人が選んでいる個体は、飛ばす。
-func step_pururin(direction: int) -> void:
-	step_row_pururin(my_row(), direction)
-
-
-## 距離を決める（部屋の主だけ）。
 func set_distance(distance_m: float) -> void:
 	_client.send(Protocol.SETTINGS, {"distance_m": distance_m})
 	# ボタンの見た目は、サーバーから届いた部屋のようすで決める（断られたときに、ずれないように）。
-	_show_room()
-
-
-## 出走数を、1つ増やす（1）か減らす（-1）（部屋の主だけ）。今いる人数より少なくは、できない。
-func step_field_size(direction: int) -> void:
-	var lowest := maxi(Protocol.FIELD_SIZE_MIN, _members.size())
-	var wanted := clampi(int(_room.get("field_size", Protocol.ROOM_CAPACITY)) + direction, lowest, Protocol.ROOM_CAPACITY)
-	if wanted != int(_room.get("field_size", 0)):
-		_client.send(Protocol.SETTINGS, {"field_size": wanted})
-
-
-## CPUを入れるかを、切り替える（部屋の主だけ。どちら向きに押しても、切り替わる）。
-func step_cpu(_direction: int) -> void:
-	_client.send(Protocol.SETTINGS, {"cpu": not bool(_room.get("cpu", true))})
+	_show_distance_buttons(can_set_distance())
 
 
 ## 窓の「変える」：パスワードを、入力らんの文字に変える（部屋の主だけ。空なら、施錠なしにする）。
@@ -2082,38 +3001,10 @@ func kick(peer_id: int) -> void:
 	_client.send(Protocol.KICK, {"peer_id": peer_id})
 
 
-## 画質を、標準と軽量で切り替える（どちら向きに押しても、切り替わる）。
-func step_scenery(_direction: int) -> void:
-	_light_scenery = not _light_scenery
-	RaceSession.set_course_only(_light_scenery)
-	_scenery_label.text = scenery_text()
-
-
 func is_light_scenery() -> bool:
 	return _light_scenery
 
 
-func scenery_text() -> String:
-	return "軽量" if _light_scenery else "標準"
-
-
-## 「確定」を押す・取り消す。
-func toggle_confirm() -> void:
-	# 主は、全員が確定したあとは、「先へ進みますか」の窓を開く。
-	if is_host() and everyone_confirmed():
-		_advance_dismissed = false
-		open_advance_dialog()
-		return
-	_client.send(Protocol.CONFIRM, {"on": not is_confirmed(OnlineSession.peer_id)})
-
-
-## 主の、先へ進むボタン。部屋では「出走表へ」、出走表では「レース開始」。
-func advance() -> void:
-	_client.send(Protocol.START if OnlineSession.in_entries() else Protocol.ENTRIES)
-	close_dialogs()
-
-
-## 出走表：枠順のくじを、引き直す（主だけ）。
 func shuffle_gates() -> void:
 	_client.send(Protocol.GATES, {"action": Protocol.GATES_SHUFFLE})
 
@@ -2126,36 +3017,48 @@ func move_selected_gate(direction: int) -> void:
 		return
 	_client.send(Protocol.GATES, {"action": Protocol.GATES_SWAP, "a": _selected_gate, "b": other})
 	_selected_gate = other
+	# カーソルも、動かした先の枠へ付いていく。
+	if _paddock_box.visible:
+		(_paddock_rows[other]["button"] as Button).grab_focus()
 
 
-## 出走表から、部屋へ戻る（主だけ。全員が、ぷるりんを選ぶ所へ戻る）。
+## 一つ前へ戻る。出走表 → ぷるりんを選ぶ所（主だけ）。レース設定 → 待機室（主は全員を、ほかの人は自分だけを戻す）。
+## パドックの「待機室へ戻る」：主は全員を、ほかの人は自分だけを、待機室へ戻す。
+func back_to_waiting() -> void:
+	_self_back = not is_host()
+	_client.send(Protocol.BACK, {"to": Protocol.BACK_TO_LOBBY})
+
+
 func back_to_room_phase() -> void:
+	# 主でない人が、レース設定・プル選択で押すと、自分だけ待機室へ戻る（自分の操作なので、知らせは出さない）。
+	_self_back = not is_host() and OnlineSession.phase() in [Protocol.PHASE_SETTINGS, Protocol.PHASE_ROOM]
 	_client.send(Protocol.BACK)
 
 
-## ひとことを送る。
-func send_chat() -> void:
-	var text := Protocol.clean_text(_chat_edit.text, OnlineConfig.chat_max_length())
+## ひとことを送る（edit は、その画面のルームチャットの入力らん）。
+func send_chat(edit: LineEdit) -> void:
+	var text := Protocol.clean_text(edit.text, OnlineConfig.chat_max_length())
 	if text.is_empty():
 		return
 	_client.send(Protocol.CHAT, {"text": text})
-	_chat_edit.text = ""
+	edit.text = ""
 
 
-## ひとことの記録を、出し直す。
+## ひとことの記録を、出し直す（待機室のルームチャットと、ぷるりんを選ぶ所・出走表の欄の、両方）。
 func _show_chat() -> void:
-	_chat_log.clear()
-	for line: Dictionary in OnlineSession.chat_log:
-		if bool(line.get("system", false)):
-			# 部屋のできごとの知らせは、色を変えて、人のひとことと見分けられるようにする。
-			_chat_log.push_color(MenuStyle.COLOR_FOCUS)
-			_chat_log.add_text("— %s\n" % str(line["text"]))
-			_chat_log.pop()
-			continue
-		_chat_log.push_color(PururinSlot.COLOR_USER if bool(line["mine"]) else COLOR_OTHER_PLAYER)
-		_chat_log.add_text(str(line["name"]))
-		_chat_log.pop()
-		_chat_log.add_text("　" + str(line["text"]) + "\n")
+	for log: RichTextLabel in _chat_logs:
+		log.clear()
+		for line: Dictionary in OnlineSession.chat_log:
+			if bool(line.get("system", false)):
+				# 部屋のできごとの知らせは、色を変えて、人のひとことと見分けられるようにする。
+				log.push_color(MenuStyle.COLOR_FOCUS)
+				log.add_text("— %s\n" % str(line["text"]))
+				log.pop()
+				continue
+			log.push_color(PururinSlot.COLOR_USER if bool(line["mine"]) else COLOR_OTHER_PLAYER)
+			log.add_text(str(line["name"]))
+			log.pop()
+			log.add_text("　" + str(line["text"]) + "\n")
 
 
 ## レースが始まった：届いた出走と距離で、レースの画面へ進む（レースは、サーバーから届く状態を映す）。
@@ -2174,14 +3077,15 @@ func prepare_race(data: Dictionary) -> void:
 
 ## 窓が出ていれば、窓を閉じる。部屋の中では、部屋を出て、一覧へ戻る。それ以外では、つながりを切って、ゲーム選択へ戻る。
 func go_back() -> void:
-	if is_trainer_picker_open():
-		_trainer_picker.call("close")
-		return
 	if is_picker_open():
 		_picker.call("close")
 		return
 	if is_dialog_open():
 		close_dialogs()
+		return
+	# パドックでは、待機室へ戻る（部屋は出ない）。
+	if _paddock_box.visible:
+		back_to_waiting()
 		return
 	if OnlineSession.in_room():
 		leave_room()
@@ -2208,10 +3112,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_back()
-	elif RaceControllerInput.is_slot_force_pressed(event) and OnlineSession.in_room() and not is_dialog_open() and not is_picker_open() and not is_trainer_picker_open():
-		# Y：いま右に出している人（CPUはトレーナー）の紹介を開く。
+	elif _paddock_box.visible and is_host() and not is_dialog_open() and RaceControllerInput.is_slot_clear_pressed(event) and not (get_viewport().gui_get_focus_owner() is LineEdit):
+		# パドックの X：枠順のくじを引き直す（部屋主だけ）。
 		viewport.set_input_as_handled()
-		open_profile_dialog()
+		shuffle_gates()
+	elif _paddock_box.visible and RaceControllerInput.distance_step(event) != 0 and not is_dialog_open():
+		# パドックの L1・R1：選んでいる枠を、上・下の枠と入れ替える（部屋主だけ）。
+		viewport.set_input_as_handled()
+		if is_host():
+			move_selected_gate(RaceControllerInput.distance_step(event))
 	elif RaceControllerInput.distance_step(event) != 0 and OnlineSession.in_room() and not is_dialog_open() and not is_picker_open():
 		# L1・R1：どこにカーソルがあっても、距離を1つ動かす（部屋の主だけ）。
 		viewport.set_input_as_handled()
@@ -2222,11 +3131,11 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## STARTは、その段階の先へ進む操作だけ。別の窓やチャット入力から、背後を動かさない。
 func start_button() -> Button:
-	if is_picker_open() or is_trainer_picker_open():
+	if is_picker_open():
 		return null
-	for dialog: Control in [_create_dialog, _join_dialog, _advance_dialog]:
+	for dialog: Control in [_create_dialog, _join_dialog]:
 		if dialog.visible:
-			var button_name := {"CreateDialog": "CreateButton", "JoinDialog": "JoinButton", "AdvanceDialog": "AdvanceButton"}
+			var button_name := {"CreateDialog": "CreateButton", "JoinDialog": "JoinButton"}
 			return dialog.find_child(button_name[str(dialog.name)], true, false) as Button
 	if is_dialog_open():
 		return null
@@ -2235,9 +3144,19 @@ func start_button() -> Button:
 		return _connect_button if _connect_box.visible else null
 	if _connect_box.visible:
 		return _connect_button
-	if OnlineSession.in_room():
-		if is_confirmed(OnlineSession.peer_id) and not (is_host() and everyone_confirmed()):
-			return null
-		return _confirm_button
+	if _waiting_box.visible:
+		if is_host():
+			return _race_open_button if not _race_open_button.disabled else null
+		return _ready_button if not OnlineSession.my_lobby_ready() else null
+	if _settings_box.visible:
+		return _settings_next_button if is_host() else null
+	if _paddock_box.visible:
+		if is_host() and not _paddock_start_button.disabled:
+			return _paddock_start_button
+		return _paddock_confirm_button if not is_confirmed(OnlineSession.peer_id) else null
+	if _pick_box.visible:
+		if is_host() and not _pick_paddock_button.disabled:
+			return _pick_paddock_button
+		return _pick_confirm_button if not is_confirmed(OnlineSession.peer_id) and not _pick_confirm_button.disabled else null
 	# 部屋の一覧では、STARTで先へ進むものはない（部屋の窓を開くだけなので、STARTは使わない）。
 	return null

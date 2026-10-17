@@ -5,7 +5,8 @@ const Logo := preload("res://scripts/logo.gd")
 const LogoScene := preload("res://scenes/logo.tscn")
 const TitleScene := preload("res://scenes/title.tscn")
 const MenuScene := preload("res://scenes/trainer_profile.tscn")
-const MenuHome := preload("res://scripts/mode_select.gd")
+const MenuHome := preload("res://scripts/options_screen.gd")
+const OptionsScene := preload("res://scenes/options.tscn")
 const ModeSelectScene := preload("res://scenes/mode_select.tscn")
 const RaceSelect := preload("res://scripts/race_select.gd")
 const RaceSelectScene := preload("res://scenes/race_select.tscn")
@@ -18,7 +19,7 @@ const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.g
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 
 ## ヘッドレスではOSの窓モードが変わらないため、入力が要求した切替を記録する。
-class TitleInputProbe extends "res://scripts/mode_select.gd":
+class TitleInputProbe extends "res://scripts/options_screen.gd":
 	var requested_steps: Array = []
 	func _cycle_screen_mode(direction: int) -> void:
 		requested_steps.append(direction)
@@ -99,7 +100,7 @@ func test_profile_is_only_for_profile_editing_and_next_or_back() -> void:
 	assert_eq(next.find_valid_focus_neighbor(SIDE_BOTTOM), back)
 	for name in ["CameraExplorationButton", "QuitButton", "ScreenModeSelector", "QualityButton", "PadDiagnosticsButton", "OfflineFreeRaceButton"]:
 		assert_null(menu.find_child(name, true, false), name)
-	assert_eq(menu.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
+	assert_eq(menu.get("OPTIONS_SCENE_PATH"), "res://scenes/options.tscn")
 	menu.free()
 
 func test_mode_select_offers_offline_play_and_friend_race() -> void:
@@ -114,10 +115,28 @@ func test_mode_select_offers_offline_play_and_friend_race() -> void:
 	assert_eq(friend.text, "ともだち対戦")
 	assert_false(friend.disabled)
 	assert_eq(screen.get("RACE_SELECT_SCENE_PATH"), "res://scenes/race_select.tscn")
-	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/trainer_profile.tscn")
+	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/options.tscn")
 	assert_eq(screen.get("ONLINE_LOBBY_SCENE_PATH"), "res://scenes/online_lobby.tscn")
 	assert_eq(get_viewport().gui_get_focus_owner(), offline)
 	screen.free()
+
+
+func test_options_screen_holds_quality_window_and_guide_between_profile_and_modes() -> void:
+	var screen := OptionsScene.instantiate()
+	add_child(screen)
+	for name in ["QualityButton", "ScreenModeSelector", "ControlGuideButton", "NextButton", "BackButton"]:
+		assert_not_null(screen.find_child(name, true, false), name)
+	for name in ["OfflineFreeRaceButton", "FriendRaceButton", "CameraExplorationButton", "QuitButton"]:
+		assert_null(screen.find_child(name, true, false), name)
+	assert_eq(screen.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
+	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/trainer_profile.tscn")
+	assert_eq((screen.find_child("NextButton", true, false) as Button).text, "次へ（ゲームモード選択）")
+	screen.free()
+	var modes := ModeSelectScene.instantiate()
+	add_child(modes)
+	for name in ["QualityButton", "ScreenModeSelector", "ControlGuideButton"]:
+		assert_null(modes.find_child(name, true, false), name)
+	modes.free()
 
 
 func test_modes_use_accept_without_a_start_shortcut() -> void:
@@ -142,16 +161,13 @@ func test_modes_use_accept_without_a_start_shortcut() -> void:
 	release.pressed = false
 	screen._unhandled_input(release)
 	assert_signal_emit_count(friend, "pressed", 1)
-	screen._open_control_guide()
-	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
-	assert_signal_emit_count(friend, "pressed", 1)
 	screen.free()
 
 
 func test_quality_choice_is_shared_with_online_and_survives_reopening() -> void:
 	var before := RaceSession.is_course_only()
 	RaceSession.set_course_only(false)
-	var screen := ModeSelectScene.instantiate()
+	var screen := OptionsScene.instantiate()
 	add_child(screen)
 	var quality := screen.find_child("QualityLabel", true, false) as Label
 	assert_true(quality.text.contains("標準"))
@@ -162,7 +178,7 @@ func test_quality_choice_is_shared_with_online_and_survives_reopening() -> void:
 	assert_true(lobby.is_light_scenery())
 	lobby.free()
 	screen.free()
-	screen = ModeSelectScene.instantiate()
+	screen = OptionsScene.instantiate()
 	add_child(screen)
 	assert_true(screen.find_child("QualityLabel", true, false).text.contains("軽量"))
 	screen.step_quality()
@@ -207,7 +223,7 @@ func test_title_screen_modes_cycle_both_directions() -> void:
 
 
 func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> void:
-	var menu := ModeSelectScene.instantiate()
+	var menu := OptionsScene.instantiate()
 	add_child(menu)
 	await get_tree().process_frame
 	var row := menu.find_child("ScreenModeSelector", true, false) as HBoxContainer
@@ -216,8 +232,8 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	var label := row.get_node("ModeLabel") as Label
 	var previous := row.get_node("PreviousModeButton") as Button
 	var next := row.get_node("NextModeButton") as Button
-	var exploration := menu.find_child("CameraExplorationButton", true, false) as Button
-	assert_eq(row.size.x, exploration.size.x)
+	var guide_button := menu.find_child("ControlGuideButton", true, false) as Button
+	assert_eq(row.size.x, guide_button.size.x)
 	for child: Control in row.get_children():
 		assert_gte(child.position.x, 0.0, child.name)
 		assert_lte(child.position.x + child.size.x, row.size.x, child.name)
@@ -226,9 +242,8 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	assert_eq(previous.text, "◀")
 	assert_eq(next.text, "▶")
 	var diagnostics := menu.get_node_or_null("Columns/MenuColumn/PadDiagnosticsButton")
-	var quit_button := menu.find_child("QuitButton", true, false) as Button
-	assert_eq(row.find_valid_focus_neighbor(SIDE_BOTTOM), quit_button)
-	assert_eq(quit_button.find_valid_focus_neighbor(SIDE_TOP), row)
+	assert_eq(row.find_valid_focus_neighbor(SIDE_BOTTOM), guide_button)
+	assert_eq(guide_button.find_valid_focus_neighbor(SIDE_TOP), row)
 	assert_null(diagnostics)
 	var quality_row: Control = menu.find_child("QualityButton", true, false)
 	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), quality_row)
@@ -256,7 +271,7 @@ func test_screen_mode_row_cycles_directly_on_left_right_without_moving_focus() -
 	get_viewport().push_input(_action("ui_left"))
 	assert_eq(title.requested_steps, [1, 1, -1])
 	assert_eq(get_viewport().gui_get_focus_owner(), row)
-	(title.find_child("OfflineFreeRaceButton", true, false) as Control).grab_focus()
+	(title.find_child("ControlGuideButton", true, false) as Control).grab_focus()
 	get_viewport().push_input(_action("ui_left"))
 	assert_eq(title.requested_steps, [1, 1, -1], "別の項目では切り替えない")
 	title.free()

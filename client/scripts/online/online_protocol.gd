@@ -2,11 +2,11 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 6
+const VERSION := 7
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
-## 1部屋に入れる人数の上限（レースの枠の数と同じ）。部屋ごとの出走数は、部屋の主が、FIELD_SIZE_MIN〜これ で決める。
+## 1部屋に入れる人数の上限（レースの枠の数と同じ）。レースの出走数は、出る人とCPUの席の数で決まり、FIELD_SIZE_MIN〜これ。
 const ROOM_CAPACITY := 8
 const FIELD_SIZE_MIN := 2
 ## 名前・部屋の名前・パスワードの、長さの上限。
@@ -37,7 +37,8 @@ const CREATE := "create"
 const JOIN := "join"
 ## 部屋から出て、部屋の一覧の所へ戻る。
 const LEAVE := "leave"
-## 部屋の決めごとを変える（部屋の主だけ。distance_m・field_size・cpu・password・description のうち、変えたいものだけ）。
+## 部屋の決めごとを変える（部屋の主だけ。password・description は待機室でも、distance_m・seats はレース設定で。変えたいものだけ）。
+## seats＝人の足りない席ごとに、CPUを入れるか（真偽の並び。長さは、8 − レースに出る人数）。
 const SETTINGS := "settings"
 ## 部屋の人を出す（部屋の主だけ。peer_id）。
 const KICK := "kick"
@@ -45,10 +46,16 @@ const KICK := "kick"
 const CHAT := "chat"
 ## 管理人の命令（token と、command＝"list"・"kick"・"close"。kick は peer_id、close は room_id）。
 const ADMIN := "admin"
+## 待機室で「準備OK」を押した・外した（on＝真偽）。
+const LOBBY_READY := "lobby_ready"
+## 待機室から、レースへ進む（部屋の主だけ）。準備OKの人と主が、レース設定へ進む。ほかの人は、待機室に残る。
+const RACE_OPEN := "race_open"
+## レース設定を終えて、ぷるりんを選ぶ所へ進む（部屋の主だけ）。
+const PICK_OPEN := "pick_open"
 ## 自分のぷるりんを選ぶ（pururin_id）。
 const PICK := "pick"
-## CPUのぷるりん・トレーナーを決める（部屋の主だけ）。部屋では index＝何番目のCPUか（0から）、出走表では gate＝枠（0から）。
-## pururin_id・trainer_id のうち、変えたいものだけ。部屋では、空の文字を送ると「おまかせ」に戻る。
+## CPUのプルを決める（部屋の主だけ。プル選択でだけ）。index＝何番目のCPUか（0から）、pururin_id（空の文字で「おまかせ」）。
+## トレーナーは、そのプルのデフォルトで、変えられない。
 const CPU_PICK := "cpu_pick"
 ## 「確定」を押した・外した（on＝真偽）。部屋でも、出走表でも、全員の確定がそろうと、主が先へ進める。
 const CONFIRM := "confirm"
@@ -56,8 +63,11 @@ const CONFIRM := "confirm"
 const ENTRIES := "entries"
 ## 出走表の枠順を変える（部屋の主だけ）。action＝"shuffle"（くじを引き直す）か "swap"（a と b の枠を入れ替える。0から）。
 const GATES := "gates"
-## 出走表から、部屋へ戻る（部屋の主だけ）。
+## 待機室へ戻る。主は全員を戻して、レースに出る人を解く。主でないレースに出る人は、自分だけ抜けて待機室へ戻る。
+## レース設定・プル選択から。パドックからは、to＝"lobby" を付ける。
 const BACK := "back"
+## back に to＝"lobby" を付けると、パドックからでも待機室へ戻る（主は全員、ほかの人は自分だけ）。
+const BACK_TO_LOBBY := "lobby"
 ## レースを始める（部屋の主だけ。出走表で、全員が確定していること）。
 const START := "start"
 ## レース中の操作（line＝ライン -1〜1、notch＝ノッチの上げ下げ -1〜1、brake＝ブレーキを押しているか）。
@@ -83,13 +93,15 @@ const PROFILE_INFO := "profile_info"
 ## 部屋の人のひとこと（peer_id、name、text）。
 const CHAT_MESSAGE := "chat_message"
 ## 部屋のできごとの知らせ（kind と、その人の name）。部屋の全員に配る。
-## kind：joined＝入った、left＝出た、disconnected＝つながりが切れた、kicked＝退出させられた（by＝"host" か "admin"）、host＝部屋の主になった。
+## kind：joined＝入った、left＝出た、disconnected＝つながりが切れた、kicked＝退出させられた（by＝"host" か "admin"）、host＝部屋の主になった、
+## race_open＝部屋の主がレース開始を押した（name＝主）。
 const NOTICE := "notice"
 const NOTICE_JOINED := "joined"
 const NOTICE_LEFT := "left"
 const NOTICE_DISCONNECTED := "disconnected"
 const NOTICE_KICKED := "kicked"
 const NOTICE_HOST := "host"
+const NOTICE_RACE_OPEN := "race_open"
 ## 部屋から出された（by＝"host" か "admin"）。このあと、lobby が届く。
 const KICKED := "kicked"
 ## 管理人の命令の返事（command と、その結果）。
@@ -103,7 +115,7 @@ const RACE_STATE := "race_state"
 ## レースが終わった（rows＝着順の一覧）。
 const RACE_RESULT := "race_result"
 
-## レースを片づけた（結果が出てから、決めた秒数がたった・全員が画面を出た）。まだレースの画面にいる人は、部屋へ戻る。
+## レースを片づけた（結果が出てから、決めた秒数がたった・全員が画面を出た）。まだレースの画面にいる人は、待機室へ戻る。
 const RACE_END := "race_end"
 
 ## 断るときの理由。
@@ -137,6 +149,10 @@ const ERROR_WRONG_PASSWORD := "wrong_password"
 const ERROR_NO_NAME := "no_name"
 ## 出走が、2体に足りない。
 const ERROR_TOO_FEW := "too_few"
+## レースに出る人（準備OKの人と主）でないと、できない。
+const ERROR_NOT_RACER := "not_racer"
+## 今の場面では、できない（待機室・レース設定・ぷるりんを選ぶ所・出走表の、決まった所でだけできること）。
+const ERROR_WRONG_PHASE := "wrong_phase"
 ## 管理人の合い札が違う・管理人の合い札が、サーバーに設定されていない。
 const ERROR_NOT_ADMIN := "not_admin"
 
@@ -148,7 +164,10 @@ const ADMIN_CLOSE := "close"
 ## 管理人の合い札を入れておく、サーバーの環境変数。空なら、管理人の命令は、すべて断る。
 const ADMIN_TOKEN_ENVIRONMENT := "PURURIN_ADMIN_TOKEN"
 
-## 部屋の場面：ぷるりんを選ぶ所（room）と、出走表（entries）。
+## 部屋の場面：待機室（lobby）、レース設定（settings）、ぷるりんを選ぶ所（room）、出走表（entries）。
+## 待機室のほかの場面は、レースに出る人だけのもの。出ない人は、そのあいだも待機室にいる。
+const PHASE_LOBBY := "lobby"
+const PHASE_SETTINGS := "settings"
 const PHASE_ROOM := "room"
 const PHASE_ENTRIES := "entries"
 const GATES_SHUFFLE := "shuffle"

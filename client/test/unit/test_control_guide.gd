@@ -1,7 +1,7 @@
 extends GutTest
 
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
-const ModeSelectScene := preload("res://scenes/mode_select.tscn")
+const OptionsScene := preload("res://scenes/options.tscn")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const RaceSession := preload("res://scripts/race_session.gd")
 
@@ -78,8 +78,8 @@ func test_guide_panel_stays_in_648px_viewport_and_footer_remains_visible() -> vo
 	await get_tree().process_frame
 
 
-func test_mode_select_opens_the_guide_and_returns_focus_when_closed() -> void:
-	var screen := ModeSelectScene.instantiate()
+func test_options_opens_the_guide_and_returns_focus_when_closed() -> void:
+	var screen := OptionsScene.instantiate()
 	add_child(screen)
 	await get_tree().process_frame
 	var button := screen.find_child("ControlGuideButton", true, false) as Button

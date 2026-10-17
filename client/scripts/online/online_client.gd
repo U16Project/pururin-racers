@@ -64,6 +64,11 @@ func join_room(room_id: int, password: String = "") -> bool:
 	return send(Protocol.JOIN, {"room_id": room_id, "password": password})
 
 
+## 待機室の「準備OK」を押す・外す。
+func set_lobby_ready(on: bool) -> bool:
+	return send(Protocol.LOBBY_READY, {"on": on})
+
+
 func _exit_tree() -> void:
 	disconnect_from_server()
 

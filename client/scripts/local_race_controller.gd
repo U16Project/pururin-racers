@@ -528,6 +528,9 @@ func _spawn_field() -> void:
 	for i in entries.size():
 		var entry: Dictionary = entries[i]
 		var pururin := PururinRosterConfig.pururin_by_id(str(entry["id"])).duplicate(true)
+		# オンラインで同じプルが何体もいるときは、走者ごとの番号（runner_id）で見分ける。
+		var runner_id := str(entry.get("runner_id", entry["id"]))
+		pururin["id"] = runner_id
 		pururin["trainer_profile_id"] = entry["trainer_profile_id"]
 		pururin["trainer_name"] = str(entry["trainer_name"]) if entry.has("trainer_name") else RaceSession.trainer_name_for(str(entry["id"]), bool(entry["player"]))
 		var runner := Node3D.new()
@@ -553,7 +556,7 @@ func _spawn_field() -> void:
 			field_size
 		)
 		_runners.append(runner)
-		_runners_by_id[str(entry["id"])] = runner
+		_runners_by_id[runner_id] = runner
 		var peer_id := int(entry.get("peer_id", 0))
 		# オンラインのゲーム側：全員、サーバーから届いた状態を映すだけ。自分の番号の走者が、この画面の「自分」。
 		if _online_view:
@@ -707,6 +710,9 @@ func _leave_online_race() -> void:
 ## 画面の無いサーバーの上では、見た目だけの処理を止める（走りの計算は、そのまま）。
 ## 止めるもの：走者の接触の光・表情・体の動き、体の部品の動き、カメラ、画面の部品（操作盤・仮想パッドなど）。
 func _stop_presentation_for_server() -> void:
+	# このPCをサーバーにしたとき、つないであるゲームパッドの操作が、サーバーの上のレースにも届く。
+	# 受け取ると、結果の「戻る」が押されてサーバーごと別の画面へ切り替わったり、一時停止したりするので、受け取らない。
+	set_process_unhandled_input(false)
 	for runner in _runners:
 		runner.set("presentation_enabled", false)
 		var body := runner.get_node_or_null("Body")

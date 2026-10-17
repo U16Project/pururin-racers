@@ -21,6 +21,8 @@ var _server: Node
 
 
 func before_each() -> void:
+	# 「さっき選んだプル」は、テストごとに消す（前のテストから持ち越さない）。
+	OnlineSession.last_pick = ""
 	# 本物のサーバーの選びに触らないように、テスト用の保存場所を使う。
 	DirAccess.remove_absolute(CHOICE_FILE)
 	ServerChoice.use_path(CHOICE_FILE)
@@ -73,6 +75,35 @@ func _lobby_in_new_room(room_name: String, password: String = "") -> Control:
 	lobby.create_room()
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 1)
 	return lobby
+
+
+## 主の画面で、待機室の「レース開始」→ レース設定の「次へ」と進めて、ぷるりんを選ぶ所まで行く。
+func _to_pick(lobby: Control) -> void:
+	lobby.open_race()
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	lobby.open_pick()
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	await wait_seconds(0.1)
+
+
+## 主が画面を使わない部屋で、画面の人が準備OKを押し、主がレース開始・次へを押して、ぷるりんを選ぶ所まで行く。
+func _guest_to_pick(lobby: Control, owner: Node) -> void:
+	lobby.toggle_lobby_ready()
+	await _wait_until(func() -> bool: return OnlineSession.my_lobby_ready())
+	owner.send(Protocol.RACE_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	owner.send(Protocol.PICK_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	await wait_seconds(0.1)
+
+
+## 自分の席（プル選択の、横長の席）の番号。無ければ -1。
+func _my_pick_row(lobby: Control) -> int:
+	var rows: Array = lobby.get("_pick_rows")
+	for index in rows.size():
+		if str(rows[index]["kind"]) == "self":
+			return index
+	return -1
 
 
 ## 一覧の部屋を押して、入室の窓が出るのを待つ（押しただけでは、入らない）。
@@ -131,9 +162,15 @@ func test_connect_screen_keyboard_and_pad_navigation_without_a_mouse() -> void:
 	var connect := lobby.find_child("ConnectButton", true, false) as Button
 	var back := lobby.find_child("BackButton", true, false) as Button
 	var edit := lobby.find_child("ServerEdit", true, false) as LineEdit
+	var local := lobby.find_child("LocalServerButton", true, false) as Button
 	assert_eq(get_viewport().gui_get_focus_owner(), connect)
+	# 「つなぐ」の下は、「このPCをサーバーにする」のボタン、その下が「戻る」。
+	_press_key(KEY_DOWN)
+	assert_eq(get_viewport().gui_get_focus_owner(), local)
 	_press_key(KEY_DOWN)
 	assert_eq(get_viewport().gui_get_focus_owner(), back)
+	_press_pad(JOY_BUTTON_DPAD_UP)
+	assert_eq(get_viewport().gui_get_focus_owner(), local)
 	_press_pad(JOY_BUTTON_DPAD_UP)
 	assert_eq(get_viewport().gui_get_focus_owner(), connect)
 	_press_key(KEY_UP)
@@ -218,7 +255,7 @@ func test_the_screen_starts_with_the_configured_server_and_the_trainer_name() ->
 	# つなぐ前は、つなぐ所だけを出す。
 	assert_true((lobby.find_child("ConnectBox", true, false) as Control).visible)
 	assert_false((lobby.find_child("LobbyBox", true, false) as Control).visible)
-	assert_false((lobby.find_child("RoomBox", true, false) as Control).visible)
+	assert_false((lobby.find_child("PaddockScreen", true, false) as Control).visible)
 	# 部屋の名前は、最初から入っている（文字が打ちにくい端末でも、そのまま作れるように）。
 	assert_eq((lobby.find_child("RoomNameEdit", true, false) as LineEdit).text, OnlineConfig.default_room())
 
@@ -237,23 +274,40 @@ func test_connecting_shows_the_room_list_and_creating_enters_the_room() -> void:
 	lobby.create_room()
 	assert_false(dialog.visible)
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 1)
-	assert_true((lobby.find_child("RoomBox", true, false) as Control).visible)
+	# 入るとまず、待機室。上に部屋の名前、席の1つ目に自分（主の印）。右にルームチャット。
+	assert_true((lobby.find_child("WaitingRoom", true, false) as Control).visible)
+	assert_false((lobby.find_child("PaddockScreen", true, false) as Control).visible)
 	assert_false((lobby.find_child("LobbyBox", true, false) as Control).visible)
-	# 自分は、1枠の行に出る（名前と、部屋の主の印）。この行でだけ、ぷるりんを選べる。
-	var first: Control = lobby.get("_slots")[0]
-	assert_true(str(first.call("trainer_text")).contains(TrainerProfile.trainer_name()))
-	assert_true(str(first.call("trainer_text")).contains("主"))
-	assert_eq(first.focus_mode, Control.FOCUS_ALL)
-	assert_eq(lobby.my_slot(), 0)
-	# 2行目からは、CPU（入れる部屋なので）。まだ「おまかせ」。主は、この行でCPUのぷるりんを決められる。
-	var second: Control = lobby.get("_slots")[1]
-	assert_eq(str(second.call("trainer_text")), "CPU")
-	assert_eq(str(second.call("shown_text")), "おまかせ")
-	assert_eq(second.focus_mode, Control.FOCUS_ALL)
+	# 上の見出し：部屋の名前と、流れの道しるべ（いまは「待機室」）。
+	assert_eq((lobby.find_child("RoomTitle", true, false) as Label).text, "テスト部屋")
+	assert_eq(str((lobby.find_child("Step1", true, false) as Control).get_meta("state")), "now")
+	assert_eq(str((lobby.find_child("Step3", true, false) as Control).get_meta("state")), "next")
+	var seat := lobby.find_child("Seat1", true, false) as Button
+	assert_true((seat.find_child("SeatName", true, false) as Label).text.contains(TrainerProfile.trainer_name()))
+	assert_true((seat.find_child("SeatName", true, false) as Label).text.contains("主"))
+	assert_eq(((lobby.find_child("Seat2", true, false) as Button).find_child("SeatName", true, false) as Label).text, "空き")
+	assert_eq((lobby.find_child("RoomChatTitle", true, false) as Label).text, "ルームチャット")
+	# 主は、レース開始を押せる。準備OKは要らない。
+	assert_false((lobby.find_child("RaceOpenButton", true, false) as Button).disabled)
+	assert_true((lobby.find_child("ReadyButton", true, false) as Button).disabled)
+	await _to_pick(lobby)
+	assert_true((lobby.find_child("PickScreen", true, false) as Control).visible)
+	# プル選択：自分の席が1つ目（名前と、部屋の主の印）。いつものプル（一覧の1体目）が入っていて、変えられる旨が出る。
+	var first: Dictionary = lobby.get("_pick_rows")[0]
+	assert_eq(str(first["kind"]), "self")
+	assert_true((first["who"] as Label).text.contains(TrainerProfile.trainer_name()))
+	assert_true((first["who"] as Label).text.contains("主"))
+	assert_true((first["note"] as Control).visible)
+	await _wait_until(func() -> bool: return lobby.my_pururin_id() == str(RaceSession.roster_ids()[0]))
+	assert_eq(lobby.my_pururin_id(), str(RaceSession.roster_ids()[0]))
+	# 2つ目からは、CPU（レース設定で、はじめは全部CPU）。まだ「おまかせ」。右に、ルームチャット。
+	var second: Dictionary = lobby.get("_pick_rows")[1]
+	assert_eq((second["who"] as Label).text, "CPU")
+	assert_eq((second["pururin"] as Label).text, "おまかせ")
+	assert_eq((lobby.find_child("PickChatTitle", true, false) as Label).text, "ルームチャット")
 	assert_true((lobby.find_child("RoomTitle", true, false) as Label).text.contains("テスト部屋"))
 	assert_true(lobby.is_host())
-	# 「部屋を出る」で、一覧へ戻る（つながりは切らない）。誰もいなくなった部屋は、消える。
-	assert_true((lobby.find_child("LeaveButton", true, false) as Button).is_visible_in_tree())
+	# 「部屋を出る」（B・戻る）で、一覧へ戻る（つながりは切らない）。誰もいなくなった部屋は、消える。
 	assert_false((lobby.find_child("BackButton", true, false) as Button).is_visible_in_tree())
 	lobby.go_back()
 	await _wait_until(func() -> bool: return (lobby.find_child("LobbyBox", true, false) as Control).visible)
@@ -301,7 +355,7 @@ func test_listed_rooms_can_be_joined_and_locked_ones_need_the_password() -> void
 	assert_true((lobby.find_child("LobbyBox", true, false) as Control).visible)
 	await _enter_listed_room(lobby, room_id, "ひみつ")
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
-	assert_eq(lobby.my_slot(), 1)
+	assert_eq(int(OnlineSession.all_members()[1]["peer_id"]), OnlineSession.peer_id)
 	assert_false(lobby.is_host())
 	assert_eq(_server.room_members(room_id).size(), 2)
 
@@ -312,6 +366,13 @@ func test_the_join_dialog_shows_the_description_and_the_host_changes_it() -> voi
 	var lobby := await _connected_lobby()
 	var room_id := _first_room_id()
 	await _wait_until(func() -> bool: return lobby.find_child("Room%d" % room_id, true, false) != null)
+	# 一覧の部屋にカーソルを合わせると、紹介文が吹き出しで出る。
+	var row := lobby.find_child("Room%d" % room_id, true, false) as Button
+	row.grab_focus()
+	await wait_process_frames(2)
+	var popup := lobby.find_child("HoverPopup", true, false) as Control
+	assert_true(popup.visible)
+	assert_eq((popup.get_child(0) as Label).text, "のんびり走ります")
 	var dialog := await _open_join_dialog(lobby, room_id)
 	assert_eq((dialog.find_child("JoinDescription", true, false) as Label).text, "のんびり走ります")
 	# 施錠のない部屋は、パスワードの欄も、施錠の印も出ない。
@@ -358,6 +419,27 @@ func test_choosing_your_own_server_enables_the_field_and_is_remembered() -> void
 	assert_not_null(connect)
 
 
+func test_this_pc_can_be_the_server_and_the_player_at_once() -> void:
+	var LocalServer = load("res://scripts/online/local_server.gd")
+	var lobby := _lobby()
+	await wait_seconds(0.1)
+	# つなぐ画面の下に「このPCをサーバーにする」の欄がある（ブラウザ版では出さない）。
+	var card := lobby.find_child("LocalServerCard", true, false) as Control
+	assert_eq(card.visible, not OS.has_feature("web"))
+	assert_eq((lobby.find_child("LocalServerButton", true, false) as Button).text, "このPCでサーバーを始めて、つなぐ")
+	assert_true((lobby.find_child("LocalServerAddress", true, false) as Label).text.begins_with("ほかの人がつなぐ場所："))
+	# 同じアプリを、画面なしで、サーバーとして起動する指定。自分は 127.0.0.1 につなぐ。
+	var arguments: PackedStringArray = LocalServer.start_arguments()
+	assert_true(arguments.has("--headless"))
+	assert_eq(arguments[arguments.size() - 1], LocalServer.SERVER_FLAG)
+	assert_eq(LocalServer.local_url(), "ws://127.0.0.1:%d" % Protocol.server_port())
+	assert_false(LocalServer.requested())
+	for address: String in ["192.168.1.5", "10.0.0.2", "172.20.3.4"]:
+		assert_true(LocalServer.is_private_address(address), address)
+	for address: String in ["127.0.0.1", "8.8.8.8", "172.32.0.1", "fe80::1"]:
+		assert_false(LocalServer.is_private_address(address), address)
+
+
 func test_a_bad_server_address_is_explained_without_connecting() -> void:
 	var lobby := _lobby()
 	(lobby.find_child("ServerEdit", true, false) as LineEdit).text = "http://127.0.0.1"
@@ -377,55 +459,10 @@ func test_a_missing_server_is_explained() -> void:
 
 func test_the_host_picks_a_pururin_and_the_room_settings_and_can_then_start() -> void:
 	var lobby := await _lobby_in_new_room("選ぶ部屋")
-	var advance := lobby.find_child("AdvanceDialog", true, false) as Control
-	var confirm := lobby.find_child("ConfirmButton", true, false) as Button
-	# 作った人は、部屋の主。まだ選んでいないので、確定できない。先へ進む窓も、出ない。
-	assert_true(lobby.is_host())
-	assert_false(advance.visible)
-	assert_true(confirm.disabled)
-	# ぷるりんを選ぶと、行に名前が出て、確定できるようになる。確定すると、主が先へ進める。
-	var first_id := str(PururinRosterConfig.values()["roster"][0]["id"])
-	lobby.step_pururin(1)
-	await _wait_until(func() -> bool: return lobby.my_pururin_id() == first_id)
-	assert_eq(lobby.my_pururin_id(), first_id)
-	assert_eq(str(lobby.get("_slots")[0].call("shown_text")), lobby.pururin_name(first_id))
-	assert_false(confirm.disabled)
-	assert_false(advance.visible)
-	confirm.pressed.emit()
-	# 全員（ここでは自分だけ）が確定すると、主に「出走表へ進みますか」の窓が出る。
-	await _wait_until(func() -> bool: return advance.visible)
-	assert_true(advance.visible)
-	assert_eq((lobby.find_child("AdvanceButton", true, false) as Button).text, "出走表へ")
-	assert_eq((lobby.find_child("Confirmed1", true, false) as Control).modulate.a, 1.0)
-	# 「まだ進まない」で閉じても、下のボタンから、もう一度開ける。
-	(lobby.find_child("AdvanceCancelButton", true, false) as Button).pressed.emit()
-	assert_false(advance.visible)
-	assert_eq(confirm.text, "出走表へ…")
-	confirm.pressed.emit()
-	assert_true(advance.visible)
-	(lobby.find_child("AdvanceCancelButton", true, false) as Button).pressed.emit()
-	# 距離のボタンを押すと、サーバーの部屋の距離が変わり、そのボタンが選ばれた見た目になる。
-	var distances: Array = RaceSession.supported_distances_m()
-	var default_button := lobby.find_child("Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), true, false) as Button
-	assert_true(default_button.button_pressed)
-	var wanted := float(distances[posmod(distances.find(RaceSession.DEFAULT_DISTANCE_M) + 1, distances.size())])
-	var wanted_button := lobby.find_child("Distance%d" % int(wanted), true, false) as Button
-	wanted_button.pressed.emit()
-	await _wait_until(func() -> bool: return is_equal_approx(float(_server.call("_room_fields", _first_room_id())["distance_m"]), wanted))
-	await _wait_until(func() -> bool: return wanted_button.button_pressed and not default_button.button_pressed)
-	assert_true(wanted_button.button_pressed)
-	assert_false(default_button.button_pressed)
-	# 出走数を減らす・CPUを外す・パスワードを付ける。
 	var room_id := _first_room_id()
-	lobby.step_field_size(-1)
-	await _wait_until(func() -> bool: return int(_server.call("_room_fields", room_id)["field_size"]) == Protocol.ROOM_CAPACITY - 1)
-	assert_true((lobby.find_child("FieldSizeLabel", true, false) as Label).text.contains(str(Protocol.ROOM_CAPACITY - 1)))
-	lobby.step_cpu(1)
-	await _wait_until(func() -> bool: return not bool(_server.call("_room_fields", room_id)["cpu"]))
-	assert_eq((lobby.find_child("CpuLabel", true, false) as Label).text, "なし")
-	# パスワードは、窓で確かめて、変える。最初は「なし」。
+	# 待機室で、パスワードを窓で確かめて、変える。最初は「なし」。
 	var change_dialog := lobby.find_child("PasswordChangeDialog", true, false) as Control
-	(lobby.find_child("OpenPasswordButton", true, false) as Button).pressed.emit()
+	(lobby.find_child("WaitingPasswordButton", true, false) as Button).pressed.emit()
 	assert_true(change_dialog.visible)
 	assert_true((lobby.find_child("CurrentPassword", true, false) as Label).text.contains("なし"))
 	(lobby.find_child("PasswordEdit", true, false) as LineEdit).text = "かぎ"
@@ -434,41 +471,112 @@ func test_the_host_picks_a_pururin_and_the_room_settings_and_can_then_start() ->
 	await _wait_until(func() -> bool: return bool(_server.call("_room_fields", room_id)["locked"]))
 	await _wait_until(func() -> bool: return (lobby.find_child("RoomLock", true, false) as Control).visible)
 	assert_true((lobby.find_child("RoomLock", true, false) as Control).visible)
-	# 主は、今のパスワードを、窓で確かめられる。
 	lobby.open_password_change_dialog()
 	assert_true((lobby.find_child("CurrentPassword", true, false) as Label).text.contains("かぎ"))
 	lobby.close_dialogs()
+	# レース開始で、レース設定へ。距離のボタンを押すと、サーバーの部屋の距離が変わり、そのボタンが選ばれた見た目になる。
+	lobby.open_race()
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	var distances: Array = RaceSession.supported_distances_m()
+	var default_button := lobby.find_child("Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), true, false) as Button
+	assert_true(default_button.button_pressed)
+	var wanted := float(distances[posmod(distances.find(RaceSession.DEFAULT_DISTANCE_M) + 1, distances.size())])
+	var wanted_button := lobby.find_child("Distance%d" % int(wanted), true, false) as Button
+	wanted_button.pressed.emit()
+	await _wait_until(func() -> bool: return is_equal_approx(float(_server.call("_room_fields", room_id)["distance_m"]), wanted))
+	await _wait_until(func() -> bool: return wanted_button.button_pressed and not default_button.button_pressed)
+	assert_true(wanted_button.button_pressed)
+	assert_false(default_button.button_pressed)
+	# 席：2つ目の席（人の足りない最初の席）を押すと、「CPU」と「入れない」が切り替わる。
+	var seat := lobby.find_child("SettingsSeat2", true, false) as Button
+	var seat_name := seat.find_child("SeatName", true, false) as Label
+	assert_eq(seat_name.text, "CPU")
+	seat.pressed.emit()
+	await _wait_until(func() -> bool: return int(_server.call("_room_fields", room_id)["field_size"]) == Protocol.ROOM_CAPACITY - 1)
+	await _wait_until(func() -> bool: return seat_name.text == "入れない")
+	assert_eq(seat_name.text, "入れない")
+	# 人の席は、待機室と同じ、絵と名前。右には、待機室と同じルームチャット。
+	assert_true(((lobby.find_child("SettingsSeat1", true, false) as Button).find_child("SeatName", true, false) as Label).text.contains(TrainerProfile.trainer_name()))
+	assert_eq((lobby.find_child("SettingsChatTitle", true, false) as Label).text, "ルームチャット")
+	assert_true((lobby.find_child("RaceSettingsCount", true, false) as Label).text.contains(str(Protocol.ROOM_CAPACITY - 1)))
+	lobby.open_pick()
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	await wait_seconds(0.1)
+	var confirm := lobby.find_child("PickConfirmButton", true, false) as Button
+	var paddock := lobby.find_child("PickPaddockButton", true, false) as Button
+	assert_true((lobby.find_child("PickInfo", true, false) as Label).text.contains("%d体" % (Protocol.ROOM_CAPACITY - 1)))
+	# 入ると、いつものプルが入っている。自分の席を押すと、ステータスの窓（変更・もどる）。「変更」で、プル選択の窓。
+	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
+	var dialog := lobby.find_child("PickDialog", true, false) as Control
+	lobby.open_pick_dialog(_my_pick_row(lobby))
+	assert_true(dialog.visible)
+	assert_true((lobby.find_child("PickChangeButton", true, false) as Button).visible)
+	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	assert_false(dialog.visible)
+	assert_true(lobby.is_picker_open())
+	var second_id := str(PururinRosterConfig.values()["roster"][1]["id"])
+	# 窓でプルを押すと、すぐには決まらない。そのプルのステータスが出て、「このプルにする」で決まる。「もどる」なら、窓へ戻る。
+	lobby.call("_on_picker_picked", second_id)
+	assert_true(dialog.visible)
+	assert_eq((lobby.find_child("PickChangeButton", true, false) as Button).text, "このプルにする")
+	assert_eq(str(lobby.get("_pick_dialog_detail").call("shown_pururin_id")), second_id)
+	(lobby.find_child("PickDialogBackButton", true, false) as Button).pressed.emit()
+	assert_false(dialog.visible)
+	assert_true(lobby.is_picker_open())
+	lobby.call("_on_picker_picked", second_id)
+	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	assert_false(dialog.visible)
+	await _wait_until(func() -> bool: return lobby.my_pururin_id() == second_id)
+	assert_eq(str((lobby.get("_pick_rows")[_my_pick_row(lobby)]["pururin"] as Label).text), lobby.pururin_name(second_id))
+	# パドックへは、全員が確定してから（ここでは自分だけ）。
+	assert_true(paddock.disabled)
+	confirm.pressed.emit()
+	await _wait_until(func() -> bool: return not paddock.disabled)
+	assert_eq(confirm.text, "確定を取り消す")
+	paddock.pressed.emit()
+	await _wait_until(func() -> bool: return OnlineSession.in_entries())
+	# 知らせを出しているあいだ（2秒ほど）は、前の画面のまま。パドックの画面が出るまで待つ。
+	await _wait_until(func() -> bool: return (lobby.find_child("PaddockScreen", true, false) as Control).visible)
+	await _wait_until(func() -> bool: return str((lobby.find_child("Step4", true, false) as Control).get_meta("state", "")) == "now")
+	assert_eq(str((lobby.find_child("Step3", true, false) as Control).get_meta("state")), "done")
 
 
-func test_a_guest_cannot_change_the_room_and_skips_pururins_others_took() -> void:
+func test_a_guest_cannot_change_the_room_and_may_pick_the_same_pururin() -> void:
 	var owner := await _other("主")
 	owner.create_room("客の部屋")
 	var first_id := str(PururinRosterConfig.values()["roster"][0]["id"])
-	var second_id := str(PururinRosterConfig.values()["roster"][1]["id"])
 	await wait_seconds(0.2)
-	owner.send(Protocol.PICK, {"pururin_id": first_id})
 	var lobby := await _connected_lobby()
 	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
-	# 2人目は、主ではない。開始のボタンとパスワードの行は出ず、決めごとは替えられない。人を出すボタンも無い。
+	# 2人目は、主ではない。待機室で、レース開始は押せず、紹介・パスワードの変更ボタンも出ない。
 	assert_false(lobby.is_host())
-	assert_false((lobby.find_child("AdvanceDialog", true, false) as Control).visible)
-	assert_false((lobby.find_child("OpenPasswordButton", true, false) as Button).visible)
+	assert_true((lobby.find_child("RaceOpenButton", true, false) as Button).disabled)
+	assert_false((lobby.find_child("WaitingPasswordButton", true, false) as Button).visible)
+	assert_false(((lobby.find_child("Seat1", true, false) as Button).find_child("SeatMenu", true, false) as Button).visible)
 	# パスワードそのものは、主にしか届かない。
 	assert_false(OnlineSession.room.has("password"))
-	for button_name: String in ["Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), "FieldSizeNext", "CpuNext"]:
-		assert_true((lobby.find_child(button_name, true, false) as Button).disabled, button_name)
-	assert_true((lobby.find_child("MemberMenu1", true, false) as Button).disabled)
-	# 主の行（1行目）は、見るだけ。主の名前と、選んだぷるりんが出る。
-	var host_row: Control = lobby.get("_slots")[0]
-	assert_true(str(host_row.call("trainer_text")).contains("主"))
-	assert_eq(str(host_row.call("shown_text")), lobby.pururin_name(first_id))
-	# ほかの人の行にも、カーソルを置ける（その人とぷるりんの紹介を見るため）。選ぶことは、できない。
-	assert_eq(host_row.focus_mode, Control.FOCUS_ALL)
-	# 主が1体目を選んでいるので、「次へ」は2体目になる。
-	lobby.step_pururin(1)
-	await _wait_until(func() -> bool: return lobby.my_pururin_id() == second_id)
-	assert_eq(lobby.my_pururin_id(), second_id)
+	# 準備OKを押してから、主がレース開始。レース設定では、距離も席も、見るだけ。
+	lobby.toggle_lobby_ready()
+	await _wait_until(func() -> bool: return OnlineSession.my_lobby_ready())
+	owner.send(Protocol.RACE_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	assert_true((lobby.find_child("Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), true, false) as Button).disabled)
+	assert_eq((lobby.find_child("SettingsSeat3", true, false) as Button).focus_mode, Control.FOCUS_NONE)
+	# 主でない人にも「待機室へ戻る」と「次へ」はある。「次へ」は押せない。
+	assert_true((lobby.find_child("SettingsNextButton", true, false) as Button).visible)
+	assert_true((lobby.find_child("SettingsNextButton", true, false) as Button).disabled)
+	assert_eq((lobby.find_child("SettingsBackButton", true, false) as Button).text, "待機室へ戻る")
+	owner.send(Protocol.PICK_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	owner.send(Protocol.PICK, {"pururin_id": first_id})
+	# 主と同じプル（いつものプル）でも選べる。主の席は、見るだけ（窓に「変更」が出ない）。パドックへは押せない。
+	await _wait_until(func() -> bool: return lobby.my_pururin_id() == first_id)
+	assert_eq(lobby.my_pururin_id(), first_id)
+	lobby.open_pick_dialog(0)
+	assert_false((lobby.find_child("PickChangeButton", true, false) as Button).visible)
+	lobby.close_dialogs()
+	assert_true((lobby.find_child("PickPaddockButton", true, false) as Button).disabled)
 
 
 func test_the_host_puts_a_guest_out_and_the_guest_is_told_why() -> void:
@@ -478,13 +586,14 @@ func test_the_host_puts_a_guest_out_and_the_guest_is_told_why() -> void:
 	var heard := []
 	guest.message_received.connect(func(data: Dictionary) -> void: heard.append(str(data["t"])))
 	guest.join_room(room_id)
-	await _wait_until(func() -> bool: return not (lobby.find_child("MemberMenu2", true, false) as Button).disabled)
-	# 主の画面には、ほかの人の行にだけ「︙」がある（自分の行・CPUの行は、押せない）。
-	assert_true((lobby.find_child("MemberMenu1", true, false) as Button).disabled)
-	assert_true((lobby.find_child("MemberMenu3", true, false) as Button).disabled)
+	var menu_of := func(seat: int) -> Button: return (lobby.find_child("Seat%d" % seat, true, false) as Button).find_child("SeatMenu", true, false) as Button
+	await _wait_until(func() -> bool: return (menu_of.call(2) as Button).visible)
+	# 主の画面には、ほかの人の席にだけ「︙」がある（自分の席・空き席には無い）。
+	assert_false((menu_of.call(1) as Button).visible)
+	assert_false((menu_of.call(3) as Button).visible)
 	# 押すと、確かめる窓が出るだけ。「やめる」なら、何も起きない。
 	var dialog := lobby.find_child("KickDialog", true, false) as Control
-	(lobby.find_child("MemberMenu2", true, false) as Button).pressed.emit()
+	(menu_of.call(2) as Button).pressed.emit()
 	assert_true(dialog.visible)
 	assert_true((dialog.find_child("Title", true, false) as Label).text.contains("客"))
 	lobby.close_dialogs()
@@ -492,12 +601,65 @@ func test_the_host_puts_a_guest_out_and_the_guest_is_told_why() -> void:
 	assert_false(heard.has(Protocol.KICKED))
 	assert_eq(_server.room_members(room_id).size(), 2)
 	# 窓の「退出させる」で、はじめて退出になる。
-	lobby.open_kick_dialog(1)
+	(menu_of.call(2) as Button).pressed.emit()
 	lobby.confirm_kick()
 	assert_false(dialog.visible)
 	await _wait_until(func() -> bool: return heard.has(Protocol.KICKED))
 	assert_true(heard.has(Protocol.KICKED))
 	assert_eq(_server.room_members(room_id).size(), 1)
+
+
+func test_the_waiting_room_shows_seats_ready_marks_and_introductions() -> void:
+	var lobby := await _lobby_in_new_room("待つ部屋")
+	var guest := await _other("客")
+	guest.hello("客", "よろしくお願いします。")
+	await wait_seconds(0.2)
+	guest.join_room(_first_room_id())
+	var seat := lobby.find_child("Seat2", true, false) as Button
+	await _wait_until(func() -> bool: return (seat.find_child("SeatName", true, false) as Label).text == "客")
+	var mark := seat.find_child("SeatReady", true, false) as Control
+	assert_false(mark.visible)
+	# 準備OKを押すと、その席に印が出る。
+	guest.set_lobby_ready(true)
+	await _wait_until(func() -> bool: return mark.visible)
+	assert_true(mark.visible)
+	# 席にカーソルを合わせると、その人の紹介文が小さく出る。
+	seat.grab_focus()
+	await wait_process_frames(2)
+	var popup := lobby.find_child("HoverPopup", true, false) as Control
+	assert_true(popup.visible)
+	assert_eq((popup.get_child(0) as Label).text, "よろしくお願いします。")
+	# ルームチャット：送ると、待機室の右の欄に出る。
+	(lobby.find_child("RoomChatEdit", true, false) as LineEdit).text = "はじめまして"
+	(lobby.find_child("RoomChatSendButton", true, false) as Button).pressed.emit()
+	await _wait_until(func() -> bool: return (lobby.find_child("RoomChatLog", true, false) as RichTextLabel).get_parsed_text().contains("はじめまして"))
+	assert_true((lobby.find_child("RoomChatLog", true, false) as RichTextLabel).get_parsed_text().contains("はじめまして"))
+	# 主がレース開始を押すと、2秒ほど知らせが出て、準備OKの人と主がレース設定へ進む。
+	lobby.open_race()
+	await _wait_until(func() -> bool: return lobby.is_race_open_popup_visible())
+	assert_eq((lobby.find_child("RaceOpenText", true, false) as Label).text, "部屋主が「レース設定へ」を押したので、レース設定に進みます。")
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	await _wait_until(func() -> bool: return not lobby.is_race_open_popup_visible(), 4.0)
+	assert_false(lobby.is_race_open_popup_visible())
+
+
+func test_a_person_who_is_not_ready_stays_in_the_waiting_room() -> void:
+	var owner := await _other("主")
+	owner.create_room("残る部屋")
+	var lobby := await _connected_lobby()
+	await _enter_listed_room(lobby, _first_room_id())
+	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
+	owner.send(Protocol.RACE_OPEN)
+	await _wait_until(func() -> bool: return lobby.is_race_open_popup_visible())
+	assert_true((lobby.find_child("RaceOpenText", true, false) as Label).text.contains("待機室で次のレースを待ちます"))
+	await wait_seconds(0.2)
+	# 準備OKでなかったので、待機室のまま。状態は「レース中」。
+	assert_true((lobby.find_child("WaitingRoom", true, false) as Control).visible)
+	assert_false((lobby.find_child("RaceSettings", true, false) as Control).visible)
+	# 席の下に「現在レース中」の帯。進んだ人の席には「出走中」。
+	await _wait_until(func() -> bool: return (lobby.find_child("WaitingRaceBand", true, false) as Control).visible)
+	assert_true((lobby.find_child("WaitingRaceText", true, false) as Label).text.begins_with("現在レース中：主（1人）"))
+	assert_eq(((lobby.find_child("Seat1", true, false) as Button).find_child("SeatReady", true, false) as Label).text, "出走中")
 
 
 func test_being_put_out_returns_the_screen_to_the_room_list_with_the_reason() -> void:
@@ -512,8 +674,8 @@ func test_being_put_out_returns_the_screen_to_the_room_list_with_the_reason() ->
 	assert_true(_status(lobby).contains("退出"))
 
 
-func test_the_entry_list_shows_gates_and_the_host_can_redraw_and_swap_them() -> void:
-	var lobby := await _lobby_in_new_room("出走表の部屋")
+func test_the_paddock_shows_gates_details_and_only_the_host_reorders() -> void:
+	var lobby := await _lobby_in_new_room("パドックの部屋")
 	var room_id := _first_room_id()
 	var guest := await _other("客")
 	# 客は、自己紹介と、自分で入れた画像（小さなJPEG）を名乗っている。
@@ -523,81 +685,64 @@ func test_the_entry_list_shows_gates_and_the_host_can_redraw_and_swap_them() -> 
 	await wait_seconds(0.2)
 	guest.join_room(room_id)
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
+	guest.set_lobby_ready(true)
+	await _wait_until(func() -> bool: return bool(OnlineSession.all_members()[1].get("ready", false)))
+	await _to_pick(lobby)
 	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
 	guest.send(Protocol.PICK, {"pururin_id": ids[3]})
-	lobby.step_pururin(1)
 	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
-	# 部屋の場面では、枠番号を出さない（枠順は、まだ決まっていない）。
-	assert_false((lobby.get("_badges")[0] as Control).visible)
-	var advance := lobby.find_child("AdvanceDialog", true, false) as Control
 	guest.send(Protocol.CONFIRM, {"on": true})
-	lobby.toggle_confirm()
-	await _wait_until(func() -> bool: return advance.visible)
-	(lobby.find_child("AdvanceButton", true, false) as Button).pressed.emit()
-	await _wait_until(func() -> bool: return OnlineSession.in_entries())
+	lobby.toggle_pick_confirm()
+	await _wait_until(func() -> bool: return not (lobby.find_child("PickPaddockButton", true, false) as Button).disabled)
+	lobby.open_paddock()
+	await _wait_until(func() -> bool: return (lobby.find_child("PaddockScreen", true, false) as Control).visible)
 	await wait_seconds(0.2)
-	# 出走表：枠番号が出て、全出走（人とCPU）が、枠順に並ぶ。確定は、いったん外れる。
-	assert_true(OnlineSession.in_entries())
-	assert_true((lobby.get("_badges")[0] as Control).visible)
-	assert_false(advance.visible)
-	# CPUの枠では、CPUトレーナーの紹介が出る。客の枠では、届いた画像が、絵に戻っている。
-	for index in (OnlineSession.room["entries"] as Array).size():
-		var entry: Dictionary = OnlineSession.room["entries"][index]
-		if int(entry["peer_id"]) == 0:
-			lobby.call("_on_row_focused", index)
-			lobby.open_profile_dialog()
-			assert_eq((lobby.find_child("ProfileName", true, false) as Label).text, str(entry["trainer_name"]))
-			assert_true((lobby.find_child("ProfileNote", true, false) as Label).text.contains("CPUトレーナー"))
-			assert_true((lobby.find_child("ProfilePortrait", true, false) as Control).visible)
-			lobby.close_dialogs()
-			break
-	for peer: int in OnlineSession.profiles:
-		if str(OnlineSession.profiles[peer]["name"]) == "客":
-			assert_eq(str(OnlineSession.profiles[peer]["kind"]), "file")
-			assert_not_null(OnlineSession.profiles[peer]["texture"])
-	assert_false((lobby.get("_rules_card") as Control).visible)
-	assert_true((lobby.get("_gates_card") as Control).visible)
+	# パドック：大きな枠が、枠順に全出走（人とCPU）。右にルームチャット。
 	var entries: Array = OnlineSession.room["entries"]
 	assert_eq(entries.size(), Protocol.ROOM_CAPACITY)
+	var rows: Array = lobby.get("_paddock_rows")
 	for index in entries.size():
-		assert_eq(str(lobby.get("_row_infos")[index]["pururin_id"]), str(entries[index]["id"]))
-		assert_eq(str(lobby.get("_slots")[index].call("shown_text")), lobby.pururin_name(str(entries[index]["id"])))
-	# 行を選んで、下の枠と入れ替える（主だけ）。
-	lobby.call("_on_row_focused", 0)
+		assert_eq((rows[index]["pururin"] as Label).text, lobby.pururin_name(str(entries[index]["id"])))
+	assert_eq((lobby.find_child("PaddockChatTitle", true, false) as Label).text, "ルームチャット")
+	# 枠を押すと、人（CPUはトレーナー）とプルの、両方の詳細。
+	for index in entries.size():
+		var entry: Dictionary = entries[index]
+		lobby.open_paddock_dialog(index)
+		var detail: Control = lobby.get("_paddock_dialog_detail")
+		assert_eq(str(detail.call("shown_pururin_id")), str(entry["id"]))
+		var name_label := lobby.find_child("PaddockPersonName", true, false) as Label
+		if int(entry["peer_id"]) == 0:
+			assert_eq(name_label.text, str(entry["trainer_name"]))
+			assert_true((lobby.find_child("PaddockPersonNote", true, false) as Label).text.contains("CPUトレーナー"))
+		elif str(entry.get("trainer_name", "")) == "客":
+			await _wait_until(func() -> bool: return OnlineSession.profiles.size() >= 2)
+			lobby.open_paddock_dialog(index)
+			assert_eq(name_label.text, "客")
+			assert_true((lobby.find_child("PaddockPersonIntro", true, false) as Label).text.contains("レースが好き"))
+		lobby.close_dialogs()
+	# 枠順：主は、選んだ枠を下へ（R1）。カーソルは、動かした先に付いていく。
 	var first_id := str(entries[0]["id"])
 	var second_id := str(entries[1]["id"])
+	(rows[0]["button"] as Button).grab_focus()
 	lobby.move_selected_gate(1)
 	await _wait_until(func() -> bool: return str(OnlineSession.room["entries"][1]["id"]) == first_id)
 	assert_eq([str(OnlineSession.room["entries"][0]["id"]), str(OnlineSession.room["entries"][1]["id"])], [second_id, first_id])
-	assert_eq(int(lobby.get("_selected_gate")), 1, "カーソルは、動かした先に付いていく")
-	# 全員が確定すると、主に「レース開始」の窓が出る。「まだ進まない」で閉じる。
+	assert_eq(int(lobby.get("_selected_gate")), 1)
+	# ランダム・上へ・下へは、主だけ押せる。プルの選び直しのボタンは無い。
+	assert_false((lobby.find_child("PaddockShuffleButton", true, false) as Button).disabled)
+	assert_null(lobby.find_child("BackToRoomButton", true, false))
+	# 全員が確定すると、主は「レース開始」を押せる。
+	var start := lobby.find_child("PaddockStartButton", true, false) as Button
+	assert_true(start.disabled)
 	guest.send(Protocol.CONFIRM, {"on": true})
-	lobby.toggle_confirm()
-	await _wait_until(func() -> bool: return advance.visible)
-	assert_eq((lobby.find_child("AdvanceButton", true, false) as Button).text, "レース開始")
-	(lobby.find_child("AdvanceCancelButton", true, false) as Button).pressed.emit()
-	# 主が「部屋へ戻る」と、選ぶ所へ戻り、枠番号が消える。
-	lobby.back_to_room_phase()
-	await _wait_until(func() -> bool: return not OnlineSession.in_entries())
-	await wait_seconds(0.2)
-	assert_false((lobby.get("_badges")[0] as Control).visible)
-	# どの行でも、カーソルを置くと、そのぷるりんが右に出て、板の右上に、その人の画像が出る。押すと、紹介の窓。
-	var person := lobby.find_child("PersonButton", true, false) as Button
-	var profile := lobby.find_child("ProfileDialog", true, false) as Control
-	lobby.call("_on_row_focused", 1)
-	assert_true(person.visible)
-	assert_false(profile.visible)
-	await _wait_until(func() -> bool: return OnlineSession.profiles.size() >= 2)
-	person.pressed.emit()
-	assert_true(profile.visible)
-	assert_eq((lobby.find_child("ProfileName", true, false) as Label).text, "客")
-	assert_true((lobby.find_child("ProfileIntroduction", true, false) as Label).text.contains("レースが好き"))
-	lobby.close_dialogs()
-	lobby.call("_on_row_focused", 0)
-	person.pressed.emit()
-	assert_true((lobby.find_child("ProfileNote", true, false) as Label).text.contains("あなた"))
-	assert_true((lobby.find_child("ProfileNote", true, false) as Label).text.contains("部屋の主"))
-	lobby.close_dialogs()
+	lobby.toggle_pick_confirm()
+	await _wait_until(func() -> bool: return not start.disabled)
+	assert_false(start.disabled)
+
+
+func _focused_name() -> String:
+	var focused := get_viewport().gui_get_focus_owner()
+	return str(focused.name) if focused != null else ""
 
 
 ## 上下左右・決定の操作を、キーボードやゲームパッドの代わりに送る。
@@ -610,23 +755,18 @@ func _press(action: String) -> void:
 	await wait_seconds(0.05)
 
 
-func _focused_name() -> String:
-	var focused := get_viewport().gui_get_focus_owner()
-	return str(focused.name) if focused != null else ""
-
-
 func test_the_room_can_be_worked_without_a_mouse() -> void:
 	var lobby := await _lobby_in_new_room("キーの部屋")
 	var room_id := _first_room_id()
 	var distances: Array = RaceSession.supported_distances_m()
 	var default_index := distances.find(RaceSession.DEFAULT_DISTANCE_M)
+	lobby.open_race()
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
 	# 両端に、オフラインと同じ「‹ L1」「R1 ›」がある。
 	assert_not_null(lobby.find_child("DistancePrev", true, false))
 	assert_not_null(lobby.find_child("DistanceNext", true, false))
-	# 自分の行から「上」で、今の距離のボタンへ。「右」で、となりの距離へ移り、そのまま、その距離になる。
-	(lobby.get("_slots")[0] as Control).grab_focus()
-	await _press("ui_up")
-	assert_eq(_focused_name(), "Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M))
+	# 今の距離のボタンから「右」で、となりの距離へ移り、そのまま、その距離になる。
+	(lobby.find_child("Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), true, false) as Control).grab_focus()
 	await _press("ui_right")
 	var next_distance := float(distances[default_index + 1])
 	assert_eq(_focused_name(), "Distance%d" % int(next_distance))
@@ -640,41 +780,29 @@ func test_the_room_can_be_worked_without_a_mouse() -> void:
 	await _wait_until(func() -> bool: return is_equal_approx(float(_server.call("_room_fields", room_id)["distance_m"]), RaceSession.DEFAULT_DISTANCE_M))
 	assert_almost_eq(float(_server.call("_room_fields", room_id)["distance_m"]), RaceSession.DEFAULT_DISTANCE_M, 0.001)
 	assert_eq(_focused_name(), "Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M))
-	# 「下」で自分の行へ。自分の行の「右」は、オフラインと同じで、ぷるりんを次の個体に替える。
+	# 「下」で、席の1つ目（自分）へ。「右」で、人の足りない席（2つ目）へ。
 	await wait_seconds(0.2)
 	await _press("ui_down")
-	assert_eq(_focused_name(), "Slot0")
+	assert_eq(_focused_name(), "SettingsSeat1")
 	await _press("ui_right")
-	assert_eq(_focused_name(), "Slot0")
-	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
-	assert_eq(lobby.my_pururin_id(), str(PururinRosterConfig.values()["roster"][0]["id"]))
-	# 右下の「確定」から「上」で、人の画像へ。「下」で確定へ戻り、「左」で「部屋を出る」。
-	(lobby.find_child("ConfirmButton", true, false) as Button).grab_focus()
-	await _press("ui_up")
-	assert_eq(_focused_name(), "PersonButton")
+	assert_eq(_focused_name(), "SettingsSeat2")
+	lobby.open_pick()
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	await wait_seconds(0.2)
+	# プル選択：自分の席から「下」で、CPUの席へ。決定で、ステータスの窓。いちばん下の席の「下」は、下のボタン。
+	(lobby.find_child("PickRow1", true, false) as Control).grab_focus()
 	await _press("ui_down")
-	assert_eq(_focused_name(), "ConfirmButton")
-	await _press("ui_left")
-	assert_eq(_focused_name(), "LeaveButton")
-	# 人の画像にカーソルを合わせて、決定で、紹介の窓が開く。「左」で、行へ戻れる。
+	assert_eq(_focused_name(), "PickRow2")
 	await _press("ui_up")
-	assert_eq(_focused_name(), "PersonButton")
 	await _press("ui_accept")
-	assert_true((lobby.find_child("ProfileDialog", true, false) as Control).visible)
+	assert_true((lobby.find_child("PickDialog", true, false) as Control).visible)
 	lobby.close_dialogs()
-	(lobby.find_child("PersonButton", true, false) as Button).grab_focus()
-	await _press("ui_left")
-	assert_eq(_focused_name(), "Slot0")
-	# 自分の行から「下」をたどると、決めごとのボタンを通って、ひとことの入力らんへ着く。
-	(lobby.get("_slots")[0] as Control).grab_focus()
-	var seen: Array = []
-	for _step in 14:
-		await _press("ui_down")
-		seen.append(_focused_name())
-		if _focused_name() == "ChatEdit":
-			break
-	assert_true(seen.has("FieldSizePrevious"), str(seen))
-	assert_eq(seen.back(), "ChatEdit", str(seen))
+	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
+	(lobby.find_child("PickRow%d" % Protocol.ROOM_CAPACITY, true, false) as Control).grab_focus()
+	await _press("ui_down")
+	assert_eq(_focused_name(), "PickBackButton")
+	await _press("ui_right")
+	assert_eq(_focused_name(), "PickConfirmButton")
 
 
 func test_a_guest_cannot_move_the_distance() -> void:
@@ -683,83 +811,41 @@ func test_a_guest_cannot_move_the_distance() -> void:
 	var lobby := await _connected_lobby()
 	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
-	# 主でない人は、距離の段にカーソルを置けない。自分の行から「上」を押しても、動かない。L1・R1 も効かない。
-	(lobby.get("_slots")[1] as Control).grab_focus()
-	await _press("ui_up")
-	assert_eq(_focused_name(), "Slot0")
-	await _press("ui_up")
-	assert_eq(_focused_name(), "Slot0")
+	lobby.toggle_lobby_ready()
+	await _wait_until(func() -> bool: return OnlineSession.my_lobby_ready())
+	owner.send(Protocol.RACE_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	# 主でない人は、距離の段にカーソルを置けない。L1・R1 も効かない。
+	assert_eq((lobby.find_child("Distance%d" % int(RaceSession.DEFAULT_DISTANCE_M), true, false) as Control).focus_mode, Control.FOCUS_NONE)
 	lobby.step_distance(1)
 	await wait_seconds(0.3)
 	assert_almost_eq(float(_server.call("_room_fields", _first_room_id())["distance_m"]), RaceSession.DEFAULT_DISTANCE_M, 0.001)
 	assert_true((lobby.find_child("DistanceNext", true, false) as Button).disabled)
-	# ほかの人の行（見るだけの行）からは、「右」で、その人の画像へ行ける。
-	(lobby.get("_slots")[0] as Control).grab_focus()
-	await _press("ui_right")
-	assert_eq(_focused_name(), "PersonButton")
-	await _press("ui_left")
-	assert_eq(_focused_name(), "Slot0")
+	owner.send(Protocol.PICK_OPEN)
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	assert_false((lobby.find_child("DistanceNext", true, false) as Control).is_visible_in_tree(), "プル選択には、距離の段は無い")
 
 
-func test_the_host_picks_cpu_pururins_and_trainers_on_the_rows() -> void:
+func test_the_host_picks_cpu_pururins_and_cannot_change_trainers() -> void:
 	var lobby := await _lobby_in_new_room("CPUの部屋")
 	var room_id := _first_room_id()
+	await _to_pick(lobby)
 	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
-	lobby.step_pururin(1)
-	await _wait_until(func() -> bool: return lobby.my_pururin_id() == ids[0])
-	# CPUの行（2行目）で「次へ」：自分が使っている1体目は飛ばして、2体目になる。
-	assert_true(lobby.is_cpu_row(1))
-	lobby.step_row_pururin(1, 1)
-	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[0]["pururin_id"]) == ids[1])
-	await _wait_until(func() -> bool: return str(lobby.get("_slots")[1].call("shown_text")) == lobby.pururin_name(ids[1]))
-	assert_eq(str(lobby.get("_slots")[1].call("shown_text")), lobby.pururin_name(ids[1]))
-	assert_true(str(lobby.get("_slots")[1].call("trainer_text")).begins_with("CPU "))
-	# その行の紹介（Y）を開くと、トレーナーが出て、主には「トレーナーを変える」がある。
-	(lobby.get("_slots")[1] as Control).grab_focus()
-	var y_press := InputEventJoypadButton.new()
-	y_press.button_index = JOY_BUTTON_Y
-	y_press.pressed = true
-	get_viewport().push_input(y_press)
-	await wait_seconds(0.1)
-	assert_true((lobby.find_child("ProfileDialog", true, false) as Control).visible, "Yで、紹介の窓が開く")
-	assert_true((lobby.find_child("ProfileTrainerButton", true, false) as Button).visible)
-	(lobby.find_child("ProfileTrainerButton", true, false) as Button).pressed.emit()
-	assert_true(lobby.is_trainer_picker_open())
-	var trainers: Array = load("res://scripts/config/cpu_trainers_config.gd").values()
-	lobby.call("_on_trainer_picked", str(trainers[4]["id"]))
-	assert_false(lobby.is_trainer_picker_open())
-	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[0]["trainer_id"]) == str(trainers[4]["id"]))
-	await _wait_until(func() -> bool: return str(lobby.get("_slots")[1].call("trainer_text")).contains(str(trainers[4]["name"])))
-	assert_true(str(lobby.get("_slots")[1].call("trainer_text")).contains(str(trainers[4]["name"])))
-	# 一覧の窓からも選べる。Xで「おまかせ」に戻る。
-	lobby.open_picker_for_row(2)
+	# CPUの席（2つ目）を押すと、ステータスの窓。主には「変更」がある。自分と同じプルでも選べる。
+	lobby.open_pick_dialog(1)
+	assert_true((lobby.find_child("PickChangeButton", true, false) as Button).visible)
+	lobby.open_pick_picker()
 	assert_true(lobby.is_picker_open())
-	lobby.call("_on_picker_picked", ids[6])
-	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[1]["pururin_id"]) == ids[6])
-	assert_eq(str(_server.room_cpus(room_id)[1]["pururin_id"]), ids[6])
-	await wait_seconds(0.2)
-	lobby.clear_cpu_row(2)
-	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[1]["pururin_id"]).is_empty())
-	assert_eq(str(_server.room_cpus(room_id)[1]["pururin_id"]), "")
-	# 出走表でも、主は、CPUの枠を替えられる。
-	lobby.toggle_confirm()
-	await _wait_until(func() -> bool: return (lobby.find_child("AdvanceDialog", true, false) as Control).visible)
-	lobby.advance()
-	await _wait_until(func() -> bool: return OnlineSession.in_entries())
-	await wait_seconds(0.2)
-	var gate := -1
-	for entry: Dictionary in OnlineSession.room["entries"]:
-		if int(entry["peer_id"]) == 0 and str(entry["id"]) != ids[1]:
-			gate = int(entry["gate"])
-			break
-	assert_true(lobby.is_cpu_row(gate))
-	var before := str(OnlineSession.room["entries"][gate]["id"])
-	lobby.step_row_pururin(gate, 1)
-	await _wait_until(func() -> bool: return str(OnlineSession.room["entries"][gate]["id"]) != before)
-	var after := str(OnlineSession.room["entries"][gate]["id"])
-	assert_ne(after, before)
-	var others := (OnlineSession.room["entries"] as Array).filter(func(entry: Dictionary) -> bool: return int(entry["gate"]) != gate).map(func(entry: Dictionary) -> String: return str(entry["id"]))
-	assert_false(others.has(after), "ほかの枠が使っている個体には、ならない")
+	lobby.call("_on_picker_picked", ids[0])
+	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[0]["pururin_id"]) == ids[0])
+	assert_eq(str(_server.room_cpus(room_id)[0]["pururin_id"]), ids[0])
+	# トレーナーは、そのプルのデフォルト（変える所は無い）。
+	var row: Dictionary = lobby.get("_pick_rows")[1]
+	await _wait_until(func() -> bool: return (row["who"] as Label).text.begins_with("CPU "))
+	var trainer: Dictionary = load("res://scripts/config/cpu_trainers_config.gd").by_id(str(PururinRosterConfig.pururin_by_id(ids[0])["trainer_id"]))
+	assert_eq((row["who"] as Label).text, "CPU %s" % str(trainer["name"]))
+	assert_null(lobby.find_child("ProfileTrainerButton", true, false))
 
 
 func test_a_guest_cannot_pick_cpu_pururins() -> void:
@@ -768,11 +854,11 @@ func test_a_guest_cannot_pick_cpu_pururins() -> void:
 	var lobby := await _connected_lobby()
 	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
-	assert_false(lobby.is_cpu_row(2))
-	assert_eq((lobby.get("_slots")[2] as Control).focus_mode, Control.FOCUS_NONE)
-	lobby.step_row_pururin(2, 1)
-	await wait_seconds(0.3)
-	assert_eq(str(_server.room_cpus(_first_room_id())[0]["pururin_id"]), "")
+	await _guest_to_pick(lobby, owner)
+	# CPUの席を押しても、ステータスを見るだけ（「変更」は無い）。
+	lobby.open_pick_dialog(2)
+	assert_true((lobby.find_child("PickDialog", true, false) as Control).visible)
+	assert_false((lobby.find_child("PickChangeButton", true, false) as Button).visible)
 
 
 func test_room_events_show_as_a_notice_and_in_the_chat() -> void:
@@ -781,7 +867,7 @@ func test_room_events_show_as_a_notice_and_in_the_chat() -> void:
 	var lobby := await _connected_lobby()
 	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
-	var chat := lobby.find_child("ChatLog", true, false) as RichTextLabel
+	var chat := lobby.find_child("RoomChatLog", true, false) as RichTextLabel
 	# もう1人が入る：上の案内と、ひとことの欄の両方に出る。
 	var third := await _other("三人目")
 	third.join_room(_first_room_id())
@@ -804,30 +890,25 @@ func test_chat_lines_show_in_the_room() -> void:
 	guest.join_room(_first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	guest.send(Protocol.CHAT, {"text": "よろしく"})
-	(lobby.find_child("ChatEdit", true, false) as LineEdit).text = "こちらこそ"
-	lobby.send_chat()
+	var edit := lobby.find_child("RoomChatEdit", true, false) as LineEdit
+	edit.text = "こちらこそ"
+	lobby.send_chat(edit)
 	await _wait_until(func() -> bool: return OnlineSession.chat_log.size() >= 2)
-	var shown := (lobby.find_child("ChatLog", true, false) as RichTextLabel).get_parsed_text()
+	var shown := (lobby.find_child("RoomChatLog", true, false) as RichTextLabel).get_parsed_text()
 	assert_true(shown.contains("客"))
 	assert_true(shown.contains("よろしく"))
 	assert_true(shown.contains("こちらこそ"))
-	assert_eq((lobby.find_child("ChatEdit", true, false) as LineEdit).text, "", "送ったら、入力らんは空になる")
+	assert_eq(edit.text, "", "送ったら、入力らんは空になる")
 
 
-func test_scenery_is_a_personal_choice_that_the_race_screen_reads() -> void:
+func test_the_race_screen_uses_the_quality_chosen_in_the_options() -> void:
 	var course_only_before := RaceSession.is_course_only()
 	RaceSession.set_course_only(not OS.has_feature("web"))
 	var lobby := await _lobby_in_new_room("景色の部屋")
-	# ゲームモード設定で選んだ画質を引き継ぐ。
+	# オプション設定で選んだ画質を、レースの画面にも使う。
 	assert_eq(lobby.is_light_scenery(), not OS.has_feature("web"))
-	var label := lobby.find_child("SceneryLabel", true, false) as Label
-	assert_eq(label.text, lobby.scenery_text())
-	# 切り替えると、レースの画面が読む「軽い景色か」に、その選択が入る。
-	for _press in 2:
-		lobby.step_scenery(1)
-		assert_eq(label.text, lobby.scenery_text())
-		lobby.prepare_race({"distance_m": RaceSession.supported_distances_m()[0], "entries": [{"gate": 0, "id": "x", "player": true, "peer_id": 1}]})
-		assert_eq(RaceSession.is_course_only(), lobby.is_light_scenery())
+	lobby.prepare_race({"distance_m": RaceSession.supported_distances_m()[0], "entries": [{"gate": 0, "id": "x", "player": true, "peer_id": 1}]})
+	assert_eq(RaceSession.is_course_only(), lobby.is_light_scenery())
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
 	RaceSession.set_course_only(course_only_before)
@@ -846,8 +927,20 @@ func test_start_targets_the_visible_next_step_and_never_cancels_confirmation() -
 	_press_pad(JOY_BUTTON_START)
 	await _wait_until(func() -> bool: return OnlineSession.in_room())
 	assert_true(OnlineSession.in_room())
-	var confirm: Button = lobby.find_child("ConfirmButton", true, false)
+	# 待機室では、主のSTARTは「レース開始」。レース設定では「次へ」。
+	await _wait_until(func() -> bool: return (lobby.find_child("WaitingRoom", true, false) as Control).visible)
+	assert_eq(lobby.start_button(), lobby.find_child("RaceOpenButton", true, false))
+	lobby.open_race()
+	await _wait_until(func() -> bool: return (lobby.find_child("RaceSettings", true, false) as Control).visible)
+	assert_eq(lobby.start_button(), lobby.find_child("SettingsNextButton", true, false))
+	lobby.open_pick()
+	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
+	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
+	# プル選択では、まず「確定」。全員がそろうと、主は「パドックへ」。
+	var confirm: Button = lobby.find_child("PickConfirmButton", true, false)
 	assert_eq(lobby.start_button(), confirm)
-	assert_true(confirm.disabled, "未選択のまま確定はできない")
-	(lobby.find_child("ChatEdit", true, false) as LineEdit).grab_focus()
+	confirm.pressed.emit()
+	await _wait_until(func() -> bool: return not (lobby.find_child("PickPaddockButton", true, false) as Button).disabled)
+	assert_eq(lobby.start_button(), lobby.find_child("PickPaddockButton", true, false))
+	(lobby.find_child("PickChatEdit", true, false) as LineEdit).grab_focus()
 	assert_null(lobby.start_button(), "チャット入力中は先へ進まない")

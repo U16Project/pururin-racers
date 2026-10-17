@@ -12,7 +12,7 @@ const TitleScene := preload("res://scenes/title.tscn")
 
 class ProfileWithoutNavigation extends "res://scripts/trainer_profile_screen.gd":
 	var transitions := 0
-	func go_to_mode_select() -> void:
+	func go_to_options() -> void:
 		transitions += 1
 
 
@@ -219,15 +219,16 @@ func test_a_picture_file_can_be_chosen_and_an_unreadable_one_is_refused() -> voi
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(source_path))
 
 
-func test_game_start_goes_to_the_trainer_screen_and_then_to_mode_select() -> void:
+func test_game_start_goes_to_the_profile_screen_then_options_then_mode_select() -> void:
 	var title: Control = TitleScene.instantiate()
 	add_child_autofree(title)
 	assert_eq((title.find_child("PressAnyButton", true, false) as Label).text, "ー　PRESS ANY BUTTON　ー")
 	assert_eq(title.call("next_scene_path"), "res://scenes/trainer_profile.tscn")
 	var screen := _screen()
 	assert_eq((screen.find_child("FreeRaceButton", true, false) as Button).text, "次へ")
-	assert_eq(screen.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
-	assert_true(ResourceLoader.exists(screen.get("MODE_SELECT_SCENE_PATH")))
+	assert_eq(screen.get("OPTIONS_SCENE_PATH"), "res://scenes/options.tscn")
+	assert_true(ResourceLoader.exists(screen.get("OPTIONS_SCENE_PATH")))
+	assert_eq((screen.find_child("Note", true, false) as Label).text, "あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。")
 
 
 func test_a_saved_avatar_that_no_longer_exists_is_reported() -> void:

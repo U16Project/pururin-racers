@@ -1,10 +1,10 @@
 extends Control
-## プロフィール編集専用画面。名前・紹介文・アイコンを編集し、次の設定画面へ進む。
+## プロフィール登録画面。名前・ひとこと（紹介文）・アイコンを登録し、オプション設定へ進む。
 ## 画像は、なし／用意してある人の絵／自分の画像ファイル、から選ぶ。
-## 「次へ」で保存してゲームモード設定へ進む。「戻る」では、何も保存しない。
+## 「次へ」で保存してオプション設定へ進む。「戻る」では、何も保存しない。
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
-const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
+const OPTIONS_SCENE_PATH := "res://scenes/options.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const BUTTON_OPACITY := 0.92
 const MENU_BUTTON_HEIGHT := 54.0
@@ -63,9 +63,14 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 8)
 	panel.add_child(column)
-	var heading := MenuStyle.label("トレーナー", 30)
+	var heading := MenuStyle.label("プロフィール登録", 30)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(heading)
+	var note := MenuStyle.label("あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。", 14, MenuStyle.COLOR_DIM)
+	note.name = "Note"
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(note)
 	# 上の段：左に今の画像、右に名前。
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 22)
@@ -80,7 +85,7 @@ func _ready() -> void:
 	name_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(name_box)
 	var rules := TrainerProfile.config()
-	name_box.add_child(MenuStyle.label("トレーナー名（%d〜%d文字）" % [int(rules["name_min_length"]), int(rules["name_max_length"])], 18, MenuStyle.COLOR_DIM))
+	name_box.add_child(MenuStyle.label("名前（%d〜%d文字）" % [int(rules["name_min_length"]), int(rules["name_max_length"])], 18, MenuStyle.COLOR_DIM))
 	_name_edit = LineEdit.new()
 	_name_edit.name = "NameEdit"
 	_name_edit.text = TrainerProfile.trainer_name()
@@ -96,7 +101,7 @@ func _ready() -> void:
 	# 紹介文（出走表の、トレーナーの所に出る）。
 	var introduction_head := HBoxContainer.new()
 	column.add_child(introduction_head)
-	var introduction_title := MenuStyle.label("紹介文（%d文字まで）" % int(rules["introduction_max_length"]), 18, MenuStyle.COLOR_DIM)
+	var introduction_title := MenuStyle.label("ひとこと（%d文字まで）" % int(rules["introduction_max_length"]), 18, MenuStyle.COLOR_DIM)
 	introduction_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	introduction_head.add_child(introduction_title)
 	_introduction_count = MenuStyle.label("", 16, MenuStyle.COLOR_DIM)
@@ -108,11 +113,11 @@ func _ready() -> void:
 	_introduction_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_introduction_edit.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	_introduction_edit.add_theme_font_size_override("font_size", 18)
-	_introduction_edit.custom_minimum_size = Vector2(0.0, 72.0)
+	_introduction_edit.custom_minimum_size = Vector2(0.0, 60.0)
 	_introduction_edit.text_changed.connect(_refresh_introduction_count)
 	column.add_child(_introduction_edit)
 	_refresh_introduction_count()
-	column.add_child(MenuStyle.label("画像", 18, MenuStyle.COLOR_DIM))
+	column.add_child(MenuStyle.label("アイコン", 18, MenuStyle.COLOR_DIM))
 	var choice_scroll := ScrollContainer.new()
 	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * 2 + 12
 	choice_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -224,7 +229,7 @@ func pending_icon() -> Dictionary:
 	return _pending.duplicate()
 
 
-## 名前と画像を保存して、遊び方の選択へ進む。名前が決まりに合わないときは、理由を出して、何も保存しない。
+## 名前・ひとこと・アイコンを保存して、オプション設定へ進む。名前が決まりに合わないときは、理由を出して、何も保存しない。
 func register() -> void:
 	if _registering or _file_dialog_open or _file_dialog.visible or _delete_dialog.visible:
 		return
@@ -245,11 +250,11 @@ func register() -> void:
 		"none": TrainerProfile.clear_icon()
 		"avatar": TrainerProfile.set_icon_avatar(str(_pending["id"]))
 	UIAudio.play_confirmation()
-	go_to_mode_select()
+	go_to_options()
 
 
-func go_to_mode_select() -> void:
-	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
+func go_to_options() -> void:
+	get_tree().change_scene_to_file(OPTIONS_SCENE_PATH)
 
 
 func go_to_title() -> void:

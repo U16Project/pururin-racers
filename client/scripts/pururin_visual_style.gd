@@ -9,5 +9,6 @@ static func color_for_pururin(pururin: Dictionary) -> Color:
 	return PururinLookConfig.primary_color_for(str(pururin["id"]))
 
 
+## 走者の番号の色。同じプルの2体目からの番号（「番号#2」など）も、そのプルの色。
 static func color_for_racer_id(racer_id: String) -> Color:
-	return PururinLookConfig.primary_color_for(racer_id)
+	return PururinLookConfig.primary_color_for(racer_id.get_slice("#", 0))

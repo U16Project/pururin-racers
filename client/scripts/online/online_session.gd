@@ -23,6 +23,8 @@ static var chat_log: Array = []
 const CHAT_LOG_LIMIT := 60
 ## 今いる部屋のようす（サーバーから届いた最後のもの。入っていなければ空）。
 static var room := {}
+## さっき選んだプル（このアプリを開いているあいだ覚えておく）。プル選択に入ったとき、まずこれにする。
+static var last_pick := ""
 
 
 ## サーバーとのつながり。無ければ作る。
@@ -72,12 +74,14 @@ static func notice_text(data: Dictionary) -> String:
 			return "%s さんが、%sによって退出しました。" % [player_name, "サーバーの管理人" if str(data.get("by", "")) == Protocol.KICKED_BY_ADMIN else "部屋の主"]
 		Protocol.NOTICE_HOST:
 			return "%s さんが、部屋の主になりました。" % player_name
+		Protocol.NOTICE_RACE_OPEN:
+			return "部屋主（%s さん）が「レース設定へ」を押しました。" % player_name
 	return ""
 
 
 ## まだ紹介を持っていない人のぶんを、サーバーに聞く。
 static func _ask_profiles() -> void:
-	for member: Dictionary in members():
+	for member: Dictionary in all_members():
 		var id := int(member["peer_id"])
 		if not _asked.has(id) and _client != null and is_instance_valid(_client):
 			_asked[id] = true
@@ -125,13 +129,57 @@ static func is_host() -> bool:
 	return in_room() and int(room.get("host", 0)) == peer_id
 
 
-static func members() -> Array:
+## 部屋の場面（待機室・レース設定・ぷるりんを選ぶ所・出走表）。
+static func phase() -> String:
+	return str(room.get("phase", Protocol.PHASE_LOBBY))
+
+
+## 自分が、今のレースに出る人か（待機室でレース開始が押されたときに、準備OKだった人と主）。
+static func am_racer() -> bool:
+	if not in_room():
+		return false
+	# JSON で届いた番号は小数になっているので、整数にそろえて比べる。
+	for id: Variant in room.get("racers", []):
+		if int(id) == peer_id:
+			return true
+	return false
+
+
+## 待機室の画面を出す場面か（待機室の場面、または、レースに出ない人）。
+static func in_waiting_room() -> bool:
+	return in_room() and (phase() == Protocol.PHASE_LOBBY or not am_racer())
+
+
+## 部屋にいる全員（入った順）。待機室の席に使う。
+static func all_members() -> Array:
 	return room.get("members", [])
+
+
+## レースを決める画面（ぷるりんを選ぶ所・出走表）で扱う人。待機室では全員、それ以外は、レースに出る人（レース開始のときの並び）。
+static func members() -> Array:
+	if phase() == Protocol.PHASE_LOBBY:
+		return all_members()
+	var by_id := {}
+	for member: Dictionary in all_members():
+		by_id[int(member["peer_id"])] = member
+	var result: Array = []
+	for id: Variant in room.get("racers", []):
+		if by_id.has(int(id)):
+			result.append(by_id[int(id)])
+	return result
+
+
+## 自分が、待機室で準備OKを押しているか。
+static func my_lobby_ready() -> bool:
+	for member: Dictionary in all_members():
+		if int(member["peer_id"]) == peer_id:
+			return bool(member.get("ready", false))
+	return false
 
 
 ## 自分が選んでいるぷるりん（まだなら空）。
 static func my_pururin_id() -> String:
-	for member: Dictionary in members():
+	for member: Dictionary in all_members():
 		if int(member["peer_id"]) == peer_id:
 			return str(member["pururin_id"])
 	return ""

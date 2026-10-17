@@ -97,7 +97,9 @@ func test_creating_a_room_makes_the_creator_the_host_and_lists_the_room() -> voi
 	assert_eq(int(welcome["host"]), int(welcome["peer_id"]))
 	assert_true(bool(welcome["locked"]))
 	assert_eq(int(welcome["field_size"]), Protocol.ROOM_CAPACITY)
-	assert_true(bool(welcome["cpu"]))
+	# 入るとまず、待機室。
+	assert_eq(str(welcome["phase"]), Protocol.PHASE_LOBBY)
+	assert_eq(int(welcome["capacity"]), Protocol.ROOM_CAPACITY)
 	assert_false(welcome.has("password"), "パスワードそのものは、配らない")
 	# 一覧を見ている人に、新しい部屋が届く。
 	var rooms := await _wait_for("b", Protocol.ROOMS)
@@ -108,6 +110,7 @@ func test_creating_a_room_makes_the_creator_the_host_and_lists_the_room() -> voi
 	assert_eq(int(listed["count"]), 1)
 	assert_true(bool(listed["locked"]))
 	assert_false(bool(listed["racing"]))
+	assert_eq(int(listed["capacity"]), Protocol.ROOM_CAPACITY)
 	assert_eq(int(b_lobby["peer_id"]) != int(welcome["peer_id"]), true)
 
 
@@ -164,9 +167,12 @@ func test_joining_needs_the_password_and_a_free_place() -> void:
 	_clients["b"].join_room(room_id, "ひみつ")
 	var joined := await _wait_for("b", Protocol.WELCOME)
 	assert_eq((joined["members"] as Array).size(), 2)
-	# 出走数を2にすると、3人目は入れない。
-	_clients["a"].send(Protocol.SETTINGS, {"field_size": 2})
-	await _wait_for("a", Protocol.ROOM)
+	# 入れる人数（8人）に達すると、それ以上は入れない。
+	for index in Protocol.ROOM_CAPACITY - 2:
+		var label := "x%d" % index
+		await _enter_lobby(label)
+		_clients[label].join_room(room_id, "ひみつ")
+		await _wait_for(label, Protocol.WELCOME)
 	_clients["c"].join_room(room_id, "ひみつ")
 	assert_eq(await _error("c"), Protocol.ERROR_ROOM_FULL)
 
@@ -193,26 +199,28 @@ func test_only_the_host_changes_the_room_settings() -> void:
 	var welcome := await _create("a", "部屋")
 	_clients["b"].join_room(int(welcome["room_id"]))
 	await _wait_for("b", Protocol.WELCOME)
-	_clients["b"].send(Protocol.SETTINGS, {"cpu": false})
+	_clients["b"].send(Protocol.SETTINGS, {"password": "かぎ"})
 	assert_eq(await _error("b"), Protocol.ERROR_NOT_HOST)
-	var distances := RaceSession.supported_distances_m()
 	_inbox["b"].clear()
 	_inbox["a"].clear()
-	_clients["a"].send(Protocol.SETTINGS, {"distance_m": distances[0], "field_size": 4, "cpu": false, "password": "かぎ"})
+	# 待機室では、パスワードと紹介だけ変えられる。距離・席は、レース設定でだけ。
+	_clients["a"].send(Protocol.SETTINGS, {"password": "かぎ"})
 	var room := await _wait_for("b", Protocol.ROOM)
-	assert_almost_eq(float(room["distance_m"]), float(distances[0]), 0.001)
-	assert_eq(int(room["field_size"]), 4)
-	assert_false(bool(room["cpu"]))
 	assert_true(bool(room["locked"]))
 	# パスワードそのものは、主にだけ届く（確かめて、変えられるように）。ほかの人には、あるかどうかだけ。
 	assert_false(room.has("password"))
 	assert_eq(str((await _wait_for("a", Protocol.ROOM)).get("password", "")), "かぎ")
-	# 今いる人数より少ない出走数・選べない距離は、断る（ほかの項目も変えない）。
-	_clients["a"].send(Protocol.SETTINGS, {"field_size": 1, "cpu": true})
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": RaceSession.supported_distances_m()[0]})
+	assert_eq(await _error("a"), Protocol.ERROR_WRONG_PHASE)
+	# レース設定では、選べない距離は断る（ほかの項目も変えない）。
+	_clients["a"].send(Protocol.RACE_OPEN)
+	await _wait_for("a", Protocol.ROOM)
+	var distance_before := float(_server.call("_room_fields", int(welcome["room_id"]))["distance_m"])
+	_clients["a"].send(Protocol.SETTINGS, {"distance_m": 123.0, "password": ""})
 	assert_eq(await _error("a"), Protocol.ERROR_BAD_MESSAGE)
-	_clients["a"].send(Protocol.SETTINGS, {"distance_m": 123.0})
-	assert_eq(await _error("a"), Protocol.ERROR_BAD_MESSAGE)
-	assert_false(bool(_server.call("_room_fields", int(welcome["room_id"]))["cpu"]))
+	var fields: Dictionary = _server.call("_room_fields", int(welcome["room_id"]))
+	assert_almost_eq(float(fields["distance_m"]), distance_before, 0.001)
+	assert_true(bool(fields["locked"]))
 
 
 func test_the_host_can_put_a_person_out_and_that_person_returns_to_the_list() -> void:

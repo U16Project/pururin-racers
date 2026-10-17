@@ -2,6 +2,7 @@ extends Control
 ## 起動して最初に出す、U16-Projectのロゴ。ふわっと出て消えたら、タイトルへ進む。どのボタンでも飛ばせる。
 
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
+const LocalServer := preload("res://scripts/online/local_server.gd")
 const LOGO_IMAGE_PATH := "res://assets/ui/logo_u16project.png"
 const FADE_IN_S := 0.5
 const HOLD_S := 1.0
@@ -13,6 +14,10 @@ var _leaving := false
 
 
 func _ready() -> void:
+	# 「このPCをサーバーにする」で起動されたときは、ゲームではなく、サーバーとして始める。
+	if LocalServer.requested():
+		get_tree().change_scene_to_file.call_deferred(LocalServer.SERVER_SCENE_PATH)
+		return
 	var background := ColorRect.new()
 	background.color = BACKGROUND_COLOR
 	background.set_anchors_preset(Control.PRESET_FULL_RECT)
