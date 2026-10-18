@@ -87,22 +87,6 @@ func test_curved_text_is_never_upside_down() -> void:
 		assert_false(RoundRaceHud.arc_text_is_upper(degrees), "%.0f度は下半分" % degrees)
 
 
-func test_race_shows_the_round_hud_and_hides_the_old_bottom_panel() -> void:
-	var race := _race(false)
-	var round_hud: Control = race.get("_round_hud")
-	assert_not_null(round_hud)
-	assert_not_null(race.get_node_or_null("UI/RoundRaceHudView"))
-	# 前の操作盤は、残してあるが、下の盤は描かない。順位表は、画面にそのまま出す。
-	var race_hud: Control = race.get_node("UI/RaceHud")
-	assert_false(bool(race_hud.get("main_panel_visible")))
-	assert_null(race.get_node_or_null("UI/RaceHudView"))
-	# 丸い操作盤は、仮想パッドのラインのボタンのすぐ右、画面の下。
-	var view: Control = race.get_node("UI/RoundRaceHudView")
-	var radius := float(race.ROUND_HUD_RADIUS)
-	var center := view.position + view.size * 0.5
-	assert_almost_eq(center.x - radius, float(race.TouchControls.LINE_BUTTONS_RIGHT) + float(race.ROUND_HUD_STICK_GAP), 0.5)
-
-
 func test_ground_text_shows_notch_then_speed_then_heart_rate() -> void:
 	assert_eq(PlayerGroundMarker.info_parts(0, 4, 55.4, 148.2), ["4", "ノッチ", true])
 	assert_eq(PlayerGroundMarker.info_parts(1, 4, 55.4, 148.2), ["55", "km/h", false])

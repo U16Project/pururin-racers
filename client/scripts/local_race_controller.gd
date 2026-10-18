@@ -14,22 +14,20 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
-const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
+const PartsRaceHud := preload("res://scripts/presentation/parts_race_hud.gd")
 const FpsLabel := preload("res://scripts/debug/fps_label.gd")
 const FirstDrawWarmup := preload("res://scripts/presentation/first_draw_warmup.gd")
 ## 表情の部品を先に作る処理に、1コマで使ってよい時間（ミリ秒）。
 const FACE_PREPARE_BUDGET_MS := 8
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
-## 丸い操作盤の大きさ（外の輪の半径。ピクセル）と、画面の下からのすき間。
-const ROUND_HUD_RADIUS := 142.0
-const ROUND_HUD_BOTTOM_MARGIN := 8.0
-## 丸い操作盤の絵を描き直す回数（1秒あたり）。
-const ROUND_HUD_UPDATES_PER_S := 10.0
+## 左上の操作盤（ハート型。絵の部品で組み立てる）の大きさ（部品の絵の canvas の半分の何倍か）と、画面の左上の角からのすき間。
+const HEART_HUD_SCALE := 0.72
+const HEART_HUD_MARGIN := Vector2(6.0, 4.0)
+## 操作盤の絵を描き直す回数（1秒あたり）。
+const HEART_HUD_UPDATES_PER_S := 10.0
 ## ウェブ版オフラインテストで、順位表の絵を描き直す回数（1秒あたり）。
 const RACE_HUD_UPDATES_PER_S := 4.0
-## 丸い操作盤の左の端と、仮想パッドのラインのボタンの右の端との、すき間。
-const ROUND_HUD_STICK_GAP := 8.0
 const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
@@ -132,12 +130,12 @@ var _remote_runners := {}
 ## オンラインのサーバーの上のレースか（人が全員やめて、通信ごしの走者がいなくなっても、そのまま）。
 var _online_host := false
 var _remote_inputs := {}
-var _round_hud: Control
-## 丸い操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
-## 絵の描き直しは、1秒に ROUND_HUD_UPDATES_PER_S 回だけにする。
-var _round_hud_viewport: SubViewport
-var _round_hud_view: TextureRect
-var _round_hud_drawn_msec := -1000000
+var _heart_hud: Control
+## 操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
+## 絵の描き直しは、1秒に HEART_HUD_UPDATES_PER_S 回だけにする。
+var _heart_hud_viewport: SubViewport
+var _heart_hud_view: TextureRect
+var _heart_hud_drawn_msec := -1000000
 ## ウェブ版オフラインテストのときだけ使う、順位表（前の操作盤）の絵と、その貼り先。
 var _race_hud_viewport: SubViewport
 var _race_hud_view: TextureRect
@@ -162,7 +160,7 @@ func _ready() -> void:
 	_race_hud = RaceHud.new()
 	_race_hud.name = "RaceHud"
 	if RaceSession.is_course_only():
-		# ウェブ版オフラインテスト：順位表（前の操作盤）も、別の絵に描いて貼る。描き直しは、丸い操作盤と同じ回数だけ（軽くするため）。
+		# ウェブ版オフラインテスト：順位表（前の操作盤）も、別の絵に描いて貼る。描き直しは、操作盤と同じ回数だけ（軽くするため）。
 		_race_hud_viewport = SubViewport.new()
 		_race_hud_viewport.name = "RaceHudViewport"
 		_race_hud_viewport.transparent_bg = true
@@ -182,28 +180,28 @@ func _ready() -> void:
 	else:
 		$UI.add_child(_race_hud)
 		$UI.move_child(_race_hud, 0)
-	# 下の操作盤は、丸い操作盤に替える（前の操作盤は、消しているだけで残してある）。
+	# 下の操作盤は、左上のハート型の操作盤（絵の部品で組み立てる）に替える（前の操作盤は、消しているだけで残してある）。
 	_race_hud.set("main_panel_visible", false)
-	_round_hud_viewport = SubViewport.new()
-	_round_hud_viewport.name = "RoundRaceHudViewport"
-	_round_hud_viewport.transparent_bg = true
-	_round_hud_viewport.disable_3d = true
-	_round_hud_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
-	$UI.add_child(_round_hud_viewport)
-	_round_hud = Control.new()
-	_round_hud.set_script(RoundRaceHud)
-	_round_hud.name = "RoundRaceHud"
-	_round_hud_viewport.add_child(_round_hud)
-	_round_hud_view = TextureRect.new()
-	_round_hud_view.name = "RoundRaceHudView"
-	_round_hud_view.texture = _round_hud_viewport.get_texture()
-	_round_hud_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_round_hud_view.stretch_mode = TextureRect.STRETCH_SCALE
-	_round_hud_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	$UI.add_child(_round_hud_view)
-	$UI.move_child(_round_hud_view, 1)
-	_place_round_hud()
-	get_viewport().size_changed.connect(_place_round_hud)
+	_heart_hud_viewport = SubViewport.new()
+	_heart_hud_viewport.name = "HeartRaceHudViewport"
+	_heart_hud_viewport.transparent_bg = true
+	_heart_hud_viewport.disable_3d = true
+	_heart_hud_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	$UI.add_child(_heart_hud_viewport)
+	_heart_hud = Control.new()
+	_heart_hud.set_script(PartsRaceHud)
+	_heart_hud.name = "HeartRaceHud"
+	_heart_hud_viewport.add_child(_heart_hud)
+	_heart_hud_view = TextureRect.new()
+	_heart_hud_view.name = "HeartRaceHudView"
+	_heart_hud_view.texture = _heart_hud_viewport.get_texture()
+	_heart_hud_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_heart_hud_view.stretch_mode = TextureRect.STRETCH_SCALE
+	_heart_hud_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$UI.add_child(_heart_hud_view)
+	$UI.move_child(_heart_hud_view, 1)
+	_place_heart_hud()
+	get_viewport().size_changed.connect(_place_heart_hud)
 	# 画面の上の仮想パッド（スマホ用。左下のボタンかF2で出し入れ）。
 	_touch_controls = TouchControls.new()
 	$UI.add_child(_touch_controls)
@@ -1188,22 +1186,19 @@ func _layout_overlay_labels() -> void:
 	_guide_label.add_theme_constant_override("outline_size", 5)
 
 
-## 丸い操作盤の位置。左の端を、仮想パッドのラインのボタンのすぐ右に、下の端を、画面の下に寄せる
-## （名前のための外側の余白は、画面の外へ出してよい）。
-func _place_round_hud() -> void:
+## 操作盤の位置：画面の左上。
+func _place_heart_hud() -> void:
 	var screen := get_viewport().get_visible_rect().size
 	# 絵は、画面の実際の点の細かさで描く（拡大してぼやけないように）。貼るときに、もとの大きさへ戻す。
 	var zoom := maxf(get_viewport().get_stretch_transform().get_scale().x, 1.0)
-	_round_hud.call("set_radius", ROUND_HUD_RADIUS * zoom)
-	var drawn_size := _round_hud.custom_minimum_size.ceil()
-	_round_hud_viewport.size = Vector2i(drawn_size)
-	_round_hud.position = Vector2.ZERO
-	_round_hud.size = drawn_size
-	var left := TouchControls.LINE_BUTTONS_RIGHT + ROUND_HUD_STICK_GAP
-	var center := Vector2(left + ROUND_HUD_RADIUS, screen.y - ROUND_HUD_BOTTOM_MARGIN - ROUND_HUD_RADIUS)
-	_round_hud_view.size = drawn_size / zoom
-	_round_hud_view.position = center - _round_hud_view.size * 0.5
-	_round_hud_drawn_msec = -1000000
+	_heart_hud.call("set_scale_factor", HEART_HUD_SCALE * zoom)
+	var drawn_size := _heart_hud.custom_minimum_size.ceil()
+	_heart_hud_viewport.size = Vector2i(drawn_size)
+	_heart_hud.position = Vector2.ZERO
+	_heart_hud.size = drawn_size
+	_heart_hud_view.size = drawn_size / zoom
+	_heart_hud_view.position = HEART_HUD_MARGIN
+	_heart_hud_drawn_msec = -1000000
 	if _race_hud_viewport != null:
 		# 順位表の絵は、画面いっぱい。画面の実際の点の細かさで描く。
 		_race_hud_viewport.size = Vector2i((screen * zoom).ceil())
@@ -1219,8 +1214,8 @@ func _update_race_hud() -> void:
 	# 順位表を画面にそのまま出しているとき（ウェブ版オフラインテスト以外）は、今までどおり毎コマ。
 	var now := Time.get_ticks_msec()
 	var race_hud_due := _race_hud_viewport == null or float(now - _race_hud_drawn_msec) >= 1000.0 / RACE_HUD_UPDATES_PER_S
-	var round_hud_due := float(now - _round_hud_drawn_msec) >= 1000.0 / ROUND_HUD_UPDATES_PER_S
-	if not race_hud_due and not round_hud_due:
+	var heart_hud_due := float(now - _heart_hud_drawn_msec) >= 1000.0 / HEART_HUD_UPDATES_PER_S
+	if not race_hud_due and not heart_hud_due:
 		return
 	var air_breakdown: Dictionary = _player.call("get_air_reduction_breakdown")
 	var place := _live_place(_player) if _race_started else 0
@@ -1275,15 +1270,15 @@ func _update_race_hud() -> void:
 	if _race_hud_viewport == null:
 		_race_hud.call("update_state", state)
 	elif race_hud_due:
-		# 順位表と丸い操作盤は、同じコマで描き直さない（重いコマを作らないため）。
+		# 順位表と操作盤は、同じコマで描き直さない（重いコマを作らないため）。
 		_race_hud_drawn_msec = now
 		_race_hud.call("update_state", state)
 		_race_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 		return
-	if round_hud_due:
-		_round_hud_drawn_msec = now
-		_round_hud.call("update_state", state)
-		_round_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if heart_hud_due:
+		_heart_hud_drawn_msec = now
+		_heart_hud.call("update_state", state)
+		_heart_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
 ## 進行バーに出す全走者の位置（割合）・自分かどうか・色。

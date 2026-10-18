@@ -109,7 +109,7 @@ func test_standings_sit_midway_between_the_race_info_and_the_panel() -> void:
 	var screen_height := 648.0
 	var rows := 8
 	var top := RaceHud.standings_top(screen_height, rows)
-	var gap_above := top - (RaceHud.RACE_INFO_ORIGIN.y + RaceHud.RACE_INFO_HEIGHT)
+	var gap_above := top - (RaceHud.RACE_INFO_TOP + RaceHud.RACE_INFO_HEIGHT)
 	var gap_below := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT - (top + rows * RaceHud.STANDINGS_ROW_HEIGHT)
 	assert_almost_eq(gap_above, gap_below, 0.0001)
 	assert_gt(gap_above, 0.0)

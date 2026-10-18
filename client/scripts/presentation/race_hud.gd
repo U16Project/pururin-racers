@@ -33,11 +33,14 @@ const NAME_TAB_TRAINER_GAP := 10.0
 const NAME_TAB_TRAINER_MAX_WIDTH := 120.0
 ## 脚質の印「〈」の間隔。
 const STYLE_CHEVRON_STEP := 10.0
-## 左上の順位表。行の高さは、確定した行も、まだの行も同じ。
-## 左上の、自分の順位・残り距離・タイムの左上の位置と、その高さ。
-const RACE_INFO_ORIGIN := Vector2(54.0, 34.0)
+## 右上の順位表。行の高さは、確定した行も、まだの行も同じ。左はしは、表の右はしを画面の右はしから SIDE_RIGHT_MARGIN だけ離す位置（side_left）。
+## 右上の、自分の順位・残り距離・タイムの上の位置と、その高さ（左はしは、順位表と同じ）。
+const RACE_INFO_TOP := 34.0
 const RACE_INFO_HEIGHT := 64.0
-const STANDINGS_LEFT := 54.0
+const SIDE_RIGHT_MARGIN := 30.0
+## 右上の台の、中身からの余白（横、縦）と、角を切る大きさ。
+const SIDE_BOARD_PAD := Vector2(22.0, 10.0)
+const SIDE_BOARD_CUT := 14.0
 const STANDINGS_ROW_HEIGHT := 26.0
 ## 順位表の、満員のときの行の数。表の位置は、この行の数で決める（人数が少なくても、上の位置は同じ）。
 const STANDINGS_FULL_ROWS := 8
@@ -80,6 +83,9 @@ const COLOR_OUTLINE := Color(0.03, 0.05, 0.1, 0.9)
 const COLOR_BOOST := Color(1.0, 0.55, 0.2, 1.0)
 const COLOR_COOL := Color(0.36, 0.72, 1.0, 1.0)
 const COLOR_AERO := Color(0.36, 0.86, 0.52, 1.0)
+## 操作盤（左上）と、順位・順位表（右上）を乗せる台の色と、そのふちの光る線の色。
+const COLOR_BOARD := Color(0.16, 0.2, 0.27, 0.86)
+const COLOR_BOARD_EDGE := Color(0.45, 0.78, 1.0, 0.55)
 
 var _state := {
 	"place": 0,
@@ -112,7 +118,7 @@ var _state := {
 	"air_blue": 0.0,
 	"countdown": false,
 }
-## 下の操作盤を出すか。丸い操作盤（RoundRaceHud）を出しているあいだは、消す。順位表と左上の表示は、そのまま。
+## 下の操作盤を出すか。丸い操作盤（RoundRaceHud）を出しているあいだは、消す。順位表と右上の表示は、そのまま。
 var main_panel_visible := true
 var _blink := 0.0
 ## 確定した行に使う太字。
@@ -164,9 +170,14 @@ static func panel_left(screen_width: float) -> float:
 	return maxf((screen_width - PANEL_WIDTH) * 0.5, PANEL_SIDE_MIN_MARGIN)
 
 
+## 右上の順位表と、順位・残り距離・タイムの左はし。
+static func side_left(screen_width: float) -> float:
+	return screen_width - STANDINGS_WIDTH - SIDE_RIGHT_MARGIN
+
+
 ## 順位表のいちばん上の縦の位置。row_count 行の表が、上の項目（順位・残り距離・タイム）と操作盤の、ちょうど中間に来る位置。
 static func standings_top(screen_height: float, row_count: int) -> float:
-	var info_bottom := RACE_INFO_ORIGIN.y + RACE_INFO_HEIGHT
+	var info_bottom := RACE_INFO_TOP + RACE_INFO_HEIGHT
 	var panel_top := screen_height - PANEL_BOTTOM_MARGIN - PANEL_HEIGHT
 	return (info_bottom + panel_top - row_count * STANDINGS_ROW_HEIGHT) * 0.5
 
@@ -277,6 +288,11 @@ func _draw() -> void:
 		return
 	_painter.begin(self)
 	_painter.glyphs.oversampling = get_viewport().get_oversampling()
+	if _bold_font == null:
+		_bold_font = FontVariation.new()
+		_bold_font.variation_embolden = 0.8
+	_bold_font.base_font = font
+	_draw_side_board()
 	_draw_race_info(font)
 	_draw_standings(font)
 	if main_panel_visible:
@@ -284,20 +300,45 @@ func _draw() -> void:
 	_painter.flush()
 
 
+## 右上の台：順位・残り距離・タイムと順位表を乗せる、1枚の濃い板（左上の操作盤と同じ色・同じ光るふち）。
+## 上の項目と順位表のあいだに、区切りの線。
+func _draw_side_board() -> void:
+	if int(_state["place"]) <= 0:
+		return
+	var screen := get_viewport_rect().size
+	var left := side_left(screen.x) - SIDE_BOARD_PAD.x
+	var right := side_left(screen.x) + STANDINGS_WIDTH + SIDE_BOARD_PAD.x * 0.5
+	var top := RACE_INFO_TOP - SIDE_BOARD_PAD.y
+	var rows := maxi((_state["standings"] as Array).size(), 1)
+	var bottom := standings_top(screen.y, STANDINGS_FULL_ROWS) + rows * STANDINGS_ROW_HEIGHT + SIDE_BOARD_PAD.y
+	var c := SIDE_BOARD_CUT
+	var shape := PackedVector2Array([
+		Vector2(left + c, top), Vector2(right, top), Vector2(right, bottom - c),
+		Vector2(right - c, bottom), Vector2(left, bottom), Vector2(left, top + c),
+	])
+	_painter.draw_colored_polygon(shape, COLOR_BOARD)
+	var edge := shape.duplicate()
+	edge.append(shape[0])
+	_painter.draw_polyline(edge, Color(COLOR_BOARD_EDGE, 0.12), 8.0, true)
+	_painter.draw_polyline(edge, COLOR_BOARD_EDGE, 2.0, true)
+	var line_y := RACE_INFO_TOP + RACE_INFO_HEIGHT + 6.0
+	_painter.draw_line(Vector2(left + c, line_y), Vector2(right - c, line_y), Color(COLOR_BOARD_EDGE, 0.45), 1.5, true)
+
+
 func _draw_race_info(font: Font) -> void:
 	var place := int(_state["place"])
 	if place <= 0:
 		return
 	# 左：自分の順位。その右に2段で、残り距離とタイム。
-	var origin := RACE_INFO_ORIGIN
+	var origin := Vector2(side_left(get_viewport_rect().size.x), RACE_INFO_TOP)
 	var place_text := "%d" % place
 	var field_text := "/ %d 位" % int(_state["field_size"])
-	var field_x := origin.x + font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 72).x + 10.0
-	var info_x := field_x + font.get_string_size(field_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x + 20.0
-	_draw_text(font, place_text, origin + Vector2(0.0, 58.0), 72, COLOR_TEXT)
-	_draw_text(font, field_text, Vector2(field_x, origin.y + 58.0), 24, COLOR_DIM)
-	_draw_text(font, "残り %.0f m" % float(_state["remaining_m"]), Vector2(info_x, origin.y + 28.0), 24, COLOR_TEXT)
-	_draw_text(font, str(_state["time_text"]), Vector2(info_x, origin.y + 58.0), 24, COLOR_TEXT)
+	var field_x := origin.x + _bold_font.get_string_size(place_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 72).x + 10.0
+	var info_x := field_x + _bold_font.get_string_size(field_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24).x + 20.0
+	_draw_text(_bold_font, place_text, origin + Vector2(0.0, 58.0), 72, COLOR_GOLD)
+	_draw_text(_bold_font, field_text, Vector2(field_x, origin.y + 58.0), 24, COLOR_TEXT)
+	_draw_text(_bold_font, "残り %.0f m" % float(_state["remaining_m"]), Vector2(info_x, origin.y + 28.0), 24, COLOR_TEXT)
+	_draw_text(_bold_font, str(_state["time_text"]), Vector2(info_x, origin.y + 58.0), 24, COLOR_TEXT)
 
 
 func _draw_main_panel(font: Font) -> void:
@@ -465,15 +506,11 @@ static func draw_style_chevrons(canvas: Object, center_left: Vector2, color: Col
 			canvas.draw_polyline(points, Color(color, 0.38), 1.6, true)
 
 
-## 左上の順位表。上から今の順位の順。ゴールして確定した行は、太く・大きく・明るくし、印を王冠・メダルにする。
+## 右上の順位表。上から今の順位の順。ゴールして確定した行は、太く・大きく・明るくし、印を王冠・メダルにする。
 func _draw_standings(font: Font) -> void:
 	var standings: Array = _state["standings"]
 	if int(_state["place"]) <= 0 or standings.is_empty():
 		return
-	if _bold_font == null:
-		_bold_font = FontVariation.new()
-		_bold_font.variation_embolden = 0.8
-	_bold_font.base_font = font
 	var confirmed := confirmed_count(standings)
 	# 人数が少ないときも、満員のときと同じ高さから、上に詰めて並べる。
 	var table_top := standings_top(get_viewport_rect().size.y, STANDINGS_FULL_ROWS)
@@ -481,7 +518,7 @@ func _draw_standings(font: Font) -> void:
 		var row: Dictionary = standings[index]
 		var top := table_top + index * STANDINGS_ROW_HEIGHT
 		var center_y := top + STANDINGS_ROW_HEIGHT * 0.5
-		var x := STANDINGS_LEFT
+		var x := side_left(get_viewport_rect().size.x)
 		var is_confirmed := index < confirmed
 		if bool(row["player"]):
 			_draw_rounded_rect(Rect2(Vector2(x - 8.0, top + 1.0), Vector2(STANDINGS_WIDTH + 8.0, STANDINGS_ROW_HEIGHT - 2.0)), Color(COLOR_PROGRESS, 0.22), 6.0)
@@ -509,8 +546,9 @@ func _draw_standings(font: Font) -> void:
 	if confirmed > 0 and confirmed < standings.size():
 		# 確定した行と、まだの行の境目。行の境目に引くので、行の高さは変わらない。
 		var line_y := table_top + confirmed * STANDINGS_ROW_HEIGHT
-		var from := Vector2(STANDINGS_LEFT - 8.0, line_y)
-		var to := Vector2(STANDINGS_LEFT + STANDINGS_WIDTH, line_y)
+		var left := side_left(get_viewport_rect().size.x)
+		var from := Vector2(left - 8.0, line_y)
+		var to := Vector2(left + STANDINGS_WIDTH, line_y)
 		_painter.draw_line(from, to, COLOR_OUTLINE, 4.0)
 		_painter.draw_line(from, to, COLOR_TEXT, 1.5)
 

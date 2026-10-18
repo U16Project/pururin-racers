@@ -1,0 +1,280 @@
+[gd_scene format=3 uid="uid://nbl7eoh446pn"]
+
+[ext_resource type="Script" uid="uid://dyoestgwq65hg" path="res://scripts/presentation/hud/arc_gauge.gd" id="1_arc"]
+[ext_resource type="Shader" uid="uid://q44grpt2uhrm" path="res://scripts/presentation/hud/arc_gauge.gdshader" id="1_r0h6u"]
+[ext_resource type="Script" uid="uid://bik0f0rb1tj1s" path="res://scripts/presentation/hud/heart_gauge.gd" id="2_heart"]
+[ext_resource type="Shader" uid="uid://cbk42h882orkf" path="res://scripts/presentation/hud/heart_gauge.gdshader" id="3_1wcox"]
+[ext_resource type="FontFile" uid="uid://cypv6grbat7rm" path="res://fonts/NotoSansJP-Black-Hud.otf" id="3_font"]
+[ext_resource type="Script" uid="uid://rjcv04x1yquf" path="res://scripts/presentation/hud/ring_gauges.gd" id="4_ring"]
+
+[sub_resource type="Gradient" id="Gradient_speed"]
+colors = PackedColorArray(0.45, 0.78, 1, 1, 0.1, 0.36, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_1wcox"]
+gradient = SubResource("Gradient_speed")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_100um"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(768, 512)
+shader_parameter/center = Vector2(327, 237.90034)
+shader_parameter/radius = 161.99968
+shader_parameter/thickness = 28.0
+shader_parameter/start_deg = 189.5
+shader_parameter/end_deg = 316.5
+shader_parameter/fill = 0.57
+shader_parameter/gradient = SubResource("GradientTexture1D_1wcox")
+shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
+shader_parameter/glow_width = 10.0
+shader_parameter/glow_strength = 0.5
+shader_parameter/gloss_strength = 0.3
+shader_parameter/inner_shade = 0.2
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 0.0
+shader_parameter/round_start = true
+shader_parameter/round_end = true
+shader_parameter/marker_at = -1.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
+[sub_resource type="Gradient" id="Gradient_debt"]
+colors = PackedColorArray(0.85, 0.06, 0.1, 1, 0.55, 0.02, 0.05, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_knikd"]
+gradient = SubResource("Gradient_debt")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mpdg8"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(768, 512)
+shader_parameter/center = Vector2(327, 237.90034)
+shader_parameter/radius = 161.99968
+shader_parameter/thickness = 28.0
+shader_parameter/start_deg = 140.2
+shader_parameter/end_deg = 154.2
+shader_parameter/fill = 0.0
+shader_parameter/gradient = SubResource("GradientTexture1D_knikd")
+shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
+shader_parameter/glow_width = 4.84
+shader_parameter/glow_strength = 0.0
+shader_parameter/gloss_strength = 0.0
+shader_parameter/inner_shade = 0.0
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 8.0
+shader_parameter/round_start = false
+shader_parameter/round_end = true
+shader_parameter/marker_at = -1.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
+[sub_resource type="Gradient" id="Gradient_stamina"]
+offsets = PackedFloat32Array(0, 0.3, 0.55, 0.8, 1)
+colors = PackedColorArray(1, 0.16, 0.23, 1, 1, 0.54, 0.1, 1, 1, 0.88, 0.13, 1, 0.62, 0.91, 0.1, 1, 0.18, 0.91, 0.42, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_100um"]
+gradient = SubResource("Gradient_stamina")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_7gc6r"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(768, 512)
+shader_parameter/center = Vector2(327, 237.90034)
+shader_parameter/radius = 161.99968
+shader_parameter/thickness = 28.0
+shader_parameter/start_deg = 140.2
+shader_parameter/end_deg = 75.2
+shader_parameter/fill = 0.69
+shader_parameter/gradient = SubResource("GradientTexture1D_100um")
+shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
+shader_parameter/glow_width = 4.84
+shader_parameter/glow_strength = 0.0
+shader_parameter/gloss_strength = 0.0
+shader_parameter/inner_shade = 0.0
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 8.0
+shader_parameter/round_start = false
+shader_parameter/round_end = true
+shader_parameter/marker_at = 0.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_dwwwi"]
+shader = ExtResource("3_1wcox")
+shader_parameter/rect_size = Vector2(768, 512)
+shader_parameter/center = Vector2(327, 286)
+shader_parameter/size_x = 125.0
+shader_parameter/size_y = 108.0
+shader_parameter/dip = 1.25
+shader_parameter/fill = 0.477
+shader_parameter/water_color = Color(0.2, 0.92, 1, 1)
+shader_parameter/water_bottom_shade = 0.25
+shader_parameter/wave_height = 3.0
+shader_parameter/wave_length = 40.0
+shader_parameter/wave_phase = 0.0
+shader_parameter/surface_color = Color(1, 1, 1, 0.7)
+shader_parameter/surface_width = 3.0
+shader_parameter/stripe_spacing = 6.0
+shader_parameter/stripe_strength = 0.12
+shader_parameter/glass_color = Color(0.08, 0.11, 0.2, 0.92)
+shader_parameter/gloss_strength = 0.0
+shader_parameter/edge_color = Color(1, 0.2, 0.7, 1)
+shader_parameter/edge_width = 7.0
+shader_parameter/edge_core_color = Color(1, 0.82, 0.95, 1)
+shader_parameter/edge_core_width = 1.5
+shader_parameter/glow_width = 24.0
+shader_parameter/glow_strength = 0.12
+shader_parameter/beat = 0.85
+shader_parameter/beat_color = Color(1, 0.7, 0.9, 1)
+
+[sub_resource type="FontVariation" id="FontVariation_slant"]
+base_font = ExtResource("3_font")
+variation_transform = Transform2D(1, 0, 0.18, 1, 0, 0)
+
+[sub_resource type="LabelSettings" id="LabelSettings_bpm"]
+font = SubResource("FontVariation_slant")
+font_size = 72
+outline_size = 8
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_bpm_unit"]
+font = SubResource("FontVariation_slant")
+font_size = 24
+outline_size = 6
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[node name="RaceControlPanel" type="Control" unique_id=1752088014]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 768.0
+offset_bottom = 512.0
+mouse_filter = 2
+
+[node name="Gauges" type="Control" parent="." unique_id=1730487933]
+anchors_preset = 0
+offset_right = 768.0
+offset_bottom = 512.0
+pivot_offset = Vector2(327, 237.90034)
+offset_transform_enabled = true
+offset_transform_position_ratio = Vector2(-0.155, -0.15)
+offset_transform_scale = Vector2(-0.885, 0.885)
+offset_transform_rotation = 0.5078908
+offset_transform_pivot = Vector2(-0.075, 0)
+mouse_filter = 2
+script = ExtResource("4_ring")
+heart_path = NodePath("../Heart")
+
+[node name="Speed" type="ColorRect" parent="Gauges" unique_id=290664610]
+visible = false
+material = SubResource("ShaderMaterial_100um")
+layout_mode = 0
+offset_right = 768.0
+offset_bottom = 512.0
+offset_transform_enabled = true
+offset_transform_position_ratio = Vector2(-0.045, 0.09)
+offset_transform_rotation = 0.3822271
+offset_transform_pivot = Vector2(-0.325, 0)
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.57
+center = Vector2(327, 237.90034)
+radius = 161.99968
+thickness = 28.0
+start_deg = 189.5
+end_deg = 316.5
+gradient = SubResource("Gradient_speed")
+
+[node name="StaminaDebt" type="ColorRect" parent="Gauges" unique_id=1081011948]
+material = SubResource("ShaderMaterial_mpdg8")
+layout_mode = 0
+offset_right = 768.0
+offset_bottom = 512.0
+offset_transform_enabled = true
+offset_transform_position_ratio = Vector2(-0.02, 0.065)
+offset_transform_rotation = 0.27576202
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.0
+center = Vector2(327, 237.90034)
+radius = 161.99968
+thickness = 28.0
+start_deg = 140.2
+end_deg = 154.2
+cap_radius = 8.0
+round_start = false
+gradient = SubResource("Gradient_debt")
+glow_width = 4.84
+glow_strength = 0.0
+gloss_strength = 0.0
+inner_shade = 0.0
+
+[node name="Stamina" type="ColorRect" parent="Gauges" unique_id=1717409501]
+material = SubResource("ShaderMaterial_7gc6r")
+layout_mode = 0
+offset_right = 768.0
+offset_bottom = 512.0
+offset_transform_enabled = true
+offset_transform_position_ratio = Vector2(-0.02, 0.065)
+offset_transform_rotation = 0.27576202
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.69
+center = Vector2(327, 237.90034)
+radius = 161.99968
+thickness = 28.0
+start_deg = 140.2
+end_deg = 75.2
+cap_radius = 8.0
+round_start = false
+gradient = SubResource("Gradient_stamina")
+glow_width = 4.84
+glow_strength = 0.0
+gloss_strength = 0.0
+inner_shade = 0.0
+marker_at = 0.0
+
+[node name="Heart" type="ColorRect" parent="." unique_id=611058645]
+material = SubResource("ShaderMaterial_dwwwi")
+layout_mode = 0
+offset_right = 768.0
+offset_bottom = 512.0
+mouse_filter = 2
+script = ExtResource("2_heart")
+value = 0.477
+beat = 0.85
+center = Vector2(327, 286)
+size_x = 125.0
+size_y = 108.0
+gloss_strength = 0.0
+edge_width = 7.0
+glow_width = 24.0
+glow_strength = 0.12
+
+[node name="BpmPlate" type="Polygon2D" parent="." unique_id=344589180]
+position = Vector2(80, 74.99999)
+scale = Vector2(0.715, 0.715)
+color = Color(0.01, 0.02, 0.04, 0.9)
+polygon = PackedVector2Array(255, 290, 427, 287, 438, 231, 266, 236)
+
+[node name="Bpm" type="Label" parent="." unique_id=717508699]
+layout_mode = 0
+offset_left = 260.0
+offset_top = 223.0
+offset_right = 392.0
+offset_bottom = 328.0
+scale = Vector2(0.715, 0.715)
+pivot_offset = Vector2(-0.45, 0)
+text = "143"
+label_settings = SubResource("LabelSettings_bpm")
+
+[node name="BpmUnit" type="Label" parent="." unique_id=1482132655]
+layout_mode = 0
+offset_left = 355.0
+offset_top = 260.99997
+offset_right = 410.0
+offset_bottom = 296.99997
+scale = Vector2(0.715, 0.715)
+text = "bpm"
+label_settings = SubResource("LabelSettings_bpm_unit")
