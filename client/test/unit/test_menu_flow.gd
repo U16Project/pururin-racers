@@ -131,6 +131,12 @@ func test_options_screen_holds_quality_window_and_guide_between_profile_and_mode
 	assert_eq(screen.get("MODE_SELECT_SCENE_PATH"), "res://scenes/mode_select.tscn")
 	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/trainer_profile.tscn")
 	assert_eq((screen.find_child("NextButton", true, false) as Button).text, "次へ（ゲームモード選択）")
+	# 「次へ」に START の目印があるので、Start で次へ進む。
+	var next := screen.find_child("NextButton", true, false) as Button
+	next.pressed.disconnect(screen.go_to_mode_select)
+	watch_signals(next)
+	screen._unhandled_input(_pad_button(JOY_BUTTON_START))
+	assert_signal_emit_count(next, "pressed", 1)
 	screen.free()
 	var modes := ModeSelectScene.instantiate()
 	add_child(modes)

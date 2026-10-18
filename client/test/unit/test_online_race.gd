@@ -480,6 +480,43 @@ func test_a_runner_whose_player_leaves_is_handed_to_the_cpu() -> void:
 	assert_false(bool(race.call("is_start_held")))
 
 
+func test_a_racer_who_quits_mid_race_goes_to_the_waiting_room_and_the_cpu_runs_on() -> void:
+	var ids := _roster_ids()
+	var a := await _enter("a", "部屋")
+	var b := await _enter("b", "部屋")
+	await _open_race("a", ["b"])
+	_clients["a"].send(Protocol.PICK, {"pururin_id": ids[0]})
+	_clients["b"].send(Protocol.PICK, {"pururin_id": ids[1]})
+	await _wait_for("b", Protocol.ROOM)
+	await wait_seconds(0.2)
+	await _go("a", ["a", "b"])
+	assert_false((await _wait_for("a", Protocol.RACE_START)).is_empty())
+	var room: int = _room_ids["部屋"]
+	var race: Node = _server.room_race(room)
+	var runner_b: Node3D = race.call("remote_runner", b)
+	# b が、一時停止の「レースをやめて待機室へ」を押す。b は部屋に残ったまま、レースに出る人から外れる。
+	_clients["b"].send(Protocol.BACK, {"to": Protocol.BACK_TO_LOBBY})
+	var waited := 0.0
+	while race.call("remote_runner", b) != null and waited < WAIT_S:
+		await wait_seconds(0.05)
+		waited += 0.05
+	assert_null(race.call("remote_runner", b))
+	assert_false(bool(runner_b.get("remote_controlled")))
+	assert_false(_server.is_racer(room, b))
+	assert_true((_server.room_members(room) as Array).any(func(m: Dictionary) -> bool: return int(m["peer_id"]) == b))
+	assert_not_null(_server.room_race(room))
+	# 主がやめても、主のまま待機室へ。走者はCPUが走り、レースはサーバーの上で続く。
+	_clients["a"].send(Protocol.BACK, {"to": Protocol.BACK_TO_LOBBY})
+	waited = 0.0
+	while race.call("remote_runner", a) != null and waited < WAIT_S:
+		await wait_seconds(0.05)
+		waited += 0.05
+	assert_null(race.call("remote_runner", a))
+	assert_eq(int(_server._rooms[room]["host"]), a)
+	assert_not_null(_server.room_race(room))
+	assert_true(bool(race.call("_is_online_host")))
+
+
 func test_the_seats_decide_how_many_cpus_run() -> void:
 	var ids := _roster_ids()
 	await _enter("a", "部屋")
@@ -683,3 +720,31 @@ func test_the_server_keeps_a_detailed_record_of_each_online_race() -> void:
 	for name in DirAccess.get_files_at(folder):
 		DirAccess.remove_absolute(folder.path_join(name))
 	OS.set_environment(OnlineRaceLog.DIRECTORY_ENVIRONMENT, "")
+
+
+func test_quitting_an_online_race_asks_first_and_b_goes_back_to_the_pause_panel() -> void:
+	var race := LocalRaceScene.instantiate()
+	add_child_autofree(race)
+	await get_tree().process_frame
+	race.set("_online_view", true)
+	race.call("_set_paused", true)
+	var pause_box := race.get_node("UI/PausePanel/PauseBox") as Control
+	var confirm_box := race.find_child("QuitConfirmBox", true, false) as Control
+	# 「レースをやめて待機室へ」を押しても、すぐには抜けない。確かめの板が出て、カーソルは「やめない」。
+	(race.get("_pause_return_button") as Button).pressed.emit()
+	assert_true(confirm_box.visible)
+	assert_false(pause_box.visible)
+	assert_eq(get_viewport().gui_get_focus_owner(), race.find_child("QuitCancelButton", true, false))
+	# B で、一時停止の板へ戻る（レースは一時停止のまま）。
+	var b := InputEventJoypadButton.new()
+	b.button_index = JOY_BUTTON_B
+	b.pressed = true
+	race._unhandled_input(b)
+	assert_false(confirm_box.visible)
+	assert_true(pause_box.visible)
+	assert_true(bool(race.get("_paused")))
+	assert_eq(get_viewport().gui_get_focus_owner(), race.get("_pause_return_button"))
+	# 一時停止を解くと、確かめの板も閉じる。
+	(race.get("_pause_return_button") as Button).pressed.emit()
+	race.call("_set_paused", false)
+	assert_false(confirm_box.visible)

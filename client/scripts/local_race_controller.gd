@@ -129,6 +129,8 @@ var _online_previous_own := {}
 var _start_hold := false
 ## 通信ごしの人（オンラインのサーバーだけ）。人の番号 → 走者、人の番号 → 今の操作。
 var _remote_runners := {}
+## オンラインのサーバーの上のレースか（人が全員やめて、通信ごしの走者がいなくなっても、そのまま）。
+var _online_host := false
 var _remote_inputs := {}
 var _round_hud: Control
 ## 丸い操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
@@ -143,6 +145,10 @@ var _race_hud_drawn_msec := -1000000
 ## 画面の上の仮想パッド。
 var _touch_controls: Control
 var _pause_guide_button: Button
+## オンラインで「レースをやめて待機室へ」を押したときの確かめの板（一時停止の板の中で、入れ替えて出す）。
+var _quit_confirm_box: VBoxContainer
+var _quit_confirm_button: Button
+var _quit_cancel_button: Button
 var _control_guide: Control
 var _guide_pad_was_shown := false
 ## 詳細な診断テキストの後半（2列目）。前半は _hud_label（1列目）。どちらも操作盤の右。
@@ -213,7 +219,8 @@ func _ready() -> void:
 	_build_result_board()
 	_add_pause_marks()
 	_add_pause_guide_button()
-	_pause_return_button.pressed.connect(_return_to_race_select)
+	_pause_return_button.pressed.connect(_on_pause_return_pressed)
+	_build_quit_confirm()
 	_result_return_button.pressed.connect(_return_to_race_select)
 	_resume_button.pressed.connect(_set_paused.bind(false))
 	UIAudio.bind_button_sound(_pause_return_button, "back")
@@ -261,7 +268,7 @@ func _ready() -> void:
 		# オンラインでは、もう1回は部屋から始める。
 		_result_retry_button.visible = false
 		_result_return_button.text = "部屋へ戻る"
-		_pause_return_button.text = "部屋へ戻る"
+		_pause_return_button.text = "レースをやめて待機室へ"
 		# 画面ができたことは、スタート前の準備（_is_preparing）が終わってから、サーバーに知らせる（_send_online_ready_when_prepared）。
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
@@ -303,7 +310,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)) and _paused:
 		UIAudio.play_back()
-		_set_paused(false)
+		# 確かめの板が出ていれば、一時停止の板へ戻るだけ。
+		if _quit_confirm_box.visible:
+			_show_quit_confirm(false)
+		else:
+			_set_paused(false)
 		get_viewport().set_input_as_handled()
 	elif not _paused and _race_started and _player != null and RaceControllerInput.is_dash_pressed(event):
 		# オンラインでは、押したことをサーバーへ送る（音は、効いたことが届いてから鳴らす）。
@@ -570,6 +581,7 @@ func _spawn_field() -> void:
 			# サーバーの端末に、走者ごとの1秒おきの診断の文を流さない。
 			runner.set("_drive_diagnostic_log_remaining", INF)
 			_remote_runners[peer_id] = runner
+			_online_host = true
 			_remote_inputs[peer_id] = {"line": 0.0, "notch": 0.0, "brake": false}
 		elif is_player:
 			_player = runner
@@ -722,9 +734,9 @@ func _stop_presentation_for_server() -> void:
 	$UI.process_mode = Node.PROCESS_MODE_DISABLED
 
 
-## オンラインのサーバーの上のレースか（通信ごしの人の走者がいる）。
+## オンラインのサーバーの上のレースか。
 func _is_online_host() -> bool:
-	return not _remote_runners.is_empty()
+	return _online_host
 
 
 ## レースの記録（あとで見返すためのファイル）に、今の状態を足す。サーバーの上では、記録しない（ファイルがたまり続けるため）。
@@ -1426,6 +1438,61 @@ func _add_pause_guide_button() -> void:
 	_pause_panel.offset_bottom = 150.0
 
 
+## 一時停止の板の下のボタン。オンラインのレースの途中なら、いきなり抜けずに、確かめの板を出す。
+func _on_pause_return_pressed() -> void:
+	if _online_view and not _race_over:
+		_show_quit_confirm(true)
+		return
+	_return_to_race_select()
+
+
+## 確かめの板：「レースをやめますか」と、やめたあとどうなるかを出して、「やめて待機室へ」か「やめない」を選んでもらう。
+func _build_quit_confirm() -> void:
+	_quit_confirm_box = VBoxContainer.new()
+	_quit_confirm_box.name = "QuitConfirmBox"
+	_quit_confirm_box.visible = false
+	_quit_confirm_box.add_theme_constant_override("separation", 12)
+	_pause_panel.add_child(_quit_confirm_box)
+	var title := Label.new()
+	title.text = "レースをやめますか"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	_quit_confirm_box.add_child(title)
+	var note := Label.new()
+	note.text = "待機室へ戻ります。\nあなたのプルは、CPUトレーナーが\n代わりに最後まで走ります。"
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 16)
+	note.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
+	_quit_confirm_box.add_child(note)
+	_quit_confirm_button = MenuStyle.button("やめて待機室へ", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	_quit_confirm_button.name = "QuitConfirmButton"
+	_quit_confirm_button.custom_minimum_size = Vector2(0.0, 44.0)
+	_quit_confirm_button.pressed.connect(_return_to_race_select)
+	UIAudio.bind_button_sound(_quit_confirm_button, "back")
+	_quit_confirm_box.add_child(_quit_confirm_button)
+	_quit_cancel_button = MenuStyle.button("やめない", 20)
+	_quit_cancel_button.name = "QuitCancelButton"
+	_quit_cancel_button.custom_minimum_size = Vector2(0.0, 44.0)
+	_quit_cancel_button.pressed.connect(_show_quit_confirm.bind(false))
+	UIAudio.bind_button_sound(_quit_cancel_button, "back")
+	MenuStyle.add_mark(_quit_cancel_button, "B", 24.0)
+	_quit_confirm_box.add_child(_quit_cancel_button)
+	_quit_confirm_button.focus_neighbor_bottom = _quit_confirm_button.get_path_to(_quit_cancel_button)
+	_quit_cancel_button.focus_neighbor_top = _quit_cancel_button.get_path_to(_quit_confirm_button)
+
+
+## 確かめの板と、一時停止の板の中身を入れ替える。閉じたら「レースをやめて待機室へ」にカーソルを戻す。
+func _show_quit_confirm(shown: bool, refocus: bool = true) -> void:
+	if _quit_confirm_box == null:
+		return
+	_quit_confirm_box.visible = shown
+	(_pause_panel.get_node("PauseBox") as Control).visible = not shown
+	if not refocus:
+		return
+	# 間違えて押しても抜けないように、はじめのカーソルは「やめない」に置く。
+	(_quit_cancel_button if shown else _pause_return_button).grab_focus()
+
+
 func _open_control_guide_from_pause() -> void:
 	if not _paused or is_instance_valid(_control_guide):
 		return
@@ -1495,6 +1562,7 @@ func _build_result_board() -> void:
 
 func _set_paused(paused: bool) -> void:
 	_paused = paused
+	_show_quit_confirm(false, false)
 	# オンラインでは、レースはサーバーで進んでいるので、止めない（板を出すだけ）。
 	if not _online_view:
 		for r in _runners:
@@ -1524,6 +1592,9 @@ func _retry_same_race() -> void:
 func _return_to_race_select() -> void:
 	_celebration.stop()
 	if _online_view:
+		# レースの途中でやめるときは、待機室へ（走者は、サーバーでCPUトレーナーが代わりに走る）。
+		if not _race_over and _online_client != null and is_instance_valid(_online_client):
+			_online_client.send(OnlineProtocol.BACK, {"to": OnlineProtocol.BACK_TO_LOBBY})
 		_leave_online_race()
 		return
 	RaceSession.mark_returning_from_race()

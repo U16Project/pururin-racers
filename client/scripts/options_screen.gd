@@ -174,7 +174,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 			viewport.set_input_as_handled()
 		return
-	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+	if RaceControllerInput.is_menu_pressed(event):
+		# 「次へ」に付けた START の目印のとおり、Start で次へ進む。
+		viewport.set_input_as_handled()
+		RaceControllerInput.activate_control(_next_button)
+	elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_to_menu()

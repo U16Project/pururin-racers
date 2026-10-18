@@ -673,6 +673,14 @@ func _change_gates(peer_id: int, room: int, data: Dictionary) -> void:
 ## 待機室へ戻る。レース設定・プル選択から（主は全員を戻す。ほかの人は、自分だけレースから抜ける）。
 ## パドックからは、to＝"lobby" を付けて送る。
 func _back_to_room(peer_id: int, room: int, data: Dictionary = {}) -> void:
+	# レースの途中でやめた人（主も同じ）：待機室へ。その人の走者は、その個体のCPUトレーナーが最後まで走る。
+	if str(data.get("to", "")) == Protocol.BACK_TO_LOBBY and room_race(room) != null and is_racer(room, peer_id):
+		(_rooms[room]["racers"] as Array).erase(peer_id)
+		room_race(room).call("release_remote_runner", peer_id)
+		_log_event(room, "quit_race", {"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "handed_to_cpu": true})
+		_announce_room(room)
+		_announce_rooms()
+		return
 	# to＝"lobby"：パドックからでも、待機室へ戻る（主は全員、ほかの人は自分だけ）。
 	if str(data.get("to", "")) == Protocol.BACK_TO_LOBBY and room_race(room) == null:
 		var phase := str(_rooms[room]["phase"])

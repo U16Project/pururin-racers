@@ -307,9 +307,22 @@ func test_connecting_shows_the_room_list_and_creating_enters_the_room() -> void:
 	assert_eq((lobby.find_child("PickChatTitle", true, false) as Label).text, "ルームチャット")
 	assert_true((lobby.find_child("RoomTitle", true, false) as Label).text.contains("テスト部屋"))
 	assert_true(lobby.is_host())
-	# 「部屋を出る」（B・戻る）で、一覧へ戻る（つながりは切らない）。誰もいなくなった部屋は、消える。
+	# プル選択の B（戻る）は、部屋を出ずに、待機室へ戻る。
 	assert_false((lobby.find_child("BackButton", true, false) as Button).is_visible_in_tree())
 	lobby.go_back()
+	await _wait_until(func() -> bool: return (lobby.find_child("WaitingRoom", true, false) as Control).is_visible_in_tree())
+	assert_true(OnlineSession.in_room())
+	# 待機室の B（部屋を出る）は、すぐには出ない。「部屋を出ますか」の窓が出て、カーソルは「やめる」。B で窓だけ閉じる。
+	lobby.go_back()
+	var leave := lobby.find_child("LeaveDialog", true, false) as Control
+	assert_true(leave.visible)
+	assert_eq(_focused_name(), "LeaveConfirmCancelButton")
+	lobby.go_back()
+	assert_false(leave.visible)
+	assert_true(OnlineSession.in_room())
+	# 窓の「部屋を出る」で、一覧へ戻る（つながりは切らない）。誰もいなくなった部屋は、消える。
+	lobby.go_back()
+	(lobby.find_child("LeaveConfirmButton", true, false) as Button).pressed.emit()
 	await _wait_until(func() -> bool: return (lobby.find_child("LobbyBox", true, false) as Control).visible)
 	assert_true((lobby.find_child("LobbyBox", true, false) as Control).visible)
 	assert_eq(_server.room_count(), 0)
@@ -514,6 +527,15 @@ func test_the_host_picks_a_pururin_and_the_room_settings_and_can_then_start() ->
 	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
 	assert_false(dialog.visible)
 	assert_true(lobby.is_picker_open())
+	# 選ばずに閉じても（B・Esc）、カーソルは自分の席へ戻る（ゲームパッドで動けなくならない）。
+	lobby.go_back()
+	assert_false(lobby.is_picker_open())
+	var my_row_button := lobby.get("_pick_rows")[_my_pick_row(lobby)]["button"] as Button
+	await _wait_until(func() -> bool: return my_row_button.has_focus())
+	assert_true(my_row_button.has_focus())
+	lobby.open_pick_dialog(_my_pick_row(lobby))
+	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	assert_true(lobby.is_picker_open())
 	var second_id := str(PururinRosterConfig.values()["roster"][1]["id"])
 	# 窓でプルを押すと、すぐには決まらない。そのプルのステータスが出て、「このプルにする」で決まる。「もどる」なら、窓へ戻る。
 	lobby.call("_on_picker_picked", second_id)
@@ -521,6 +543,11 @@ func test_the_host_picks_a_pururin_and_the_room_settings_and_can_then_start() ->
 	assert_eq((lobby.find_child("PickChangeButton", true, false) as Button).text, "このプルにする")
 	assert_eq(str(lobby.get("_pick_dialog_detail").call("shown_pururin_id")), second_id)
 	(lobby.find_child("PickDialogBackButton", true, false) as Button).pressed.emit()
+	assert_false(dialog.visible)
+	assert_true(lobby.is_picker_open())
+	# B（戻る）も、「もどる」と同じ。プル一覧へ戻る（全部を閉じない）。
+	lobby.call("_on_picker_picked", second_id)
+	lobby.go_back()
 	assert_false(dialog.visible)
 	assert_true(lobby.is_picker_open())
 	lobby.call("_on_picker_picked", second_id)

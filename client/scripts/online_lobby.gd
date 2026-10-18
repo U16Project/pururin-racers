@@ -312,6 +312,8 @@ var _pick_confirm_button: Button
 var _pick_paddock_button: Button
 var _pick_chat_edit: LineEdit
 var _pick_dialog: Control
+## 「部屋を出ますか」の窓。
+var _leave_dialog: Control
 var _pick_dialog_title: Label
 var _pick_dialog_detail: Control
 var _pick_dialog_empty: Label
@@ -695,7 +697,14 @@ func _dialog_buttons(column: VBoxContainer, confirm_text: String, confirm_name: 
 		UIAudio.bind_button_sound(button, str(spec[4]))
 		row.add_child(button)
 		if confirm_name in ["CreateButton", "JoinButton", "AdvanceButton"] and button.name == confirm_name:
-			MenuStyle.add_mark(button, "START", 22.0)
+			_add_mark_beside_text(button, "START", 22.0)
+	# 左右の行き先は、窓の2つのボタンどうしだけ（後ろの画面へ出ない）。
+	var confirm_button := row.get_child(0) as Button
+	var cancel_button := row.get_child(1) as Button
+	confirm_button.focus_neighbor_left = confirm_button.get_path_to(confirm_button)
+	confirm_button.focus_neighbor_right = confirm_button.get_path_to(cancel_button)
+	cancel_button.focus_neighbor_left = cancel_button.get_path_to(confirm_button)
+	cancel_button.focus_neighbor_right = cancel_button.get_path_to(cancel_button)
 
 
 func _build_dialogs() -> void:
@@ -836,6 +845,13 @@ func _build_dialogs() -> void:
 	kick_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	kick_column.add_child(kick_note)
 	_dialog_buttons(kick_column, "退出させる", "KickConfirmButton", confirm_kick, COLOR_DANGER_BUTTON)
+	var leave_parts := _dialog("LeaveDialog", "部屋を出ますか")
+	_leave_dialog = leave_parts[0]
+	var leave_column: VBoxContainer = leave_parts[1]
+	var leave_note := MenuStyle.label("部屋を出て、部屋の一覧へ戻ります。", 17, MenuStyle.COLOR_DIM)
+	leave_note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	leave_column.add_child(leave_note)
+	_dialog_buttons(leave_column, "部屋を出る", "LeaveConfirmButton", confirm_leave_room, COLOR_DANGER_BUTTON)
 
 
 ## 「部屋を作る」：作る窓を出す。
@@ -880,6 +896,7 @@ func close_dialogs() -> void:
 	_profile_dialog.visible = false
 	_pick_dialog.visible = false
 	_paddock_dialog.visible = false
+	_leave_dialog.visible = false
 	_pick_candidate = ""
 	_kick_target = 0
 	_joining_room_id = 0
@@ -888,7 +905,7 @@ func close_dialogs() -> void:
 
 
 func is_dialog_open() -> bool:
-	return _create_dialog.visible or _join_dialog.visible or _change_dialog.visible or _description_dialog.visible or _kick_dialog.visible or _profile_dialog.visible or _pick_dialog.visible or _paddock_dialog.visible
+	return _create_dialog.visible or _join_dialog.visible or _change_dialog.visible or _description_dialog.visible or _kick_dialog.visible or _profile_dialog.visible or _pick_dialog.visible or _paddock_dialog.visible or _leave_dialog.visible
 
 
 func _build_distance_row() -> HBoxContainer:
@@ -1079,6 +1096,20 @@ func _on_picker_picked(pururin_id: String) -> void:
 		_open_pick_candidate(pururin_id)
 
 
+## プル選択の窓を、選ばずに閉じた（B・Esc・閉じるボタン）。カーソルを、選んでいた席へ戻す（ゲームパッドで動けなくならないように）。
+## プルを押して閉じたときは、続けてステータスの窓が開くので、何もしない。
+func _on_picker_closed() -> void:
+	await get_tree().process_frame
+	if not is_inside_tree() or is_dialog_open() or is_picker_open():
+		return
+	var row := int(_pick_target.get("row", -1))
+	_pick_target = {}
+	if row >= 0 and row < _pick_rows.size() and (_pick_rows[row]["button"] as Button).is_visible_in_tree():
+		(_pick_rows[row]["button"] as Button).grab_focus()
+	else:
+		_restore_focus()
+
+
 static func _compact(button: Button, margin_y: float, margin_x: float = -1.0) -> void:
 	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
 		var box := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
@@ -1144,6 +1175,11 @@ func _field(column: VBoxContainer, title: String, node_name: String, text: Strin
 
 func _process(delta: float) -> void:
 	_wait_for_local_server(delta)
+	# 窓を閉じた・ボタンが消えたなどで、カーソルの行き場がなくなったら、その画面の決まった所へ戻す
+	# （ゲームパッドだけで遊んでいても、動けなくならないように）。
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused == null or not focused.is_visible_in_tree():
+		_restore_focus()
 	if _race_open_popup.visible and Time.get_ticks_msec() >= _race_open_until_msec:
 		_race_open_popup.visible = false
 		if not _race_start_data.is_empty():
@@ -1301,6 +1337,18 @@ func join_with_password() -> void:
 
 
 ## 部屋を出て、部屋の一覧へ戻る。
+## 「部屋を出る」・B：いきなり出ずに、確かめる。はじめのカーソルは「やめる」。
+func open_leave_dialog() -> void:
+	close_dialogs()
+	_leave_dialog.visible = true
+	(_leave_dialog.find_child("LeaveConfirmCancelButton", true, false) as Button).grab_focus()
+
+
+func confirm_leave_room() -> void:
+	close_dialogs()
+	leave_room()
+
+
 func leave_room() -> void:
 	_client.send(Protocol.LEAVE)
 
@@ -1472,6 +1520,9 @@ func _refresh() -> void:
 	_paddock_box.visible = view == "paddock"
 	if view != "paddock":
 		_paddock_dialog.visible = false
+	# 「部屋を出ますか」は、待機室・レース設定の窓。主の操作で画面が進んだら閉じる。
+	if not waiting and not settings:
+		_leave_dialog.visible = false
 	_room_header.visible = in_room
 	_room_name_row.visible = in_room
 	if in_room:
@@ -1784,19 +1835,23 @@ func _row_button(parent: HBoxContainer, text: String, node_name: String, action:
 	button.pressed.connect(action)
 	UIAudio.bind_button_sound(button, sound)
 	if not mark.is_empty():
-		# 印は左。文字は、印のぶん右へ寄せて、重ならないようにする（左右の余白を、印の幅だけ足す）。
-		var node := MenuStyle.add_mark(button, mark, 20.0)
-		var mark_width := node.offset_right
-		for state: String in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
-			var box := button.get_theme_stylebox(state)
-			if box == null:
-				continue
-			box = box.duplicate()
-			box.content_margin_left = mark_width + 8.0
-			box.content_margin_right = 8.0
-			button.add_theme_stylebox_override(state, box)
+		_add_mark_beside_text(button, mark, 20.0)
 	parent.add_child(button)
 	return button
+
+
+## ボタンの左に印（"B"・"START" など）を付ける。文字は、印のぶん右へ寄せて、重ならないようにする（左右の余白を、印の幅だけ足す）。
+func _add_mark_beside_text(button: Button, mark: String, mark_height: float) -> void:
+	var node := MenuStyle.add_mark(button, mark, mark_height)
+	var mark_width := node.offset_right
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled", "hover_pressed"]:
+		var box := button.get_theme_stylebox(state)
+		if box == null:
+			continue
+		box = box.duplicate()
+		box.content_margin_left = mark_width + 8.0
+		box.content_margin_right = 8.0
+		button.add_theme_stylebox_override(state, box)
 
 
 ## 左の5分の3の本体の列。
@@ -2025,7 +2080,16 @@ func _link_waiting_focus() -> void:
 		if not button.disabled:
 			actions.append(button)
 	var first_action: Control = actions.back() if not actions.is_empty() else _waiting_leave_button
-	_link_seat_grid(_seats, _lobby_chat_edit, null, first_action)
+	# 部屋主だけの「紹介を変える」「パスワード」：上の段の席から、上で行ける。
+	var host_buttons: Array[Control] = []
+	for button: Button in _waiting_host_buttons:
+		if button.visible and not button.disabled:
+			host_buttons.append(button)
+	_link_seat_grid(_seats, _lobby_chat_edit, host_buttons.front() if not host_buttons.is_empty() else null, first_action)
+	for index in host_buttons.size():
+		var button := host_buttons[index]
+		var below: Control = _seats[mini(index * (WAITING_SEAT_COLUMNS - 1), WAITING_SEAT_COLUMNS - 1)]["button"]
+		_link(button, host_buttons[maxi(index - 1, 0)], host_buttons[index + 1] if index < host_buttons.size() - 1 else _lobby_chat_edit, button, below)
 	var above: Control = _seats[Protocol.ROOM_CAPACITY - WAITING_SEAT_COLUMNS]["button"]
 	for index in actions.size():
 		var button := actions[index]
@@ -2311,27 +2375,11 @@ func _build_pick(column: VBoxContainer) -> void:
 	actions.name = "PickActions"
 	actions.add_theme_constant_override("separation", 8)
 	main.add_child(actions)
-	_pick_back_button = MenuStyle.button("待機室へ戻る", 16, MenuStyle.COLOR_BUTTON_QUIET)
-	_pick_back_button.name = "PickBackButton"
-	_pick_back_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_pick_back_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pick_back_button.pressed.connect(back_to_room_phase)
-	UIAudio.bind_button_sound(_pick_back_button, "back")
-	actions.add_child(_pick_back_button)
-	_pick_confirm_button = MenuStyle.button("確定", 18, MenuStyle.COLOR_BUTTON)
-	_pick_confirm_button.name = "PickConfirmButton"
-	_pick_confirm_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_pick_confirm_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pick_confirm_button.pressed.connect(toggle_pick_confirm)
-	UIAudio.bind_button_sound(_pick_confirm_button, "confirmation")
-	actions.add_child(_pick_confirm_button)
-	_pick_paddock_button = MenuStyle.button("パドックへ", 18, MenuStyle.COLOR_BUTTON_ON)
-	_pick_paddock_button.name = "PickPaddockButton"
-	_pick_paddock_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_pick_paddock_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pick_paddock_button.pressed.connect(open_paddock)
-	UIAudio.bind_button_sound(_pick_paddock_button, "confirmation")
-	actions.add_child(_pick_paddock_button)
+	_pick_back_button = _row_button(actions, "待機室へ戻る", "PickBackButton", back_to_room_phase, MenuStyle.COLOR_BUTTON_QUIET, "back", "B")
+	# 部屋主のときは「待機室へ戻る（全員）」と長いので、ほかより少し広く取る（B の印と並べても切れないように）。
+	_pick_back_button.size_flags_stretch_ratio = 1.3
+	_pick_confirm_button = _row_button(actions, "確定", "PickConfirmButton", toggle_pick_confirm, MenuStyle.COLOR_BUTTON, "confirmation", "")
+	_pick_paddock_button = _row_button(actions, "パドックへ", "PickPaddockButton", open_paddock, MenuStyle.COLOR_BUTTON_ON, "confirmation", "START")
 	var chat := _room_chat(_pick_box, "PickChat")
 	_pick_chat_edit = chat[1]
 	# プルを選ぶ窓（オフラインのレース選択と同じもの）。
@@ -2339,6 +2387,7 @@ func _build_pick(column: VBoxContainer) -> void:
 	_picker.name = "Picker"
 	add_child(_picker)
 	_picker.connect("picked", _on_picker_picked)
+	_picker.connect("closed", _on_picker_closed)
 	# プルのステータスの窓（変更・もどる）。
 	var parts := _dialog("PickDialog", "")
 	_pick_dialog = parts[0]
@@ -3075,20 +3124,33 @@ func prepare_race(data: Dictionary) -> void:
 	RaceSession.set_course_only(_light_scenery)
 
 
-## 窓が出ていれば、窓を閉じる。部屋の中では、部屋を出て、一覧へ戻る。それ以外では、つながりを切って、ゲーム選択へ戻る。
+## 戻る（B・Esc）。窓が出ていれば、窓を閉じる。プル選択・パドックでは、待機室へ戻る。
+## 待機室・レース設定では、部屋を出るかを確かめる。部屋の外では、つながりを切って、ゲーム選択へ戻る。
 func go_back() -> void:
 	if is_picker_open():
 		_picker.call("close")
 		return
+	# 「このプルにしますか」の窓では、「もどる」と同じ（プル一覧へ戻る）。
+	if _pick_dialog.visible and not _pick_candidate.is_empty():
+		_on_pick_dialog_back()
+		return
 	if is_dialog_open():
 		close_dialogs()
 		return
-	# パドックでは、待機室へ戻る（部屋は出ない）。
+	# 入力らんで Esc：部屋は出ずに、入力らんから抜ける。
+	var focused := get_viewport().gui_get_focus_owner()
+	if focused is LineEdit and OnlineSession.in_room():
+		focused.release_focus()
+		_restore_focus()
+		return
 	if _paddock_box.visible:
 		back_to_waiting()
 		return
+	if _pick_box.visible:
+		back_to_room_phase()
+		return
 	if OnlineSession.in_room():
-		leave_room()
+		open_leave_dialog()
 		return
 	OnlineSession.close()
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
