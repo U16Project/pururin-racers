@@ -5,6 +5,8 @@ extends ColorRect
 ## 位置（center）は、この部品の左上からの点。角度は、12時を0として時計まわりの度。
 ## 終わりの角度（end_deg）が始まり（start_deg）より小さければ、反時計まわりに進む。
 ## ゲームのコードが変えるのは value だけ。
+## この部品の四角は、描いている所（弧と、そのまわりの光）に自動で合わせる（エディタで、クリックしてつまみやすいように）。
+## 形を変えると、見た目の位置はそのままで、四角だけが縮んだり広がったりする。
 
 const ArcShader := preload("res://scripts/presentation/hud/arc_gauge.gdshader")
 
@@ -114,6 +116,8 @@ const ArcShader := preload("res://scripts/presentation/hud/arc_gauge.gdshader")
 		_push()
 
 var _gradient_texture := GradientTexture1D.new()
+## 四角を合わせている最中か（合わせるときに変える値で、また合わせ直さないように）。
+var _fitting := false
 
 
 func _ready() -> void:
@@ -127,6 +131,8 @@ func _ready() -> void:
 func _push() -> void:
 	if not is_inside_tree():
 		return
+	if not _fitting:
+		_fit_rect()
 	var shader_material := material as ShaderMaterial
 	if shader_material == null or shader_material.shader != ArcShader:
 		shader_material = ShaderMaterial.new()
@@ -155,3 +161,31 @@ func _push() -> void:
 	shader_material.set_shader_parameter("cap_radius", cap_radius)
 	shader_material.set_shader_parameter("round_start", round_start)
 	shader_material.set_shader_parameter("round_end", round_end)
+
+
+## 描いている所の四角（この部品の左上から）。弧の帯と、まわりの光・目印の線のはみ出しを含む。
+func drawn_rect() -> Rect2:
+	var margin := maxf(glow_width * 1.5, marker_overhang + marker_width) + 3.0
+	var outer := radius + thickness * 0.5 + margin
+	var inner := maxf(radius - thickness * 0.5 - margin, 0.0)
+	var steps := maxi(int(absf(end_deg - start_deg) / 2.0), 1)
+	var box := Rect2(center + Vector2.UP.rotated(deg_to_rad(start_deg)) * outer, Vector2.ZERO)
+	for index in steps + 1:
+		var direction := Vector2.UP.rotated(deg_to_rad(lerpf(start_deg, end_deg, float(index) / float(steps))))
+		box = box.expand(center + direction * outer).expand(center + direction * inner)
+	# 両はしの外の光のぶん。
+	return box.grow(margin * 0.5)
+
+
+## この部品の四角を、描いている所に合わせる（見た目の位置は変えない）。回したり縮めたりしているときは、合わせない。
+func _fit_rect() -> void:
+	if rotation != 0.0 or scale != Vector2.ONE:
+		return
+	var box := drawn_rect()
+	if box.position.distance_to(Vector2.ZERO) < 0.5 and box.size.distance_to(size) < 0.5:
+		return
+	_fitting = true
+	position += box.position
+	center -= box.position
+	size = box.size
+	_fitting = false

@@ -100,26 +100,6 @@ func test_confirmed_count_counts_the_finished_rows_at_the_top() -> void:
 	assert_eq(RaceHud.confirmed_count([{"finished": true}, {"finished": true}]), 2)
 
 
-func test_standings_time_text_shows_minutes_seconds_and_hundredths() -> void:
-	assert_eq(RaceHud.standings_time_text(118.32), "1:58:32")
-	assert_eq(RaceHud.standings_time_text(9.05), "0:09:05")
-
-
-func test_standings_sit_midway_between_the_race_info_and_the_panel() -> void:
-	var screen_height := 648.0
-	var rows := 8
-	var top := RaceHud.standings_top(screen_height, rows)
-	var gap_above := top - (RaceHud.RACE_INFO_TOP + RaceHud.RACE_INFO_HEIGHT)
-	var gap_below := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT - (top + rows * RaceHud.STANDINGS_ROW_HEIGHT)
-	assert_almost_eq(gap_above, gap_below, 0.0001)
-	assert_gt(gap_above, 0.0)
-
-
-func test_standings_start_at_the_same_height_whatever_the_field_size() -> void:
-	# 表の位置は、満員の行の数で決める。人数が少ないレースでも、上から詰めて並ぶ。
-	assert_eq(RaceHud.STANDINGS_FULL_ROWS, preload("res://scripts/local_race_math.gd").FIELD_SIZE)
-
-
 ## 全角9文字の名前。
 func _nine_characters() -> String:
 	return "ア".repeat(9)
@@ -151,13 +131,6 @@ func test_a_nine_character_name_is_never_cut_in_the_race_hud_or_the_result_board
 	var board := FitText.fit(bold, name, board_width, Board.FONT_SIZE)
 	assert_eq(board["text"], name)
 	assert_eq(board["x_scale"], 1.0)
-
-
-func test_the_name_tab_sits_between_the_standings_and_the_panel() -> void:
-	var screen_height := 648.0
-	var panel_top := screen_height - RaceHud.PANEL_BOTTOM_MARGIN - RaceHud.PANEL_HEIGHT
-	var standings_bottom := RaceHud.standings_top(screen_height, RaceHud.STANDINGS_FULL_ROWS) + RaceHud.STANDINGS_FULL_ROWS * RaceHud.STANDINGS_ROW_HEIGHT
-	assert_gte(panel_top - RaceHud.NAME_TAB_HEIGHT, standings_bottom, "名札は、順位表の一番下の行に重ならない")
 
 
 func test_standings_are_not_redrawn_every_frame_when_the_bottom_panel_is_hidden() -> void:

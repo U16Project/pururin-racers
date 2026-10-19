@@ -136,6 +136,8 @@ func _process(_delta: float) -> void:
 func _push() -> void:
 	if not is_inside_tree():
 		return
+	if not _fitting:
+		_fit_rect()
 	var shader_material := material as ShaderMaterial
 	if shader_material == null or shader_material.shader != HeartShader:
 		shader_material = ShaderMaterial.new()
@@ -145,3 +147,31 @@ func _push() -> void:
 		shader_material.set_shader_parameter(key, get(key))
 	shader_material.set_shader_parameter("rect_size", size)
 	shader_material.set_shader_parameter("fill", value)
+
+
+## 四角を合わせている最中か（合わせるときに変える値で、また合わせ直さないように）。
+var _fitting := false
+
+
+## 描いている所の四角（この部品の左上から）。ハートと、ふち・まわりの光のはみ出しを含む。
+## ハートの上のてっぺんは、まん中から 1.577 ÷ dip、下の先は 1 ÷ dip（縦の大きさ1あたり）。
+func drawn_rect() -> Rect2:
+	var margin := edge_width + glow_width * 2.5 + 4.0
+	var top := center.y - 1.577 / dip * size_y
+	var bottom := center.y + 1.0 / dip * size_y
+	return Rect2(Vector2(center.x - size_x, top), Vector2(size_x * 2.0, bottom - top)).grow(margin)
+
+
+## この部品の四角を、描いている所に合わせる（見た目の位置は変えない）。回したり縮めたりしているときは、合わせない。
+func _fit_rect() -> void:
+	if rotation != 0.0 or scale != Vector2.ONE:
+		return
+	var box := drawn_rect()
+	if box.position.distance_to(Vector2.ZERO) < 0.5 and box.size.distance_to(size) < 0.5:
+		return
+	_fitting = true
+	position += box.position
+	center -= box.position
+	size = box.size
+	_fitting = false
+

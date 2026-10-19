@@ -3,7 +3,7 @@ extends Control
 ## 速さ・体力の弧のゲージを、まとめて置くまとまり。
 ## 中の弧（ArcGauge）は、どれも同じ円の上に乗る：ハート（heart_path）をちょうど囲む、いちばん小さい円の外側に、
 ## すき間（gap）を空けて、太さ（thickness）で。ハートの形や大きさを変えると、弧もついてくる。
-## まとまりの回転・拡大の軸は、その円のまん中。弧ごとに変えるのは、始まりと終わりの角度・色などだけ。
+## まとまりの回転・拡大の軸は、その円のまん中。このまとまりの四角は、その円が収まる大きさに自動で合わせる。弧ごとに変えるのは、始まりと終わりの角度・色などだけ。
 
 ## 囲むハート（HeartGauge）。
 @export var heart_path: NodePath:
@@ -21,6 +21,8 @@ extends Control
 		thickness = next
 		_fit()
 
+## このまとまりの四角の、弧のまわりの余白（光のぶん）。
+const MARGIN := 24.0
 ## ハートを、この数の点で調べて、囲む円を求める。
 const HEART_SAMPLES := 400
 
@@ -95,10 +97,23 @@ func _fit() -> void:
 	var center: Vector2 = circle[0]
 	# ハートのふちの線の太さの半分も、ハートに含める。
 	var radius := float(circle[1]) + float(heart.get("edge_width")) * 0.5 + gap + thickness * 0.5
+	# このまとまりの四角を、弧の円が収まる大きさに合わせる（エディタで、つまみやすいように）。回したり縮めたりしているときは、合わせない。
+	if rotation == 0.0 and scale == Vector2.ONE:
+		var reach := radius + thickness * 0.5 + MARGIN
+		var box := Rect2(center - Vector2(reach, reach), Vector2(reach, reach) * 2.0)
+		if box.position.distance_to(Vector2.ZERO) >= 0.5 or box.size.distance_to(size) >= 0.5:
+			position += box.position
+			for child in get_children():
+				if child is Control:
+					(child as Control).position -= box.position
+			center -= box.position
+			size = box.size
+			_fitted_key = [heart_center, heart.get("size_x"), heart.get("size_y"), heart.get("dip"), heart.get("edge_width"), (heart as Control).position - position if heart is Control else Vector2.ZERO, gap, thickness]
 	pivot_offset = center
 	for child in get_children():
 		if child.get("start_deg") == null:
 			continue
-		child.set("center", center)
+		# 弧のまん中は、その弧の四角の左上から。
+		child.set("center", center - (child as Control).position)
 		child.set("radius", radius)
 		child.set("thickness", thickness)

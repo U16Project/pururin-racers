@@ -1,68 +1,85 @@
-[gd_scene format=3 uid="uid://nbl7eoh446pn"]
+[gd_scene format=3 uid="uid://b5ac2ud8s65cn"]
 
 [ext_resource type="Script" uid="uid://dyoestgwq65hg" path="res://scripts/presentation/hud/arc_gauge.gd" id="1_arc"]
 [ext_resource type="Shader" uid="uid://q44grpt2uhrm" path="res://scripts/presentation/hud/arc_gauge.gdshader" id="1_r0h6u"]
+[ext_resource type="Script" uid="uid://bofi7u306o7ol" path="res://scripts/presentation/hud/hud_mark.gd" id="2_100um"]
 [ext_resource type="Script" uid="uid://bik0f0rb1tj1s" path="res://scripts/presentation/hud/heart_gauge.gd" id="2_heart"]
 [ext_resource type="Shader" uid="uid://cbk42h882orkf" path="res://scripts/presentation/hud/heart_gauge.gdshader" id="3_1wcox"]
 [ext_resource type="FontFile" uid="uid://cypv6grbat7rm" path="res://fonts/NotoSansJP-Black-Hud.otf" id="3_font"]
 [ext_resource type="Script" uid="uid://rjcv04x1yquf" path="res://scripts/presentation/hud/ring_gauges.gd" id="4_ring"]
+[ext_resource type="Script" uid="uid://k1hbjqn5g0qv" path="res://scripts/presentation/hud/slant_bars.gd" id="8_xxtil"]
+[ext_resource type="Script" uid="uid://dyr0d7shf1kqq" path="res://scripts/presentation/hud/race_control_panel.gd" id="9_panel"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_100um"]
+bg_color = Color(0.16, 0.2, 0.27, 0.86)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.78, 1, 0.55)
+corner_radius_top_left = 18
+corner_radius_top_right = 18
+corner_radius_bottom_right = 18
+corner_radius_bottom_left = 18
+corner_detail = 1
+
+[sub_resource type="FontVariation" id="FontVariation_slant"]
+base_font = ExtResource("3_font")
+variation_transform = Transform2D(1, 0, 0.18, 1, 0, 0)
+
+[sub_resource type="LabelSettings" id="LabelSettings_xxtil"]
+font = SubResource("FontVariation_slant")
+font_size = 120
+font_color = Color(1, 0.82, 0.22, 1)
+outline_size = 10
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_jtnj3"]
+font = SubResource("FontVariation_slant")
+font_size = 44
+font_color = Color(0.95, 0.97, 1, 1)
+outline_size = 8
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_7gc6r"]
+font = SubResource("FontVariation_slant")
+font_size = 44
+font_color = Color(0.95, 0.97, 1, 1)
+outline_size = 8
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_mpdg8"]
+resource_name = "Name"
+font = SubResource("FontVariation_slant")
+font_size = 31
+font_color = Color(0.95, 0.97, 1, 1)
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
 
 [sub_resource type="Gradient" id="Gradient_speed"]
 colors = PackedColorArray(0.45, 0.78, 1, 1, 0.1, 0.36, 1, 1)
 
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_1wcox"]
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_xxtil"]
 gradient = SubResource("Gradient_speed")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_100um"]
 shader = ExtResource("1_r0h6u")
-shader_parameter/rect_size = Vector2(768, 512)
-shader_parameter/center = Vector2(327, 237.90034)
+shader_parameter/rect_size = Vector2(146.99982, 310.7093)
+shader_parameter/center = Vector2(202.99966, 177.0086)
 shader_parameter/radius = 161.99968
 shader_parameter/thickness = 28.0
-shader_parameter/start_deg = 189.5
-shader_parameter/end_deg = 316.5
+shader_parameter/start_deg = -130.0
+shader_parameter/end_deg = -30.0
 shader_parameter/fill = 0.57
-shader_parameter/gradient = SubResource("GradientTexture1D_1wcox")
+shader_parameter/gradient = SubResource("GradientTexture1D_xxtil")
 shader_parameter/track_color = Color(1, 1, 1, 0.08)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
 shader_parameter/glow_width = 10.0
-shader_parameter/glow_strength = 0.5
-shader_parameter/gloss_strength = 0.3
-shader_parameter/inner_shade = 0.2
-shader_parameter/softness = 1.2
-shader_parameter/cap_radius = 0.0
-shader_parameter/round_start = true
-shader_parameter/round_end = true
-shader_parameter/marker_at = -1.0
-shader_parameter/marker_color = Color(1, 1, 1, 1)
-shader_parameter/marker_width = 4.0
-shader_parameter/marker_overhang = 4.0
-
-[sub_resource type="Gradient" id="Gradient_debt"]
-colors = PackedColorArray(0.85, 0.06, 0.1, 1, 0.55, 0.02, 0.05, 1)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_knikd"]
-gradient = SubResource("Gradient_debt")
-
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_mpdg8"]
-shader = ExtResource("1_r0h6u")
-shader_parameter/rect_size = Vector2(768, 512)
-shader_parameter/center = Vector2(327, 237.90034)
-shader_parameter/radius = 161.99968
-shader_parameter/thickness = 28.0
-shader_parameter/start_deg = 140.2
-shader_parameter/end_deg = 154.2
-shader_parameter/fill = 0.0
-shader_parameter/gradient = SubResource("GradientTexture1D_knikd")
-shader_parameter/track_color = Color(1, 1, 1, 0.08)
-shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
-shader_parameter/glow_width = 4.84
 shader_parameter/glow_strength = 0.0
 shader_parameter/gloss_strength = 0.0
-shader_parameter/inner_shade = 0.0
+shader_parameter/inner_shade = 0.2
 shader_parameter/softness = 1.2
 shader_parameter/cap_radius = 8.0
-shader_parameter/round_start = false
+shader_parameter/round_start = true
 shader_parameter/round_end = true
 shader_parameter/marker_at = -1.0
 shader_parameter/marker_color = Color(1, 1, 1, 1)
@@ -73,38 +90,38 @@ shader_parameter/marker_overhang = 4.0
 offsets = PackedFloat32Array(0, 0.3, 0.55, 0.8, 1)
 colors = PackedColorArray(1, 0.16, 0.23, 1, 1, 0.54, 0.1, 1, 1, 0.88, 0.13, 1, 0.62, 0.91, 0.1, 1, 0.18, 0.91, 0.42, 1)
 
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_100um"]
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_mpdg8"]
 gradient = SubResource("Gradient_stamina")
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_7gc6r"]
 shader = ExtResource("1_r0h6u")
-shader_parameter/rect_size = Vector2(768, 512)
-shader_parameter/center = Vector2(327, 237.90034)
+shader_parameter/rect_size = Vector2(146.99985, 310.70926)
+shader_parameter/center = Vector2(-55.999847, 133.70055)
 shader_parameter/radius = 161.99968
 shader_parameter/thickness = 28.0
-shader_parameter/start_deg = 140.2
-shader_parameter/end_deg = 75.2
-shader_parameter/fill = 0.69
-shader_parameter/gradient = SubResource("GradientTexture1D_100um")
+shader_parameter/start_deg = 150.0
+shader_parameter/end_deg = 50.0
+shader_parameter/fill = 1.0
+shader_parameter/gradient = SubResource("GradientTexture1D_mpdg8")
 shader_parameter/track_color = Color(1, 1, 1, 0.08)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
-shader_parameter/glow_width = 4.84
+shader_parameter/glow_width = 10.0
 shader_parameter/glow_strength = 0.0
 shader_parameter/gloss_strength = 0.0
-shader_parameter/inner_shade = 0.0
+shader_parameter/inner_shade = 0.2
 shader_parameter/softness = 1.2
 shader_parameter/cap_radius = 8.0
-shader_parameter/round_start = false
+shader_parameter/round_start = true
 shader_parameter/round_end = true
-shader_parameter/marker_at = 0.0
+shader_parameter/marker_at = 0.5
 shader_parameter/marker_color = Color(1, 1, 1, 1)
 shader_parameter/marker_width = 4.0
 shader_parameter/marker_overhang = 4.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dwwwi"]
 shader = ExtResource("3_1wcox")
-shader_parameter/rect_size = Vector2(768, 512)
-shader_parameter/center = Vector2(327, 286)
+shader_parameter/rect_size = Vector2(392, 364.65283)
+shader_parameter/center = Vector2(196, 207.2528)
 shader_parameter/size_x = 125.0
 shader_parameter/size_y = 108.0
 shader_parameter/dip = 1.25
@@ -113,7 +130,7 @@ shader_parameter/water_color = Color(0.2, 0.92, 1, 1)
 shader_parameter/water_bottom_shade = 0.25
 shader_parameter/wave_height = 3.0
 shader_parameter/wave_length = 40.0
-shader_parameter/wave_phase = 0.0
+shader_parameter/wave_phase = 2.586
 shader_parameter/surface_color = Color(1, 1, 1, 0.7)
 shader_parameter/surface_width = 3.0
 shader_parameter/stripe_spacing = 6.0
@@ -129,10 +146,6 @@ shader_parameter/glow_strength = 0.12
 shader_parameter/beat = 0.85
 shader_parameter/beat_color = Color(1, 0.7, 0.9, 1)
 
-[sub_resource type="FontVariation" id="FontVariation_slant"]
-base_font = ExtResource("3_font")
-variation_transform = Transform2D(1, 0, 0.18, 1, 0, 0)
-
 [sub_resource type="LabelSettings" id="LabelSettings_bpm"]
 font = SubResource("FontVariation_slant")
 font_size = 72
@@ -145,106 +158,312 @@ font_size = 24
 outline_size = 6
 outline_color = Color(0.02, 0.03, 0.06, 0.95)
 
+[sub_resource type="Gradient" id="Gradient_jtnj3"]
+colors = PackedColorArray(0.36, 0.72, 1, 1, 0.36, 0.72, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_jtnj3"]
+gradient = SubResource("Gradient_jtnj3")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_kto8r"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(136.01315, 210.52351)
+shader_parameter/center = Vector2(318.8102, 15.488876)
+shader_parameter/radius = 274.84082
+shader_parameter/thickness = 34.0
+shader_parameter/start_deg = 233.1
+shader_parameter/end_deg = 271.2
+shader_parameter/fill = 0.68
+shader_parameter/gradient = SubResource("GradientTexture1D_jtnj3")
+shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
+shader_parameter/glow_width = 10.0
+shader_parameter/glow_strength = 0.0
+shader_parameter/gloss_strength = 0.0
+shader_parameter/inner_shade = 0.2
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 6.0
+shader_parameter/round_start = true
+shader_parameter/round_end = true
+shader_parameter/marker_at = -1.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
+[sub_resource type="Gradient" id="Gradient_7gc6r"]
+colors = PackedColorArray(0.36, 0.86, 0.52, 1, 0.36, 0.86, 0.52, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_7gc6r"]
+gradient = SubResource("Gradient_7gc6r")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_pp5k7"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(136.01315, 210.52351)
+shader_parameter/center = Vector2(318.8102, 15.488876)
+shader_parameter/radius = 274.84082
+shader_parameter/thickness = 34.0
+shader_parameter/start_deg = 233.1
+shader_parameter/end_deg = 271.2
+shader_parameter/fill = 0.3
+shader_parameter/gradient = SubResource("GradientTexture1D_7gc6r")
+shader_parameter/track_color = Color(1, 1, 1, 0)
+shader_parameter/track_edge_color = Color(1, 1, 1, 0)
+shader_parameter/glow_width = 10.0
+shader_parameter/glow_strength = 0.0
+shader_parameter/gloss_strength = 0.0
+shader_parameter/inner_shade = 0.2
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 6.0
+shader_parameter/round_start = true
+shader_parameter/round_end = true
+shader_parameter/marker_at = -1.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
+[sub_resource type="LabelSettings" id="LabelSettings_dwwwi"]
+resource_name = "Word"
+font = SubResource("FontVariation_slant")
+font_size = 22
+font_color = Color(0.95, 0.97, 1, 1)
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_kto8r"]
+resource_name = "Value"
+font = SubResource("FontVariation_slant")
+font_size = 54
+font_color = Color(1, 0.9, 0.12, 1)
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="LabelSettings" id="LabelSettings_mrsrx"]
+resource_name = "Unit"
+font = SubResource("FontVariation_slant")
+font_size = 25
+font_color = Color(0.95, 0.97, 1, 1)
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="Gradient" id="Gradient_uwi00"]
+offsets = PackedFloat32Array(0, 0.2, 0.4, 0.6, 0.8, 1)
+colors = PackedColorArray(0.09411765, 0.8627451, 1, 1, 0.18039216, 0.9098039, 0.18039216, 1, 0.61960787, 0.9098039, 0.101960786, 1, 1, 0.8392157, 0.101960786, 1, 1, 0.47843137, 0.101960786, 1, 1, 0.16470589, 0.33333334, 1)
+
+[sub_resource type="Gradient" id="Gradient_i4ki3"]
+colors = PackedColorArray(1, 0.47, 0.06, 1, 1, 0.47, 0.06, 1)
+
+[sub_resource type="LabelSettings" id="LabelSettings_jquf8"]
+resource_name = "Count"
+font = SubResource("FontVariation_slant")
+font_size = 24
+font_color = Color(0.95, 0.97, 1, 1)
+outline_color = Color(0.02, 0.03, 0.06, 0.95)
+
+[sub_resource type="Gradient" id="Gradient_4paao"]
+colors = PackedColorArray(0.1, 0.9, 1, 1, 0.1, 0.9, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_dwwwi"]
+gradient = SubResource("Gradient_4paao")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_i4ki3"]
+shader = ExtResource("1_r0h6u")
+shader_parameter/rect_size = Vector2(144, 144)
+shader_parameter/center = Vector2(72, 72)
+shader_parameter/radius = 40.0
+shader_parameter/thickness = 10.0
+shader_parameter/start_deg = 0.0
+shader_parameter/end_deg = 360.0
+shader_parameter/fill = 1.0
+shader_parameter/gradient = SubResource("GradientTexture1D_dwwwi")
+shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
+shader_parameter/glow_width = 10.0
+shader_parameter/glow_strength = 0.35
+shader_parameter/gloss_strength = 0.15
+shader_parameter/inner_shade = 0.2
+shader_parameter/softness = 1.2
+shader_parameter/cap_radius = 6.0
+shader_parameter/round_start = true
+shader_parameter/round_end = true
+shader_parameter/marker_at = -1.0
+shader_parameter/marker_color = Color(1, 1, 1, 1)
+shader_parameter/marker_width = 4.0
+shader_parameter/marker_overhang = 4.0
+
 [node name="RaceControlPanel" type="Control" unique_id=1752088014]
+custom_minimum_size = Vector2(904, 499)
 layout_mode = 3
 anchors_preset = 0
-offset_right = 768.0
-offset_bottom = 512.0
+offset_left = 8.0
+offset_top = -24.0
+offset_right = 835.0
+offset_bottom = 567.0
 mouse_filter = 2
+script = ExtResource("9_panel")
+
+[node name="Board" type="Panel" parent="." unique_id=1579347103]
+layout_mode = 0
+offset_left = -8.0
+offset_top = 24.0
+offset_right = 896.0
+offset_bottom = 719.0
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_100um")
+
+[node name="RaceInfo" type="Control" parent="." unique_id=362215443]
+anchors_preset = 0
+offset_left = 16.0
+offset_top = 34.0
+offset_right = 872.0
+offset_bottom = 216.0
+mouse_filter = 2
+
+[node name="Place" type="Label" parent="RaceInfo" unique_id=195788040]
+layout_mode = 0
+offset_left = 102.0
+offset_right = 190.0
+offset_bottom = 175.0
+scale = Vector2(1.36, 1.05)
+text = "8"
+label_settings = SubResource("LabelSettings_xxtil")
+
+[node name="Field" type="Label" parent="RaceInfo" unique_id=1514614748]
+layout_mode = 0
+offset_left = 202.0
+offset_top = 96.0
+offset_right = 310.0
+offset_bottom = 161.0
+text = "/ 8 位"
+label_settings = SubResource("LabelSettings_jtnj3")
+
+[node name="Remaining" type="Label" parent="RaceInfo" unique_id=2056365237]
+layout_mode = 0
+offset_left = 286.0
+offset_top = 27.0
+offset_right = 714.0
+offset_bottom = 92.0
+text = "残り 1898 m"
+label_settings = SubResource("LabelSettings_7gc6r")
+horizontal_alignment = 2
+
+[node name="Time" type="Label" parent="RaceInfo" unique_id=2105450750]
+layout_mode = 0
+offset_left = 286.0
+offset_top = 94.5
+offset_right = 714.0
+offset_bottom = 159.5
+text = "0分07秒60"
+label_settings = SubResource("LabelSettings_7gc6r")
+horizontal_alignment = 2
+
+[node name="Separator" type="ColorRect" parent="RaceInfo" unique_id=1743027025]
+layout_mode = 0
+offset_top = 179.0
+offset_right = 856.0
+offset_bottom = 182.0
+mouse_filter = 2
+color = Color(0.45, 0.78, 1, 0.45)
+
+[node name="NameRow" type="Control" parent="." unique_id=1600614687]
+anchors_preset = 0
+offset_left = 239.0
+offset_top = 272.0
+offset_right = 662.0
+offset_bottom = 317.0
+mouse_filter = 2
+
+[node name="Name" type="Label" parent="NameRow" unique_id=1246697893]
+layout_mode = 0
+offset_left = -151.0
+offset_top = -38.0
+offset_right = 65.0
+offset_bottom = 7.0
+scale = Vector2(1.28, 1.28)
+text = "アカネ（U16）"
+label_settings = SubResource("LabelSettings_mpdg8")
+
+[node name="Attribute" type="Control" parent="NameRow" unique_id=1163582918]
+anchors_preset = 0
+offset_left = 329.0
+offset_top = -37.0
+offset_right = 369.0
+offset_bottom = 3.0
+scale = Vector2(1.28, 1.28)
+mouse_filter = 2
+script = ExtResource("2_100um")
+kind = "attribute"
+mark_size = 36.0
+
+[node name="Style" type="Control" parent="NameRow" unique_id=1186340594]
+anchors_preset = 0
+offset_left = 397.0
+offset_top = -35.0
+offset_right = 487.0
+offset_bottom = 1.0
+scale = Vector2(1.28, 1.28)
+mouse_filter = 2
+script = ExtResource("2_100um")
+kind = "style"
 
 [node name="Gauges" type="Control" parent="." unique_id=1730487933]
 anchors_preset = 0
-offset_right = 768.0
-offset_bottom = 512.0
-pivot_offset = Vector2(327, 237.90034)
-offset_transform_enabled = true
-offset_transform_position_ratio = Vector2(-0.155, -0.15)
-offset_transform_scale = Vector2(-0.885, 0.885)
-offset_transform_rotation = 0.5078908
-offset_transform_pivot = Vector2(-0.075, 0)
+offset_left = 112.000305
+offset_top = 278.1535
+offset_right = 511.9997
+offset_bottom = 678.1529
+pivot_offset = Vector2(199.9997, 199.99965)
 mouse_filter = 2
 script = ExtResource("4_ring")
 heart_path = NodePath("../Heart")
 
 [node name="Speed" type="ColorRect" parent="Gauges" unique_id=290664610]
-visible = false
 material = SubResource("ShaderMaterial_100um")
 layout_mode = 0
-offset_right = 768.0
-offset_bottom = 512.0
-offset_transform_enabled = true
-offset_transform_position_ratio = Vector2(-0.045, 0.09)
-offset_transform_rotation = 0.3822271
-offset_transform_pivot = Vector2(-0.325, 0)
+offset_left = -2.999977
+offset_top = 22.991043
+offset_right = 143.99985
+offset_bottom = 333.70032
 mouse_filter = 2
 script = ExtResource("1_arc")
 value = 0.57
-center = Vector2(327, 237.90034)
+center = Vector2(202.99966, 177.0086)
 radius = 161.99968
 thickness = 28.0
-start_deg = 189.5
-end_deg = 316.5
-gradient = SubResource("Gradient_speed")
-
-[node name="StaminaDebt" type="ColorRect" parent="Gauges" unique_id=1081011948]
-material = SubResource("ShaderMaterial_mpdg8")
-layout_mode = 0
-offset_right = 768.0
-offset_bottom = 512.0
-offset_transform_enabled = true
-offset_transform_position_ratio = Vector2(-0.02, 0.065)
-offset_transform_rotation = 0.27576202
-mouse_filter = 2
-script = ExtResource("1_arc")
-value = 0.0
-center = Vector2(327, 237.90034)
-radius = 161.99968
-thickness = 28.0
-start_deg = 140.2
-end_deg = 154.2
+start_deg = -130.0
+end_deg = -30.0
 cap_radius = 8.0
-round_start = false
-gradient = SubResource("Gradient_debt")
-glow_width = 4.84
+gradient = SubResource("Gradient_speed")
 glow_strength = 0.0
 gloss_strength = 0.0
-inner_shade = 0.0
 
 [node name="Stamina" type="ColorRect" parent="Gauges" unique_id=1717409501]
 material = SubResource("ShaderMaterial_7gc6r")
 layout_mode = 0
-offset_right = 768.0
-offset_bottom = 512.0
-offset_transform_enabled = true
-offset_transform_position_ratio = Vector2(-0.02, 0.065)
-offset_transform_rotation = 0.27576202
+offset_left = 255.99954
+offset_top = 66.2991
+offset_right = 402.9994
+offset_bottom = 377.00836
 mouse_filter = 2
 script = ExtResource("1_arc")
-value = 0.69
-center = Vector2(327, 237.90034)
+center = Vector2(-55.999847, 133.70055)
 radius = 161.99968
 thickness = 28.0
-start_deg = 140.2
-end_deg = 75.2
+start_deg = 150.0
+end_deg = 50.0
 cap_radius = 8.0
-round_start = false
 gradient = SubResource("Gradient_stamina")
-glow_width = 4.84
 glow_strength = 0.0
 gloss_strength = 0.0
-inner_shade = 0.0
-marker_at = 0.0
+marker_at = 0.5
 
 [node name="Heart" type="ColorRect" parent="." unique_id=611058645]
 material = SubResource("ShaderMaterial_dwwwi")
 layout_mode = 0
-offset_right = 768.0
-offset_bottom = 512.0
+offset_left = 116.0
+offset_top = 319.0
+offset_right = 508.0
+offset_bottom = 683.65283
 mouse_filter = 2
 script = ExtResource("2_heart")
 value = 0.477
 beat = 0.85
-center = Vector2(327, 286)
+center = Vector2(196, 207.2528)
 size_x = 125.0
 size_y = 108.0
 gloss_strength = 0.0
@@ -253,17 +472,17 @@ glow_width = 24.0
 glow_strength = 0.12
 
 [node name="BpmPlate" type="Polygon2D" parent="." unique_id=344589180]
-position = Vector2(80, 74.99999)
+position = Vector2(78.128235, 310)
 scale = Vector2(0.715, 0.715)
 color = Color(0.01, 0.02, 0.04, 0.9)
 polygon = PackedVector2Array(255, 290, 427, 287, 438, 231, 266, 236)
 
 [node name="Bpm" type="Label" parent="." unique_id=717508699]
 layout_mode = 0
-offset_left = 260.0
-offset_top = 223.0
-offset_right = 392.0
-offset_bottom = 328.0
+offset_left = 258.12823
+offset_top = 458.0
+offset_right = 390.12823
+offset_bottom = 563.0
 scale = Vector2(0.715, 0.715)
 pivot_offset = Vector2(-0.45, 0)
 text = "143"
@@ -271,10 +490,315 @@ label_settings = SubResource("LabelSettings_bpm")
 
 [node name="BpmUnit" type="Label" parent="." unique_id=1482132655]
 layout_mode = 0
-offset_left = 355.0
-offset_top = 260.99997
-offset_right = 410.0
-offset_bottom = 296.99997
+offset_left = 353.12823
+offset_top = 495.99997
+offset_right = 408.12823
+offset_bottom = 532.0
 scale = Vector2(0.715, 0.715)
 text = "bpm"
 label_settings = SubResource("LabelSettings_bpm_unit")
+
+[node name="Aero" type="Control" parent="." unique_id=1393527677]
+anchors_preset = 0
+offset_left = 48.0
+offset_top = 348.0
+offset_right = 217.979
+offset_bottom = 639.0014
+mouse_filter = 2
+
+[node name="AeroBlue" type="ColorRect" parent="Aero" unique_id=2096058780]
+material = SubResource("ShaderMaterial_kto8r")
+layout_mode = 0
+offset_left = -8.034149
+offset_top = 96.47789
+offset_right = 127.979004
+offset_bottom = 307.0014
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.68
+center = Vector2(318.8102, 15.488876)
+radius = 274.84082
+thickness = 34.0
+start_deg = 233.1
+end_deg = 271.2
+cap_radius = 6.0
+gradient = SubResource("Gradient_jtnj3")
+glow_strength = 0.0
+gloss_strength = 0.0
+
+[node name="AeroGreen" type="ColorRect" parent="Aero" unique_id=620621237]
+material = SubResource("ShaderMaterial_pp5k7")
+layout_mode = 0
+offset_left = -8.034149
+offset_top = 96.47789
+offset_right = 127.979004
+offset_bottom = 307.0014
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.3
+center = Vector2(318.8102, 15.488876)
+radius = 274.84082
+thickness = 34.0
+start_deg = 233.1
+end_deg = 271.2
+cap_radius = 6.0
+gradient = SubResource("Gradient_7gc6r")
+track_color = Color(1, 1, 1, 0)
+track_edge_color = Color(1, 1, 1, 0)
+glow_strength = 0.0
+gloss_strength = 0.0
+
+[node name="AeroWord" type="Label" parent="Aero" unique_id=116925814]
+layout_mode = 0
+offset_left = 9.0
+offset_top = 16.0
+offset_right = 59.0
+offset_bottom = 49.0
+text = "aero"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="AeroValue" type="Label" parent="Aero" unique_id=2084048620]
+layout_mode = 0
+offset_left = -42.0
+offset_top = 31.0
+offset_right = 61.0
+offset_bottom = 110.0
+text = "68"
+label_settings = SubResource("LabelSettings_kto8r")
+horizontal_alignment = 2
+
+[node name="AeroUnit" type="Label" parent="Aero" unique_id=1446583339]
+layout_mode = 0
+offset_left = 74.0
+offset_top = 53.0
+offset_right = 99.0
+offset_bottom = 90.0
+text = "%"
+label_settings = SubResource("LabelSettings_mrsrx")
+
+[node name="SpeedText" type="Control" parent="." unique_id=775819191]
+anchors_preset = 0
+offset_left = 312.0
+offset_top = 309.0
+offset_right = 528.0
+offset_bottom = 388.0
+mouse_filter = 2
+
+[node name="SpeedWord" type="Label" parent="SpeedText" unique_id=383809541]
+layout_mode = 0
+offset_left = -68.0
+offset_top = -7.0
+offset_right = 1.0
+offset_bottom = 26.0
+text = "Speed"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="SpeedValue" type="Label" parent="SpeedText" unique_id=1411073247]
+layout_mode = 0
+offset_left = -97.0
+offset_top = 7.0
+offset_right = 6.0
+offset_bottom = 86.0
+text = "63"
+label_settings = SubResource("LabelSettings_kto8r")
+horizontal_alignment = 2
+
+[node name="SpeedUnit" type="Label" parent="SpeedText" unique_id=1362422431]
+layout_mode = 0
+offset_left = 3.0
+offset_top = 33.0
+offset_right = 70.0
+offset_bottom = 70.0
+text = "km/h"
+label_settings = SubResource("LabelSettings_mrsrx")
+
+[node name="StaminaText" type="Control" parent="." unique_id=338143617]
+anchors_preset = 0
+offset_left = 274.0
+offset_top = 607.0
+offset_right = 496.0
+offset_bottom = 705.0
+mouse_filter = 2
+
+[node name="StaminaWord" type="Label" parent="StaminaText" unique_id=1331570963]
+layout_mode = 0
+offset_left = -2.0
+offset_top = -22.0
+offset_right = 91.0
+offset_bottom = 11.0
+text = "Stamina"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="StaminaValue" type="Label" parent="StaminaText" unique_id=1999687586]
+layout_mode = 0
+offset_left = -7.0
+offset_top = -6.0
+offset_right = 96.0
+offset_bottom = 73.0
+text = "69"
+label_settings = SubResource("LabelSettings_kto8r")
+horizontal_alignment = 2
+
+[node name="StaminaUnit" type="Label" parent="StaminaText" unique_id=1847201963]
+layout_mode = 0
+offset_left = 98.0
+offset_top = 23.0
+offset_right = 123.0
+offset_bottom = 60.0
+text = "%"
+label_settings = SubResource("LabelSettings_mrsrx")
+
+[node name="Notch" type="Control" parent="." unique_id=1322124683]
+anchors_preset = 0
+offset_left = 495.0
+offset_top = 309.0
+offset_right = 768.0
+offset_bottom = 600.0
+mouse_filter = 2
+
+[node name="NotchBars" type="Control" parent="Notch" unique_id=620045232]
+anchors_preset = 0
+offset_left = -31.0
+offset_top = 47.999996
+offset_right = 242.0
+offset_bottom = 279.0
+scale = Vector2(1.095, 1.095)
+mouse_filter = 2
+script = ExtResource("8_xxtil")
+first_bottom_left = Vector2(9, 222)
+step = Vector2(10, -36.5)
+height = 30.5
+slant = 15.0
+grow = 1.7
+gradient = SubResource("Gradient_uwi00")
+
+[node name="NotchWord" type="Label" parent="Notch" unique_id=1147974207]
+layout_mode = 0
+offset_left = 85.0
+offset_top = 13.0
+offset_right = 151.0
+offset_bottom = 46.0
+text = "Notch"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="NotchValue" type="Label" parent="Notch" unique_id=459623784]
+layout_mode = 0
+offset_left = 173.0
+offset_top = -19.0
+offset_right = 206.0
+offset_bottom = 60.0
+text = "6"
+label_settings = SubResource("LabelSettings_kto8r")
+
+[node name="Boost" type="Control" parent="." unique_id=1183564837]
+anchors_preset = 0
+offset_left = 565.0
+offset_top = 437.5
+offset_right = 771.5
+offset_bottom = 693.0
+mouse_filter = 2
+
+[node name="BoostBars" type="Control" parent="Boost" unique_id=379572111]
+anchors_preset = 0
+offset_left = 79.0
+offset_top = -73.5
+offset_right = 256.0
+offset_bottom = 127.5
+mouse_filter = 2
+script = ExtResource("8_xxtil")
+count = 3
+lit_count = 3
+first_bottom_left = Vector2(9, 192)
+step = Vector2(47, -65)
+height = 53.0
+slant = 35.0
+first_length = 30.0
+last_length = 30.0
+gradient = SubResource("Gradient_i4ki3")
+
+[node name="BoostWord" type="Label" parent="Boost" unique_id=2130570323]
+layout_mode = 0
+offset_left = 64.0
+offset_top = 119.5
+offset_right = 128.0
+offset_bottom = 152.5
+text = "Boost"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="BoostCount" type="Label" parent="Boost" unique_id=220348003]
+layout_mode = 0
+offset_left = 75.0
+offset_top = 143.5
+offset_right = 120.0
+offset_bottom = 178.5
+text = "( 3 )"
+label_settings = SubResource("LabelSettings_jquf8")
+
+[node name="BoostButton" type="Control" parent="Boost" unique_id=994150558]
+anchors_preset = 0
+offset_left = 225.0
+offset_top = -105.5
+offset_right = 255.0
+offset_bottom = -75.5
+mouse_filter = 2
+script = ExtResource("2_100um")
+mark_size = 26.0
+letter_font = SubResource("FontVariation_slant")
+
+[node name="Dash" type="Control" parent="." unique_id=591305241]
+anchors_preset = 0
+offset_left = 688.0075
+offset_top = 462.5843
+offset_right = 806.23413
+offset_bottom = 670.0
+mouse_filter = 2
+
+[node name="DashBar" type="ColorRect" parent="Dash" unique_id=113869791]
+material = SubResource("ShaderMaterial_i4ki3")
+layout_mode = 0
+offset_left = 49.992493
+offset_top = -36.58429
+offset_right = 193.9925
+offset_bottom = 107.41571
+mouse_filter = 2
+script = ExtResource("1_arc")
+center = Vector2(72, 72)
+radius = 40.0
+thickness = 10.0
+end_deg = 360.0
+cap_radius = 6.0
+gradient = SubResource("Gradient_4paao")
+glow_strength = 0.35
+gloss_strength = 0.15
+
+[node name="DashWord" type="Label" parent="Dash" unique_id=511447410]
+layout_mode = 0
+offset_left = 54.992493
+offset_top = 79.41571
+offset_right = 109.99249
+offset_bottom = 112.41571
+text = "Dash"
+label_settings = SubResource("LabelSettings_dwwwi")
+
+[node name="DashCount" type="Label" parent="Dash" unique_id=1403913163]
+layout_mode = 0
+offset_left = 53.992493
+offset_top = 103.41571
+offset_right = 96.99249
+offset_bottom = 138.41571
+text = "(∞)"
+label_settings = SubResource("LabelSettings_jquf8")
+
+[node name="DashButton" type="Control" parent="Dash" unique_id=1263559664]
+anchors_preset = 0
+offset_left = 83.99249
+offset_top = -6.5842896
+offset_right = 120.99249
+offset_bottom = 33.41571
+scale = Vector2(2.065, 2.065)
+mouse_filter = 2
+script = ExtResource("2_100um")
+mark_size = 26.0
+letter = "B"
+ring_color = Color(0.6992691, 0.0922892, 0.7252204, 1)
+letter_font = SubResource("FontVariation_slant")

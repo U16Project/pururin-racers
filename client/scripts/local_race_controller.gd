@@ -14,16 +14,18 @@ const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd
 
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
-const PartsRaceHud := preload("res://scripts/presentation/parts_race_hud.gd")
+const RaceControlPanelScene := preload("res://scenes/hud/race_control_panel.tscn")
 const FpsLabel := preload("res://scripts/debug/fps_label.gd")
 const FirstDrawWarmup := preload("res://scripts/presentation/first_draw_warmup.gd")
 ## 表情の部品を先に作る処理に、1コマで使ってよい時間（ミリ秒）。
 const FACE_PREPARE_BUDGET_MS := 8
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
-## 左上の操作盤（ハート型。絵の部品で組み立てる）の大きさ（部品の絵の canvas の半分の何倍か）と、画面の左上の角からのすき間。
-const HEART_HUD_SCALE := 0.72
-const HEART_HUD_MARGIN := Vector2(6.0, 4.0)
+## 左上の操作盤（場面 race_control_panel.tscn）の大きさ（場面の大きさの何倍か）と、画面の左上の角からのすき間。
+const HEART_HUD_SCALE := 0.45
+const HEART_HUD_MARGIN := Vector2(20.0, 20.0)
+## 操作盤と、その下の順位表とのすき間。
+const STANDINGS_GAP := 10.0
 ## 操作盤の絵を描き直す回数（1秒あたり）。
 const HEART_HUD_UPDATES_PER_S := 10.0
 ## ウェブ版オフラインテストで、順位表の絵を描き直す回数（1秒あたり）。
@@ -180,7 +182,7 @@ func _ready() -> void:
 	else:
 		$UI.add_child(_race_hud)
 		$UI.move_child(_race_hud, 0)
-	# 下の操作盤は、左上のハート型の操作盤（絵の部品で組み立てる）に替える（前の操作盤は、消しているだけで残してある）。
+	# 下の操作盤は、左上の操作盤（場面 race_control_panel.tscn）に替える（前の操作盤は、消しているだけで残してある）。
 	_race_hud.set("main_panel_visible", false)
 	_heart_hud_viewport = SubViewport.new()
 	_heart_hud_viewport.name = "HeartRaceHudViewport"
@@ -188,8 +190,7 @@ func _ready() -> void:
 	_heart_hud_viewport.disable_3d = true
 	_heart_hud_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	$UI.add_child(_heart_hud_viewport)
-	_heart_hud = Control.new()
-	_heart_hud.set_script(PartsRaceHud)
+	_heart_hud = RaceControlPanelScene.instantiate()
 	_heart_hud.name = "HeartRaceHud"
 	_heart_hud_viewport.add_child(_heart_hud)
 	_heart_hud_view = TextureRect.new()
@@ -1193,11 +1194,12 @@ func _place_heart_hud() -> void:
 	var zoom := maxf(get_viewport().get_stretch_transform().get_scale().x, 1.0)
 	_heart_hud.call("set_scale_factor", HEART_HUD_SCALE * zoom)
 	var drawn_size := _heart_hud.custom_minimum_size.ceil()
+	# 操作盤は、自分で、台の左上が絵の左上に来るように置く。
 	_heart_hud_viewport.size = Vector2i(drawn_size)
-	_heart_hud.position = Vector2.ZERO
-	_heart_hud.size = drawn_size
 	_heart_hud_view.size = drawn_size / zoom
 	_heart_hud_view.position = HEART_HUD_MARGIN
+	# 順位表は、操作盤のすぐ下。自分の行の色の帯の左はしを、操作盤の左はしにそろえる。
+	_race_hud.set("standings_origin", HEART_HUD_MARGIN + Vector2(RaceHud.STANDINGS_ROW_PAD, _heart_hud_view.size.y + STANDINGS_GAP))
 	_heart_hud_drawn_msec = -1000000
 	if _race_hud_viewport != null:
 		# 順位表の絵は、画面いっぱい。画面の実際の点の細かさで描く。
