@@ -230,13 +230,18 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 	assert_between(float(OnlineConfig.server_max_fps()), fps_range.x, fps_range.y)
 	assert_gt(OnlineConfig.max_rooms(), 0)
 	assert_gt(OnlineConfig.chat_max_length(), 0)
-	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14}
+	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14,
+		"free_rooms": [{"id": "middle", "name": "中距離", "distance_m": RaceSession.supported_distances_m()[0]}], "free_fill_wait_s": 20, "free_answer_wait_s": 10}
 	assert_true(OnlineConfig.validate(good).is_empty())
 	for bad: Dictionary in [
 		{"server_url": "http://x"}, {"connect_timeout_s": 0.0},
 		{"server_max_fps": fps_range.x - 1.0}, {"server_max_fps": fps_range.y + 1.0}, {"server_max_fps": 30.5}, {"server_max_fps": "30"},
 		{"default_room": "  "}, {"default_room": "あ".repeat(Protocol.ROOM_NAME_MAX_LENGTH + 1)}, {"default_room": 5},
 		{"max_rooms": 0}, {"max_rooms": 2.5}, {"chat_max_length": 0},
+		{"free_rooms": []}, {"free_rooms": [{"id": "Bad ID", "name": "a", "distance_m": RaceSession.supported_distances_m()[0]}]},
+		{"free_rooms": [{"id": "a", "name": "a", "distance_m": 999.0}]},
+		{"free_rooms": [{"id": "a", "name": "a", "distance_m": RaceSession.supported_distances_m()[0]}, {"id": "a", "name": "b", "distance_m": RaceSession.supported_distances_m()[0]}]},
+		{"free_fill_wait_s": 0}, {"free_answer_wait_s": 0},
 	]:
 		var changed := good.duplicate()
 		changed.merge(bad, true)

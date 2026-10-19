@@ -110,8 +110,8 @@ func test_mode_select_offers_offline_play_and_friend_race() -> void:
 	var online := screen.get_node("Panel").find_child("OnlineFreeRaceButton", true, false) as Button
 	assert_eq(offline.text, "オフラインフリー対戦")
 	var friend := screen.get_node("Panel").find_child("FriendRaceButton", true, false) as Button
-	assert_eq(online.text, "オンラインフリー対戦（未実装）")
-	assert_true(online.disabled)
+	assert_eq(online.text, "オンラインフリー対戦")
+	assert_false(online.disabled)
 	assert_eq(friend.text, "ともだち対戦")
 	assert_false(friend.disabled)
 	assert_eq(screen.get("RACE_SELECT_SCENE_PATH"), "res://scenes/race_select.tscn")

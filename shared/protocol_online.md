@@ -7,9 +7,11 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `7`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `8`）と、種類 `t` が入る。版が違う文は、`version` で断る。
 - 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋に8人まで入れる。レースの出走数は2〜8体で、出る人と、部屋の主がCPUを入れると決めた席の数で決まる。
 - 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 待機室（各自が「準備OK」＝`lobby_ready`）→ 主がレース開始（`race_open`。準備OKの人と主がレースに出る人になる。ほかの人は待機室に残る）→ レース設定（主が距離と、人の足りない席にCPUを入れるかを決めて、`pick_open`）→ ぷるりんを選ぶ所（各自が選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレースを始める（`start`）→ 結果のあと、全員が待機室へ戻る。
+
+- オンラインフリー対戦の流れ：つなぐ → 名乗る（`hello`）→ フリー対戦のロビーに入る（`free_enter`）→ 出るぷるりんを選ぶ（`free_pick`）→ 入りたいルームに☑（`free_wish`。並びの前ほど優先）→ ルームが空くと、長く待っている人から呼ばれる（`free_offer`）→ 入るか答える（`free_answer`）→ 呼び始めてから決めた秒数（`online.json` の `free_fill_wait_s`）がたつか、満員になると、入ると答えた人でレースが始まる（`race_start`。足りない枠はCPU、枠順はくじ）→ 結果のあと、ロビーへ戻る（☑は残る。待っている時間は、戻ったときから数え直す）。
 
 ## 起動
 
@@ -46,6 +48,13 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `action` | `kind`（`dash` か `boost`） | ダッシュ・ブーストを押した |
 | `race_done` | — | 結果を見終わって、レースの画面を出た。全員ぶんそろうと、サーバーは、決めた秒数を待たずに、レースを片づける |
 | `ready` | — | レースの画面ができた（スタート前の準備＝コースを一度描く・表情の部品を作る、が終わってから送る） |
+| `free_enter` | — | オンラインフリー対戦のロビーに入る（ともだち対戦の部屋にいたら、出る）。返事は `free_lobby` |
+| `free_leave` | — | ロビーから出る。呼ばれていたら取り消し、レース中なら抜ける（その走者は、その個体のCPUトレーナーが最後まで走る）。☑と、待っている時間は消える。返事は `lobby` |
+| `free_pick` | `pururin_id` | 出るぷるりんを選ぶ。☑する前に選んでおく。ほかの人と同じプルでもよい |
+| `free_wish` | `room_ids`（ルームのIDの並び。前ほど優先） | 入りたいルームを決める。ぷるりんを選ぶ前は `no_pick`。☑が無かった人が☑したら、そのときから待ち始める。全部外すと、待つのをやめる |
+| `free_answer` | `room_id`、`accept`（真偽） | 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。やめる：そのルームの☑だけを外す（ほかの☑と、待っている時間は、そのまま） |
+
+フリー対戦のロビーにいる人のレースの文（`input`・`action`・`ready`・`race_done`）は、そのルームのレースへ届く。レースの途中で `back`（`to`＝`lobby`）を送ると、レースから抜けて、ロビーへ戻る（その走者は、その個体のCPUトレーナーが最後まで走る）。
 
 部屋の主は、その部屋を作った人。主が抜けたら、次に古い人が主になる。誰もいなくなった部屋は、消える。
 
@@ -69,6 +78,9 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `notice` | `kind`（`joined`・`left`・`disconnected`・`kicked`・`host`・`race_open`）、`name`、`by`（`kicked` のとき `host` か `admin`） | 部屋のできごと（入った・出た・切れた・退出させられた・主になった）。部屋の全員に配る |
 | `race_end` | — | サーバーが、レースを片づけた。部屋は待機室に戻る。まだレースの画面にいる人は、待機室へ戻る |
 | `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒） |
+| `free_lobby` | `peer_id`、`pururin_id`、`wishes`、`rooms`、`fill_wait_s`、`answer_wait_s` | フリー対戦のロビーのようす。変わるたびに、ロビーにいる全員に届く。`rooms` の1つぶん：`room_id`、`name`、`distance_m`、`state`（`idle`＝空き、`calling`＝呼んでいる、`racing`＝レース中）、`racers`（入ると答えた人・走っている人の数）、`waiting`（☑している人数）、`place`（自分が列の何番目か。☑していなければ0） |
+| `free_offer` | `room_id`、`name`、`distance_m`、`priority`（何番目の希望か）、`wait_s`（返事を待つ秒数） | ルームに呼ばれた。返事は `free_answer` |
+| `free_offer_end` | `room_id`、`reason`（`timeout`＝返事がなかった、`started`＝待たずにレースが始まった） | 呼ばれたのが取り消された。返事がなかった人は、ロビーにいないとみなして、全部の☑を外す |
 
 部屋のようす：`room_id`、`room`（部屋の名前）、`members`（入った順の `{peer_id, name, pururin_id, confirmed, ready, racer, introduction, icon}`。まだ選んでいなければ `pururin_id` は空。`confirmed` は「確定」、`ready` は待機室の「準備OK」を押しているか。`racer` はレースに出る人か。`icon` は `{kind, id}` だけ＝自分で入れた画像は `profile` で聞く）、
 `phase`（`lobby`＝待機室、`settings`＝レース設定、`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`racers`（レースに出る人の番号。レース開始のときの並び。待機室では空）、`seats`（人の足りない席ごとに、CPUを入れるか）、`capacity`（入れる人数）、`cpus`（CPUの数ぶんの `{pururin_id, trainer_id}`。主が決めていない所は、空の文字＝おまかせ）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
@@ -93,7 +105,15 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 `wrong_password`（パスワードが違う）、`room_full`（満員）、`not_in_room`（部屋に入る前にはできない）、`taken`（その個体は、ほかの人が選んでいる）、
 `not_host`（部屋の主でないとできない）、`not_ready`（まだ選んでいない人がいる）、`too_few`（出走が2体に足りない）、`racing`（レース中はできない）、
 `in_entries`（出走表を見ているあいだはできない）、`not_in_entries`（出走表でないとできない）、`not_confirmed`（まだ確定していない人がいる）、
-`not_racer`（レースに出る人でないとできない）、`wrong_phase`（今の場面ではできない）、`not_admin`（管理人の合い札が違う）。
+`not_racer`（レースに出る人でないとできない）、`wrong_phase`（今の場面ではできない）、`not_admin`（管理人の合い札が違う）、
+`not_in_free`（フリー対戦のロビーに入っていないとできない）、`no_pick`（出るぷるりんを選ぶ前に☑した）。
+
+## オンラインフリー対戦のルーム
+
+- ルームは、サーバーが持つ（主はいない）。並びと名前と距離は `client/data/config/online.json` の `free_rooms`（`id`・`name`・`distance_m`）。ともだち対戦の部屋の一覧と、部屋の数の上限（`max_rooms`）には入らない。
+- 呼ぶ順：ルームが空く（前のレースが終わった・だれも走っていない）と、呼べる人（ロビーにいて、ぷるりんを選んでいて、☑していて、呼ばれていない・どこにも入っていない人）を、その人の希望の順で、いちばん前の、空きのあるルームへ振り分ける。ルームごとに、長く待っている順に、空きの数（8人まで）だけ呼ぶ。同時に複数のルームで順番が来たら、先に☑したルーム（優先の番号の小さいほう）が先。
+- 待つ秒数：返事を待つのは `free_answer_wait_s`（ただし、ルームが始まるまでの残りより長くはしない）。呼び始めてから `free_fill_wait_s` たつか、8人そろったら、入ると答えた人で始める。だれも入らなければ、空きに戻す。
+- レースの走らせ方は、ともだち対戦と同じ（下の「サーバーの中のレース」）。
 
 ## サーバーの中のレース
 

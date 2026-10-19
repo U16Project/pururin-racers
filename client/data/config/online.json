@@ -6,5 +6,13 @@
   "max_rooms": 6,
   "chat_max_length": 60,
   "result_linger_s": 20,
-  "log_keep_days": 14
+  "log_keep_days": 14,
+  "free_rooms": [
+    {"id": "sprint", "name": "短距離", "distance_m": 1200},
+    {"id": "mile", "name": "マイル", "distance_m": 1600},
+    {"id": "middle", "name": "中距離", "distance_m": 2000},
+    {"id": "long", "name": "長距離", "distance_m": 3000}
+  ],
+  "free_fill_wait_s": 20,
+  "free_answer_wait_s": 10
 }

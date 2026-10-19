@@ -45,6 +45,7 @@ const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
 const ONLINE_LOBBY_SCENE := "res://scenes/online_lobby.tscn"
+const ONLINE_FREE_LOBBY_SCENE := "res://scenes/online_free_lobby.tscn"
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const OnlineProtocol := preload("res://scripts/online/online_protocol.gd")
 ## オンラインで、今の操作を、変わっていなくても送り直す間（秒）。
@@ -266,8 +267,8 @@ func _ready() -> void:
 		_online_client.closed.connect(_leave_online_race)
 		# オンラインでは、もう1回は部屋から始める。
 		_result_retry_button.visible = false
-		_result_return_button.text = "部屋へ戻る"
-		_pause_return_button.text = "レースをやめて待機室へ"
+		_result_return_button.text = "ロビーへ戻る" if OnlineSession.free_mode else "部屋へ戻る"
+		_pause_return_button.text = "レースをやめて%sへ" % online_return_place()
 		# 画面ができたことは、スタート前の準備（_is_preparing）が終わってから、サーバーに知らせる（_send_online_ready_when_prepared）。
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
@@ -708,7 +709,12 @@ func _apply_online_result(data: Dictionary) -> void:
 	_show_results()
 
 
-## オンラインのレースの画面を出て、部屋の画面へ戻る（つながりは、そのまま）。
+## オンラインのレースをやめたときに戻る所の名前（フリー対戦はロビー、ともだち対戦は部屋の待機室）。
+static func online_return_place() -> String:
+	return "ロビー" if OnlineSession.free_mode else "待機室"
+
+
+## オンラインのレースの画面を出て、部屋の画面（フリー対戦なら、ロビー）へ戻る（つながりは、そのまま）。
 func _leave_online_race() -> void:
 	# 結果を見終わったことを、サーバーに知らせる（全員ぶんそろうと、決めた秒数を待たずに、次の準備へ進める）。
 	if _online_client != null and is_instance_valid(_online_client):
@@ -716,7 +722,8 @@ func _leave_online_race() -> void:
 	_celebration.stop()
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
-	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE)
+	# オンラインフリー対戦から来たら、フリー対戦のロビーへ。ともだち対戦なら、部屋の画面へ。
+	get_tree().change_scene_to_file(ONLINE_FREE_LOBBY_SCENE if OnlineSession.free_mode else ONLINE_LOBBY_SCENE)
 
 
 # ---------------------------------------------------------------- オンラインのサーバー側
@@ -1461,12 +1468,12 @@ func _build_quit_confirm() -> void:
 	title.add_theme_font_size_override("font_size", 24)
 	_quit_confirm_box.add_child(title)
 	var note := Label.new()
-	note.text = "待機室へ戻ります。\nあなたのプルは、CPUトレーナーが\n代わりに最後まで走ります。"
+	note.text = "%sへ戻ります。\nあなたのプルは、CPUトレーナーが\n代わりに最後まで走ります。" % online_return_place()
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 16)
 	note.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
 	_quit_confirm_box.add_child(note)
-	_quit_confirm_button = MenuStyle.button("やめて待機室へ", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	_quit_confirm_button = MenuStyle.button("やめて%sへ" % online_return_place(), 20, MenuStyle.COLOR_BUTTON_QUIET)
 	_quit_confirm_button.name = "QuitConfirmButton"
 	_quit_confirm_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_quit_confirm_button.pressed.connect(_return_to_race_select)

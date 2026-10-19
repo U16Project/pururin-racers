@@ -7,7 +7,12 @@ const Protocol := preload("res://scripts/online/online_protocol.gd")
 const SERVER_MAX_FPS_RANGE := Vector2(10.0, 120.0)
 ## 整数の設定と、受け付ける範囲。max_rooms＝同時に作れる部屋の数、chat_max_length＝部屋のひとことの字数。
 ## result_linger_s＝結果が出たあと、サーバーがレースを走らせ続ける秒数（過ぎたら、レースを片づけて、全員を部屋へ戻す）。
-const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0), "log_keep_days": Vector2(1.0, 365.0)}
+## free_fill_wait_s＝オンラインフリー対戦のルームが、人を呼び始めてから、レースを始めるまでに待つ秒数の上限（足りない枠はCPU）。
+## free_answer_wait_s＝呼ばれた人の、返事を待つ秒数の上限（返事がなければ、ロビーにいないとみなす）。
+const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0), "log_keep_days": Vector2(1.0, 365.0), "free_fill_wait_s": Vector2(1.0, 300.0), "free_answer_wait_s": Vector2(1.0, 120.0)}
+## オンラインフリー対戦のルームの、名前の長さの上限と、IDに使える文字。
+const FREE_ROOM_NAME_MAX_LENGTH := 16
+const FREE_ROOM_ID_PATTERN := "^[a-z0-9_]{1,24}$"
 ## つなぐ先として受け付ける書き出し（暗号なし・暗号あり）。
 const URL_PREFIXES := ["ws://", "wss://"]
 
@@ -44,10 +49,53 @@ static func validate(data: Variant) -> PackedStringArray:
 		var limits: Vector2 = WHOLE_NUMBER_RANGES[key]
 		if not (number is float or number is int) or float(number) != floorf(float(number)) or float(number) < limits.x or float(number) > limits.y:
 			errors.append("online.%s: %d〜%d の整数が必要です" % [key, int(limits.x), int(limits.y)])
+	errors.append_array(validate_free_rooms(data.get("free_rooms")))
 	var fps: Variant = data.get("server_max_fps")
 	if not (fps is float or fps is int) or float(fps) != floorf(float(fps)) or float(fps) < SERVER_MAX_FPS_RANGE.x or float(fps) > SERVER_MAX_FPS_RANGE.y:
 		errors.append("online.server_max_fps: %d〜%d の整数が必要です" % [int(SERVER_MAX_FPS_RANGE.x), int(SERVER_MAX_FPS_RANGE.y)])
 	return errors
+
+
+## オンラインフリー対戦のルームの並び（1つぶん：id、name、distance_m）。id は重ならないこと。距離は、レースで選べる距離。
+static func validate_free_rooms(rooms: Variant) -> PackedStringArray:
+	var errors := PackedStringArray()
+	if not rooms is Array or (rooms as Array).is_empty():
+		errors.append("online.free_rooms: ルームが1つ以上必要です")
+		return errors
+	var pattern := RegEx.create_from_string(FREE_ROOM_ID_PATTERN)
+	var ids := {}
+	for index in (rooms as Array).size():
+		var room: Variant = rooms[index]
+		var label := "online.free_rooms[%d]" % index
+		if not room is Dictionary:
+			errors.append("%s: オブジェクトが必要です" % label)
+			continue
+		var id := str(room.get("id", ""))
+		if pattern.search(id) == null or ids.has(id):
+			errors.append("%s.id: 重ならない、英小文字・数字・_ のIDが必要です" % label)
+		ids[id] = true
+		var name: Variant = room.get("name")
+		if not name is String or str(name).strip_edges().is_empty() or str(name).length() > FREE_ROOM_NAME_MAX_LENGTH:
+			errors.append("%s.name: 1〜%d字の名前が必要です" % [label, FREE_ROOM_NAME_MAX_LENGTH])
+		var distance: Variant = room.get("distance_m")
+		if not (distance is float or distance is int) or not preload("res://scripts/race_session.gd").supported_distances_m().has(float(distance)):
+			errors.append("%s.distance_m: レースで選べる距離（%s）が必要です" % [label, str(preload("res://scripts/race_session.gd").supported_distances_m())])
+	return errors
+
+
+## オンラインフリー対戦のルームの並び（1つぶん：id、name、distance_m）。
+static func free_rooms() -> Array:
+	return values()["free_rooms"]
+
+
+## オンラインフリー対戦のルームが、人を呼び始めてから、レースを始めるまでに待つ秒数の上限。
+static func free_fill_wait_s() -> float:
+	return float(values()["free_fill_wait_s"])
+
+
+## 呼ばれた人の、返事を待つ秒数の上限。
+static func free_answer_wait_s() -> float:
+	return float(values()["free_answer_wait_s"])
 
 
 ## つなぐ先として使える形か（ws:// か wss:// で始まり、そのあとに何か書いてある）。

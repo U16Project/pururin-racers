@@ -1,12 +1,14 @@
 extends Control
-## ゲームモード選択。オフライン・ともだち対戦・カメラで探検を選ぶ。
+## ゲームモード選択。オフライン・オンラインフリー対戦・ともだち対戦・カメラで探検を選ぶ。
 
 const RACE_SELECT_SCENE_PATH := "res://scenes/race_select.tscn"
 const MENU_SCENE_PATH := "res://scenes/options.tscn"
 const ONLINE_LOBBY_SCENE_PATH := "res://scenes/online_lobby.tscn"
+const ONLINE_FREE_LOBBY_SCENE_PATH := "res://scenes/online_free_lobby.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
+const OnlineSession := preload("res://scripts/online/online_session.gd")
 const CAMERA_EXPLORATION_SCENE_PATH := "res://scenes/camera_exploration.tscn"
 const BUTTON_OPACITY := 0.92
 const BUTTON_WIDTH := 460.0
@@ -46,8 +48,9 @@ func _ready() -> void:
 	_offline_button.pressed.connect(go_to_race_select)
 	UIAudio.bind_button_sound(_offline_button, "confirmation")
 	column.add_child(_offline_button)
-	_online_button = _choice_button("オンラインフリー対戦（未実装）", "OnlineFreeRaceButton")
-	_online_button.disabled = true
+	_online_button = _choice_button("オンラインフリー対戦", "OnlineFreeRaceButton")
+	_online_button.pressed.connect(go_to_online_free_lobby)
+	UIAudio.bind_button_sound(_online_button, "confirmation")
 	column.add_child(_online_button)
 	_friend_button = _choice_button("ともだち対戦", "FriendRaceButton")
 	_friend_button.pressed.connect(go_to_online_lobby)
@@ -66,8 +69,10 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	column.add_child(_back_button)
-	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_friend_button)
-	_friend_button.focus_neighbor_top = _friend_button.get_path_to(_offline_button)
+	_offline_button.focus_neighbor_bottom = _offline_button.get_path_to(_online_button)
+	_online_button.focus_neighbor_top = _online_button.get_path_to(_offline_button)
+	_online_button.focus_neighbor_bottom = _online_button.get_path_to(_friend_button)
+	_friend_button.focus_neighbor_top = _friend_button.get_path_to(_online_button)
 	_friend_button.focus_neighbor_bottom = _friend_button.get_path_to(exploration)
 	exploration.focus_neighbor_top = exploration.get_path_to(_friend_button)
 	exploration.focus_neighbor_bottom = exploration.get_path_to(quit_button)
@@ -84,8 +89,14 @@ func _choice_button(text: String, node_name: String, color: Color = MenuStyle.CO
 	return button
 
 
+## オンラインフリー対戦：共通のロビーへ。
+func go_to_online_free_lobby() -> void:
+	get_tree().change_scene_to_file(ONLINE_FREE_LOBBY_SCENE_PATH)
+
+
 ## ともだち対戦：部屋の画面へ（今は、合言葉の部屋に集まる所まで）。
 func go_to_online_lobby() -> void:
+	OnlineSession.free_mode = false
 	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE_PATH)
 
 
@@ -109,4 +120,3 @@ func _unhandled_input(event: InputEvent) -> void:
 		go_to_menu()
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
-

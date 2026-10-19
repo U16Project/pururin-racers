@@ -2,7 +2,7 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 7
+const VERSION := 8
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
@@ -78,7 +78,29 @@ const ACTION := "action"
 const RACE_DONE := "race_done"
 ## レースの画面ができた（全員ぶんそろうと、入場の待ちとカウントダウンが始まる）。
 const READY := "ready"
+## オンラインフリー対戦。サーバーが持つルーム（距離ごと）の、共通のロビーに入る。返事は free_lobby。
+const FREE_ENTER := "free_enter"
+## オンラインフリー対戦のロビーから出る（☑と、待っている時間は消える）。返事は lobby。
+const FREE_LEAVE := "free_leave"
+## 出るぷるりんを選ぶ（pururin_id）。ロビーで、先に選んでおく。
+const FREE_PICK := "free_pick"
+## 入りたいルームを決める（room_ids＝ルームのIDの並び。前ほど優先）。
+const FREE_WISH := "free_wish"
+## 呼ばれたルームに、入るか答える（room_id、accept＝真偽）。
+const FREE_ANSWER := "free_answer"
 ## サーバー → ゲーム。
+## オンラインフリー対戦のロビーのようす（peer_id、pururin_id、wishes、rooms、fill_wait_s、answer_wait_s）。変わるたびに届く。
+## rooms の1つぶん：room_id、name、distance_m、state（idle・calling・racing）、racers（出ている人数）、waiting（☑している人数）、place（自分が何番目か。☑していなければ0）。
+const FREE_LOBBY := "free_lobby"
+## ルームに呼ばれた（room_id、name、distance_m、priority＝何番目の希望か、wait_s＝返事を待つ秒数）。
+const FREE_OFFER := "free_offer"
+## 呼ばれたのが取り消された（room_id、reason＝"timeout"＝返事がなかった、"started"＝待たずにレースが始まった）。
+const FREE_OFFER_END := "free_offer_end"
+const FREE_STATE_IDLE := "idle"
+const FREE_STATE_CALLING := "calling"
+const FREE_STATE_RACING := "racing"
+const FREE_OFFER_TIMEOUT := "timeout"
+const FREE_OFFER_STARTED := "started"
 ## 部屋の一覧の所に入れた（peer_id、max_rooms、rooms）。部屋を出たとき・出されたときも、これが届く。
 const LOBBY := "lobby"
 ## 部屋の一覧が変わった（rooms。部屋に入っていない人に配る）。
@@ -153,6 +175,10 @@ const ERROR_TOO_FEW := "too_few"
 const ERROR_NOT_RACER := "not_racer"
 ## 今の場面では、できない（待機室・レース設定・ぷるりんを選ぶ所・出走表の、決まった所でだけできること）。
 const ERROR_WRONG_PHASE := "wrong_phase"
+## オンラインフリー対戦のロビーに入っていないと、できない。
+const ERROR_NOT_IN_FREE := "not_in_free"
+## 出るぷるりんを、まだ選んでいない（☑する前に、選ぶ）。
+const ERROR_NO_PICK := "no_pick"
 ## 管理人の合い札が違う・管理人の合い札が、サーバーに設定されていない。
 const ERROR_NOT_ADMIN := "not_admin"
 

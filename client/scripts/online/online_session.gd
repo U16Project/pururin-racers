@@ -25,6 +25,10 @@ const CHAT_LOG_LIMIT := 60
 static var room := {}
 ## さっき選んだプル（このアプリを開いているあいだ覚えておく）。プル選択に入ったとき、まずこれにする。
 static var last_pick := ""
+## オンラインフリー対戦の画面から来たか（レースのあと、フリー対戦のロビーへ戻る）。
+static var free_mode := false
+## オンラインフリー対戦のロビーのようす（サーバーから届いた最後の free_lobby。届いていなければ空）。
+static var free_lobby := {}
 
 
 ## サーバーとのつながり。無ければ作る。
@@ -198,6 +202,9 @@ static func _remember(data: Dictionary) -> void:
 			_asked = {}
 		Protocol.ROOMS:
 			rooms = data["rooms"]
+		Protocol.FREE_LOBBY:
+			peer_id = int(data["peer_id"])
+			free_lobby = data
 		Protocol.WELCOME:
 			peer_id = int(data["peer_id"])
 			room = data
@@ -216,6 +223,7 @@ static func _remember(data: Dictionary) -> void:
 
 static func _forget() -> void:
 	peer_id = 0
+	free_lobby = {}
 	room = {}
 	rooms = []
 	max_rooms = 0
