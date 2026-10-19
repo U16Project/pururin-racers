@@ -139,5 +139,18 @@ func test_normal_race_keeps_the_full_venue_and_shadows() -> void:
 	# 太陽の影は、出してよい端末でだけ出す（ブラウザ版では、白っぽくなるので出さない）。
 	assert_eq(SunShadow.allowed(), not OS.has_feature("web"))
 	assert_eq((race.get_node("Sun") as DirectionalLight3D).shadow_enabled, SunShadow.allowed())
-	# 重さを確かめる表示は、景色ありのレースにも出す（開発の目処がつくまで）。
+	# 重さを確かめる表示は、景色ありのレースにも置く。
 	assert_not_null(race.get_node_or_null("UI/FpsLabel"))
+
+
+func test_frame_counter_shows_only_with_the_detail_display_f3() -> void:
+	var race := _race(false)
+	var fps_label: Control = race.get_node("UI/FpsLabel")
+	assert_false(fps_label.visible, "はじめは出さない")
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_F3
+	key.pressed = true
+	race._unhandled_input(key)
+	assert_true(fps_label.visible, "F3で出す")
+	race._unhandled_input(key)
+	assert_false(fps_label.visible, "もう一度F3で消す")

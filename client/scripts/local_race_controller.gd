@@ -333,10 +333,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			_set_paused(not _paused)
 			get_viewport().set_input_as_handled()
 		elif event.physical_keycode == KEY_F3:
-			# 診断数値と操作ガイドは同じ「詳細表示」として切り替える。
+			# 診断数値と操作ガイドと、重さを確かめる表示（コマ数など）は、同じ「詳細表示」として切り替える。
 			_hud_label.visible = not _hud_label.visible
 			_hud_label_right.visible = _hud_label.visible
 			_guide_label.visible = _hud_label.visible
+			var fps_label := $UI.get_node_or_null("FpsLabel") as Control
+			if fps_label != null:
+				fps_label.visible = _hud_label.visible
 			if _hud_label.visible and _player != null:
 				_update_detail_text()
 			get_viewport().set_input_as_handled()
@@ -858,9 +861,11 @@ func _place_markers() -> void:
 	if RaceSession.is_course_only():
 		# ウェブ版オフラインテスト：軽くするために、太陽の影を切る。
 		($Sun as DirectionalLight3D).shadow_enabled = false
-	# 重さを確かめる表示（コマ数など）は、景色のあり・なしに関係なく、どのレースにも出す（開発の目処がつくまで）。
+	# 重さを確かめる表示（コマ数など）は、景色のあり・なしに関係なく、どのレースにも置く。見せるのは、詳細表示（F3）のときだけ。
 	if $UI.get_node_or_null("FpsLabel") == null:
-		$UI.add_child(FpsLabel.new())
+		var fps_label := FpsLabel.new()
+		fps_label.visible = _hud_label.visible
+		$UI.add_child(fps_label)
 	_start_gate.place(_track, _race_route, LocalRaceMath.lap_length_m())
 
 
