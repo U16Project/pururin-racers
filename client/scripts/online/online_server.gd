@@ -58,7 +58,8 @@ const DEFAULT_RESULT_FILE := "user://online_results.json"
 ## ぷるりんのIDと合言葉の形（16進の文字。OwnedPururins が作る長さ）。
 const UID_PATTERN := "^[0-9a-f]{32}$"
 const SECRET_PATTERN := "^[0-9a-f]{64}$"
-## ルームの画像の置き場所（サーバーの主が置く。ゲームの書き出しには入れない）。
+## ルームの画像の置き場所（サーバーの主が置く。取り込みは「そのまま」（.import の importer="keep"）にして、アプリの書き出しにも、そのままの形で入れる。
+## パソコン版のアプリの「このPCをサーバーにする」でも、画像を読んで送れるように）。
 const FREE_ROOM_IMAGE_DIR := "res://data/free_room_images"
 ## 管理人の合い札（空なら、管理人の命令は、すべて断る）。起動時に、環境変数から読む。テストでは、直接入れる。
 var admin_token := ""
