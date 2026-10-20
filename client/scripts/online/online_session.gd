@@ -29,6 +29,13 @@ static var last_pick := ""
 static var free_mode := false
 ## オンラインフリー対戦のロビーのようす（サーバーから届いた最後の free_lobby。届いていなければ空）。
 static var free_lobby := {}
+## オンラインフリー対戦のルームの画像（ルームのID → 絵）。つながっているあいだ覚えておく。
+static var free_images := {}
+## 今走っている（走った）オンラインフリー対戦のルームのID。
+static var free_race_room := ""
+## レースの結果の画面で選んだこと（room_id、entry＝"on"・"hold"・"off"、top＝優先をいちばん前に、stay＝そのルームの画面に残る）。
+## ロビーに戻ったときに、サーバーへ送って消す。
+static var free_after := {}
 
 
 ## サーバーとのつながり。無ければ作る。
@@ -224,6 +231,9 @@ static func _remember(data: Dictionary) -> void:
 static func _forget() -> void:
 	peer_id = 0
 	free_lobby = {}
+	free_images = {}
+	free_after = {}
+	free_race_room = ""
 	room = {}
 	rooms = []
 	max_rooms = 0

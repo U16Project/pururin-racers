@@ -2,7 +2,7 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 8
+const VERSION := 9
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
@@ -78,29 +78,94 @@ const ACTION := "action"
 const RACE_DONE := "race_done"
 ## レースの画面ができた（全員ぶんそろうと、入場の待ちとカウントダウンが始まる）。
 const READY := "ready"
-## オンラインフリー対戦。サーバーが持つルーム（距離ごと）の、共通のロビーに入る。返事は free_lobby。
+## オンラインフリー対戦。サーバーが持つルームの、全体のロビーに入る（レースから戻ったときも送る）。返事は free_lobby。
 const FREE_ENTER := "free_enter"
-## オンラインフリー対戦のロビーから出る（☑と、待っている時間は消える）。返事は lobby。
+## オンラインフリー対戦のロビーから出る（エントリー候補は、全部消える）。返事は lobby。
 const FREE_LEAVE := "free_leave"
-## 出るぷるりんを選ぶ（pururin_id）。ロビーで、先に選んでおく。
-const FREE_PICK := "free_pick"
-## 入りたいルームを決める（room_ids＝ルームのIDの並び。前ほど優先）。
-const FREE_WISH := "free_wish"
-## 呼ばれたルームに、入るか答える（room_id、accept＝真偽）。
+## ルームの画面を開いた・閉じた（room_id。閉じたら空）。開いているあいだ、そのルームの free_room が届く。
+const FREE_VIEW := "free_view"
+## ルームの画像を聞く（room_id）。返事は free_image。
+const FREE_IMAGE_ASK := "free_image_ask"
+## ルームにエントリーする（room_id、pururin_id、uid・secret＝自分のぷるりんのIDと合言葉。OwnedPururins）。エントリー候補の、優先のいちばん後ろに入る。
+## もうエントリーしていれば、ぷるりんだけ替える。チケットの要るルームは、そのぷるりんがチケットを持っていないと no_ticket。
+const FREE_ENTRY := "free_entry"
+## エントリーを取り消す（room_id）。
+const FREE_CANCEL := "free_cancel"
+## エントリー候補を、一時保留にする・保留を外す（room_id、hold＝真偽）。保留のあいだは呼ばれない。待っている時間は数え続ける。
+const FREE_HOLD := "free_hold"
+## エントリー候補の、優先の順番を並べ替える（room_ids＝今のエントリー候補の全部を、前ほど優先の順に）。
+const FREE_ORDER := "free_order"
+## 呼ばれたルームに、入るか答える（room_id、accept＝真偽）。入らないと、そのルームのエントリーを取り消す。
 const FREE_ANSWER := "free_answer"
+## オンラインフリー対戦のチャットに書く（room_id＝ルームのID。空なら、全体のロビーのチャット。text＝文字だけ。長さは online.json の chat_max_length まで）。
+## 全体のチャットは、ロビーにいる全員に、ルームのチャットは、そのルームの画面を開いている人に届く。
+const FREE_CHAT := "free_chat"
+## そのルームの過去の結果を聞く（room_id）。返事は free_results。
+const FREE_RESULTS_ASK := "free_results_ask"
+## 大会（本戦）の結果を聞く。返事は free_events。
+const FREE_EVENTS_ASK := "free_events_ask"
+## レースのあとの選択（room_id、entry＝"on"＝続けて呼ばれる・"hold"＝保留・"off"＝取り消す、top＝優先をいちばん前にするか）。
+const FREE_AFTER := "free_after"
+const FREE_AFTER_ON := "on"
+const FREE_AFTER_HOLD := "hold"
+const FREE_AFTER_OFF := "off"
 ## サーバー → ゲーム。
-## オンラインフリー対戦のロビーのようす（peer_id、pururin_id、wishes、rooms、fill_wait_s、answer_wait_s）。変わるたびに届く。
-## rooms の1つぶん：room_id、name、distance_m、state（idle・calling・racing）、racers（出ている人数）、waiting（☑している人数）、place（自分が何番目か。☑していなければ0）。
+## オンラインフリー対戦のロビーのようす（peer_id、rooms、entries、answer_wait_s）。変わるたびに届く。
+## rooms の1つぶん：room_id、name、distance_m、tag、tag_color、rule、state（idle・calling・racing）、races（走っているレースの数）、
+## max_races、waiting（エントリーしている人数）、kind（"normal"＝ふつう、"final"＝本戦）、本戦なら start_unix・max_players・phase（下の FINAL_PHASE_…）・final_answer_s（呼び出しに答える秒数）、open_unix・close_unix（受付の開始と終了。世界の基準の秒。いつでも開いていれば0）、needs_ticket・gives_ticket（チケットのID。無ければ空）、needs_ticket_name・gives_ticket_name（名前）。
+## entries は、自分のエントリー候補（前ほど優先）。1つぶん：room_id、pururin_id、hold、place（待っている列の何番目か。保留中も数える）、state（"wait"＝待っている・"called"＝呼ばれている・"accepted"＝入ると答えて、始まるのを待っている・"racing"＝走っている）。
+## now_unix は、サーバーの今の時刻（締め切りまでの時間を、サーバーの時計で数えるため）。終わったルーム（受付が終わって、走っているレースも無い）は、rooms に入らない。
 const FREE_LOBBY := "free_lobby"
-## ルームに呼ばれた（room_id、name、distance_m、priority＝何番目の希望か、wait_s＝返事を待つ秒数）。
+## 開いているルームのくわしいようす（room_id、intro、capacity、fill_wait_s、races、entrants＝エントリーしている人
+## {name, pururin_id, hold}の並び＝待っている列の順）。
+const FREE_ROOM := "free_room"
+## オンラインフリー対戦のチャットの1行（room_id、peer_id、name、text）。
+const FREE_CHAT_MESSAGE := "free_chat_message"
+## オンラインフリー対戦のチャットの、これまで（room_id、lines＝{peer_id, name, text} の並び。古いものが前）。
+## 全体のロビーに入ったとき（全体のチャット）と、ルームの画面を開いたとき（そのルームのチャット）に届く。
+const FREE_CHAT_LOG := "free_chat_log"
+## チャットの、サーバーが覚えておく行の数（チャットごと）。
+const FREE_CHAT_HISTORY := 30
+## そのルームの過去の結果（room_id、results＝新しいものが前。1レースぶん：unix、room_id、name、distance_m、stage、
+## rows＝着順の順の {place, name＝人の名前（CPUはトレーナー）, pururin, player, time}）。
+const FREE_RESULTS := "free_results"
+## 大会（本戦）の結果（events＝新しいものが前。1つぶん：room_id、name、distance_m、start_unix、end_unix（決勝が終わった時刻。まだなら無い）、
+## semis＝準決勝ごとの rows、final＝決勝の rows）。
+const FREE_EVENTS := "free_events"
+## 大会の結果を、いくつまで送るか。
+const FREE_EVENTS_SHOWN := 30
+## 本戦の知らせ（room_id、text＝画面に出す文。決勝に進んだ・敗退・優勝など）。
+const FREE_NOTICE := "free_notice"
+## 本戦の進み方（free_lobby の rooms の phase）。エントリー受付中・呼び出し中・準決勝・決勝に進む人が戻るのを待つ・決勝の呼び出し中・決勝・終わり。
+const FINAL_PHASE_ENTRY := "entry"
+const FINAL_PHASE_CALLING := "calling"
+const FINAL_PHASE_SEMIS := "semis"
+const FINAL_PHASE_WAIT := "wait"
+const FINAL_PHASE_FINAL_CALLING := "final_calling"
+const FINAL_PHASE_FINAL := "final"
+const FINAL_PHASE_DONE := "done"
+## レースの段（race_start・free_offer の stage）。ふつうのルームは空。
+const STAGE_SEMI := "semi"
+const STAGE_FINAL := "final"
+## チケットをもらった（uid＝どのぷるりんか、ticket_id、name、expires_unix＝期限（無ければ0）、room_id＝どのルームで）。ルームの1位のぷるりんに届く。
+const FREE_TICKET := "free_ticket"
+## ルームの画像（room_id、image＝jpg か png の中身を base64 にした文。画像が無ければ空）。
+const FREE_IMAGE := "free_image"
+## ルームに呼ばれた（room_id、name、distance_m、pururin_id、priority＝何番目の候補か、wait_s＝返事を待つ秒数、stage＝本戦なら "semi"（本戦の最初の呼び出し）か "final"（決勝）。ふつうは空）。
 const FREE_OFFER := "free_offer"
-## 呼ばれたのが取り消された（room_id、reason＝"timeout"＝返事がなかった、"started"＝待たずにレースが始まった）。
+## 呼ばれたのが取り消された（room_id、reason＝"timeout"＝返事がなかった（そのルームのエントリーは取り消し）、"started"＝待たずにレースが始まった）。
 const FREE_OFFER_END := "free_offer_end"
 const FREE_STATE_IDLE := "idle"
 const FREE_STATE_CALLING := "calling"
 const FREE_STATE_RACING := "racing"
+const FREE_ENTRY_WAIT := "wait"
+const FREE_ENTRY_CALLED := "called"
+const FREE_ENTRY_ACCEPTED := "accepted"
+const FREE_ENTRY_RACING := "racing"
 const FREE_OFFER_TIMEOUT := "timeout"
 const FREE_OFFER_STARTED := "started"
+## ルームの画像の、base64 にした文の長さの上限（つながりの1回に送れる量に収める）。
+const FREE_IMAGE_MAX_CHARS := ICON_IMAGE_MAX_CHARS
 ## 部屋の一覧の所に入れた（peer_id、max_rooms、rooms）。部屋を出たとき・出されたときも、これが届く。
 const LOBBY := "lobby"
 ## 部屋の一覧が変わった（rooms。部屋に入っていない人に配る）。
@@ -130,7 +195,7 @@ const KICKED := "kicked"
 const ADMIN_RESULT := "admin_result"
 const PONG := "pong"
 const ERROR := "error"
-## レースが始まる（distance_m、entries＝出走の一覧）。
+## レースが始まる（distance_m、entries＝出走の一覧。オンラインフリー対戦なら、free_room_id＝ルームのID も）。
 const RACE_START := "race_start"
 ## レースの今の状態（1秒に STATE_RATE_HZ 回）。
 const RACE_STATE := "race_state"
@@ -177,8 +242,12 @@ const ERROR_NOT_RACER := "not_racer"
 const ERROR_WRONG_PHASE := "wrong_phase"
 ## オンラインフリー対戦のロビーに入っていないと、できない。
 const ERROR_NOT_IN_FREE := "not_in_free"
-## 出るぷるりんを、まだ選んでいない（☑する前に、選ぶ）。
-const ERROR_NO_PICK := "no_pick"
+## そのルームに、エントリーしていない。
+const ERROR_NO_ENTRY := "no_entry"
+## そのルームに要るチケットを、そのぷるりんが持っていない（または、IDと合言葉・能力が、チケットを渡したときと合わない）。
+const ERROR_NO_TICKET := "no_ticket"
+## そのルームは、今は受付をしていない（受付の前・後）。
+const ERROR_CLOSED := "closed"
 ## 管理人の合い札が違う・管理人の合い札が、サーバーに設定されていない。
 const ERROR_NOT_ADMIN := "not_admin"
 

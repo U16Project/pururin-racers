@@ -48,6 +48,7 @@ const ONLINE_LOBBY_SCENE := "res://scenes/online_lobby.tscn"
 const ONLINE_FREE_LOBBY_SCENE := "res://scenes/online_free_lobby.tscn"
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const OnlineProtocol := preload("res://scripts/online/online_protocol.gd")
+const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
 ## オンラインで、今の操作を、変わっていなくても送り直す間（秒）。
 const ONLINE_INPUT_RESEND_S := 0.25
 const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
@@ -91,6 +92,17 @@ var _results_wait_remaining: float = 0.0
 ## ユーザーがゴールした時点の、操作盤の表示（ゴール後は、これを出し続ける）。
 var _finish_hud_state: Dictionary = {}
 var _result_retry_button: Button
+## オンラインフリー対戦の結果の板：このあと、走ったルームのエントリーをどうするか（続けて呼ばれる・保留・取り消す）と、
+## 優先をいちばん前にするか、そのルームの画面に残るボタン。
+var _free_after_buttons := {}
+var _free_after_top: CheckBox
+var _result_stay_button: Button
+## チケットをもらったときの知らせ（結果の板）。
+var _free_notice_label: Label
+## 走ったルームが本戦か（本戦では、エントリーの続け方は選ばない。勝ち上がりは、サーバーが決める）。
+var _free_final := false
+## オンラインのレースの画面を出ると決めたか（出たあとに届く知らせで、もう一度出ようとしないため）。
+var _online_left := false
 ## ゴールした走者の、ゴールした時点の心拍と体力（順位表の、その行に出し続ける）。走者 → {heart_bpm, fuel_ratio}。
 var _finish_standing_values: Dictionary = {}
 var _player: Node3D = null
@@ -268,6 +280,8 @@ func _ready() -> void:
 		# オンラインでは、もう1回は部屋から始める。
 		_result_retry_button.visible = false
 		_result_return_button.text = "ロビーへ戻る" if OnlineSession.free_mode else "部屋へ戻る"
+		if OnlineSession.free_mode:
+			_build_free_after_choice()
 		_pause_return_button.text = "レースをやめて%sへ" % online_return_place()
 		# 画面ができたことは、スタート前の準備（_is_preparing）が終わってから、サーバーに知らせる（_send_online_ready_when_prepared）。
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
@@ -636,6 +650,10 @@ func _on_online_message(data: Dictionary) -> void:
 		OnlineProtocol.RACE_RESULT: _apply_online_result(data)
 		# サーバーがレースを片づけた（結果から決めた秒数がたった・全員が出た）：部屋へ戻る。
 		OnlineProtocol.RACE_END: _leave_online_race()
+		# オンラインフリー対戦で1位になって、チケットをもらった：そのぷるりんに覚えさせて、結果の板に出す。
+		OnlineProtocol.FREE_TICKET: _apply_free_ticket(data)
+		# 本戦の知らせ（決勝に進んだ・敗退・優勝など）：結果の板に出す。
+		OnlineProtocol.FREE_NOTICE: _show_free_notice(str(data.get("text", "")))
 
 
 ## 届いたレースの状態を、走者と表示に入れる。
@@ -714,8 +732,110 @@ static func online_return_place() -> String:
 	return "ロビー" if OnlineSession.free_mode else "待機室"
 
 
+## オンラインフリー対戦の結果の板に、このあとの選択を足す：走ったルームのエントリーを、続けて呼ばれる・保留・取り消す
+## （はじめは、続けて呼ばれる）、優先をいちばん前にするか、そのルームの画面に残るか・ロビーへ戻るか。
+func _build_free_after_choice() -> void:
+	var box: VBoxContainer = _result_panel.get_node("ResultBox")
+	var buttons: Control = box.get_node("ResultButtons")
+	var choice := VBoxContainer.new()
+	choice.name = "FreeAfter"
+	choice.add_theme_constant_override("separation", 8)
+	box.add_child(choice)
+	box.move_child(choice, buttons.get_index())
+	var room_name := ""
+	for room: Dictionary in OnlineSession.free_lobby.get("rooms", []):
+		if str(room["room_id"]) == OnlineSession.free_race_room:
+			room_name = str(room["name"])
+			_free_final = str(room.get("kind", "")) == "final"
+	_free_notice_label = MenuStyle.label("", 19, RaceHud.COLOR_GOLD)
+	_free_notice_label.name = "FreeNotice"
+	_free_notice_label.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
+	_free_notice_label.visible = false
+	choice.add_child(_free_notice_label)
+	if not _free_final:
+		_build_free_entry_choice(choice, room_name)
+	_result_stay_button = MenuStyle.button("このルームに残る", 20, MenuStyle.COLOR_BUTTON)
+	_result_stay_button.name = "ResultStayButton"
+	_result_stay_button.custom_minimum_size = Vector2(0.0, 56.0)
+	_result_stay_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_result_stay_button.pressed.connect(_leave_free_race.bind(true))
+	UIAudio.bind_button_sound(_result_stay_button, "confirmation")
+	buttons.add_child(_result_stay_button)
+	buttons.move_child(_result_stay_button, 0)
+	_result_stay_button.focus_neighbor_right = _result_stay_button.get_path_to(_result_return_button)
+	_result_return_button.focus_neighbor_left = _result_return_button.get_path_to(_result_stay_button)
+
+
+## ふつうのルームの、エントリーの続け方（続けて呼ばれる・保留・取り消す、優先をいちばん前に）。
+func _build_free_entry_choice(choice: VBoxContainer, room_name: String) -> void:
+	choice.add_child(MenuStyle.label("このあと「%s」のエントリーは" % room_name, 17, MenuStyle.COLOR_DIM))
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	choice.add_child(row)
+	var group := ButtonGroup.new()
+	for option: Array in [[OnlineProtocol.FREE_AFTER_ON, "続けて呼ばれる"], [OnlineProtocol.FREE_AFTER_HOLD, "保留にする"], [OnlineProtocol.FREE_AFTER_OFF, "取り消す"]]:
+		var button := MenuStyle.button(option[1], 17, MenuStyle.COLOR_BUTTON_QUIET)
+		button.toggle_mode = true
+		button.button_group = group
+		button.custom_minimum_size = Vector2(0.0, 44.0)
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.add_theme_stylebox_override("pressed", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON))
+		button.add_theme_stylebox_override("hover_pressed", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON))
+		UIAudio.bind_button_sound(button, "confirmation")
+		row.add_child(button)
+		_free_after_buttons[option[0]] = button
+	(_free_after_buttons[OnlineProtocol.FREE_AFTER_ON] as Button).button_pressed = true
+	_free_after_top = CheckBox.new()
+	_free_after_top.text = "優先の順番を、いちばん前にする"
+	_free_after_top.add_theme_font_size_override("font_size", 17)
+	UIAudio.bind_button_sound(_free_after_top, "confirmation")
+	choice.add_child(_free_after_top)
+
+
+func _apply_free_ticket(data: Dictionary) -> void:
+	OwnedPururins.add_ticket(str(data.get("uid", "")), str(data.get("ticket_id", "")), str(data.get("name", "")), int(data.get("expires_unix", 0)))
+	_show_free_notice("「%s」をもらいました！" % str(data.get("name", "")))
+
+
+## 結果の板に、フリー対戦の知らせを出す（前の知らせに、行を足す）。
+func _show_free_notice(text: String) -> void:
+	if _free_notice_label == null or text.is_empty():
+		return
+	_free_notice_label.text = text if _free_notice_label.text.is_empty() else _free_notice_label.text + "\n" + text
+	_free_notice_label.visible = true
+
+
+## オンラインフリー対戦の結果の板から出る：選んだことを OnlineSession に置いて（ロビーに戻ったら、サーバーへ送る）、ロビーへ。
+## stay なら、ロビーに戻ったあと、走ったルームの画面を開く。
+func _leave_free_race(stay: bool) -> void:
+	_celebration.stop()
+	OnlineSession.free_after = free_after_choice(stay)
+	_leave_online_race()
+
+
+## 結果の板で選んでいること（レースが終わる前に出たときは、空＝何も変えない）。
+func free_after_choice(stay: bool) -> Dictionary:
+	if not _race_over or OnlineSession.free_race_room.is_empty():
+		return {}
+	# 本戦では、エントリーの続け方は送らない（残るか戻るかだけ）。
+	if _free_final or _free_after_buttons.is_empty():
+		return {"room_id": OnlineSession.free_race_room, "stay": stay}
+	var entry := OnlineProtocol.FREE_AFTER_ON
+	for key: String in _free_after_buttons:
+		if (_free_after_buttons[key] as Button).button_pressed:
+			entry = key
+	return {"room_id": OnlineSession.free_race_room, "entry": entry, "top": _free_after_top.button_pressed, "stay": stay}
+
+
 ## オンラインのレースの画面を出て、部屋の画面（フリー対戦なら、ロビー）へ戻る（つながりは、そのまま）。
 func _leave_online_race() -> void:
+	# 出ると決めたあとに届いた知らせ（レースの片づけなど）では、もう何もしない。
+	if _online_left:
+		return
+	_online_left = true
+	# フリー対戦で、結果の板で選ぶ前に出た（サーバーが片づけた・ロビーへ戻るを押した）ら、そのとき選んでいたことを使う。
+	if OnlineSession.free_mode and OnlineSession.free_after.is_empty():
+		OnlineSession.free_after = free_after_choice(false)
 	# 結果を見終わったことを、サーバーに知らせる（全員ぶんそろうと、決めた秒数を待たずに、次の準備へ進める）。
 	if _online_client != null and is_instance_valid(_online_client):
 		_online_client.send(OnlineProtocol.RACE_DONE)

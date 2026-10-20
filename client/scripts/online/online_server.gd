@@ -1,7 +1,7 @@
 extends Node
 ## オンライン対戦のサーバー（画面なしの Godot で動かす）。
 ## つなぐ・部屋を作る・部屋に入る・部屋の決めごと・ぷるりんを選ぶ・ひとこと・レースを走らせて状態を配る、を受け持つ。
-## オンラインフリー対戦（サーバーが持つ、距離ごとのルーム。☑した人を、長く待っている順に呼んで、レースを始める）も受け持つ。
+## オンラインフリー対戦（サーバーが持つルーム。エントリーした人を、長く待っている順に呼んで、レースを始める。1つのルームで、いくつものレースを同時に走らせる）も受け持つ。
 ## レースは、ゲーム本体と同じ場面（local_race）を、部屋ごとに1つ作って走らせる。
 ## 起動：`godot --headless --path client res://scenes/online_server.tscn`
 
@@ -32,12 +32,34 @@ var _next_peer_id := 1
 ## "ready": {レースの画面ができた人の番号: true}, "ready_wait_s": 全員の画面ができるのを待った秒数}
 var _rooms := {}
 var _next_room_id := 1
-## オンラインフリー対戦のルーム。ルームのID（online.json の free_rooms の id）→ 部屋の番号（_rooms の鍵）。並びは、設定の順。
-## フリーのルームも、_rooms に入る（レースの走らせ方を、ともだち対戦と同じにするため）。部屋の主はいない（host は0）。
-## フリーのルームにだけある項目：free＝true、free_id、call_state（idle＝空き、calling＝呼んでいる、racing＝レース中）、
-## call_s＝呼び始めてからの秒数、accepted＝入ると答えた人（答えた順）、pending＝返事を待っている人 {番号: true}。
+## オンラインフリー対戦のルーム。ルームのID（online.json の free_rooms の id）→ 設定の中身（name・distance_m・tag など）と、
+## image（送る形の画像）、races（そのルームのレースの、部屋の番号の並び。呼んでいる途中のものも入る）、calling（人を呼んでいるレースの部屋の番号。無ければ0）。並びは、設定の順。
+## 1つのルームで、いくつものレースを同時に走らせる。レースの1つぶんは、_rooms に入る（レースの走らせ方を、ともだち対戦と同じにするため。部屋の主はいない＝host は0）。
+## そのレースにだけある項目：free＝true、free_id、call_s＝呼び始めてからの秒数、accepted＝入ると答えた人（答えた順）、pending＝返事を待っている人 {番号: true}。
 ## order（レースに出ていて、まだいる人）・racers・picks・seats は、レースを始めるときに入れる。
 var _free_rooms := {}
+## オンラインフリー対戦のチャットの、これまで（ルームのID → {peer_id, name, text} の並び。空のIDは、全体のロビーのチャット）。
+var _free_chat_logs := {}
+## オンラインフリー対戦のチケット。ぷるりんのID（uid）→ {"secret_sha256"＝合言葉を元に戻せない形にしたもの、"pururin_id"＝一覧のぷるりん、
+## "stats"＝渡したときの能力、"tickets"＝{チケットのID: {"room_id", "unix"}}}。ファイルに保存して、サーバーを起動し直しても残す。
+var _tickets := {}
+## チケットを保存するファイル（空なら、環境変数 TICKET_FILE_ENVIRONMENT、それも無ければ DEFAULT_TICKET_FILE）。テストで替える。
+var tickets_path := ""
+const TICKET_FILE_ENVIRONMENT := "PURURIN_TICKET_FILE"
+const DEFAULT_TICKET_FILE := "user://online_tickets.json"
+## 今の時刻（世界の基準の秒）。0より小さければ、本物の時計。テストで、時刻を決めるため。
+var clock_unix := -1
+## オンラインフリー対戦の結果。{"rooms": {ルームのID: 新しい free_result_keep レースの結果}, "events": 大会（本戦）の結果の並び}。ファイルに保存する。
+var _results := {"rooms": {}, "events": []}
+## 結果を保存するファイル（空なら、環境変数 RESULT_FILE_ENVIRONMENT、それも無ければ DEFAULT_RESULT_FILE）。テストで替える。
+var results_path := ""
+const RESULT_FILE_ENVIRONMENT := "PURURIN_RESULT_FILE"
+const DEFAULT_RESULT_FILE := "user://online_results.json"
+## ぷるりんのIDと合言葉の形（16進の文字。OwnedPururins が作る長さ）。
+const UID_PATTERN := "^[0-9a-f]{32}$"
+const SECRET_PATTERN := "^[0-9a-f]{64}$"
+## ルームの画像の置き場所（サーバーの主が置く。ゲームの書き出しには入れない）。
+const FREE_ROOM_IMAGE_DIR := "res://data/free_room_images"
 ## 管理人の合い札（空なら、管理人の命令は、すべて断る）。起動時に、環境変数から読む。テストでは、直接入れる。
 var admin_token := ""
 ## オンラインフリー対戦の、待つ秒数（0より小さければ、設定 online.json の値）。テストで、短くするため。
@@ -47,6 +69,8 @@ var answer_wait_s := -1.0
 
 func _ready() -> void:
 	_make_free_rooms()
+	load_tickets()
+	load_results()
 	if listen_on_ready:
 		# サーバーは、画面のボタンを押す操作を受け取らない（このPCをサーバーにしたとき、
 		# つないであるゲームパッドの操作が、サーバーの上の画面にも届くため。レースの側は、レースを始めるときに止める）。
@@ -88,9 +112,9 @@ func peer_count() -> int:
 	return _peers.size()
 
 
-## ともだち対戦の部屋の数（フリーのルームは数えない）。
+## ともだち対戦の部屋の数（フリーのルームのレースは数えない）。
 func room_count() -> int:
-	return _rooms.size() - _free_rooms.size()
+	return _rooms.values().filter(func(data: Dictionary) -> bool: return not bool(data.get("free", false))).size()
 
 
 ## その部屋にいる人（入った順）。1人ぶん：{"peer_id": 番号, "name": 名前, "pururin_id": 選んだぷるりん（まだなら空）,
@@ -185,9 +209,10 @@ func _process(delta: float) -> void:
 		if socket.accept_stream(_tcp.take_connection()) == OK:
 			_peers[_next_peer_id] = {
 				"socket": socket, "name": "", "room": 0, "introduction": "", "icon": clean_icon({}),
-				# オンラインフリー対戦：ロビーにいるか、出るぷるりん、入りたいルーム（前ほど優先）、待ち始めた時刻（ミリ秒。待っていなければ0）、
-				# 呼ばれているルーム（ID。無ければ空）とその返事の締め切り（ミリ秒）、入ると答えた・走っているルームの部屋の番号（無ければ0）。
-				"free": false, "free_pick": "", "wishes": [], "wait_since_msec": 0, "offer": "", "offer_until_msec": 0, "free_room": 0,
+				# オンラインフリー対戦：ロビーにいるか、エントリー候補（前ほど優先。1つぶん：room_id、pururin_id、hold、since_msec＝待ち始めた時刻）、
+				# 呼ばれているルーム（ID。無ければ空）とその返事の締め切り（ミリ秒）、入ると答えた・走っているレースの部屋の番号（無ければ0）、
+				# レースのあと、ロビーへ戻る途中か（戻るまで呼ばない）、開いているルームの画面（ID。無ければ空）。
+				"free": false, "entries": [], "offer": "", "offer_until_msec": 0, "free_room": 0, "returning": false, "viewing": "", "final_room": "",
 			}
 			_next_peer_id += 1
 	for peer_id: int in _peers.keys():
@@ -239,14 +264,11 @@ func _receive(peer_id: int, text: String) -> void:
 			_free_leave(peer_id)
 			_send_lobby(peer_id)
 			return
-		Protocol.FREE_PICK, Protocol.FREE_WISH, Protocol.FREE_ANSWER:
+		Protocol.FREE_VIEW, Protocol.FREE_CHAT, Protocol.FREE_RESULTS_ASK, Protocol.FREE_EVENTS_ASK, Protocol.FREE_IMAGE_ASK, Protocol.FREE_ENTRY, Protocol.FREE_CANCEL, Protocol.FREE_HOLD, Protocol.FREE_ORDER, Protocol.FREE_ANSWER, Protocol.FREE_AFTER:
 			if not bool(_peers[peer_id]["free"]):
 				_refuse(peer_id, Protocol.ERROR_NOT_IN_FREE)
 				return
-			match type:
-				Protocol.FREE_PICK: _free_pick(peer_id, data)
-				Protocol.FREE_WISH: _free_wish(peer_id, data)
-				Protocol.FREE_ANSWER: _free_answer(peer_id, data)
+			_free_message(peer_id, type, data)
 			return
 		Protocol.CREATE:
 			_free_leave(peer_id)
@@ -937,7 +959,8 @@ func _start_race(peer_id: int, room: int) -> void:
 
 
 ## 出走表のとおりに、その部屋のレースを作って、レースに出る人に知らせる（ともだち対戦の部屋と、フリーのルームで共通）。
-func _launch_race(room: int, entries: Array, distance: float) -> void:
+## extra は、レースの始まりの知らせに足す項目。
+func _launch_race(room: int, entries: Array, distance: float, extra: Dictionary = {}) -> void:
 	# レースの場面は、作られるときに、出走と距離を読む。作り終わったら、出走の指定は戻す。
 	RaceSession.select_distance(distance)
 	RaceSession.set_course_only(true)
@@ -967,7 +990,9 @@ func _launch_race(room: int, entries: Array, distance: float) -> void:
 		"cpu_picks": room_cpus(room), "entries": entries, "people": people,
 	})
 	_rooms[room]["log"] = log
-	_send_racers(room, Protocol.message(Protocol.RACE_START, {"distance_m": distance, "entries": entries}))
+	var start := {"distance_m": distance, "entries": entries}
+	start.merge(extra)
+	_send_racers(room, Protocol.message(Protocol.RACE_START, start))
 	_announce_room(room)
 	_announce_rooms()
 
@@ -1002,6 +1027,11 @@ func _update_race(room: int, delta: float) -> void:
 			_rooms[room]["result_sent"] = true
 			_send_racers(room, Protocol.message(Protocol.RACE_RESULT, {"rows": race.call("online_result_rows")}))
 			_log_event(room, "result", {"rows": race.call("online_result_rows")})
+			if bool(_rooms[room].get("free", false)):
+				_free_give_ticket(room, race.call("online_result_rows"))
+				_free_record_result(room, race.call("online_result_rows"))
+				if is_final(str(_rooms[room]["free_id"])):
+					_free_final_result(room, race.call("online_result_rows"))
 		_rooms[room]["linger_s"] = float(_rooms[room]["linger_s"]) + delta
 		# 決めた秒数がたつか、全員が結果を見終わって画面を出たら、レースを片づけて、全員を待機室へ戻す。
 		if float(_rooms[room]["linger_s"]) >= OnlineConfig.result_linger_s() or everyone_done(room):
@@ -1070,70 +1100,172 @@ func _answer_wait_s() -> float:
 
 
 ## 設定の free_rooms から、フリーのルームを作る（サーバーを起動したときに1回）。並びは、設定の順。
+## 画像は、FREE_ROOM_IMAGE_DIR から読んで、送る形（base64）にしておく。読めない・大きすぎる画像は、画像なし。
 func _make_free_rooms() -> void:
 	for spec: Dictionary in OnlineConfig.free_rooms():
-		var room := _next_room_id
-		_next_room_id += 1
-		_rooms[room] = {
-			"free": true, "free_id": str(spec["id"]), "name": str(spec["name"]), "password": "", "description": "",
-			"host": 0, "order": [], "distance_m": float(spec["distance_m"]),
-			"seats": [], "picks": {}, "racers": [], "lobby_ready": {},
-			"phase": Protocol.PHASE_ENTRIES, "confirmed": {}, "entries": [], "cpu_picks": [],
-			"race": null, "log": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0,
-			"result_sent": false, "linger_s": 0.0, "done": {},
-			"call_state": Protocol.FREE_STATE_IDLE, "call_s": 0.0, "accepted": [], "pending": {},
-		}
+		var room := spec.duplicate(true)
+		room["distance_m"] = float(spec["distance_m"])
+		room["max_races"] = int(spec["max_races"])
+		room["image"] = _free_room_image(str(spec["image"]))
+		room["races"] = []
+		room["calling"] = 0
+		room["open_unix"] = maxi(OnlineConfig.schedule_unix(spec.get("open_at")), 0)
+		room["close_unix"] = maxi(OnlineConfig.schedule_unix(spec.get("close_at")), 0)
+		room["was_open"] = false
+		if spec.has("final"):
+			room["start_unix"] = OnlineConfig.schedule_unix(spec["final"]["start_at"])
+			room["phase"] = Protocol.FINAL_PHASE_ENTRY
+			room["accepted"] = []
+			room["advancers"] = []
+			room["wait_until_msec"] = 0
 		_free_rooms[str(spec["id"])] = room
 
 
-## そのルームに☑している人の、待っている列（長く待っている順。同じなら、つないだ順）。
+static func _free_room_image(file_name: String) -> String:
+	var path := FREE_ROOM_IMAGE_DIR.path_join(file_name)
+	var bytes := FileAccess.get_file_as_bytes(path)
+	if bytes.is_empty():
+		push_error("オンラインフリー対戦：ルームの画像が読めません（%s）" % path)
+		return ""
+	var text := Marshalls.raw_to_base64(bytes)
+	if text.length() > Protocol.FREE_IMAGE_MAX_CHARS:
+		push_error("オンラインフリー対戦：ルームの画像が大きすぎます（%s。base64 で %d字まで）" % [path, Protocol.FREE_IMAGE_MAX_CHARS])
+		return ""
+	return text
+
+
+## その人のエントリー候補のうち、そのルームのもの（無ければ空）。
+func _free_entry_of(peer_id: int, free_id: String) -> Dictionary:
+	for entry: Dictionary in _peers[peer_id]["entries"]:
+		if str(entry["room_id"]) == free_id:
+			return entry
+	return {}
+
+
+## そのルームにエントリーしている人の、待っている列（長く待っている順。同じなら、つないだ順）。保留中の人も入る。
 func free_line(free_id: String) -> Array:
 	var line: Array = []
 	for peer_id: int in _peers:
-		var peer: Dictionary = _peers[peer_id]
-		if bool(peer["free"]) and (peer["wishes"] as Array).has(free_id):
+		if bool(_peers[peer_id]["free"]) and not _free_entry_of(peer_id, free_id).is_empty():
 			line.append(peer_id)
-	line.sort_custom(_waited_longer)
+	line.sort_custom(func(a: int, b: int) -> bool:
+		var wait_a := int(_free_entry_of(a, free_id)["since_msec"])
+		var wait_b := int(_free_entry_of(b, free_id)["since_msec"])
+		return wait_a < wait_b or (wait_a == wait_b and a < b))
 	return line
 
 
-func _waited_longer(a: int, b: int) -> bool:
-	var wait_a := int(_peers[a]["wait_since_msec"])
-	var wait_b := int(_peers[b]["wait_since_msec"])
-	return wait_a < wait_b or (wait_a == wait_b and a < b)
+## 呼べる人か（ロビーにいて、レースから戻っている途中でなく、呼ばれていなくて、どこにも入っていない）。
+func _free_callable(peer_id: int) -> bool:
+	var peer: Dictionary = _peers[peer_id]
+	return bool(peer["free"]) and not bool(peer["returning"]) and str(peer["offer"]).is_empty() and int(peer["free_room"]) == 0 and str(peer["final_room"]).is_empty()
 
 
-## フリーのルームの一覧（設定の順）。peer_id を渡すと、その人が列の何番目か（place。☑していなければ0）も入れる。
-func free_room_list(peer_id: int = 0) -> Array:
+func now_unix() -> int:
+	return clock_unix if clock_unix >= 0 else int(Time.get_unix_time_from_system())
+
+
+## そのルームが、今、受付をしているか（受付の時刻が無ければ、いつでも）。
+func free_open(free_id: String) -> bool:
+	var data: Dictionary = _free_rooms[free_id]
+	if is_final(free_id):
+		return str(data["phase"]) == Protocol.FINAL_PHASE_ENTRY and now_unix() < int(data["start_unix"])
+	var open_unix := int(data["open_unix"])
+	return open_unix == 0 or (now_unix() >= open_unix and now_unix() < int(data["close_unix"]))
+
+
+## そのルームを、ロビーに出すか（受付が終わって、走っているレースも無くなったら、出さない）。
+func free_listed(free_id: String) -> bool:
+	var data: Dictionary = _free_rooms[free_id]
+	if is_final(free_id):
+		return str(data["phase"]) != Protocol.FINAL_PHASE_DONE or not (data["races"] as Array).is_empty()
+	return int(data["close_unix"]) == 0 or now_unix() < int(data["close_unix"]) or not (data["races"] as Array).is_empty()
+
+
+## そのルームの今のようす：呼んでいるレースがあれば calling、走っているレースがあれば racing、どちらも無ければ idle。
+func _free_state(free_id: String) -> String:
+	var data: Dictionary = _free_rooms[free_id]
+	if int(data["calling"]) != 0:
+		return Protocol.FREE_STATE_CALLING
+	return Protocol.FREE_STATE_RACING if not (data["races"] as Array).is_empty() else Protocol.FREE_STATE_IDLE
+
+
+## 走っているレースの数（呼んでいる途中のものは数えない）。
+func _free_racing_count(free_id: String) -> int:
+	var data: Dictionary = _free_rooms[free_id]
+	return (data["races"] as Array).size() - (1 if int(data["calling"]) != 0 else 0)
+
+
+## フリーのルームの一覧（設定の順）。
+func free_room_list() -> Array:
 	var list: Array = []
 	for free_id: String in _free_rooms:
-		var data: Dictionary = _rooms[int(_free_rooms[free_id])]
-		var line := free_line(free_id)
-		var racing := str(data["call_state"]) == Protocol.FREE_STATE_RACING
+		if not free_listed(free_id):
+			continue
+		var data: Dictionary = _free_rooms[free_id]
 		list.append({
-			"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]), "state": str(data["call_state"]),
-			"racers": (data["order"] as Array).size() if racing else (data["accepted"] as Array).size(),
-			"waiting": line.size(), "place": line.find(peer_id) + 1 if peer_id != 0 else 0,
+			"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]),
+			"tag": str(data["tag"]), "tag_color": str(data["tag_color"]), "rule": str(data["rule"]),
+			"needs_ticket": str(data.get("needs_ticket", "")), "gives_ticket": str(data.get("gives_ticket", "")),
+			"needs_ticket_name": OnlineConfig.free_ticket_name(str(data.get("needs_ticket", ""))),
+			"gives_ticket_name": OnlineConfig.free_ticket_name(str(data.get("gives_ticket", ""))),
+			"state": _free_state(free_id), "races": _free_racing_count(free_id), "max_races": int(data["max_races"]),
+			"waiting": free_line(free_id).size(), "open_unix": int(data["open_unix"]), "close_unix": int(data["close_unix"]),
+			"kind": "final" if is_final(free_id) else "normal",
+		})
+		if is_final(free_id):
+			(list.back() as Dictionary).merge({"start_unix": int(data["start_unix"]), "max_players": int(data["final"]["max_players"]), "phase": str(data["phase"]), "final_answer_s": float(data["final"]["answer_wait_s"])})
+	return list
+
+
+## その人のエントリー候補（前ほど優先）。1つぶん：room_id、pururin_id、hold、place、state。
+func free_entry_list(peer_id: int) -> Array:
+	var list: Array = []
+	var peer: Dictionary = _peers[peer_id]
+	for entry: Dictionary in peer["entries"]:
+		var free_id := str(entry["room_id"])
+		var state := Protocol.FREE_ENTRY_WAIT
+		if str(peer["offer"]) == free_id:
+			state = Protocol.FREE_ENTRY_CALLED
+		elif int(peer["free_room"]) != 0 and str(_rooms[int(peer["free_room"])]["free_id"]) == free_id:
+			state = Protocol.FREE_ENTRY_RACING if room_race(int(peer["free_room"])) != null else Protocol.FREE_ENTRY_ACCEPTED
+		list.append({
+			"room_id": free_id, "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"]),
+			"place": free_line(free_id).find(peer_id) + 1, "state": state,
 		})
 	return list
 
 
-## オンラインフリー対戦のロビーに入る（ともだち対戦の部屋にいたら、出る）。
+## そのルームの、くわしいようす（ルームの画面を開いている人に送る）。
+func free_room_detail(free_id: String) -> Dictionary:
+	var data: Dictionary = _free_rooms[free_id]
+	var entrants: Array = []
+	for peer_id: int in free_line(free_id):
+		var entry := _free_entry_of(peer_id, free_id)
+		entrants.append({"name": str(_peers[peer_id]["name"]), "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"])})
+	return {
+		"room_id": free_id, "intro": str(data["intro"]), "capacity": Protocol.ROOM_CAPACITY, "fill_wait_s": _fill_wait_s(),
+		"races": _free_racing_count(free_id), "entrants": entrants,
+	}
+
+
+## オンラインフリー対戦のロビーに入る（ともだち対戦の部屋にいたら、出る）。レースから戻ったときも、これ。
 func _free_enter(peer_id: int) -> void:
 	if int(_peers[peer_id]["room"]) != 0:
 		_leave_room(peer_id)
 	_peers[peer_id]["free"] = true
-	_send_free_lobby(peer_id)
+	_peers[peer_id]["returning"] = false
+	_send_free_chat_log(peer_id, "")
+	_announce_free()
 
 
 ## オンラインフリー対戦のロビーから出る。呼ばれていたら取り消し、入ると答えたルーム・走っているレースからも抜ける
-## （走っていたら、その走者は、その個体のCPUトレーナーに任せる）。☑と、待っている時間は消える。
+## （走っていたら、その走者は、その個体のCPUトレーナーに任せる）。エントリー候補は、全部消える。
 func _free_leave(peer_id: int) -> void:
 	if not _peers.has(peer_id) or not bool(_peers[peer_id]["free"]):
 		return
 	var peer: Dictionary = _peers[peer_id]
-	if not str(peer["offer"]).is_empty():
-		(_rooms[int(_free_rooms[str(peer["offer"])])]["pending"] as Dictionary).erase(peer_id)
+	_free_withdraw_offer(peer_id)
 	var room := int(peer["free_room"])
 	if room != 0:
 		if room_race(room) != null:
@@ -1141,92 +1273,324 @@ func _free_leave(peer_id: int) -> void:
 		else:
 			(_rooms[room]["accepted"] as Array).erase(peer_id)
 	peer["free"] = false
-	peer["wishes"] = []
-	peer["wait_since_msec"] = 0
-	peer["offer"] = ""
+	peer["entries"] = []
 	peer["free_room"] = 0
+	peer["returning"] = false
+	peer["viewing"] = ""
+	peer["final_room"] = ""
 	_announce_free()
 
 
-## 出るぷるりんを選ぶ。
-func _free_pick(peer_id: int, data: Dictionary) -> void:
+## 呼んでいるのを、だまって取り消す（その人が、自分でエントリーを取り消した・保留にした・ロビーを出たとき）。
+func _free_withdraw_offer(peer_id: int) -> void:
+	var peer: Dictionary = _peers[peer_id]
+	if str(peer["offer"]).is_empty():
+		return
+	var calling := int(_free_rooms[str(peer["offer"])]["calling"])
+	if calling != 0:
+		(_rooms[calling]["pending"] as Dictionary).erase(peer_id)
+	peer["offer"] = ""
+
+
+## 入ると答えて、レースが始まるのを待っているところから、抜ける（まだ始まっていなければ）。
+func _free_withdraw_accept(peer_id: int, free_id: String) -> void:
+	var room := int(_peers[peer_id]["free_room"])
+	if room != 0 and room_race(room) == null and str(_rooms[room]["free_id"]) == free_id:
+		(_rooms[room]["accepted"] as Array).erase(peer_id)
+		_peers[peer_id]["free_room"] = 0
+
+
+## フリー対戦の文を受け取る（ロビーに入っているときだけ）。
+func _free_message(peer_id: int, type: String, data: Dictionary) -> void:
+	var free_id := str(data.get("room_id", ""))
+	var may_be_empty := type in [Protocol.FREE_VIEW, Protocol.FREE_CHAT, Protocol.FREE_EVENTS_ASK]
+	if type != Protocol.FREE_ORDER and not (may_be_empty and free_id.is_empty()) and not _free_rooms.has(free_id):
+		_refuse(peer_id, Protocol.ERROR_NO_ROOM)
+		return
+	match type:
+		Protocol.FREE_VIEW:
+			_peers[peer_id]["viewing"] = free_id
+			if not free_id.is_empty():
+				_send(peer_id, Protocol.message(Protocol.FREE_ROOM, free_room_detail(free_id)))
+				_send_free_chat_log(peer_id, free_id)
+		Protocol.FREE_CHAT: _free_chat(peer_id, free_id, data)
+		Protocol.FREE_RESULTS_ASK:
+			_send(peer_id, Protocol.message(Protocol.FREE_RESULTS, {"room_id": free_id, "results": free_room_results(free_id)}))
+		Protocol.FREE_EVENTS_ASK:
+			_send(peer_id, Protocol.message(Protocol.FREE_EVENTS, {"events": free_event_results()}))
+		Protocol.FREE_IMAGE_ASK:
+			_send(peer_id, Protocol.message(Protocol.FREE_IMAGE, {"room_id": free_id, "image": str(_free_rooms[free_id]["image"])}))
+		Protocol.FREE_ENTRY: _free_entry(peer_id, free_id, data)
+		Protocol.FREE_CANCEL: _free_cancel(peer_id, free_id)
+		Protocol.FREE_HOLD: _free_hold(peer_id, free_id, bool(data.get("hold", false)))
+		Protocol.FREE_ORDER: _free_order(peer_id, data)
+		Protocol.FREE_ANSWER: _free_answer(peer_id, free_id, bool(data.get("accept", false)))
+		Protocol.FREE_AFTER: _free_after(peer_id, free_id, data)
+
+
+## チャットに書く。全体（free_id が空）は、ロビーにいる全員へ。ルームのチャットは、そのルームの画面を開いている人へ。
+## サーバーは、チャットごとに、新しいほうから FREE_CHAT_HISTORY 行を覚えておく（あとから入った人に見せるため）。
+func _free_chat(peer_id: int, free_id: String, data: Dictionary) -> void:
+	var text := Protocol.clean_text(data.get("text", ""), OnlineConfig.chat_max_length())
+	if text.is_empty():
+		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+		return
+	var line := {"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "text": text}
+	var log: Array = _free_chat_logs.get_or_add(free_id, [])
+	log.append(line)
+	while log.size() > Protocol.FREE_CHAT_HISTORY:
+		log.pop_front()
+	var message := line.duplicate()
+	message["room_id"] = free_id
+	var encoded := Protocol.encode(Protocol.message(Protocol.FREE_CHAT_MESSAGE, message))
+	for other: int in _peers:
+		var peer: Dictionary = _peers[other]
+		if bool(peer["free"]) and (free_id.is_empty() or str(peer["viewing"]) == free_id):
+			_send_text(other, encoded)
+
+
+func _send_free_chat_log(peer_id: int, free_id: String) -> void:
+	_send(peer_id, Protocol.message(Protocol.FREE_CHAT_LOG, {"room_id": free_id, "lines": (_free_chat_logs.get(free_id, []) as Array).duplicate()}))
+
+
+## ルームにエントリーする。もうエントリーしていれば、出るぷるりんだけ替える（待っている時間は、そのまま）。
+## 自分のぷるりんのIDと合言葉も受け取る（合言葉は、元に戻せない形にして覚える）。チケットの要るルームは、そのぷるりんがチケットを持っていること。
+func _free_entry(peer_id: int, free_id: String, data: Dictionary) -> void:
 	var pururin_id := str(data.get("pururin_id", ""))
-	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty():
+	var uid := str(data.get("uid", ""))
+	var secret := str(data.get("secret", ""))
+	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty() or RegEx.create_from_string(UID_PATTERN).search(uid) == null or RegEx.create_from_string(SECRET_PATTERN).search(secret) == null:
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
-	_peers[peer_id]["free_pick"] = pururin_id
-	_send_free_lobby(peer_id)
+	if not free_open(free_id):
+		_refuse(peer_id, Protocol.ERROR_CLOSED)
+		return
+	var secret_sha := secret.sha256_text()
+	var needs := str(_free_rooms[free_id].get("needs_ticket", ""))
+	if not needs.is_empty() and not has_ticket(uid, secret_sha, pururin_id, needs):
+		_refuse(peer_id, Protocol.ERROR_NO_TICKET)
+		return
+	var entry := _free_entry_of(peer_id, free_id)
+	if entry.is_empty() and is_final(free_id) and free_line(free_id).size() >= int(_free_rooms[free_id]["final"]["max_players"]):
+		_refuse(peer_id, Protocol.ERROR_ROOM_FULL)
+		return
+	if entry.is_empty():
+		entry = {"room_id": free_id, "hold": false, "since_msec": Time.get_ticks_msec()}
+		(_peers[peer_id]["entries"] as Array).append(entry)
+	entry["pururin_id"] = pururin_id
+	entry["uid"] = uid
+	entry["secret_sha256"] = secret_sha
+	_announce_free()
 
 
-## 入りたいルームを決める（前ほど優先）。☑が無かった人が☑したら、そのときから待ち始める。全部外したら、待つのをやめる。
-func _free_wish(peer_id: int, data: Dictionary) -> void:
-	var wished: Variant = data.get("room_ids", [])
-	if not wished is Array:
+## そのぷるりんが、そのチケットを持っているか（IDと合言葉と、渡したときの能力が、今と合うこと。チケットに期限があれば、期限の前）。
+func has_ticket(uid: String, secret_sha: String, pururin_id: String, ticket_id: String) -> bool:
+	var expires := OnlineConfig.free_ticket_expires(ticket_id)
+	if expires > 0 and now_unix() >= expires:
+		return false
+	var record: Dictionary = _tickets.get(uid, {})
+	return not record.is_empty() and str(record["secret_sha256"]) == secret_sha and str(record["pururin_id"]) == pururin_id \
+		and record["stats"] == pururin_stats(pururin_id) and (record["tickets"] as Dictionary).has(ticket_id)
+
+
+## チケットの確かめに使う、ぷるりんの能力（属性・脚質・配分）。
+static func pururin_stats(pururin_id: String) -> Dictionary:
+	var pururin := PururinRosterConfig.pururin_by_id(pururin_id)
+	return {"attribute": str(pururin.get("attribute", "")), "running_style": str(pururin.get("running_style", "")), "allocation": pururin.get("allocation", {})}
+
+
+## 1位になったぷるりんに、ルームのチケットを渡す（人の走者のときだけ。CPUが1位なら、だれにも渡さない）。保存して、その人に知らせる。
+func _free_give_ticket(room: int, rows: Array) -> void:
+	var data: Dictionary = _rooms[room]
+	var free_id := str(data["free_id"])
+	var ticket_id := str(_free_rooms[free_id].get("gives_ticket", ""))
+	if ticket_id.is_empty():
+		return
+	var winner_runner := ""
+	for row: Dictionary in rows:
+		if int(row["place"]) == 1:
+			winner_runner = str(row["id"])
+	for race_entry: Dictionary in data["entries"]:
+		var peer_id := int(race_entry["peer_id"])
+		if str(race_entry.get("runner_id", race_entry["id"])) != winner_runner or not bool(race_entry["player"]) or not _peers.has(peer_id):
+			continue
+		var entry := _free_entry_of(peer_id, free_id)
+		if entry.is_empty():
+			return
+		var uid := str(entry["uid"])
+		var record: Dictionary = _tickets.get(uid, {})
+		if record.is_empty() or str(record["secret_sha256"]) != str(entry["secret_sha256"]):
+			record = {"secret_sha256": str(entry["secret_sha256"]), "pururin_id": str(entry["pururin_id"]), "stats": pururin_stats(str(entry["pururin_id"])), "tickets": {}}
+			_tickets[uid] = record
+		(record["tickets"] as Dictionary)[ticket_id] = {"room_id": free_id, "unix": int(Time.get_unix_time_from_system())}
+		_save_tickets()
+		_send(peer_id, Protocol.message(Protocol.FREE_TICKET, {"uid": uid, "ticket_id": ticket_id, "name": OnlineConfig.free_ticket_name(ticket_id), "expires_unix": OnlineConfig.free_ticket_expires(ticket_id), "room_id": free_id}))
+		return
+
+
+func _ticket_file() -> String:
+	if not tickets_path.is_empty():
+		return tickets_path
+	var from_environment := OS.get_environment(TICKET_FILE_ENVIRONMENT)
+	return from_environment if not from_environment.is_empty() else DEFAULT_TICKET_FILE
+
+
+## チケットのファイルを読み直す（起動したとき。テストでは、ファイルを替えたあと）。
+func load_tickets() -> void:
+	_tickets = {}
+	if not FileAccess.file_exists(_ticket_file()):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_ticket_file()))
+	if parsed is Dictionary:
+		_tickets = parsed
+	else:
+		push_error("オンラインフリー対戦：チケットのファイルが読めません（%s）" % _ticket_file())
+
+
+func _save_tickets() -> void:
+	var file := FileAccess.open(_ticket_file(), FileAccess.WRITE)
+	if file == null:
+		push_error("オンラインフリー対戦：チケットを保存できません（%s）" % _ticket_file())
+		return
+	file.store_string(JSON.stringify(_tickets))
+
+
+## エントリーを取り消す。呼ばれていた・入ると答えていた（まだ始まっていない）なら、それも取り消す。
+func _free_cancel(peer_id: int, free_id: String) -> void:
+	var entry := _free_entry_of(peer_id, free_id)
+	if entry.is_empty():
+		_refuse(peer_id, Protocol.ERROR_NO_ENTRY)
+		return
+	if str(_peers[peer_id]["offer"]) == free_id:
+		_free_withdraw_offer(peer_id)
+	_free_withdraw_accept(peer_id, free_id)
+	(_peers[peer_id]["entries"] as Array).erase(entry)
+	_announce_free()
+
+
+## 一時保留にする・保留を外す。保留にしたとき、呼ばれていたら、取り消す。待っている時間は、保留のあいだも数え続ける。
+func _free_hold(peer_id: int, free_id: String, hold: bool) -> void:
+	var entry := _free_entry_of(peer_id, free_id)
+	if entry.is_empty():
+		_refuse(peer_id, Protocol.ERROR_NO_ENTRY)
+		return
+	entry["hold"] = hold
+	if hold and str(_peers[peer_id]["offer"]) == free_id:
+		_free_withdraw_offer(peer_id)
+	_announce_free()
+
+
+## 優先の順番を並べ替える。今のエントリー候補の全部を、重ならずに並べたものだけ受け付ける。
+func _free_order(peer_id: int, data: Dictionary) -> void:
+	var ids: Variant = data.get("room_ids", [])
+	var entries: Array = _peers[peer_id]["entries"]
+	if not ids is Array or (ids as Array).size() != entries.size():
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
-	var wishes: Array = []
-	for value: Variant in wished:
-		var free_id := str(value)
-		if not _free_rooms.has(free_id) or wishes.has(free_id):
+	var ordered: Array = []
+	for value: Variant in ids:
+		var entry := _free_entry_of(peer_id, str(value))
+		if entry.is_empty() or ordered.has(entry):
 			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 			return
-		wishes.append(free_id)
-	var peer: Dictionary = _peers[peer_id]
-	if not wishes.is_empty() and str(peer["free_pick"]).is_empty():
-		_refuse(peer_id, Protocol.ERROR_NO_PICK)
-		return
-	if wishes.is_empty():
-		peer["wait_since_msec"] = 0
-	elif (peer["wishes"] as Array).is_empty():
-		peer["wait_since_msec"] = Time.get_ticks_msec()
-	peer["wishes"] = wishes
+		ordered.append(entry)
+	_peers[peer_id]["entries"] = ordered
 	_announce_free()
 
 
-## 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。やめる：そのルームの☑だけを外す。
-func _free_answer(peer_id: int, data: Dictionary) -> void:
+## 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。入らない：そのルームのエントリーを取り消す。
+func _free_answer(peer_id: int, free_id: String, accept: bool) -> void:
 	var peer: Dictionary = _peers[peer_id]
-	var free_id := str(data.get("room_id", ""))
-	if str(peer["offer"]).is_empty() or free_id != str(peer["offer"]):
+	if str(peer["offer"]) != free_id:
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
-	var room := int(_free_rooms[free_id])
-	(_rooms[room]["pending"] as Dictionary).erase(peer_id)
-	peer["offer"] = ""
-	if bool(data.get("accept", false)):
+	var room := int(_free_rooms[free_id]["calling"])
+	_free_withdraw_offer(peer_id)
+	if is_final(free_id):
+		if accept:
+			(_free_rooms[free_id]["accepted"] as Array).append(peer_id)
+		else:
+			_final_drop(peer_id, free_id)
+		_announce_free()
+		return
+	if accept and room != 0:
 		(_rooms[room]["accepted"] as Array).append(peer_id)
 		peer["free_room"] = room
-	else:
-		(peer["wishes"] as Array).erase(free_id)
-		if (peer["wishes"] as Array).is_empty():
-			peer["wait_since_msec"] = 0
+	elif not accept:
+		(peer["entries"] as Array).erase(_free_entry_of(peer_id, free_id))
 	_announce_free()
 
 
-## 毎コマ：返事の締め切りを過ぎた人を外し、呼んでいるルームを始め、空いているルームに人を呼ぶ。
+## レースのあとの選択：そのルームのエントリーを、続けて呼ばれる・保留・取り消す。top なら、優先をいちばん前にする。
+func _free_after(peer_id: int, free_id: String, data: Dictionary) -> void:
+	var entry := _free_entry_of(peer_id, free_id)
+	if entry.is_empty():
+		_refuse(peer_id, Protocol.ERROR_NO_ENTRY)
+		return
+	var entries: Array = _peers[peer_id]["entries"]
+	match str(data.get("entry", "")):
+		Protocol.FREE_AFTER_ON:
+			entry["hold"] = false
+		Protocol.FREE_AFTER_HOLD:
+			entry["hold"] = true
+		Protocol.FREE_AFTER_OFF:
+			entries.erase(entry)
+			_announce_free()
+			return
+		_:
+			_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+			return
+	if bool(data.get("top", false)):
+		entries.erase(entry)
+		entries.insert(0, entry)
+	_announce_free()
+
+
+## 毎コマ：返事の締め切りを過ぎた人のエントリーを取り消し、呼んでいるレースを始め、空きのあるルームに人を呼ぶ。
 func _update_free(delta: float) -> void:
 	if _free_rooms.is_empty():
 		return
 	var now := Time.get_ticks_msec()
 	var changed := false
-	# 返事がない人は、ロビーにいないとみなして、全部の☑を外す。
+	# 返事がない人は、そのルームのエントリーだけを取り消す（ほかのルームのエントリーは残す）。
 	for peer_id: int in _peers.keys():
 		var peer: Dictionary = _peers[peer_id]
 		if str(peer["offer"]).is_empty() or now < int(peer["offer_until_msec"]):
 			continue
 		var free_id := str(peer["offer"])
-		(_rooms[int(_free_rooms[free_id])]["pending"] as Dictionary).erase(peer_id)
-		peer["offer"] = ""
-		peer["wishes"] = []
-		peer["wait_since_msec"] = 0
+		_free_withdraw_offer(peer_id)
+		(peer["entries"] as Array).erase(_free_entry_of(peer_id, free_id))
+		if str(peer["final_room"]) == free_id:
+			peer["final_room"] = ""
 		_send(peer_id, Protocol.message(Protocol.FREE_OFFER_END, {"room_id": free_id, "reason": Protocol.FREE_OFFER_TIMEOUT}))
 		changed = true
-	# 呼んでいるルーム：満員になるか、決めた秒数がたったら、入ると答えた人で始める（足りない枠は、CPU）。
+	# 受付が始まった・終わったルームは、ロビーの全員に知らせる。終わったルームは、呼んでいたレースを、入ると答えた人ですぐ始め
+	# （だれもいなければ、作らなかったことにする）、残ったエントリーを取り消す。
 	for free_id: String in _free_rooms:
-		var room := int(_free_rooms[free_id])
-		var data: Dictionary = _rooms[room]
-		if str(data["call_state"]) != Protocol.FREE_STATE_CALLING:
+		var data: Dictionary = _free_rooms[free_id]
+		var open := free_open(free_id)
+		if open != bool(data["was_open"]):
+			data["was_open"] = open
+			changed = true
+		if int(data["close_unix"]) == 0 or now_unix() < int(data["close_unix"]):
 			continue
+		if int(data["calling"]) != 0:
+			_free_start(int(data["calling"]))
+			changed = true
+		for peer_id: int in _peers:
+			var entry := _free_entry_of(peer_id, free_id)
+			if not entry.is_empty():
+				(_peers[peer_id]["entries"] as Array).erase(entry)
+				changed = true
+	for free_id: String in _free_rooms:
+		if is_final(free_id) and _update_final(free_id):
+			changed = true
+	# 呼んでいるレース：満員になるか、決めた秒数がたったら、入ると答えた人で始める（足りない枠は、CPU）。
+	for free_id: String in _free_rooms:
+		var room := int(_free_rooms[free_id]["calling"])
+		if room == 0:
+			continue
+		var data: Dictionary = _rooms[room]
 		data["call_s"] = float(data["call_s"]) + delta
 		if (data["accepted"] as Array).size() >= Protocol.ROOM_CAPACITY or float(data["call_s"]) >= _fill_wait_s():
 			_free_start(room)
@@ -1237,70 +1601,100 @@ func _update_free(delta: float) -> void:
 		_announce_free()
 
 
-## 空いているルームに、人を呼ぶ。呼べる人（ロビーにいて、ぷるりんを選んでいて、☑していて、呼ばれていない・どこにも入っていない人）を、
-## その人の希望の順で、いちばん前の、空きのあるルームへ振り分け、ルームごとに、長く待っている順に、空きの数だけ呼ぶ。呼んだら true。
+## 空きのあるルームに、人を呼ぶ。空き：呼んでいるレースの残りの席。呼んでいるレースが無く、走っているレースが上限より少なければ、新しいレースの席。
+## 呼べる人を、その人の優先の順で、いちばん前の（保留でない）空きのあるルームへ振り分け、ルームごとに、長く待っている順に、空きの数だけ呼ぶ。呼んだら true。
 func _free_call(now: int) -> bool:
 	var room_left := {}
 	for free_id: String in _free_rooms:
-		var data: Dictionary = _rooms[int(_free_rooms[free_id])]
-		if str(data["call_state"]) == Protocol.FREE_STATE_RACING:
+		var data: Dictionary = _free_rooms[free_id]
+		var calling := int(data["calling"])
+		var left := 0
+		if is_final(free_id) or not free_open(free_id):
 			continue
-		var left := Protocol.ROOM_CAPACITY - (data["accepted"] as Array).size() - (data["pending"] as Dictionary).size()
+		if calling != 0:
+			left = Protocol.ROOM_CAPACITY - (_rooms[calling]["accepted"] as Array).size() - (_rooms[calling]["pending"] as Dictionary).size()
+		elif (data["races"] as Array).size() < int(data["max_races"]):
+			left = Protocol.ROOM_CAPACITY
 		if left > 0:
 			room_left[free_id] = left
 	if room_left.is_empty():
 		return false
 	var by_room := {}
 	for peer_id: int in _peers:
-		var peer: Dictionary = _peers[peer_id]
-		if not bool(peer["free"]) or str(peer["free_pick"]).is_empty() or not str(peer["offer"]).is_empty() or int(peer["free_room"]) != 0:
+		if not _free_callable(peer_id):
 			continue
-		for free_id: String in peer["wishes"]:
-			if room_left.has(free_id):
-				(by_room.get_or_add(free_id, []) as Array).append(peer_id)
+		for entry: Dictionary in _peers[peer_id]["entries"]:
+			if not bool(entry["hold"]) and room_left.has(str(entry["room_id"])):
+				(by_room.get_or_add(str(entry["room_id"]), []) as Array).append(peer_id)
 				break
 	var called := false
 	for free_id: String in by_room:
-		var room := int(_free_rooms[free_id])
-		var data: Dictionary = _rooms[room]
-		var line: Array = by_room[free_id]
-		line.sort_custom(_waited_longer)
+		var line: Array = free_line(free_id).filter(func(peer_id: int) -> bool: return (by_room[free_id] as Array).has(peer_id))
 		for peer_id: int in line.slice(0, int(room_left[free_id])):
-			if str(data["call_state"]) == Protocol.FREE_STATE_IDLE:
-				data["call_state"] = Protocol.FREE_STATE_CALLING
-				data["call_s"] = 0.0
-			# 返事を待つのは、決めた秒数まで。ただし、ルームが始まるまでの残りより長くはしない。
+			var room := int(_free_rooms[free_id]["calling"])
+			if room == 0:
+				room = _free_new_race(free_id)
+			var data: Dictionary = _rooms[room]
+			# 返事を待つのは、決めた秒数まで。ただし、レースが始まるまでの残りより長くはしない。
 			var wait_s := minf(_answer_wait_s(), maxf(_fill_wait_s() - float(data["call_s"]), 1.0))
 			(data["pending"] as Dictionary)[peer_id] = true
 			_peers[peer_id]["offer"] = free_id
 			_peers[peer_id]["offer_until_msec"] = now + int(wait_s * 1000.0)
+			var entry := _free_entry_of(peer_id, free_id)
 			_send(peer_id, Protocol.message(Protocol.FREE_OFFER, {
-				"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]),
-				"priority": (_peers[peer_id]["wishes"] as Array).find(free_id) + 1, "wait_s": wait_s,
+				"room_id": free_id, "name": str(_free_rooms[free_id]["name"]), "distance_m": float(_free_rooms[free_id]["distance_m"]),
+				"pururin_id": str(entry["pururin_id"]), "priority": (_peers[peer_id]["entries"] as Array).find(entry) + 1, "wait_s": wait_s,
 			}))
 			called = true
 	return called
 
 
-## 呼んでいたルームのレースを始める。まだ返事を待っていた人は、呼ぶのを取り消す（☑と、待っている時間は、そのまま）。
-## 入ると答えた人が1人もいなければ、空きに戻す。足りない枠は、CPU。枠順は、くじ。
-func _free_start(room: int) -> void:
+## そのルームに、人を呼ぶレースを1つ作る。
+func _free_new_race(free_id: String) -> int:
+	var room := _free_make_race(free_id)
+	_free_rooms[free_id]["calling"] = room
+	return room
+
+
+## そのルームのレースを1つ作る（_rooms に入れる。レースの走らせ方を、ともだち対戦と同じにするため。部屋の主はいない）。
+func _free_make_race(free_id: String) -> int:
+	var room := _next_room_id
+	_next_room_id += 1
+	_rooms[room] = {
+		"free": true, "free_id": free_id, "name": str(_free_rooms[free_id]["name"]), "password": "", "description": "",
+		"host": 0, "order": [], "distance_m": float(_free_rooms[free_id]["distance_m"]),
+		"seats": [], "picks": {}, "racers": [], "lobby_ready": {},
+		"phase": Protocol.PHASE_ENTRIES, "confirmed": {}, "entries": [], "cpu_picks": [],
+		"race": null, "log": null, "state_wait_s": 0.0, "ready": {}, "ready_wait_s": 0.0,
+		"result_sent": false, "linger_s": 0.0, "done": {},
+		"call_s": 0.0, "accepted": [], "pending": {},
+	}
+	(_free_rooms[free_id]["races"] as Array).append(room)
+	return room
+
+
+## 呼んでいたレースを始める。まだ返事を待っていた人は、呼ぶのを取り消す（エントリーと、待っている時間は、そのまま）。
+## 入ると答えた人が1人もいなければ、そのレースは作らなかったことにする。足りない枠は、CPU。枠順は、くじ。
+func _free_start(room: int, extra: Dictionary = {}) -> void:
 	var data: Dictionary = _rooms[room]
+	var free_id := str(data["free_id"])
+	if int(_free_rooms[free_id]["calling"]) == room:
+		_free_rooms[free_id]["calling"] = 0
 	for peer_id: int in (data["pending"] as Dictionary).keys():
 		if _peers.has(peer_id):
 			_peers[peer_id]["offer"] = ""
-			_send(peer_id, Protocol.message(Protocol.FREE_OFFER_END, {"room_id": str(data["free_id"]), "reason": Protocol.FREE_OFFER_STARTED}))
+			_send(peer_id, Protocol.message(Protocol.FREE_OFFER_END, {"room_id": free_id, "reason": Protocol.FREE_OFFER_STARTED}))
 	data["pending"] = {}
 	var racers: Array = (data["accepted"] as Array).filter(func(peer_id: int) -> bool: return _peers.has(peer_id))
 	data["accepted"] = []
 	if racers.is_empty():
-		data["call_state"] = Protocol.FREE_STATE_IDLE
+		_free_drop_race(room)
 		return
 	data["racers"] = racers.duplicate()
 	data["order"] = racers.duplicate()
 	var picks := {}
 	for peer_id: int in racers:
-		picks[peer_id] = str(_peers[peer_id]["free_pick"])
+		picks[peer_id] = str(_free_entry_of(peer_id, free_id)["pururin_id"])
 	data["picks"] = picks
 	var seats: Array = []
 	for _index in Protocol.ROOM_CAPACITY - racers.size():
@@ -1310,39 +1704,48 @@ func _free_start(room: int) -> void:
 	var entries := build_entries(room)
 	entries.shuffle()
 	data["entries"] = _with_gates(entries)
-	data["call_state"] = Protocol.FREE_STATE_RACING
-	_launch_race(room, (data["entries"] as Array).duplicate(true), float(data["distance_m"]))
+	var start := {"free_room_id": free_id}
+	start.merge(extra)
+	_launch_race(room, (data["entries"] as Array).duplicate(true), float(data["distance_m"]), start)
 
 
-## フリーのルームのレースを片づけたあと：出た人は、ロビーへ戻る（☑は残す。待っている時間は、今から数え直す＝列の後ろへ）。ルームは空きに戻す。
+## フリーのルームのレースを、_rooms と、ルームのレースの並びから消す。
+func _free_drop_race(room: int) -> void:
+	var free_id := str(_rooms[room]["free_id"])
+	(_free_rooms[free_id]["races"] as Array).erase(room)
+	if int(_free_rooms[free_id]["calling"]) == room:
+		_free_rooms[free_id]["calling"] = 0
+	_rooms.erase(room)
+
+
+## フリーのルームのレースを片づけたあと：出た人は、ロビーへ戻る途中になる（戻るまで呼ばない）。
+## そのルームのエントリーは残し、待っている時間は、今から数え直す（列の後ろへ）。
 func _free_race_over(room: int) -> void:
 	var data: Dictionary = _rooms[room]
-	var now := Time.get_ticks_msec()
 	for peer_id: int in data["racers"]:
 		if _peers.has(peer_id) and int(_peers[peer_id]["free_room"]) == room:
-			_peers[peer_id]["free_room"] = 0
-			if not (_peers[peer_id]["wishes"] as Array).is_empty():
-				_peers[peer_id]["wait_since_msec"] = now
-	data["racers"] = []
-	data["order"] = []
-	data["picks"] = {}
-	data["seats"] = []
-	data["entries"] = []
-	data["call_state"] = Protocol.FREE_STATE_IDLE
-	data["call_s"] = 0.0
+			_free_back_from_race(peer_id, str(data["free_id"]))
+	_free_drop_race(room)
 	_announce_free()
 
 
-## フリーのルームのレースの途中で、やめる・抜ける：その走者は、その個体のCPUトレーナーに任せて、ロビーへ戻る（待っている時間は、今から数え直す）。
+## レースから抜けた人：ロビーへ戻る途中にして、そのルームの待っている時間を、今から数え直す。
+func _free_back_from_race(peer_id: int, free_id: String) -> void:
+	_peers[peer_id]["free_room"] = 0
+	_peers[peer_id]["returning"] = true
+	var entry := _free_entry_of(peer_id, free_id)
+	if not entry.is_empty():
+		entry["since_msec"] = Time.get_ticks_msec()
+
+
+## フリーのルームのレースの途中で、やめる・抜ける：その走者は、その個体のCPUトレーナーに任せて、ロビーへ戻る。
 func _free_quit_race(peer_id: int, room: int) -> void:
 	var race := room_race(room)
 	if race != null:
 		race.call("release_remote_runner", peer_id)
 		_log_event(room, "left", {"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "how": Protocol.NOTICE_LEFT, "handed_to_cpu": true})
 	(_rooms[room]["order"] as Array).erase(peer_id)
-	_peers[peer_id]["free_room"] = 0
-	if not (_peers[peer_id]["wishes"] as Array).is_empty():
-		_peers[peer_id]["wait_since_msec"] = Time.get_ticks_msec()
+	_free_back_from_race(peer_id, str(_rooms[room]["free_id"]))
 
 
 ## オンラインフリー対戦のロビーにいる人の、レースの文（操作・画面ができた・見終わった・途中でやめる）。
@@ -1364,19 +1767,270 @@ func _free_race_message(peer_id: int, type: String, data: Dictionary) -> void:
 		_: _refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 
 
-func _send_free_lobby(peer_id: int) -> void:
-	var peer: Dictionary = _peers[peer_id]
-	_send(peer_id, Protocol.message(Protocol.FREE_LOBBY, {
-		"peer_id": peer_id, "pururin_id": str(peer["free_pick"]), "wishes": (peer["wishes"] as Array).duplicate(),
-		"rooms": free_room_list(peer_id), "fill_wait_s": _fill_wait_s(), "answer_wait_s": _answer_wait_s(),
-	}))
-
-
-## オンラインフリー対戦のロビーのようすを、ロビーにいる全員に配る（列の何番目かは、人ごとに違う）。
+## オンラインフリー対戦のロビーのようすを、ロビーにいる全員に配る（エントリー候補は、人ごとに違う）。
+## ルームの画面を開いている人には、そのルームのくわしいようすも配る。
 func _announce_free() -> void:
+	var rooms := free_room_list()
+	var details := {}
 	for peer_id: int in _peers:
-		if bool(_peers[peer_id]["free"]):
-			_send_free_lobby(peer_id)
+		var peer: Dictionary = _peers[peer_id]
+		if not bool(peer["free"]):
+			continue
+		_send(peer_id, Protocol.message(Protocol.FREE_LOBBY, {
+			"peer_id": peer_id, "rooms": rooms, "entries": free_entry_list(peer_id), "answer_wait_s": _answer_wait_s(), "now_unix": now_unix(),
+		}))
+		var viewing := str(peer["viewing"])
+		if not viewing.is_empty():
+			if not details.has(viewing):
+				details[viewing] = Protocol.message(Protocol.FREE_ROOM, free_room_detail(viewing))
+			_send(peer_id, details[viewing])
+
+
+# ---------------------------------------------------------------- オンラインフリー対戦の本戦
+
+## 決勝に進む人がロビーに戻るのを、最大でこの秒数だけ待ってから、決勝の呼び出しをする（戻っていない人は、呼び出しに答えられず失格になる）。
+const FINAL_RETURN_WAIT_S := 40.0
+
+
+func is_final(free_id: String) -> bool:
+	return _free_rooms.has(free_id) and _free_rooms[free_id].has("final")
+
+
+## 本戦を進める（毎コマ）：開始の時刻で全員を呼ぶ → 答えがそろったら準決勝（8人以下なら決勝）→ 準決勝が全部終わったら、決勝に進む人を呼ぶ → 決勝 → 終わり。
+## 呼び出しに答えなかった人の失格は、ふつうの返事の締め切りと同じ所（_update_free）で、エントリーを取り消して行う。
+func _update_final(free_id: String) -> bool:
+	var data: Dictionary = _free_rooms[free_id]
+	var now := Time.get_ticks_msec()
+	match str(data["phase"]):
+		Protocol.FINAL_PHASE_ENTRY:
+			if now_unix() < int(data["start_unix"]):
+				return false
+			var called := _final_call(free_id, free_line(free_id), Protocol.STAGE_SEMI)
+			data["phase"] = Protocol.FINAL_PHASE_CALLING if called else Protocol.FINAL_PHASE_DONE
+			return true
+		Protocol.FINAL_PHASE_CALLING, Protocol.FINAL_PHASE_FINAL_CALLING:
+			if _final_pending(free_id) > 0:
+				return false
+			var accepted: Array = (data["accepted"] as Array).filter(func(peer_id: int) -> bool: return _peers.has(peer_id))
+			data["accepted"] = []
+			if accepted.is_empty():
+				_final_finish(free_id)
+			elif str(data["phase"]) == Protocol.FINAL_PHASE_FINAL_CALLING or accepted.size() <= Protocol.ROOM_CAPACITY:
+				_final_launch(free_id, accepted, Protocol.STAGE_FINAL)
+				data["phase"] = Protocol.FINAL_PHASE_FINAL
+			else:
+				for group: Array in final_groups(accepted):
+					_final_launch(free_id, group, Protocol.STAGE_SEMI)
+				data["phase"] = Protocol.FINAL_PHASE_SEMIS
+			return true
+		Protocol.FINAL_PHASE_SEMIS:
+			if not (data["races"] as Array).is_empty():
+				return false
+			data["phase"] = Protocol.FINAL_PHASE_WAIT
+			data["wait_until_msec"] = now + int(FINAL_RETURN_WAIT_S * 1000.0)
+			return true
+		Protocol.FINAL_PHASE_WAIT:
+			var advancers: Array = (data["advancers"] as Array).filter(func(peer_id: int) -> bool: return _peers.has(peer_id))
+			var back := advancers.all(func(peer_id: int) -> bool: return not bool(_peers[peer_id]["returning"]))
+			if not back and now < int(data["wait_until_msec"]):
+				return false
+			data["advancers"] = []
+			if not _final_call(free_id, advancers, Protocol.STAGE_FINAL):
+				_final_finish(free_id)
+			else:
+				data["phase"] = Protocol.FINAL_PHASE_FINAL_CALLING
+			return true
+		Protocol.FINAL_PHASE_FINAL:
+			if (data["races"] as Array).is_empty():
+				_final_finish(free_id)
+				return true
+	return false
+
+
+## 本戦の呼び出し：呼べる人全員に、本戦の秒数で返事を待つ。だれかを呼んだら true。
+func _final_call(free_id: String, peer_ids: Array, stage: String) -> bool:
+	var data: Dictionary = _free_rooms[free_id]
+	var wait_s := float(data["final"]["answer_wait_s"])
+	var called := false
+	for peer_id: int in peer_ids:
+		if not _peers.has(peer_id) or not bool(_peers[peer_id]["free"]) or _free_entry_of(peer_id, free_id).is_empty():
+			continue
+		var peer: Dictionary = _peers[peer_id]
+		# ほかのルームで呼ばれていたら、そちらは取り消す（本戦が先）。
+		_free_withdraw_offer(peer_id)
+		peer["offer"] = free_id
+		peer["offer_until_msec"] = Time.get_ticks_msec() + int(wait_s * 1000.0)
+		peer["final_room"] = free_id
+		_send(peer_id, Protocol.message(Protocol.FREE_OFFER, {
+			"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]),
+			"pururin_id": str(_free_entry_of(peer_id, free_id)["pururin_id"]), "priority": 1, "wait_s": wait_s, "stage": stage,
+		}))
+		called = true
+	return called
+
+
+## 本戦の呼び出しに、まだ答えていない人の数。
+func _final_pending(free_id: String) -> int:
+	var count := 0
+	for peer_id: int in _peers:
+		if str(_peers[peer_id]["offer"]) == free_id:
+			count += 1
+	return count
+
+
+## 準決勝の組み分け：8人以下ずつ、なるべく同じ人数に（例：20人なら7・7・6）。並びは、くじ。
+static func final_groups(peer_ids: Array) -> Array:
+	var shuffled := peer_ids.duplicate()
+	shuffled.shuffle()
+	var count := ceili(float(shuffled.size()) / float(Protocol.ROOM_CAPACITY))
+	var groups: Array = []
+	for index in count:
+		groups.append([])
+	for index in shuffled.size():
+		(groups[index % count] as Array).append(shuffled[index])
+	return groups
+
+
+## 本戦のレースを1つ始める（足りない枠はCPU）。
+func _final_launch(free_id: String, group: Array, stage: String) -> void:
+	var room := _free_make_race(free_id)
+	_rooms[room]["stage"] = stage
+	_rooms[room]["accepted"] = group.duplicate()
+	for peer_id: int in group:
+		_peers[peer_id]["free_room"] = room
+	_free_start(room, {"stage": stage})
+
+
+## 本戦のレースの結果：準決勝は、1位の人（CPUが1位なら、いちばん上の順位の人間）が決勝へ。ほかの人は敗退（エントリーを取り消す）。
+## 決勝は、全員に順位を知らせて、本戦を終わりにする。
+func _free_final_result(room: int, rows: Array) -> void:
+	var data: Dictionary = _rooms[room]
+	var free_id := str(data["free_id"])
+	var places := {}
+	for row: Dictionary in rows:
+		places[str(row["id"])] = int(row["place"])
+	var humans: Array = []
+	for race_entry: Dictionary in data["entries"]:
+		if bool(race_entry["player"]):
+			humans.append({"peer_id": int(race_entry["peer_id"]), "place": int(places.get(str(race_entry.get("runner_id", race_entry["id"])), 99))})
+	humans.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["place"]) < int(b["place"]))
+	if str(data.get("stage", "")) == Protocol.STAGE_SEMI:
+		for index in humans.size():
+			var peer_id := int(humans[index]["peer_id"])
+			if not _peers.has(peer_id):
+				continue
+			if index == 0:
+				(_free_rooms[free_id]["advancers"] as Array).append(peer_id)
+				_send(peer_id, Protocol.message(Protocol.FREE_NOTICE, {"room_id": free_id, "text": "決勝に進みました！ ロビーに戻ると、決勝の呼び出しがあります。"}))
+			else:
+				_final_drop(peer_id, free_id)
+				_send(peer_id, Protocol.message(Protocol.FREE_NOTICE, {"room_id": free_id, "text": "準決勝で敗退しました。おつかれさまでした！"}))
+		return
+	for human: Dictionary in humans:
+		var peer_id := int(human["peer_id"])
+		if _peers.has(peer_id):
+			var text := "優勝しました！" if int(human["place"]) == 1 else "決勝は %d位でした。" % int(human["place"])
+			_send(peer_id, Protocol.message(Protocol.FREE_NOTICE, {"room_id": free_id, "text": text}))
+
+
+## その人を、本戦から外す（エントリーを取り消す）。
+func _final_drop(peer_id: int, free_id: String) -> void:
+	var entry := _free_entry_of(peer_id, free_id)
+	if not entry.is_empty():
+		(_peers[peer_id]["entries"] as Array).erase(entry)
+	if str(_peers[peer_id]["final_room"]) == free_id:
+		_peers[peer_id]["final_room"] = ""
+
+
+## 本戦を終わりにする：残ったエントリーを取り消す。走っているレースが無くなったら、ロビーの一覧から消える。
+func _final_finish(free_id: String) -> void:
+	_free_rooms[free_id]["phase"] = Protocol.FINAL_PHASE_DONE
+	_free_rooms[free_id].erase("event")
+	for peer_id: int in _peers:
+		_final_drop(peer_id, free_id)
+
+
+# ---------------------------------------------------------------- オンラインフリー対戦の結果
+
+## 1レースの結果（着順の順）：place・name（人の名前。CPUはトレーナーの名前）・pururin（ぷるりんの名前）・player（人か）・time（秒）。
+func _free_result_rows(room: int, rows: Array) -> Array:
+	var by_runner := {}
+	for race_entry: Dictionary in _rooms[room]["entries"]:
+		by_runner[str(race_entry.get("runner_id", race_entry["id"]))] = race_entry
+	var result: Array = []
+	for row: Dictionary in rows:
+		var race_entry: Dictionary = by_runner.get(str(row["id"]), {})
+		result.append({
+			"place": int(row["place"]), "name": str(race_entry.get("trainer_name", "")), "player": bool(race_entry.get("player", false)),
+			"pururin": str(PururinRosterConfig.pururin_by_id(str(race_entry.get("id", ""))).get("display_name", "")), "time": float(row.get("time", 0.0)),
+		})
+	result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["place"]) < int(b["place"]))
+	return result
+
+
+## レースの結果を残す：ルームごとに、新しいほうから free_result_keep レース。本戦は、準決勝と決勝を、大会の結果としてずっと残す。
+func _free_record_result(room: int, rows: Array) -> void:
+	var data: Dictionary = _rooms[room]
+	var free_id := str(data["free_id"])
+	var record := {"unix": now_unix(), "room_id": free_id, "name": str(_free_rooms[free_id]["name"]), "distance_m": float(data["distance_m"]),
+		"stage": str(data.get("stage", "")), "rows": _free_result_rows(room, rows)}
+	var recent: Array = (_results["rooms"] as Dictionary).get_or_add(free_id, [])
+	recent.append(record)
+	while recent.size() > OnlineConfig.free_result_keep():
+		recent.pop_front()
+	if is_final(free_id):
+		var event: Dictionary = _free_rooms[free_id].get("event", {})
+		if event.is_empty():
+			event = {"room_id": free_id, "name": str(_free_rooms[free_id]["name"]), "distance_m": float(data["distance_m"]), "start_unix": int(_free_rooms[free_id]["start_unix"]), "semis": [], "final": []}
+			_free_rooms[free_id]["event"] = event
+			(_results["events"] as Array).append(event)
+		if str(data.get("stage", "")) == Protocol.STAGE_FINAL:
+			event["final"] = record["rows"]
+			event["end_unix"] = now_unix()
+		else:
+			(event["semis"] as Array).append(record["rows"])
+	_save_results()
+
+
+func _results_file() -> String:
+	if not results_path.is_empty():
+		return results_path
+	var from_environment := OS.get_environment(RESULT_FILE_ENVIRONMENT)
+	return from_environment if not from_environment.is_empty() else DEFAULT_RESULT_FILE
+
+
+## 結果のファイルを読み直す（起動したとき。テストでは、ファイルを替えたあと）。
+func load_results() -> void:
+	_results = {"rooms": {}, "events": []}
+	if not FileAccess.file_exists(_results_file()):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(_results_file()))
+	if parsed is Dictionary and parsed.get("rooms") is Dictionary and parsed.get("events") is Array:
+		_results = parsed
+	else:
+		push_error("オンラインフリー対戦：結果のファイルが読めません（%s）" % _results_file())
+
+
+func _save_results() -> void:
+	var file := FileAccess.open(_results_file(), FileAccess.WRITE)
+	if file == null:
+		push_error("オンラインフリー対戦：結果を保存できません（%s）" % _results_file())
+		return
+	file.store_string(JSON.stringify(_results))
+
+
+## そのルームの過去の結果（新しいものが前）。
+func free_room_results(free_id: String) -> Array:
+	var recent: Array = (_results["rooms"] as Dictionary).get(free_id, []).duplicate()
+	recent.reverse()
+	return recent
+
+
+## 大会の結果（開始の時刻が新しいものが前。FREE_EVENTS_SHOWN まで）。
+func free_event_results() -> Array:
+	var events: Array = (_results["events"] as Array).duplicate()
+	events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["start_unix"]) > int(b["start_unix"]))
+	return events.slice(0, Protocol.FREE_EVENTS_SHOWN)
 
 
 # ---------------------------------------------------------------- 送る

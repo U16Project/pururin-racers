@@ -7,11 +7,11 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `8`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `9`）と、種類 `t` が入る。版が違う文は、`version` で断る。
 - 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋に8人まで入れる。レースの出走数は2〜8体で、出る人と、部屋の主がCPUを入れると決めた席の数で決まる。
 - 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 待機室（各自が「準備OK」＝`lobby_ready`）→ 主がレース開始（`race_open`。準備OKの人と主がレースに出る人になる。ほかの人は待機室に残る）→ レース設定（主が距離と、人の足りない席にCPUを入れるかを決めて、`pick_open`）→ ぷるりんを選ぶ所（各自が選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレースを始める（`start`）→ 結果のあと、全員が待機室へ戻る。
 
-- オンラインフリー対戦の流れ：つなぐ → 名乗る（`hello`）→ フリー対戦のロビーに入る（`free_enter`）→ 出るぷるりんを選ぶ（`free_pick`）→ 入りたいルームに☑（`free_wish`。並びの前ほど優先）→ ルームが空くと、長く待っている人から呼ばれる（`free_offer`）→ 入るか答える（`free_answer`）→ 呼び始めてから決めた秒数（`online.json` の `free_fill_wait_s`）がたつか、満員になると、入ると答えた人でレースが始まる（`race_start`。足りない枠はCPU、枠順はくじ）→ 結果のあと、ロビーへ戻る（☑は残る。待っている時間は、戻ったときから数え直す）。
+- オンラインフリー対戦の流れ：つなぐ → 名乗る（`hello`）→ フリー対戦の全体のロビーに入る（`free_enter`）→ ルームの画面を開く（`free_view`。くわしい条件・紹介文・エントリーしている人が届く）→ 出るぷるりんを選んで、エントリーする（`free_entry`。エントリー候補の、優先のいちばん後ろに入る）→ 番が来ると、長く待っている人から呼ばれる（`free_offer`）→ 入るか答える（`free_answer`）→ 呼び始めてから決めた秒数（`online.json` の `free_fill_wait_s`）がたつか、満員になると、入ると答えた人でレースが始まる（`race_start`。足りない枠はCPU、枠順はくじ）→ 結果の画面で、このあとを選ぶ（そのルームのエントリーを、続けて呼ばれる・保留・取り消す。優先をいちばん前にするか。ルームの画面に残るか、ロビーへ戻るか）→ ロビーへ戻る（`free_after`、`free_enter`。エントリーは残り、そのルームの待っている時間は、戻ったときから数え直す）。
 
 ## 起動
 
@@ -48,11 +48,19 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `action` | `kind`（`dash` か `boost`） | ダッシュ・ブーストを押した |
 | `race_done` | — | 結果を見終わって、レースの画面を出た。全員ぶんそろうと、サーバーは、決めた秒数を待たずに、レースを片づける |
 | `ready` | — | レースの画面ができた（スタート前の準備＝コースを一度描く・表情の部品を作る、が終わってから送る） |
-| `free_enter` | — | オンラインフリー対戦のロビーに入る（ともだち対戦の部屋にいたら、出る）。返事は `free_lobby` |
-| `free_leave` | — | ロビーから出る。呼ばれていたら取り消し、レース中なら抜ける（その走者は、その個体のCPUトレーナーが最後まで走る）。☑と、待っている時間は消える。返事は `lobby` |
-| `free_pick` | `pururin_id` | 出るぷるりんを選ぶ。☑する前に選んでおく。ほかの人と同じプルでもよい |
-| `free_wish` | `room_ids`（ルームのIDの並び。前ほど優先） | 入りたいルームを決める。ぷるりんを選ぶ前は `no_pick`。☑が無かった人が☑したら、そのときから待ち始める。全部外すと、待つのをやめる |
-| `free_answer` | `room_id`、`accept`（真偽） | 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。やめる：そのルームの☑だけを外す（ほかの☑と、待っている時間は、そのまま） |
+| `free_enter` | — | オンラインフリー対戦のロビーに入る（ともだち対戦の部屋にいたら、出る）。レースから戻ったときも送る（戻るまで、サーバーは呼ばない）。返事は `free_lobby` |
+| `free_leave` | — | ロビーから出る。呼ばれていたら取り消し、レース中なら抜ける（その走者は、その個体のCPUトレーナーが最後まで走る）。エントリー候補は、全部消える。返事は `lobby` |
+| `free_view` | `room_id`（閉じたら空） | ルームの画面を開いた・閉じた。開いているあいだ、そのルームの `free_room` が届く |
+| `free_image_ask` | `room_id` | ルームの画像を聞く。返事は `free_image` |
+| `free_entry` | `room_id`、`pururin_id`、`uid`（自分のぷるりんのID。16進32字）、`secret`（合言葉。16進64字） | ルームにエントリーする。IDと合言葉は、アプリが自動で作って機械に保存したもの（`client/scripts/config/owned_pururins.gd`）。合言葉は、サーバーにだけ送る。チケットの要るルームは、そのぷるりんがチケットを持っていないと `no_ticket`。エントリー候補の、優先のいちばん後ろに入り、そのときから待ち始める。もうエントリーしていれば、出るぷるりんだけ替える（待っている時間は、そのまま）。ほかの人と同じプルでもよい |
+| `free_cancel` | `room_id` | エントリーを取り消す。呼ばれていた・入ると答えていた（まだ始まっていない）なら、それも取り消す。エントリーしていなければ `no_entry` |
+| `free_hold` | `room_id`、`hold`（真偽） | エントリー候補を、一時保留にする・保留を外す。保留のあいだは呼ばれない（呼ばれていたら取り消す）。待っている時間は、保留のあいだも数え続ける |
+| `free_order` | `room_ids`（今のエントリー候補の全部を、前ほど優先の順に） | 優先の順番を並べ替える。全部がそろっていないと `bad_message` |
+| `free_answer` | `room_id`、`accept`（真偽） | 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。入らない：そのルームのエントリーを取り消す（ほかのエントリーは、そのまま） |
+| `free_chat` | `room_id`（空なら全体のチャット）、`text` | チャットに書く。文字だけ。長さは `online.json` の `chat_max_length` まで（前後の空白は取る。空なら `bad_message`）。全体のチャットはロビーにいる全員へ、ルームのチャットはそのルームの画面を開いている人へ届く（書いた本人にも） |
+| `free_results_ask` | `room_id` | そのルームの過去の結果を聞く。返事は `free_results` |
+| `free_events_ask` | — | 大会（本戦）の結果を聞く。返事は `free_events` |
+| `free_after` | `room_id`、`entry`（`on`＝続けて呼ばれる・`hold`＝保留・`off`＝取り消す）、`top`（真偽。優先をいちばん前にするか） | レースのあとの選択。結果の画面で選び、ロビーに戻るとき `free_enter` の前に送る |
 
 フリー対戦のロビーにいる人のレースの文（`input`・`action`・`ready`・`race_done`）は、そのルームのレースへ届く。レースの途中で `back`（`to`＝`lobby`）を送ると、レースから抜けて、ロビーへ戻る（その走者は、その個体のCPUトレーナーが最後まで走る）。
 
@@ -73,14 +81,22 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `admin_result` | `command` と、その結果（`list` は `rooms`＝部屋と中の人・`peers`＝つないでいる数。`kick`・`close` は `done`） | 管理人の命令の返事 |
 | `pong` | `client_ts` | `ping` の返事 |
 | `error` | `code` | 断った。つながりは切らない |
-| `race_start` | `distance_m`、`entries` | レースが始まる。`entries` は出走の一覧。レースの文（`race_start`・`race_state`・`race_result`・`race_end`）は、レースに出る人にだけ配る |
+| `race_start` | `distance_m`、`entries`（フリー対戦では、`free_room_id` も。本戦では `stage`＝`semi`・`final` も） | レースが始まる。`entries` は出走の一覧。レースの文（`race_start`・`race_state`・`race_result`・`race_end`）は、レースに出る人にだけ配る |
 | `race_state` | レースの状態 | レース中、1秒に20回配る |
 | `notice` | `kind`（`joined`・`left`・`disconnected`・`kicked`・`host`・`race_open`）、`name`、`by`（`kicked` のとき `host` か `admin`） | 部屋のできごと（入った・出た・切れた・退出させられた・主になった）。部屋の全員に配る |
 | `race_end` | — | サーバーが、レースを片づけた。部屋は待機室に戻る。まだレースの画面にいる人は、待機室へ戻る |
 | `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒） |
-| `free_lobby` | `peer_id`、`pururin_id`、`wishes`、`rooms`、`fill_wait_s`、`answer_wait_s` | フリー対戦のロビーのようす。変わるたびに、ロビーにいる全員に届く。`rooms` の1つぶん：`room_id`、`name`、`distance_m`、`state`（`idle`＝空き、`calling`＝呼んでいる、`racing`＝レース中）、`racers`（入ると答えた人・走っている人の数）、`waiting`（☑している人数）、`place`（自分が列の何番目か。☑していなければ0） |
-| `free_offer` | `room_id`、`name`、`distance_m`、`priority`（何番目の希望か）、`wait_s`（返事を待つ秒数） | ルームに呼ばれた。返事は `free_answer` |
-| `free_offer_end` | `room_id`、`reason`（`timeout`＝返事がなかった、`started`＝待たずにレースが始まった） | 呼ばれたのが取り消された。返事がなかった人は、ロビーにいないとみなして、全部の☑を外す |
+| `free_lobby` | `peer_id`、`rooms`、`entries`、`answer_wait_s`、`now_unix`（サーバーの今の時刻。締め切りまでの時間を、サーバーの時計で数えるため） | フリー対戦のロビーのようす。変わるたびに、ロビーにいる全員に届く。`rooms` の1つぶん：`room_id`、`name`、`distance_m`、`tag`（種類の札）、`tag_color`、`rule`（縛りの文）、`state`（`idle`＝空き、`calling`＝呼んでいる、`racing`＝レース中）、`races`（走っているレースの数）、`max_races`、`waiting`（エントリーしている人数）、`kind`（`normal`・`final`＝本戦）、本戦なら `start_unix`・`max_players`・`phase`（`entry`・`calling`・`semis`・`wait`・`final_calling`・`final`・`done`）・`final_answer_s`、`open_unix`・`close_unix`（受付の開始と終了。世界の基準の秒。いつでも開いていれば0）、`needs_ticket`・`gives_ticket`（チケットのID。無ければ空）、`needs_ticket_name`・`gives_ticket_name`。`entries` は自分のエントリー候補（前ほど優先）。1つぶん：`room_id`、`pururin_id`、`hold`、`place`（待っている列の何番目か。保留中も数える）、`state`（`wait`・`called`＝呼ばれている・`accepted`＝入ると答えて始まるのを待っている・`racing`） |
+| `free_room` | `room_id`、`intro`（紹介文）、`capacity`、`fill_wait_s`、`races`、`entrants`（エントリーしている人 `{name, pururin_id, hold}` の並び＝待っている列の順） | 開いているルームの、くわしいようす。開いているあいだ、変わるたびに届く |
+| `free_chat_message` | `room_id`、`peer_id`、`name`、`text` | チャットの1行 |
+| `free_chat_log` | `room_id`、`lines`（`{peer_id, name, text}` の並び。古いものが前） | チャットの、これまで。全体のロビーに入ったとき（全体のチャット）と、ルームの画面を開いたとき（そのルームのチャット）に届く。サーバーは、チャットごとに新しいほうから30行（`FREE_CHAT_HISTORY`）を覚えておく |
+| `free_results` | `room_id`、`results`（新しいものが前。1レースぶん：`unix`、`room_id`、`name`、`distance_m`、`stage`、`rows`＝着順の順の `{place, name, pururin, player, time}`。`name` は人の名前、CPUはトレーナーの名前） | そのルームの過去の結果（ルームごとに、新しい `free_result_keep` レース） |
+| `free_events` | `events`（開始の時刻が新しいものが前。30まで。1つぶん：`room_id`、`name`、`distance_m`、`start_unix`、`end_unix`、`semis`＝準決勝ごとの `rows`、`final`＝決勝の `rows`） | 大会（本戦）の結果 |
+| `free_notice` | `room_id`、`text` | 本戦の知らせ（決勝に進んだ・準決勝で敗退・優勝・決勝の順位）。画面に出すだけ |
+| `free_ticket` | `uid`、`ticket_id`、`name`、`expires_unix`（期限。無ければ0）、`room_id` | チケットをもらった（ルームの1位のぷるりん。CPUが1位なら、だれにも渡さない）。アプリは、そのぷるりんに覚えさせる |
+| `free_image` | `room_id`、`image`（jpg か png の中身を base64 にした文。無ければ空） | ルームの画像 |
+| `free_offer` | `room_id`、`name`、`distance_m`、`pururin_id`、`priority`（何番目の候補か）、`wait_s`（返事を待つ秒数）、`stage`（本戦なら `semi`＝本戦の最初の呼び出し・`final`＝決勝。ふつうは無し） | ルームに呼ばれた。返事は `free_answer` |
+| `free_offer_end` | `room_id`、`reason`（`timeout`＝返事がなかった、`started`＝待たずにレースが始まった） | 呼ばれたのが取り消された。返事がなかった人は、そのルームのエントリーだけを取り消す |
 
 部屋のようす：`room_id`、`room`（部屋の名前）、`members`（入った順の `{peer_id, name, pururin_id, confirmed, ready, racer, introduction, icon}`。まだ選んでいなければ `pururin_id` は空。`confirmed` は「確定」、`ready` は待機室の「準備OK」を押しているか。`racer` はレースに出る人か。`icon` は `{kind, id}` だけ＝自分で入れた画像は `profile` で聞く）、
 `phase`（`lobby`＝待機室、`settings`＝レース設定、`room`＝ぷるりんを選ぶ所、`entries`＝出走表）、`racers`（レースに出る人の番号。レース開始のときの並び。待機室では空）、`seats`（人の足りない席ごとに、CPUを入れるか）、`capacity`（入れる人数）、`cpus`（CPUの数ぶんの `{pururin_id, trainer_id}`。主が決めていない所は、空の文字＝おまかせ）、`entries`（出走表。枠順に並んだ出走の一覧。部屋の場面では空）、
@@ -106,13 +122,18 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 `not_host`（部屋の主でないとできない）、`not_ready`（まだ選んでいない人がいる）、`too_few`（出走が2体に足りない）、`racing`（レース中はできない）、
 `in_entries`（出走表を見ているあいだはできない）、`not_in_entries`（出走表でないとできない）、`not_confirmed`（まだ確定していない人がいる）、
 `not_racer`（レースに出る人でないとできない）、`wrong_phase`（今の場面ではできない）、`not_admin`（管理人の合い札が違う）、
-`not_in_free`（フリー対戦のロビーに入っていないとできない）、`no_pick`（出るぷるりんを選ぶ前に☑した）。
+`not_in_free`（フリー対戦のロビーに入っていないとできない）、`no_entry`（そのルームにエントリーしていない）、`closed`（そのルームは、今は受付をしていない）、`no_ticket`（そのルームに要るチケットを、そのぷるりんが持っていない。IDと合言葉・能力が、渡したときと合わないときも）。
 
 ## オンラインフリー対戦のルーム
 
-- ルームは、サーバーが持つ（主はいない）。並びと名前と距離は `client/data/config/online.json` の `free_rooms`（`id`・`name`・`distance_m`）。ともだち対戦の部屋の一覧と、部屋の数の上限（`max_rooms`）には入らない。
-- 呼ぶ順：ルームが空く（前のレースが終わった・だれも走っていない）と、呼べる人（ロビーにいて、ぷるりんを選んでいて、☑していて、呼ばれていない・どこにも入っていない人）を、その人の希望の順で、いちばん前の、空きのあるルームへ振り分ける。ルームごとに、長く待っている順に、空きの数（8人まで）だけ呼ぶ。同時に複数のルームで順番が来たら、先に☑したルーム（優先の番号の小さいほう）が先。
-- 待つ秒数：返事を待つのは `free_answer_wait_s`（ただし、ルームが始まるまでの残りより長くはしない）。呼び始めてから `free_fill_wait_s` たつか、8人そろったら、入ると答えた人で始める。だれも入らなければ、空きに戻す。
+- ルームは、サーバーの主が決める（主の人はいない）。中身は `client/data/config/online.json` の `free_rooms`（`id`・`name`・`distance_m`・`tag`・`tag_color`・`rule`・`intro`・`image`・`max_races`）。画像は、サーバーの `client/data/free_room_images/`（`.gdignore` があるので、ゲームの書き出しには入らない）に置き、サーバーが起動したときに読む。ともだち対戦の部屋の一覧と、部屋の数の上限（`max_rooms`）には入らない。
+- チケット：設定の `free_tickets`（`id`・`name`）。ルームの `gives_ticket` は、そのルームで1位になった人のぷるりんに渡すチケット、`needs_ticket` は、出るのに要るチケット。チケットは使ってもなくならない。サーバーは、ぷるりんのID → 合言葉を元に戻せない形にしたもの（sha256）・一覧のぷるりん・渡したときの能力（属性・脚質・配分）・チケットを、ファイル（環境変数 `PURURIN_TICKET_FILE`、無ければ `user://online_tickets.json`）に保存する。チケットを使うときは、IDと合言葉と能力が合うかを確かめる。
+- 受付の時刻：ルームに `open_at`・`close_at`（日本の時間 `"2026-10-25 07:00"`）があれば、そのあいだだけエントリーできる（外は `closed`）。受付が終わると、呼んでいたレースは入ると答えた人ですぐ始め、残ったエントリーは取り消す。走っているレースも無くなったら、ロビーの一覧から消える。チケットに `expires_at` があれば、その時刻からは使えない。
+- 本戦：ルームに `final`（`start_at`＝開始の時刻、`max_players`＝エントリーの上限、`answer_wait_s`＝呼び出しに答える秒数）があれば本戦。開始の時刻まではエントリーできる（上限を超えると `room_full`。保留は無視）。開始の時刻に、エントリーした全員を呼び出す（ほかのルームの呼び出しは取り消す）。答えなかった・入らないと答えた人は失格（エントリーを取り消す）。入ると答えた人が8人以下なら、すぐ決勝。多ければ、8人以下ずつ、なるべく同じ人数の準決勝に分ける（くじ）。足りない枠はCPU。準決勝の1位の人（CPUが1位なら、そのレースでいちばん上の順位の人間）が決勝へ進み、ほかは敗退。準決勝が全部終わったら、決勝に進む人がロビーに戻るのを最大40秒待って、決勝の呼び出しをする。決勝が終わると、本戦は終わり、ロビーの一覧から消える。
+- 結果：レースが終わるたびに、着順をルームごとに残す（新しい `free_result_keep` レースまで）。本戦は、準決勝と決勝を大会の結果としてずっと残す。どちらもファイル（環境変数 `PURURIN_RESULT_FILE`、無ければ `user://online_results.json`）に保存する。
+- 1つのルームで、いくつものレースを同時に走らせる（`max_races` まで）。人を呼ぶレースは、1つのルームに同時に1つだけ。
+- 呼ぶ順：空きのあるルーム（人を呼んでいるレースの残りの席。呼んでいるレースが無く、走っているレースが上限より少なければ、新しいレースの8席）に、呼べる人（ロビーにいて、レースから戻る途中でなく、呼ばれていない・どこにも入っていない人）を、その人の優先の順で、いちばん前の、保留でない、空きのあるルームへ振り分ける。ルームごとに、長く待っている順に、空きの数だけ呼ぶ。
+- 待つ秒数：返事を待つのは `free_answer_wait_s`（ただし、レースが始まるまでの残りより長くはしない）。呼び始めてから `free_fill_wait_s` たつか、8人そろったら、入ると答えた人で始める。だれも入らなければ、そのレースは作らなかったことにする。
 - レースの走らせ方は、ともだち対戦と同じ（下の「サーバーの中のレース」）。
 
 ## サーバーの中のレース

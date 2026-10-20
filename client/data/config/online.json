@@ -8,11 +8,23 @@
   "result_linger_s": 20,
   "log_keep_days": 14,
   "free_rooms": [
-    {"id": "sprint", "name": "短距離", "distance_m": 1200},
-    {"id": "mile", "name": "マイル", "distance_m": 1600},
-    {"id": "middle", "name": "中距離", "distance_m": 2000},
-    {"id": "long", "name": "長距離", "distance_m": 3000}
+    {"id": "sprint", "name": "短距離", "distance_m": 1200, "tag": "いつもの", "tag_color": "#52db80", "rule": "縛りなし", "image": "sprint.jpg", "max_races": 4,
+     "intro": "1200mの短い勝負。スタートの出足と、最後の直線のダッシュで決まります。終わったら、同じ条件の次のレースがすぐ始まります。"},
+    {"id": "mile", "name": "マイル", "distance_m": 1600, "tag": "いつもの", "tag_color": "#52db80", "rule": "縛りなし", "image": "mile.jpg", "max_races": 4,
+     "intro": "1600mの、速さと体力のちょうど中間。どの走り方のぷるりんでも勝ち目があります。"},
+    {"id": "middle", "name": "中距離", "distance_m": 2000, "tag": "いつもの", "tag_color": "#52db80", "rule": "縛りなし", "image": "middle.jpg", "max_races": 4,
+     "intro": "2000mの中距離。仕掛けどころを見きわめるのが大事です。"},
+    {"id": "long", "name": "長距離", "distance_m": 3000, "tag": "いつもの", "tag_color": "#52db80", "rule": "縛りなし", "image": "long.jpg", "max_races": 4,
+     "intro": "3000mの長い勝負。体力の配分と、集団の後ろで風を避ける走りが効きます。"},
+    {"id": "trial_qual1", "name": "予選1回戦（お試し）", "distance_m": 2400, "tag": "公式戦", "tag_color": "#ffcc47", "rule": "縛りなし", "image": "official.jpg", "max_races": 4,
+     "gives_ticket": "trial_qual2", "intro": "チケットのお試し。1位になったぷるりんに「予選2回戦のチケット」を渡します（CPUが1位なら、だれももらえません）。何度でも挑戦できます。"},
+    {"id": "trial_qual2", "name": "予選2回戦（お試し）", "distance_m": 2400, "tag": "公式戦", "tag_color": "#ffcc47", "rule": "縛りなし", "image": "official.jpg", "max_races": 4,
+     "needs_ticket": "trial_qual2", "intro": "チケットのお試し。「予選2回戦のチケット」を持っているぷるりんだけが出られます。チケットは、使ってもなくなりません。"}
+  ],
+  "free_tickets": [
+    {"id": "trial_qual2", "name": "予選2回戦のチケット"}
   ],
   "free_fill_wait_s": 20,
-  "free_answer_wait_s": 10
+  "free_answer_wait_s": 15,
+  "free_result_keep": 20
 }

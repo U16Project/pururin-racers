@@ -218,6 +218,12 @@ func test_refresh_preserves_focus_and_recovers_after_disconnect() -> void:
 	assert_eq(get_viewport().gui_get_focus_owner(), lobby.find_child("ConnectButton", true, false))
 
 
+static func _changed(base: Dictionary, changes: Dictionary) -> Dictionary:
+	var result := base.duplicate()
+	result.merge(changes, true)
+	return result
+
+
 func test_online_config_names_a_server_and_the_limits() -> void:
 	assert_true(OnlineConfig.validate(OnlineConfig.values()).is_empty())
 	assert_true(OnlineConfig.is_server_url(OnlineConfig.server_url()))
@@ -230,17 +236,31 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 	assert_between(float(OnlineConfig.server_max_fps()), fps_range.x, fps_range.y)
 	assert_gt(OnlineConfig.max_rooms(), 0)
 	assert_gt(OnlineConfig.chat_max_length(), 0)
+	var room := {"id": "middle", "name": "中距離", "distance_m": RaceSession.supported_distances_m()[0], "tag": "いつもの", "tag_color": "#52db80",
+		"rule": "縛りなし", "intro": "紹介", "image": "middle.jpg", "max_races": int(OnlineConfig.FREE_ROOM_MAX_RACES_RANGE.x)}
 	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14,
-		"free_rooms": [{"id": "middle", "name": "中距離", "distance_m": RaceSession.supported_distances_m()[0]}], "free_fill_wait_s": 20, "free_answer_wait_s": 10}
+		"free_rooms": [room], "free_tickets": [{"id": "t2", "name": "チケット"}], "free_fill_wait_s": 20, "free_answer_wait_s": 10, "free_result_keep": 20}
 	assert_true(OnlineConfig.validate(good).is_empty())
+	assert_true(OnlineConfig.validate(_changed(good, {"free_rooms": [_changed(room, {"needs_ticket": "t2", "gives_ticket": "t2"})]})).is_empty())
+	assert_true(OnlineConfig.validate(_changed(good, {"free_rooms": [_changed(room, {"final": {"start_at": "2026-10-25 08:05", "max_players": 64, "answer_wait_s": 60}})]})).is_empty())
 	for bad: Dictionary in [
 		{"server_url": "http://x"}, {"connect_timeout_s": 0.0},
 		{"server_max_fps": fps_range.x - 1.0}, {"server_max_fps": fps_range.y + 1.0}, {"server_max_fps": 30.5}, {"server_max_fps": "30"},
 		{"default_room": "  "}, {"default_room": "あ".repeat(Protocol.ROOM_NAME_MAX_LENGTH + 1)}, {"default_room": 5},
 		{"max_rooms": 0}, {"max_rooms": 2.5}, {"chat_max_length": 0},
-		{"free_rooms": []}, {"free_rooms": [{"id": "Bad ID", "name": "a", "distance_m": RaceSession.supported_distances_m()[0]}]},
-		{"free_rooms": [{"id": "a", "name": "a", "distance_m": 999.0}]},
-		{"free_rooms": [{"id": "a", "name": "a", "distance_m": RaceSession.supported_distances_m()[0]}, {"id": "a", "name": "b", "distance_m": RaceSession.supported_distances_m()[0]}]},
+		{"free_rooms": []}, {"free_rooms": [_changed(room, {"id": "Bad ID"})]},
+		{"free_rooms": [_changed(room, {"distance_m": 999.0})]},
+		{"free_rooms": [room, room]},
+		{"free_rooms": [_changed(room, {"tag": ""})]}, {"free_rooms": [_changed(room, {"tag_color": "green"})]},
+		{"free_rooms": [_changed(room, {"rule": "あ".repeat(OnlineConfig.FREE_ROOM_RULE_MAX_LENGTH + 1)})]},
+		{"free_rooms": [_changed(room, {"intro": 5})]}, {"free_rooms": [_changed(room, {"image": "../a.jpg"})]},
+		{"free_rooms": [_changed(room, {"max_races": 0})]},
+		{"free_rooms": [_changed(room, {"needs_ticket": "no_such"})]},
+		{"free_rooms": [_changed(room, {"final": {"start_at": "x", "max_players": 64, "answer_wait_s": 60}})]},
+		{"free_rooms": [_changed(room, {"final": {"start_at": "2026-10-25 08:05", "max_players": 1, "answer_wait_s": 60}})]},
+		{"free_rooms": [_changed(room, {"final": {"start_at": "2026-10-25 08:05", "max_players": 64, "answer_wait_s": 1}})]},
+		{"free_rooms": [_changed(room, {"final": {"start_at": "2026-10-25 08:05", "max_players": 64, "answer_wait_s": 60}, "open_at": "2026-10-25 07:00", "close_at": "2026-10-25 08:00"})]}, {"free_rooms": [_changed(room, {"gives_ticket": 5})]},
+		{"free_tickets": [{"id": "t2", "name": "a"}, {"id": "t2", "name": "b"}]}, {"free_tickets": [{"id": "t2", "name": ""}]}, {"free_tickets": null}, {"free_rooms": [_changed(room, {"max_races": OnlineConfig.FREE_ROOM_MAX_RACES_RANGE.y + 1.0})]},
 		{"free_fill_wait_s": 0}, {"free_answer_wait_s": 0},
 	]:
 		var changed := good.duplicate()
