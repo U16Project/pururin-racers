@@ -114,6 +114,7 @@ const FREE_AFTER_OFF := "off"
 ## rooms の1つぶん：room_id、name、distance_m、tag、tag_color、rule、state（idle・calling・racing）、races（走っているレースの数）、
 ## max_races、waiting（エントリーしている人数）、kind（"normal"＝ふつう、"final"＝本戦）、本戦なら start_unix・max_players・phase（下の FINAL_PHASE_…）・final_answer_s（呼び出しに答える秒数）、open_unix・close_unix（受付の開始と終了。世界の基準の秒。いつでも開いていれば0）、needs_ticket・gives_ticket（チケットのID。無ければ空）、needs_ticket_name・gives_ticket_name（名前）。
 ## entries は、自分のエントリー候補（前ほど優先）。1つぶん：room_id、pururin_id、hold、place（待っている列の何番目か。保留中も数える）、state（"wait"＝待っている・"called"＝呼ばれている・"accepted"＝入ると答えて、始まるのを待っている・"racing"＝走っている）。
+## rest_s は、レースのあと呼ばないで休ませる残りの秒数（休んでいなければ0）。
 ## now_unix は、サーバーの今の時刻（締め切りまでの時間を、サーバーの時計で数えるため）。終わったルーム（受付が終わって、走っているレースも無い）は、rooms に入らない。
 const FREE_LOBBY := "free_lobby"
 ## 開いているルームのくわしいようす（room_id、intro、capacity、fill_wait_s、races、entrants＝エントリーしている人

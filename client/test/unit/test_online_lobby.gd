@@ -239,7 +239,7 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 	var room := {"id": "middle", "name": "中距離", "distance_m": RaceSession.supported_distances_m()[0], "tag": "いつもの", "tag_color": "#52db80",
 		"rule": "縛りなし", "intro": "紹介", "image": "middle.jpg", "max_races": int(OnlineConfig.FREE_ROOM_MAX_RACES_RANGE.x)}
 	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14,
-		"free_rooms": [room], "free_tickets": [{"id": "t2", "name": "チケット"}], "free_fill_wait_s": 20, "free_answer_wait_s": 10, "free_result_keep": 20}
+		"free_rooms": [room], "free_tickets": [{"id": "t2", "name": "チケット"}], "free_fill_wait_s": 20, "free_answer_wait_s": 10, "free_result_keep": 20, "free_rest_after_race_s": 15}
 	assert_true(OnlineConfig.validate(good).is_empty())
 	assert_true(OnlineConfig.validate(_changed(good, {"free_rooms": [_changed(room, {"needs_ticket": "t2", "gives_ticket": "t2"})]})).is_empty())
 	assert_true(OnlineConfig.validate(_changed(good, {"free_rooms": [_changed(room, {"final": {"start_at": "2026-10-25 08:05", "max_players": 64, "answer_wait_s": 60}})]})).is_empty())

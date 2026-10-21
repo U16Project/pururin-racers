@@ -35,6 +35,7 @@ func before_each() -> void:
 	_server.listen_on_ready = false
 	_server.fill_wait_s = FILL_WAIT_S
 	_server.answer_wait_s = ANSWER_WAIT_S
+	_server.rest_after_race_s = 0.0
 	# 自分のぷるりんとチケットは、テスト用の場所に置く（本物に触らない）。
 	DirAccess.remove_absolute(OWNED_FILE)
 	DirAccess.remove_absolute(TICKET_FILE)
@@ -1018,3 +1019,97 @@ func test_the_results_tab_and_the_room_results_show_the_saved_results() -> void:
 	var log: RichTextLabel = screen.find_child("RoomResultsLog", true, false)
 	assert_true(await _wait_until(func() -> bool: return log.get_parsed_text().contains("モモ（モモの人）")))
 	assert_true(log.get_parsed_text().contains("1分15秒00"))
+
+
+func test_leaving_the_lobby_with_entries_asks_first() -> void:
+	var ids := _free_ids()
+	_server.set("fill_wait_s", 60.0)
+	_server.set("answer_wait_s", 60.0)
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	OnlineSession.client(get_tree()).send(Protocol.FREE_ENTRY, _entry_message(ids[0], _first_pururin()))
+	OnlineSession.client(get_tree()).send(Protocol.FREE_HOLD, {"room_id": ids[0], "hold": true})
+	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).size() == 1))
+	screen.press_back()
+	var dialog: Control = screen.find_child("ConfirmDialog", true, false)
+	assert_true(dialog.visible, "エントリーがあれば、出る前に確かめる")
+	assert_true((screen.find_child("ConfirmText", true, false) as Label).text.contains("1件"))
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("ConfirmNo", true, false), "うっかり出ないよう、はじめは「出ない」")
+	(screen.find_child("ConfirmNo", true, false) as Button).pressed.emit()
+	assert_false(dialog.visible)
+	assert_eq((screen.get("_entries") as Array).size(), 1, "出ないなら、そのまま")
+
+
+func test_a_lost_connection_offers_to_reconnect() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	_server.stop()
+	var dialog: Control = screen.find_child("ConfirmDialog", true, false)
+	assert_true(await _wait_until(func() -> bool: return dialog.visible), "切れたら、つなぎ直すかを聞く")
+	assert_eq((screen.find_child("ConfirmYes", true, false) as Button).text, "つなぎ直す")
+	# サーバーを起動し直したのと同じにする（止めると、ルームの一覧も消えるため）。
+	_server.call("_make_free_rooms")
+	assert_eq(_server.listen(TEST_PORT), OK)
+	(screen.find_child("ConfirmYes", true, false) as Button).pressed.emit()
+	assert_true((screen.get("_rooms") as Array).is_empty(), "つなぎ直すときは、前のようすを消す")
+	assert_true(await _wait_until(func() -> bool: return not (screen.get("_rooms") as Array).is_empty() and OnlineSession.in_lobby()), "つなぎ直して、ロビーに入り直す")
+
+
+func test_pad_moves_reach_the_room_tabs_and_skip_the_chat_boxes() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	for edit_name: String in ["LobbyChatEdit", "RoomChatEdit"]:
+		assert_eq((screen.find_child(edit_name, true, false) as LineEdit).focus_mode, Control.FOCUS_CLICK, "方向キーでは入らない")
+	var entry: Button = screen.find_child("EntryButton", true, false)
+	assert_eq(entry.get_node(entry.focus_neighbor_left), screen.find_child("RoomResultsTab", true, false), "左で、下のタブへ")
+
+
+func test_after_accepting_a_call_the_cursor_is_not_on_cancel() -> void:
+	var ids := _free_ids()
+	_server.set("fill_wait_s", 60.0)
+	_server.set("answer_wait_s", 60.0)
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	screen.open_room(ids[0])
+	(screen.find_child("EntryButton", true, false) as Button).pressed.emit()
+	var panel: Control = screen.find_child("OfferPanel", true, false)
+	assert_true(await _wait_until(func() -> bool: return panel.visible))
+	screen.answer(true)
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("StatusButton", true, false))
+
+
+
+func test_after_a_race_the_runner_rests_before_being_called_again() -> void:
+	var ids := _free_ids()
+	await _enter_free("a")
+	_server.set("rest_after_race_s", 0.8)
+	_enter_rooms("a", [ids[0]])
+	await _accept_and_start("a")
+	var room: int = (_server.get("_free_rooms")[ids[0]]["races"] as Array)[0]
+	_server.call("_end_race", room)
+	_server.call("_free_race_over", room)
+	_clients["a"].send(Protocol.FREE_ENTER)
+	var lobby := await _latest_lobby("a")
+	assert_gt(float(lobby["rest_s"]), 0.0, "休んでいる残りの秒数が届く")
+	assert_true((await _wait_for("a", Protocol.FREE_OFFER, 0.5)).is_empty(), "休んでいるあいだは呼ばない")
+	assert_false((await _wait_for("a", Protocol.FREE_OFFER, 2.0)).is_empty(), "休み終わったら呼ぶ")
+
+
+func test_the_server_button_opens_the_choice_and_switches_the_server() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	(screen.find_child("ServerButton", true, false) as Button).pressed.emit()
+	assert_true((screen.find_child("ServerDialog", true, false) as Control).visible)
+	assert_true((screen.find_child("ServerCustom", true, false) as Button).button_pressed, "今の選び（自分で指定）が選ばれている")
+	var edit: LineEdit = screen.find_child("ServerUrl", true, false)
+	edit.text = "http://bad"
+	screen.apply_server_choice()
+	assert_true((screen.find_child("ServerDialog", true, false) as Control).visible, "正しくないURLでは、つながない")
+	edit.text = "ws://127.0.0.1:%d" % TEST_PORT
+	screen.apply_server_choice()
+	assert_false((screen.find_child("ServerDialog", true, false) as Control).visible)
+	assert_false((screen.find_child("ConfirmDialog", true, false) as Control).visible, "自分で替えたときは、切れたことを聞かない")
+	assert_true(await _wait_until(func() -> bool: return not (screen.get("_rooms") as Array).is_empty()), "つなぎ直して、ロビーに入り直す")

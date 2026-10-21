@@ -1366,7 +1366,8 @@ func _update_race_hud() -> void:
 		"attribute_id": attribute_id,
 		"attribute_color": Color.from_string(str(HudStatsConfig.values()["attributes"][attribute_id]["color"]), Color.WHITE) if not attribute_id.is_empty() else Color.WHITE,
 		"field_size": _runners.size(),
-		"remaining_m": maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
+		# ゴールしたら0（オンラインでは、届いた位置がゴールの少し手前のことがあるため）。
+		"remaining_m": 0.0 if bool(_player.call("is_finished")) else maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
 		"race_distance_m": _race_distance_m,
 		"dash_ratio": _player.call("get_dash_time_ratio"),
 		"boost_ratio": _player.call("get_boost_time_ratio"),

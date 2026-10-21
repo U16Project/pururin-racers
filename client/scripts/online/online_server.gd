@@ -66,6 +66,8 @@ var admin_token := ""
 ## オンラインフリー対戦の、待つ秒数（0より小さければ、設定 online.json の値）。テストで、短くするため。
 var fill_wait_s := -1.0
 var answer_wait_s := -1.0
+## レースのあと休ませる秒数（0より小さければ、設定 online.json の値）。テストで、短くするため。
+var rest_after_race_s := -1.0
 
 
 func _ready() -> void:
@@ -213,7 +215,7 @@ func _process(delta: float) -> void:
 				# オンラインフリー対戦：ロビーにいるか、エントリー候補（前ほど優先。1つぶん：room_id、pururin_id、hold、since_msec＝待ち始めた時刻）、
 				# 呼ばれているルーム（ID。無ければ空）とその返事の締め切り（ミリ秒）、入ると答えた・走っているレースの部屋の番号（無ければ0）、
 				# レースのあと、ロビーへ戻る途中か（戻るまで呼ばない）、開いているルームの画面（ID。無ければ空）。
-				"free": false, "entries": [], "offer": "", "offer_until_msec": 0, "free_room": 0, "returning": false, "viewing": "", "final_room": "",
+				"free": false, "entries": [], "offer": "", "offer_until_msec": 0, "free_room": 0, "returning": false, "viewing": "", "final_room": "", "rest_until_msec": 0,
 			}
 			_next_peer_id += 1
 	for peer_id: int in _peers.keys():
@@ -1095,6 +1097,11 @@ func _fill_wait_s() -> float:
 	return fill_wait_s if fill_wait_s >= 0.0 else OnlineConfig.free_fill_wait_s()
 
 
+## レースからロビーに戻ったあと、呼ばないで休ませる秒数。
+func _rest_after_race_s() -> float:
+	return rest_after_race_s if rest_after_race_s >= 0.0 else OnlineConfig.free_rest_after_race_s()
+
+
 ## 呼ばれた人の、返事を待つ秒数の上限。
 func _answer_wait_s() -> float:
 	return answer_wait_s if answer_wait_s >= 0.0 else OnlineConfig.free_answer_wait_s()
@@ -1159,7 +1166,8 @@ func free_line(free_id: String) -> Array:
 ## 呼べる人か（ロビーにいて、レースから戻っている途中でなく、呼ばれていなくて、どこにも入っていない）。
 func _free_callable(peer_id: int) -> bool:
 	var peer: Dictionary = _peers[peer_id]
-	return bool(peer["free"]) and not bool(peer["returning"]) and str(peer["offer"]).is_empty() and int(peer["free_room"]) == 0 and str(peer["final_room"]).is_empty()
+	return bool(peer["free"]) and not bool(peer["returning"]) and str(peer["offer"]).is_empty() and int(peer["free_room"]) == 0 and str(peer["final_room"]).is_empty() \
+		and Time.get_ticks_msec() >= int(peer["rest_until_msec"])
 
 
 func now_unix() -> int:
@@ -1254,6 +1262,9 @@ func free_room_detail(free_id: String) -> Dictionary:
 func _free_enter(peer_id: int) -> void:
 	if int(_peers[peer_id]["room"]) != 0:
 		_leave_room(peer_id)
+	# レースから戻ってきたら、決めた秒数は呼ばない（一息つけるように）。
+	if bool(_peers[peer_id]["returning"]):
+		_peers[peer_id]["rest_until_msec"] = Time.get_ticks_msec() + int(_rest_after_race_s() * 1000.0)
 	_peers[peer_id]["free"] = true
 	_peers[peer_id]["returning"] = false
 	_send_free_chat_log(peer_id, "")
@@ -1291,6 +1302,13 @@ func _free_withdraw_offer(peer_id: int) -> void:
 	if calling != 0:
 		(_rooms[calling]["pending"] as Dictionary).erase(peer_id)
 	peer["offer"] = ""
+
+
+## そのルームの呼び出しに、もうだれも残っていなければ（返事待ちも、入ると答えた人もいない）、すぐやめる（ロビーに「呼び出し中」と残らないように）。
+func _free_drop_empty_call(free_id: String) -> void:
+	var calling := int(_free_rooms[free_id]["calling"])
+	if calling != 0 and not is_final(free_id) and (_rooms[calling]["pending"] as Dictionary).is_empty() and (_rooms[calling]["accepted"] as Array).is_empty():
+		_free_drop_race(calling)
 
 
 ## 入ると答えて、レースが始まるのを待っているところから、抜ける（まだ始まっていなければ）。
@@ -1465,6 +1483,7 @@ func _free_cancel(peer_id: int, free_id: String) -> void:
 	if str(_peers[peer_id]["offer"]) == free_id:
 		_free_withdraw_offer(peer_id)
 	_free_withdraw_accept(peer_id, free_id)
+	_free_drop_empty_call(free_id)
 	(_peers[peer_id]["entries"] as Array).erase(entry)
 	_announce_free()
 
@@ -1478,6 +1497,7 @@ func _free_hold(peer_id: int, free_id: String, hold: bool) -> void:
 	entry["hold"] = hold
 	if hold and str(_peers[peer_id]["offer"]) == free_id:
 		_free_withdraw_offer(peer_id)
+		_free_drop_empty_call(free_id)
 	_announce_free()
 
 
@@ -1779,6 +1799,7 @@ func _announce_free() -> void:
 			continue
 		_send(peer_id, Protocol.message(Protocol.FREE_LOBBY, {
 			"peer_id": peer_id, "rooms": rooms, "entries": free_entry_list(peer_id), "answer_wait_s": _answer_wait_s(), "now_unix": now_unix(),
+			"rest_s": maxf(float(int(peer["rest_until_msec"]) - Time.get_ticks_msec()) / 1000.0, 0.0),
 		}))
 		var viewing := str(peer["viewing"])
 		if not viewing.is_empty():

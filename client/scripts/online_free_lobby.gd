@@ -18,6 +18,7 @@ const RaceControllerInput := preload("res://scripts/input/race_controller_input.
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
+const LocalServer := preload("res://scripts/online/local_server.gd")
 
 const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
 const LOCAL_RACE_SCENE_PATH := "res://scenes/local_race.tscn"
@@ -57,6 +58,9 @@ const PART_RESULTS := "results"
 const RESULT_ROWS_SHOWN := 3
 ## 結果の、CPUの名前の色。
 const COLOR_RESULT_CPU := Color(0.74, 0.8, 0.9)
+## このPCのサーバーを起動してから、つながるまで待つ秒数と、つなぎ直す間（ともだち対戦の画面と同じ）。
+const LOCAL_SERVER_START_TIMEOUT_S := 12.0
+const LOCAL_SERVER_RETRY_S := 0.8
 ## しぼりこみの「すべて」。
 const FILTER_ALL := "すべて"
 
@@ -130,6 +134,19 @@ const FILTER_ALL := "すべて"
 @onready var _chat_overlay_edit: LineEdit = %ChatOverlayEdit
 @onready var _chat_overlay_send: Button = %ChatOverlaySend
 @onready var _guide_chat: Control = %GuideChat
+@onready var _server_button: Button = %ServerButton
+@onready var _server_dialog: Control = %ServerDialog
+@onready var _server_official: Button = %ServerOfficial
+@onready var _server_custom: Button = %ServerCustom
+@onready var _server_local: Button = %ServerLocal
+@onready var _server_url_edit: LineEdit = %ServerUrl
+@onready var _server_local_note: Label = %ServerLocalNote
+@onready var _server_ok: Button = %ServerOk
+@onready var _server_back: Button = %ServerBack
+@onready var _confirm_dialog: Control = %ConfirmDialog
+@onready var _confirm_text: Label = %ConfirmText
+@onready var _confirm_yes: Button = %ConfirmYes
+@onready var _confirm_no: Button = %ConfirmNo
 @onready var _card_template: Button = %CardTemplate
 @onready var _entry_row_template: Control = %EntryRowTemplate
 @onready var _entrant_template: Control = %EntrantTemplate
@@ -157,6 +174,16 @@ var _open_room := ""
 var _pick_index := 0
 ## チャットの行（ルームのID → {peer_id, name, text} の並び。空のIDは、全体のチャット）。
 var _chat_lines := {}
+## このPCのサーバーにつなごうとしている秒数（つなごうとしていなければ負）と、次につなぎ直すまでの秒数。
+var _local_wait_s := -1.0
+## サーバーを替えるために、自分でつながりを切っているところか。
+var _switching_server := false
+var _local_retry_s := 0.0
+## 確かめの窓で「はい」「いいえ」を押したときにすること。
+var _confirm_yes_action := Callable()
+var _confirm_no_action := Callable()
+## レースのあと、呼ばれない時刻（ミリ秒。休んでいなければ0）。
+var _rest_until_msec := 0
 ## 大きなチャット欄で出しているチャット（ルームのID。空なら全体のチャット）。
 var _overlay_room := ""
 ## プル選択の窓で押した、選びかけのぷるりん（ステータスの窓で「このプルにする」を押すと決まる。無ければ空）。
@@ -183,10 +210,25 @@ func _ready() -> void:
 	_entrant_template.visible = false
 	_offer_panel.visible = false
 	_pick_dialog.visible = false
+	_confirm_dialog.visible = false
 	_chat_overlay.visible = false
 	_room_view.visible = false
 	_status.text = HINT_TEXT
-	_server_name.text = "自分で指定したサーバー" if ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM and OnlineConfig.is_server_url(ServerChoice.custom_url()) else "公式サーバー"
+	_refresh_server_name()
+	_server_button.pressed.connect(open_server_dialog)
+	var group := ButtonGroup.new()
+	for option: Button in [_server_official, _server_custom, _server_local]:
+		option.button_group = group
+		option.pressed.connect(_refresh_server_dialog)
+		UIAudio.bind_button_sound(option, "confirmation")
+	_server_local.visible = LocalServer.is_supported()
+	_server_ok.pressed.connect(apply_server_choice)
+	_server_back.pressed.connect(close_server_dialog)
+	_server_url_edit.text_submitted.connect(func(_text: String) -> void: apply_server_choice())
+	for button: Button in [_server_button, _server_ok]:
+		UIAudio.bind_button_sound(button, "confirmation")
+	UIAudio.bind_button_sound(_server_back, "back")
+	_server_dialog.visible = false
 	_trainer_name.text = TrainerProfile.trainer_name()
 	_update_clock()
 	_rooms_tab.pressed.connect(show_tab.bind(TAB_ROOMS))
@@ -208,10 +250,18 @@ func _ready() -> void:
 	for pair: Array in [[_lobby_chat_edit, _lobby_chat_send, false], [_room_chat_edit, _room_chat_send, true]]:
 		var edit: LineEdit = pair[0]
 		var in_room: bool = pair[2]
+		# チャットの入力らんは、押したときだけ入る（ゲームパッド・方向キーでは入らない。入ると出られず、字も打てないため）。
+		# ゲームパッドでは、T・SELECT の大きなチャット欄から書く。
+		edit.focus_mode = Control.FOCUS_CLICK
+		(pair[1] as Button).focus_mode = Control.FOCUS_NONE
 		edit.max_length = OnlineConfig.chat_max_length()
 		edit.text_submitted.connect(func(_text: String) -> void: send_chat(edit, in_room))
 		(pair[1] as Button).pressed.connect(func() -> void: send_chat(edit, in_room))
 		UIAudio.bind_button_sound(pair[1], "confirmation")
+	_confirm_yes.pressed.connect(func() -> void: _answer_confirm(true))
+	_confirm_no.pressed.connect(func() -> void: _answer_confirm(false))
+	UIAudio.bind_button_sound(_confirm_yes, "confirmation")
+	UIAudio.bind_button_sound(_confirm_no, "back")
 	_chat_overlay_edit.max_length = OnlineConfig.chat_max_length()
 	_chat_overlay_edit.text_submitted.connect(func(_text: String) -> void: _send_overlay_chat())
 	_chat_overlay_send.pressed.connect(_send_overlay_chat)
@@ -232,6 +282,7 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	UIAudio.bind_button_sound(_pick_dialog_back, "back")
 	_add_marks()
+	_link_room_focus()
 	show_tab(TAB_ROOMS)
 	_client = OnlineSession.client(get_tree())
 	_client.message_received.connect(_on_message)
@@ -256,12 +307,35 @@ func _ready() -> void:
 		connect_to_server()
 
 
+## ルームの画面の、ゲームパッド・方向キーでの動き：右の欄（ステータス・矢印・エントリー・保留）と、左の下のタブ（出走の条件・紹介／エントリーしている人／過去の結果）を、左右で行き来する。
+func _link_room_focus() -> void:
+	for button: Control in [_status_button, _prev_button, _entry_button]:
+		button.focus_neighbor_left = button.get_path_to(_room_results_tab)
+	_room_results_tab.focus_neighbor_right = _room_results_tab.get_path_to(_entry_button)
+	for tab: Control in [_conditions_tab, _entrants_tab, _room_results_tab]:
+		tab.focus_neighbor_top = tab.get_path_to(tab)
+		tab.focus_neighbor_bottom = tab.get_path_to(tab)
+	_entry_button.focus_neighbor_bottom = _entry_button.get_path_to(_hold_button)
+	_hold_button.focus_neighbor_top = _hold_button.get_path_to(_entry_button)
+	_hold_button.focus_neighbor_bottom = _hold_button.get_path_to(_hold_button)
+
+
 ## ゲームパッドのボタンのマーク（そのボタンを押すと、この動きになる、の印）。
 func _add_marks() -> void:
 	MenuStyle.add_mark(_entry_button, "A")
 	MenuStyle.add_mark(_accept_button, "A")
 	MenuStyle.add_mark(_decline_button, "B")
 	MenuStyle.add_mark(_back_button, "B", 24.0)
+	MenuStyle.add_mark(_confirm_yes, "A")
+	MenuStyle.add_mark(_confirm_no, "B")
+	# 印の右から文字が始まるように、左の余白を広げる。
+	for button: Button in [_confirm_yes, _confirm_no]:
+		for state: String in ["normal", "hover", "pressed", "focus"]:
+			var box := button.get_theme_stylebox(state)
+			if box is StyleBoxFlat:
+				var wider := (box as StyleBoxFlat).duplicate() as StyleBoxFlat
+				wider.content_margin_left = 48.0
+				button.add_theme_stylebox_override(state, wider)
 	var accept_row := _guide_accept.get_parent()
 	accept_row.add_child(MenuStyle.mark("A", 24.0))
 	accept_row.move_child(accept_row.get_child(accept_row.get_child_count() - 1), 0)
@@ -275,8 +349,11 @@ func _add_marks() -> void:
 		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 
-## つなぐ先：ともだち対戦の画面で選んだもの（自分で指定したURLが正しければ、それ。でなければ、標準のサーバー）。
+## つなぐ先：このPCのサーバーを動かしていればそれ。でなければ、選んだもの（自分で指定したURLが正しければ、それ。でなければ、公式サーバー）。
+## 選びは、ともだち対戦の画面と同じ所に保存する（どちらで選んでも同じ）。
 static func server_url() -> String:
+	if LocalServer.is_running():
+		return LocalServer.local_url()
 	if ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM and OnlineConfig.is_server_url(ServerChoice.custom_url()):
 		return ServerChoice.custom_url()
 	return OnlineConfig.server_url()
@@ -286,6 +363,7 @@ func connect_to_server() -> void:
 	var error: Error = _client.connect_to(server_url())
 	if error != OK:
 		_set_status("サーバーにつながりません（%s）。" % error_string(error))
+		ask("サーバーにつながりませんでした。", "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
 		return
 	_connect_wait_s = 0.0
 	_set_status("サーバーにつないでいます…")
@@ -413,6 +491,8 @@ func _apply_lobby(data: Dictionary) -> void:
 	_entries = data.get("entries", [])
 	_answer_wait_s = float(data.get("answer_wait_s", 0.0))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
+	var rest_s := float(data.get("rest_s", 0.0))
+	_rest_until_msec = Time.get_ticks_msec() + int(rest_s * 1000.0) if rest_s > 0.0 else 0
 	_refresh_filter()
 	_refresh_cards()
 	_refresh_entries()
@@ -754,11 +834,16 @@ func move_entry(index: int, step: int) -> void:
 
 func set_hold(room_id: String, hold: bool) -> void:
 	_client.send(Protocol.FREE_HOLD, {"room_id": room_id, "hold": hold})
+	# 呼ばれているルームを保留にしたら、サーバーは呼び出しを取り消すので、窓も閉じる。
+	if hold and str(_offer.get("room_id", "")) == room_id:
+		_close_offer()
 	_set_status("「%s」を保留にしました（保留のあいだは呼ばれません）。" % str(room_by_id(room_id).get("name", room_id)) if hold else "「%s」の保留を外しました。" % str(room_by_id(room_id).get("name", room_id)))
 
 
 func cancel_entry(room_id: String) -> void:
 	_client.send(Protocol.FREE_CANCEL, {"room_id": room_id})
+	if str(_offer.get("room_id", "")) == room_id:
+		_close_offer()
 	_set_status("「%s」のエントリーを取り消しました。" % str(room_by_id(room_id).get("name", room_id)))
 
 
@@ -1141,13 +1226,15 @@ func answer(accept: bool) -> void:
 	_close_offer()
 
 
+## 呼び出しの窓を閉じる。カーソルは、続けてAを押しても何も取り消さない所へ戻す
+## （ルームの画面のエントリーのボタンは、入ると答えたあと「取り消す」になるため、そこへは戻さない）。
 func _close_offer() -> void:
 	_offer = {}
 	if _offer_panel == null or not _offer_panel.visible:
 		return
 	_offer_panel.visible = false
 	if _room_view.visible:
-		_entry_button.grab_focus()
+		_status_button.grab_focus()
 	else:
 		_focus_lobby()
 
@@ -1171,7 +1258,128 @@ func press_back() -> void:
 	elif _room_view.visible:
 		close_room()
 	else:
+		request_leave()
+
+
+# ---------------------------------------------------------------- つなぐサーバー
+
+## 上の帯の札：今つないでいるサーバーの名前。
+func _refresh_server_name() -> void:
+	var text := "公式サーバー"
+	if LocalServer.is_running():
+		text = "このPCのサーバー"
+	elif ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM and OnlineConfig.is_server_url(ServerChoice.custom_url()):
+		text = "自分で指定したサーバー"
+	_server_name.text = text + " ▼"
+
+
+## つなぐサーバーを選ぶ窓を開く。
+func open_server_dialog() -> void:
+	if LocalServer.is_running():
+		_server_local.button_pressed = true
+	elif ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM:
+		_server_custom.button_pressed = true
+	else:
+		_server_official.button_pressed = true
+	_server_url_edit.text = ServerChoice.custom_url()
+	_refresh_server_dialog()
+	_server_dialog.visible = true
+	_server_ok.grab_focus()
+
+
+func close_server_dialog() -> void:
+	_server_dialog.visible = false
+	_focus_lobby()
+
+
+func _refresh_server_dialog() -> void:
+	_server_url_edit.editable = _server_custom.button_pressed
+	_server_url_edit.modulate = Color.WHITE if _server_custom.button_pressed else Color(1, 1, 1, 0.4)
+	var urls := LocalServer.lan_urls()
+	_server_local_note.text = ("同じWi-Fiの人は %s につなぎます。" % urls[0] if not urls.is_empty() else "このPCで、サーバーを動かします。") if _server_local.button_pressed else ""
+	_server_local_note.visible = _server_local.button_pressed
+
+
+## 窓の「つなぐ」：選んだサーバーへつなぎ直す（今のつながりは切る。エントリー候補は取り消される）。
+func apply_server_choice() -> void:
+	if _server_custom.button_pressed and not OnlineConfig.is_server_url(_server_url_edit.text.strip_edges()):
+		_server_local_note.text = "ws:// か wss:// で始まるURLを入れてください。"
+		_server_local_note.visible = true
+		return
+	_server_dialog.visible = false
+	if _server_local.button_pressed:
+		if LocalServer.start(get_tree()) != OK:
+			_set_status("このPCでサーバーを起動できませんでした。")
+			return
+	else:
+		LocalServer.stop()
+		ServerChoice.save(ServerChoice.CHOICE_CUSTOM if _server_custom.button_pressed else ServerChoice.CHOICE_DEFAULT, _server_url_edit.text if _server_custom.button_pressed else ServerChoice.custom_url())
+	_refresh_server_name()
+	_switching_server = true
+	if _client.is_open():
+		_client.send(Protocol.FREE_LEAVE)
+		_client.disconnect_from_server()
+	_switching_server = false
+	_entries = []
+	_rooms = []
+	OnlineSession.free_lobby = {}
+	if LocalServer.is_running():
+		# 起動しきるまで、つなぎ直しながら待つ。
+		_local_wait_s = 0.0
+		_local_retry_s = 0.0
+		_set_status("このPCでサーバーを起動しています…")
+	else:
+		connect_to_server()
+
+
+func _wait_for_local_server(delta: float) -> void:
+	if _local_wait_s < 0.0:
+		return
+	if _client.is_open():
+		_local_wait_s = -1.0
+		return
+	_local_wait_s += delta
+	_local_retry_s -= delta
+	if _local_wait_s >= LOCAL_SERVER_START_TIMEOUT_S or not LocalServer.is_running():
+		_local_wait_s = -1.0
+		ask("このPCのサーバーにつながりませんでした。", "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+		return
+	if _local_retry_s <= 0.0:
+		_local_retry_s = LOCAL_SERVER_RETRY_S
+		_client.connect_to(LocalServer.local_url())
+
+
+## 確かめの窓を出す（文、「はい」の字とすること、「いいえ」の字とすること）。
+func ask(text: String, yes_text: String, on_yes: Callable, no_text: String, on_no: Callable) -> void:
+	_confirm_text.text = text
+	_confirm_yes.text = yes_text
+	_confirm_no.text = no_text
+	_confirm_yes_action = on_yes
+	_confirm_no_action = on_no
+	_confirm_dialog.visible = true
+	_confirm_no.grab_focus()
+
+
+func _answer_confirm(yes: bool) -> void:
+	_confirm_dialog.visible = false
+	var action := _confirm_yes_action if yes else _confirm_no_action
+	_confirm_yes_action = Callable()
+	_confirm_no_action = Callable()
+	if action.is_valid():
+		action.call()
+	if is_inside_tree() and not _confirm_dialog.visible:
+		if _room_view.visible:
+			_status_button.grab_focus()
+		else:
+			_focus_lobby()
+
+
+## 戻る（ロビーから）：エントリー候補があれば、全部消えることを確かめてから出る。
+func request_leave() -> void:
+	if _entries.is_empty() or not _client.is_open():
 		go_back()
+		return
+	ask("ロビーを出ると、エントリー候補（%d件）は、すべて取り消されます。出ますか？" % _entries.size(), "出る", go_back, "出ない", Callable())
 
 
 func go_back() -> void:
@@ -1187,11 +1395,32 @@ func _on_connected() -> void:
 	_client.hello(TrainerProfile.trainer_name(), TrainerProfile.introduction(), OnlineSession.my_icon_to_send())
 
 
+## つながりが切れた・つながらなかった：つなぎ直すか、ゲームモード選択へ戻るかを聞く。
 func _on_closed() -> void:
+	# サーバーを替えるために、自分で切ったとき・このPCのサーバーが起動しきるのを待っているときは、聞かない。
+	if _switching_server or _local_wait_s >= 0.0:
+		return
 	var was_waiting := _connect_wait_s >= 0.0
 	_connect_wait_s = -1.0
 	_close_offer()
+	_chat_overlay.visible = false
+	_picker.call("close")
+	_pick_dialog.visible = false
 	_set_status("サーバーにつながりません。" if was_waiting else "サーバーとのつながりが切れました。")
+	if _confirm_dialog.visible:
+		return
+	var text := "サーバーにつながりませんでした。" if was_waiting else "サーバーとのつながりが切れました。エントリー候補は、取り消されています。"
+	ask(text, "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+
+
+## つなぎ直す（つながったら、名乗って、ロビーに入り直す）。
+func reconnect() -> void:
+	if _open_room != "":
+		close_room()
+	_entries = []
+	_rooms = []
+	OnlineSession.free_lobby = {}
+	connect_to_server()
 
 
 func _on_message(data: Dictionary) -> void:
@@ -1236,17 +1465,28 @@ func _on_message(data: Dictionary) -> void:
 
 
 func _process(delta: float) -> void:
+	_wait_for_local_server(delta)
 	if not _offer.is_empty():
 		_update_offer_time()
+	if _rest_until_msec > 0:
+		var left := int(ceil(float(_rest_until_msec - Time.get_ticks_msec()) / 1000.0))
+		if left > 0:
+			_set_status("ひと休み：次の呼び出しまで %d秒" % left)
+		else:
+			_rest_until_msec = 0
+			_set_status(HINT_TEXT)
 	_clock_wait_s -= delta
 	if _clock_wait_s <= 0.0:
 		_update_clock()
 	if _connect_wait_s >= 0.0:
 		_connect_wait_s += delta
 		if _connect_wait_s >= OnlineConfig.connect_timeout_s():
-			_connect_wait_s = -1.0
 			_client.disconnect_from_server()
-			_set_status("サーバーにつながりません。")
+			if _connect_wait_s >= 0.0:
+				_connect_wait_s = -1.0
+				_set_status("サーバーにつながりません。")
+				if not _confirm_dialog.visible:
+					ask("サーバーにつながりませんでした。", "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
 
 
 func _update_clock() -> void:
@@ -1256,7 +1496,8 @@ func _update_clock() -> void:
 		_refresh_cards()
 	if not _open_room.is_empty() and not room_by_id(_open_room).is_empty():
 		_refresh_room_strip(room_by_id(_open_room))
-	var now := Time.get_time_dict_from_system()
+	# 大会の時刻と同じ、日本の時間（サーバーの時計に合わせる）。
+	var now := Time.get_datetime_dict_from_unix_time(server_now() + OnlineConfig.JST_OFFSET_S)
 	_clock.text = "%d:%02d" % [int(now["hour"]), int(now["minute"])]
 
 
@@ -1290,6 +1531,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			focused.release_focus()
 			_focus_lobby()
+		return
+	if _server_dialog.visible and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)) and not focused is LineEdit:
+		viewport.set_input_as_handled()
+		UIAudio.play_back()
+		close_server_dialog()
+		return
+	if _confirm_dialog.visible and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)):
+		viewport.set_input_as_handled()
+		_answer_confirm(false)
 		return
 	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		viewport.set_input_as_handled()

@@ -26,5 +26,6 @@
   ],
   "free_fill_wait_s": 20,
   "free_answer_wait_s": 15,
-  "free_result_keep": 20
+  "free_result_keep": 20,
+  "free_rest_after_race_s": 15
 }
