@@ -169,8 +169,10 @@ func _ready() -> void:
 	buttons.add_child(_start)
 	_link_focus()
 	if not _rows.is_empty():
-		_rows[0].grab_focus()
-		_show_entry(_entries[0])
+		# はじめのカーソルは、自分のぷるりんの行（いなければ、いちばん上）。
+		var first := maxi(_entries.find_custom(func(entry: Dictionary) -> bool: return bool(entry["player"])), 0)
+		_rows[first].grab_focus()
+		_show_entry(_entries[first])
 	else:
 		_back.grab_focus()
 
@@ -214,12 +216,14 @@ func start() -> void:
 	if _transitioning or not Session.race_start_problem().is_empty():
 		return
 	_transitioning = true
+	UIAudio.play_confirmation()
 	_navigate("res://scenes/local_race.tscn")
 
 func back() -> void:
 	if _transitioning:
 		return
 	_transitioning = true
+	UIAudio.play_back()
 	_navigate("res://scenes/race_select.tscn")
 
 func _unhandled_input(event: InputEvent) -> void:

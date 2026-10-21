@@ -19,7 +19,6 @@ const HEART_BEAT_PART := 0.4
 const NAME_GAP := 8.0
 
 @onready var _board: Control = $Board
-@onready var _race_info: Control = $RaceInfo
 @onready var _place: Label = $RaceInfo/Place
 @onready var _field: Label = $RaceInfo/Field
 @onready var _remaining: Label = $RaceInfo/Remaining
@@ -95,9 +94,8 @@ static func beat_glow(phase: float) -> float:
 func update_state(values: Dictionary) -> void:
 	if not is_node_ready():
 		return
-	# 上の行：順位・残り距離・タイム（スタート前は、順位がまだ無いので出さない）。
-	var place := int(values.get("place", 0))
-	_race_info.visible = place > 0
+	# 上の行：順位・残り距離・タイム。初めから出す（スタート前は、順位がまだ無いので1位と出す）。
+	var place := maxi(int(values.get("place", 0)), 1)
 	_place.text = "%d" % place
 	_field.text = "/ %d 位" % int(values.get("field_size", 0))
 	_remaining.text = "残り %.0f m" % float(values.get("remaining_m", 0.0))

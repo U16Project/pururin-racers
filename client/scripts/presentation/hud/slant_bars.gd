@@ -71,7 +71,7 @@ extends Control
 			gradient.changed.connect(queue_redraw)
 		_refresh()
 ## 消えている棒の色と、そのふちの線の色。
-@export var empty_color := Color(1.0, 1.0, 1.0, 0.07):
+@export var empty_color := Color(0.04, 0.06, 0.14, 0.45):
 	set(next):
 		empty_color = next
 		_refresh()

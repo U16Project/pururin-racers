@@ -33,6 +33,8 @@ const NAME_TAB_TRAINER_GAP := 10.0
 const NAME_TAB_TRAINER_MAX_WIDTH := 120.0
 ## 脚質の印「〈」の間隔。
 const STYLE_CHEVRON_STEP := 10.0
+## 脚質の印の、今いない所の色（明るい景色の上でも見えるよう、暗くする）。
+const COLOR_STYLE_CHEVRON_OFF := Color(0.04, 0.06, 0.14, 0.55)
 ## 順位表（左上の操作盤の下に、台なしで出す）。行の高さは、確定した行も、まだの行も同じ。
 ## 置き場所（表の左上）は、standings_origin。local_race_controller が、操作盤の下に合わせて入れる。
 ## 自分の行の色の帯が、表の左はしから左へはみ出す幅。表の全体の幅は、STANDINGS_ROW_PAD + STANDINGS_WIDTH。
@@ -440,7 +442,7 @@ static func draw_style_chevrons(canvas: Object, center_left: Vector2, color: Col
 			canvas.draw_polyline(points, Color(color, 0.28), 6.0 * size_scale, true)
 			canvas.draw_polyline(points, color, 2.6 * size_scale, true)
 		else:
-			canvas.draw_polyline(points, Color(color, 0.38), 1.6, true)
+			canvas.draw_polyline(points, COLOR_STYLE_CHEVRON_OFF, 1.6, true)
 
 
 ## 順位表（左上の操作盤の下）。上から今の順位の順。ゴールして確定した行は、太く・大きく・明るくし、印を王冠・メダルにする。

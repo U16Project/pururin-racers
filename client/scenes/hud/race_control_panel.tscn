@@ -11,7 +11,7 @@
 [ext_resource type="Script" uid="uid://dyr0d7shf1kqq" path="res://scripts/presentation/hud/race_control_panel.gd" id="9_panel"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_100um"]
-bg_color = Color(0.16, 0.2, 0.27, 0.86)
+bg_color = Color(0.16, 0.2, 0.27, 0.45)
 border_width_left = 2
 border_width_top = 2
 border_width_right = 2
@@ -71,7 +71,7 @@ shader_parameter/start_deg = -130.0
 shader_parameter/end_deg = -30.0
 shader_parameter/fill = 0.57
 shader_parameter/gradient = SubResource("GradientTexture1D_xxtil")
-shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_color = Color(0.04, 0.06, 0.14, 0.45)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
 shader_parameter/glow_width = 10.0
 shader_parameter/glow_strength = 0.0
@@ -103,7 +103,7 @@ shader_parameter/start_deg = 150.0
 shader_parameter/end_deg = 50.0
 shader_parameter/fill = 1.0
 shader_parameter/gradient = SubResource("GradientTexture1D_mpdg8")
-shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_color = Color(0.04, 0.06, 0.14, 0.45)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
 shader_parameter/glow_width = 10.0
 shader_parameter/glow_strength = 0.0
@@ -144,7 +144,7 @@ shader_parameter/edge_core_width = 1.5
 shader_parameter/glow_width = 24.0
 shader_parameter/glow_strength = 0.12
 shader_parameter/beat = 0.85
-shader_parameter/beat_color = Color(1, 0.7, 0.9, 1)
+shader_parameter/beat_color = Color(1, 0.96, 0.98, 1)
 
 [sub_resource type="LabelSettings" id="LabelSettings_bpm"]
 font = SubResource("FontVariation_slant")
@@ -174,7 +174,7 @@ shader_parameter/start_deg = 233.1
 shader_parameter/end_deg = 271.2
 shader_parameter/fill = 0.68
 shader_parameter/gradient = SubResource("GradientTexture1D_jtnj3")
-shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_color = Color(0.04, 0.06, 0.14, 0.45)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
 shader_parameter/glow_width = 10.0
 shader_parameter/glow_strength = 0.0
@@ -271,7 +271,7 @@ shader_parameter/start_deg = 0.0
 shader_parameter/end_deg = 360.0
 shader_parameter/fill = 1.0
 shader_parameter/gradient = SubResource("GradientTexture1D_dwwwi")
-shader_parameter/track_color = Color(1, 1, 1, 0.08)
+shader_parameter/track_color = Color(0.04, 0.06, 0.14, 0.45)
 shader_parameter/track_edge_color = Color(0.6, 0.8, 1, 0.35)
 shader_parameter/glow_width = 10.0
 shader_parameter/glow_strength = 0.35

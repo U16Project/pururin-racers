@@ -67,7 +67,7 @@ const ArcShader := preload("res://scripts/presentation/hud/arc_gauge.gdshader")
 			gradient.changed.connect(_push)
 		_push()
 ## 空の所の色と、そのふちの線の色。
-@export var track_color := Color(1.0, 1.0, 1.0, 0.08):
+@export var track_color := Color(0.04, 0.06, 0.14, 0.45):
 	set(next):
 		track_color = next
 		_push()

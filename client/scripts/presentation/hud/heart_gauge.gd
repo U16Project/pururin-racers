@@ -37,6 +37,11 @@ const HeartShader := preload("res://scripts/presentation/hud/heart_gauge.gdshade
 	set(next):
 		dip = next
 		_push()
+## 鼓動のいちばん強い瞬間に、ハートが大きくなる割合（0.06＝6%大きくなる）。
+@export_range(0.0, 0.3, 0.01) var beat_grow := 0.06:
+	set(next):
+		beat_grow = next
+		_push()
 
 @export_group("水")
 @export var water_color := Color(0.2, 0.92, 1.0, 1.0):
@@ -108,7 +113,7 @@ const HeartShader := preload("res://scripts/presentation/hud/heart_gauge.gdshade
 	set(next):
 		glow_strength = next
 		_push()
-@export var beat_color := Color(1.0, 0.7, 0.9, 1.0):
+@export var beat_color := Color(1.0, 0.96, 0.98, 1.0):
 	set(next):
 		beat_color = next
 		_push()
@@ -145,6 +150,9 @@ func _push() -> void:
 		material = shader_material
 	for key: String in ["center", "size_x", "size_y", "dip", "water_color", "water_bottom_shade", "wave_height", "wave_length", "surface_color", "surface_width", "stripe_spacing", "stripe_strength", "glass_color", "gloss_strength", "edge_color", "edge_width", "edge_core_color", "edge_core_width", "glow_width", "glow_strength", "beat", "beat_color"]:
 		shader_material.set_shader_parameter(key, get(key))
+	# 鼓動で、ハートを少しふくらませる。
+	shader_material.set_shader_parameter("size_x", size_x * (1.0 + beat_grow * beat))
+	shader_material.set_shader_parameter("size_y", size_y * (1.0 + beat_grow * beat))
 	shader_material.set_shader_parameter("rect_size", size)
 	shader_material.set_shader_parameter("fill", value)
 
