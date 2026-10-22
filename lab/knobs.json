@@ -1,0 +1,27 @@
+{
+  "_note": "頭のつまみの一覧（仮）。項目を足すときは、ここに1つ足して、knob_brain.gd に使い方を足す。per_distance が true のつまみは、短い距離用と長い距離用の2つの数字を持ち、あいだの距離は中間の値を使う。最初の値は、範囲のまん中。",
+  "knobs": [
+    {"name": "start_length_m", "label": "序盤の長さ（スタートから何mまで）", "min": 0, "max": 600, "per_distance": true},
+    {"name": "start_notch", "label": "序盤のノッチ", "min": 0, "max": 6, "per_distance": true},
+    {"name": "mid_notch", "label": "中盤のノッチ", "min": 0, "max": 6, "per_distance": true},
+    {"name": "spurt_remaining_m", "label": "スパートを始める残り距離", "min": 0, "max": 1000, "per_distance": true},
+    {"name": "spurt_notch", "label": "スパートのノッチ", "min": 0, "max": 6, "per_distance": false},
+    {"name": "mid_heart_limit_bpm", "label": "中盤、心拍がこれを超えたらノッチを1段下げる", "min": 150, "max": 230, "per_distance": false},
+    {"name": "spurt_heart_limit_bpm", "label": "スパート中、心拍がこれを超えたらノッチを1段下げる", "min": 150, "max": 230, "per_distance": false},
+    {"name": "save_stamina_below", "label": "体力がこの割合を下回ったら、スパート前はノッチを1段下げる", "min": 0, "max": 0.8, "per_distance": true},
+    {"name": "wanted_place", "label": "中盤にいたい順位（前0〜後ろ1）", "min": 0, "max": 1, "per_distance": false},
+    {"name": "place_notch_range", "label": "いたい順位からずれたとき、ノッチを何段まで足し引きするか", "min": 0, "max": 2, "per_distance": false},
+    {"name": "follow_within_m", "label": "前の走者の何m以内なら、真後ろにつく", "min": 0, "max": 15, "per_distance": false},
+    {"name": "leave_follow_remaining_m", "label": "後ろにつくのをやめて、横へ出る残り距離", "min": 0, "max": 1000, "per_distance": true},
+    {"name": "corner_inside", "label": "コーナーで内側に寄る強さ", "min": 0, "max": 1, "per_distance": false},
+    {"name": "blocked_speed_loss_kmh", "label": "前にふさがれて、速さがこれだけ落ちたら横へ出る", "min": 0, "max": 10, "per_distance": false},
+    {"name": "boost1_remaining_m", "label": "ブースト1回目を使う残り距離", "min": 0, "max": 3000, "per_distance": true},
+    {"name": "boost2_remaining_m", "label": "ブースト2回目を使う残り距離", "min": 0, "max": 3000, "per_distance": true},
+    {"name": "boost3_remaining_m", "label": "ブースト3回目を使う残り距離", "min": 0, "max": 3000, "per_distance": true},
+    {"name": "boost_stamina_at_least", "label": "体力がこの割合以上あるときだけブーストを使う", "min": 0, "max": 1, "per_distance": false},
+    {"name": "dash_remaining_m", "label": "ダッシュを使い始める残り距離", "min": 0, "max": 1000, "per_distance": true},
+    {"name": "dash_heart_below_bpm", "label": "心拍がこれ以下のときだけダッシュを使う", "min": 150, "max": 230, "per_distance": false},
+    {"name": "dash_interval_s", "label": "ダッシュを次に押すまでの間（秒）", "min": 0, "max": 10, "per_distance": false},
+    {"name": "dash_on_escape", "label": "横へ抜け出した直後にダッシュを使う（0.5以上で使う）", "min": 0, "max": 1, "per_distance": false}
+  ]
+}

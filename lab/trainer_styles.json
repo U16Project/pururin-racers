@@ -1,0 +1,126 @@
+{
+  "_note": "トレーナーの走らせ方（性格）。ユーザーと決めたもの。育成は、この性格の中で細かい数字を探す（性格そのものは育成で変えない）。今はラボだけが使う。ゲームのCPUはまだ読まない。",
+  "trainers": {
+    "homura": {
+      "name": "ホムラ",
+      "pururin": "cpu-1",
+      "summary": "スタートダッシュで先頭に立ち、そのまま逃げ切る。",
+      "wanted_place": "1位だけ",
+      "when_passed": "1位を取られたら、すぐ上げて取り返す（譲るのが嫌い）",
+      "when_closed_in": "後ろに詰められたら、少し上げて差を保つ",
+      "save_stamina": "1位で、後ろと差があるときだけ下げる",
+      "draft": "後ろにつかない",
+      "spurt": "早め（後ろに並ばれる前に、突き放しにかかる）",
+      "weakness_kept": "競り合いでも引かないので、体力を使いすぎて最後に落ちることがある"
+    },
+    "gantetsu": {
+      "name": "ガンテツ",
+      "pururin": "cpu-7",
+      "summary": "とことん前方で粘り、最後は根性で押しのける。",
+      "wanted_place": "1〜3位（前方）",
+      "when_passed": "前方にいるあいだは追わない。前方から落ちそうなときだけ上げる",
+      "when_closed_in": "並ばれても引かない（押し合いに強い）",
+      "save_stamina": "強い（前方にいて余裕があれば下げる）",
+      "draft": "前方の中でなら、後ろにつくこともある",
+      "spurt": "遅め。ためた体力で長く押す",
+      "weakness_kept": "出足が遅く、前で詰まると抜け出す加速がない"
+    },
+    "yuu": {
+      "name": "ユウ",
+      "pururin": "player-1",
+      "summary": "集団の中で温存して、最後の直線で一気に抜け出す。",
+      "wanted_place": "3〜4位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "ふつう",
+      "draft": "進んで後ろにつく",
+      "spurt": "最後の直線",
+      "weakness_kept": "大きな弱点はないが、とがった強みも最高速だけ"
+    },
+    "shizuku": {
+      "name": "シズク",
+      "pururin": "cpu-2",
+      "summary": "中盤は全体のペースに合わせて柔軟に走りを変え、終盤は早めに良い位置をキープし仕掛ける。",
+      "wanted_place": "中盤は全体の流れしだい（3〜5位あたり）。終盤は早めに良い位置（3位以内）をキープ",
+      "when_passed": "中盤は追わず、全体のペースに合わせる",
+      "when_closed_in": "中盤は無理に競らない",
+      "save_stamina": "全体のペースが遅ければ下げ、速ければ合わせる",
+      "draft": "選ぶ",
+      "spurt": "早め",
+      "weakness_kept": "最後の一押し（最高速・加速）は弱い"
+    },
+    "akari": {
+      "name": "アカリ",
+      "pururin": "cpu-5",
+      "summary": "集団を引き連れ、トップを追い、直線で押しのけ、一気にゴールを目指す。",
+      "wanted_place": "2〜3位（集団の先頭）",
+      "when_passed": "トップとの差が開きすぎないよう追う",
+      "when_closed_in": "引かない（集団の先頭を譲らない）",
+      "save_stamina": "ふつう",
+      "draft": "選ばない（前目で他のプルを従えて走る）",
+      "spurt": "最後の直線で押しのけて前へ",
+      "weakness_kept": "前で風を受けるので体力を使う。自分から抜け出す最高速はない"
+    },
+    "daichi": {
+      "name": "ダイチ",
+      "pururin": "cpu-3",
+      "summary": "序盤は集団の中で力をため、前が疲れたころから、じわじわと長く追い上げる。",
+      "wanted_place": "5〜6位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "強い（序盤）",
+      "draft": "選ぶ",
+      "spurt": "早め・長い（残りが多いうちから、少しずつ上げる）",
+      "weakness_kept": "瞬発力の勝負（最後の直線だけの競り合い）に弱い"
+    },
+    "minato": {
+      "name": "ミナト",
+      "pururin": "cpu-6",
+      "summary": "集団の後ろで力を残し、前が開いたら、すぐ隙間を抜けて追い上げる。",
+      "wanted_place": "5〜6位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "強い（集団の後ろで）",
+      "draft": "進んで後ろにつく",
+      "spurt": "前が開いたとき（隙間を見つけたら、すぐ）",
+      "weakness_kept": "前がふさがったままだと、力を出し切れない"
+    },
+    "kaede": {
+      "name": "カエデ",
+      "pururin": "cpu-8",
+      "summary": "集団の後ろで相手をよく見て、前の勢いが落ちたところを、直線でかわす。",
+      "wanted_place": "5〜6位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "強い",
+      "draft": "選ぶ",
+      "spurt": "前の走者の速さが落ちてきたとき（最後の直線が多い）",
+      "weakness_kept": "加速が遅く、仕掛けが遅れると届かない"
+    },
+    "hayate": {
+      "name": "ハヤテ",
+      "pururin": "cpu-4",
+      "summary": "後ろでじっと待ち、仕掛けると決めたら、外から一気に抜き去る。",
+      "wanted_place": "7〜8位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "強い",
+      "draft": "選ぶ（待つあいだ）",
+      "spurt": "決めた所から外へ出て、一気に",
+      "weakness_kept": "前が速すぎる展開だと届かない。内で詰まると力を出せない"
+    },
+    "ibuki": {
+      "name": "イブキ",
+      "pururin": "cpu-9",
+      "summary": "前が急いでも慌てず後方で待機し、直線で一気に爆発。プルの合間をすり抜けゴールに迫る。",
+      "wanted_place": "7〜8位",
+      "when_passed": "追わない",
+      "when_closed_in": "動じない",
+      "save_stamina": "強い（後方で待つ）",
+      "draft": "あまり頼らない",
+      "spurt": "最後の直線で一気に",
+      "line": "直線では、プルの合間の空いた所をすり抜ける",
+      "weakness_kept": "体力と心肺が低く、早く仕掛けると持たない"
+    }
+  }
+}

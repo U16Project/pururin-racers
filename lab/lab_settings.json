@@ -1,0 +1,20 @@
+{
+  "_note": "CPU育成ラボの設定（すべて仮）。ゲーム本体の設定ではない。",
+  "decide_every_s": 0.5,
+  "cut_after_winner_s": 30.0,
+  "workers": 8,
+  "fixed_fps": 30,
+  "distances_m": [1200, 1600, 2000, 2400, 3000],
+  "score": {
+    "win_rate": 100.0,
+    "gap_to_winner_s": -5.0,
+    "avg_place": -2.0
+  },
+  "evolve": {
+    "candidates": 10,
+    "races": 10,
+    "start_sigma": 0.3,
+    "check_races": 10,
+    "hall_of_fame": 4
+  }
+}
