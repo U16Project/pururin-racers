@@ -119,7 +119,9 @@ func _ready() -> void:
 		summary.add_child(style_mark)
 		summary.add_child(_dim_label("%s　%s" % [STYLE_NAMES.get(style_id, ""), trainer_name]))
 		row.focus_entered.connect(_show_entry.bind(entry))
+		# マウスを乗せている間だけ、その行を見せる。離れたら、カーソルが合っている行に戻す。
 		row.mouse_entered.connect(_show_entry.bind(entry))
+		row.mouse_exited.connect(_show_focused_entry)
 		row.pressed.connect(_show_entry.bind(entry))
 		list.add_child(row)
 		_rows.append(row)
@@ -175,6 +177,15 @@ func _ready() -> void:
 		_show_entry(_entries[first])
 	else:
 		_back.grab_focus()
+
+## カーソルが合っている行のぷるりんを見せる（どの行にも合っていなければ、そのまま）。
+func _show_focused_entry() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	for index in _rows.size():
+		if _rows[index] == focused:
+			_show_entry(_entries[index])
+			return
+
 
 func _show_entry(entry: Dictionary) -> void:
 	shown_gate = int(entry["gate"])

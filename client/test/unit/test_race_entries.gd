@@ -71,3 +71,17 @@ func test_full_field_fits_viewport_with_readable_details() -> void:
 	if OS.has_environment("PURURIN_CAPTURE_DIR"):
 		await RenderingServer.frame_post_draw
 		screen.get_viewport().get_texture().get_image().save_png(OS.get_environment("PURURIN_CAPTURE_DIR").path_join("pururin-race-entries-full.png"))
+
+func test_hovering_shows_that_row_and_leaving_returns_to_the_cursor_row() -> void:
+	var screen: Control = EntriesScene.instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var rows: Array = screen.get("_rows")
+	rows[0].grab_focus()
+	assert_eq(screen.get("shown_gate"), 0)
+	rows[1].mouse_entered.emit()
+	assert_eq(screen.get("shown_gate"), 4, "マウスを乗せた行を見せる")
+	rows[1].mouse_exited.emit()
+	assert_eq(screen.get("shown_gate"), 0, "離れたら、カーソルが合っている行に戻る")
+	assert_eq(screen.get("_detail").call("shown_pururin_id"), "player-1")
