@@ -7,6 +7,9 @@ extends Control
 
 ## 速さの弧が満タンになる速さ（km/h）。
 const SPEED_FULL_KMH := 110.0
+## 空力の弧が満タンになる、空気抵抗の減りの割合。ふつうは1〜4割で、6割を超えることはほぼない（超えたら満タンで止める）。
+## 数字は、本当の割合のまま出す。
+const AERO_FULL := 0.6
 ## 心拍の水の色：低いうちは水色。ふつうの上限の手前から黄、上限を超えると赤。
 const COLOR_HEART_LOW := Color(0.2, 0.92, 1.0, 1.0)
 const COLOR_HEART_MID := Color(1.0, 0.76, 0.25, 1.0)
@@ -17,6 +20,13 @@ const HEART_WARN_AT_BPM := 20.0
 const HEART_BEAT_PART := 0.4
 ## 名前と属性の印のあいだに、最低これだけ空ける（長い名前は、横に縮めて収める）。
 const NAME_GAP := 8.0
+## 押し合いで削られた体力を、赤い帯で残す。押し合いが終わってから、この秒数で消す。
+const STAMINA_HIT_FADE_S := 1.0
+## 押し負けているあいだ、ハートのふちが赤く点滅する色と、1秒あたりの点滅の回数、震える幅（ピクセル）。
+## 操作盤の描き直しは1秒に10回（local_race_controller の HEART_HUD_UPDATES_PER_S）なので、点滅は、それよりずっと遅くする。
+const HEART_HIT_EDGE_COLOR := Color(1.0, 0.12, 0.12, 1.0)
+const HEART_HIT_FLASH_PER_S := 2.5
+const HEART_HIT_SHAKE_PX := 3.0
 
 @onready var _board: Control = $Board
 @onready var _place: Label = $RaceInfo/Place
@@ -28,10 +38,13 @@ const NAME_GAP := 8.0
 @onready var _style: Control = $NameRow/Style
 @onready var _speed: Control = $Gauges/Speed
 @onready var _stamina: Control = $Gauges/Stamina
+@onready var _stamina_hit: Control = $Gauges/StaminaHit
+@onready var _stamina_top: Control = $Gauges/StaminaTop
 @onready var _heart: Control = $Heart
 @onready var _bpm: Label = $Bpm
 @onready var _aero_blue: Control = $Aero/AeroBlue
 @onready var _aero_green: Control = $Aero/AeroGreen
+@onready var _aero_base: Control = $Aero/AeroBase
 @onready var _aero_value: Label = $Aero/AeroValue
 @onready var _speed_value: Label = $SpeedText/SpeedValue
 @onready var _stamina_value: Label = $StaminaText/StaminaValue
@@ -44,11 +57,21 @@ const NAME_GAP := 8.0
 var _scale := 1.0
 ## 名前の、場面で決めた大きさ（長い名前は、ここから横に縮める）。
 var _name_scale := Vector2.ONE
+## 赤い帯の上のはし（体力の割合）。押し合いのあいだは、始まったときの値で止め、終わったら、だんだん今の値へ戻す。
+var _stamina_hit_ratio := 1.0
+var _stamina_hit_from := 1.0
+var _push_ended_msec := -1
+var _was_pushing := false
+## ハートの、場面で決めたふちの色と位置（押し負けの点滅・震えのあと、戻すため）。
+var _heart_edge_color := Color.WHITE
+var _heart_position := Vector2.ZERO
 
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_scale = _name.scale
+	_heart_edge_color = _heart.get("edge_color")
+	_heart_position = _heart.position
 	set_scale_factor(_scale)
 
 
@@ -104,12 +127,19 @@ func update_state(values: Dictionary) -> void:
 	_speed.set("value", clampf(speed / SPEED_FULL_KMH, 0.0, 1.0))
 	_speed_value.text = "%d" % int(round(speed))
 	var fuel := float(values.get("fuel_ratio", 1.0))
+	var pushing := bool(values.get("pushing", false))
+	_update_stamina_hit(fuel, pushing, Time.get_ticks_msec())
 	_stamina.set("value", stamina_value(fuel))
+	_stamina_hit.set("value", stamina_value(_stamina_hit_ratio))
+	_stamina_top.set("value", stamina_value(fuel))
 	_stamina_value.text = "%d" % int(round(fuel * 100.0))
-	var green := clampf(float(values.get("air_green", 0.0)), 0.0, 1.0)
-	var total := clampf(green + float(values.get("air_blue", 0.0)), 0.0, 1.0)
-	_aero_blue.set("value", total)
-	_aero_green.set("value", green)
+	# 空力のゲージ：根本から、黄＝空力の能力の分、緑＝後方支援の分、青＝ドラフトの分。
+	var base := clampf(float(values.get("air_base", 0.0)), 0.0, 1.0)
+	var with_rear := clampf(base + float(values.get("air_rear", 0.0)), 0.0, 1.0)
+	var total := clampf(with_rear + float(values.get("air_blue", 0.0)), 0.0, 1.0)
+	_aero_blue.set("value", clampf(total / AERO_FULL, 0.0, 1.0))
+	_aero_green.set("value", clampf(with_rear / AERO_FULL, 0.0, 1.0))
+	_aero_base.set("value", clampf(base / AERO_FULL, 0.0, 1.0))
 	_aero_value.text = "%d" % int(round(total * 100.0))
 	var notch_max := maxi(int(values.get("notch_max", 1)), 1)
 	var notch := clampi(int(values.get("notch", 1)), 1, notch_max)
@@ -128,6 +158,7 @@ func update_state(values: Dictionary) -> void:
 	_heart.set("value", heart_fill(bpm, float(values.get("heart_min_bpm", 100.0)), max_bpm))
 	_heart.set("water_color", heart_water_color(bpm, float(values.get("heart_normal_max_bpm", 200.0)), max_bpm))
 	_heart.set("beat", beat_glow(float(values.get("heart_beat_phase", 1.0))))
+	_update_heart_hit(bool(values.get("push_lost", false)), Time.get_ticks_msec())
 	_bpm.text = "%d" % int(round(bpm))
 	var trainer := str(values.get("trainer_name", ""))
 	_name.text = str(values.get("player_name", "")) + ("（%s）" % trainer if not trainer.is_empty() else "")
@@ -137,6 +168,39 @@ func update_state(values: Dictionary) -> void:
 	_style.set("style_count", int(values.get("style_group_count", 0)))
 	_style.set("style_index", int(values.get("style_group_index", 0)))
 	_style.set("style_rank_bonus", int(values.get("style_rank_bonus", 0)))
+
+
+## 押し合いで削られた体力の赤い帯。押し合いが始まったときの体力で上のはしを止め、終わったら STAMINA_HIT_FADE_S で今の値へ戻す。
+func _update_stamina_hit(fuel: float, pushing: bool, now_msec: int) -> void:
+	if pushing:
+		if not _was_pushing:
+			_stamina_hit_ratio = fuel
+		_stamina_hit_ratio = maxf(_stamina_hit_ratio, fuel)
+		_push_ended_msec = -1
+	elif _was_pushing:
+		_push_ended_msec = now_msec
+		_stamina_hit_from = _stamina_hit_ratio
+	_was_pushing = pushing
+	if not pushing:
+		if _push_ended_msec < 0:
+			_stamina_hit_ratio = fuel
+		else:
+			var t := clampf(float(now_msec - _push_ended_msec) / 1000.0 / STAMINA_HIT_FADE_S, 0.0, 1.0)
+			_stamina_hit_ratio = maxf(lerpf(_stamina_hit_from, fuel, t), fuel)
+			if t >= 1.0:
+				_push_ended_msec = -1
+
+
+## 押し負けているあいだ、ハートのふちを赤く点滅させ、小さく震わせる。負けていなければ、場面で決めた見た目に戻す。
+func _update_heart_hit(losing: bool, now_msec: int) -> void:
+	if not losing:
+		_heart.set("edge_color", _heart_edge_color)
+		_heart.position = _heart_position
+		return
+	var seconds := float(now_msec) / 1000.0
+	var flash := 0.5 + 0.5 * sin(seconds * TAU * HEART_HIT_FLASH_PER_S)
+	_heart.set("edge_color", _heart_edge_color.lerp(HEART_HIT_EDGE_COLOR, flash))
+	_heart.position = _heart_position + Vector2(sin(seconds * 71.0), cos(seconds * 53.0)) * HEART_HIT_SHAKE_PX
 
 
 ## 長い名前は、属性の印にかからないよう、横に縮める（縦の大きさは、場面で決めたまま）。

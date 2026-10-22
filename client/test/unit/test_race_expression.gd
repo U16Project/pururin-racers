@@ -72,13 +72,13 @@ func test_the_loser_of_a_push_is_the_one_with_lower_contact_resistance() -> void
 	var gap := LocalRaceMath.required_lateral_gap(0.0)
 	var strong := {"id": "A", "progress": 100.0, "offset": 0.0, "old_offset": 0.0, "stat": 8}
 	var weak := {"id": "B", "progress": 100.0, "offset": gap * 0.5, "old_offset": gap * 0.5, "stat": 3}
-	var result := LocalRaceMath.resolve_lateral_pushes([strong, weak])
+	var result := LocalRaceMath.resolve_lateral_pushes([strong, weak], 1.0)
 	assert_eq(result["lost_ids"], ["B"])
 	assert_true("A" in result["contest_ids"] and "B" in result["contest_ids"])
 	# 接触耐性が同じなら、どちらも負けではない（両方が頑張っている顔になる）。
 	var even: Dictionary = weak.duplicate()
 	even["stat"] = strong["stat"]
-	assert_eq(LocalRaceMath.resolve_lateral_pushes([strong, even])["lost_ids"], [])
+	assert_eq(LocalRaceMath.resolve_lateral_pushes([strong, even], 1.0)["lost_ids"], [])
 
 
 func test_a_runner_shows_the_expression_on_its_body() -> void:
@@ -90,11 +90,11 @@ func test_a_runner_shows_the_expression_on_its_body() -> void:
 	var hold := RaceExpression.MIN_SHOW_SECONDS
 	assert_eq(body.call("expression"), RaceExpression.NORMAL)
 	# 押し合いで負けている。
-	runner.call("apply_push_result", float(runner.call("get_offset")), true, true)
+	runner.call("apply_push_result", float(runner.call("get_offset")), true, true, 0)
 	runner.call("_update_expression", hold)
 	assert_eq(body.call("expression"), "push_lose")
 	# 押し合いが終わっても、すぐには戻さない。決まった時間がたったら、戻す。
-	runner.call("apply_push_result", float(runner.call("get_offset")), false, false)
+	runner.call("apply_push_result", float(runner.call("get_offset")), false, false, 0)
 	runner.call("_update_expression", hold * 0.5)
 	assert_eq(body.call("expression"), "push_lose")
 	runner.call("_update_expression", hold * 0.5)
@@ -191,7 +191,7 @@ func test_a_runner_sets_the_action_on_its_body() -> void:
 	runner.call("apply_contact_count", 1)
 	runner.call("_update_action", tick)
 	assert_eq(body.call("action"), "contact")
-	runner.call("apply_push_result", float(runner.call("get_offset")), true, false)
+	runner.call("apply_push_result", float(runner.call("get_offset")), true, false, 0)
 	runner.call("_update_action", tick)
 	assert_eq(body.call("action"), "push")
 	runner.call("mark_finished", 1, 100.0)

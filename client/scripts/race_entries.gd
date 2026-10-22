@@ -254,4 +254,3 @@ func _dim_label(text: String) -> Label:
 	var label := Style.label(text, 13, Style.COLOR_DIM)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
-

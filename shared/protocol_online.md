@@ -115,6 +115,8 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 `runners` の1体ぶん：`id`、`gate`、`progress`（進んだ距離 m）、`offset`（ライン m）、`speed`・`actual_speed`（km/h）、`notch`、
 `braking`、`heart`（心拍）、`stamina_ratio`、`air_aero`・`air_draft`（空気抵抗の軽減）、`dash_ratio`・`boost_ratio`（残り時間の割合）、
 `boost_uses_left`、`contacts`（接触している数）、`pushing`（押し合い中か）、`finished`、`finish_order`、`finish_time`。
+あとから足した項目（古い版のサーバーは送らない。無ければ0・false として扱う）：`air_base`（空力の能力だけで減っている分。空力1を0として数える。操作盤の表示用）、
+`air_rear`（後方支援で減っている分。操作盤の表示用）、`push_lost`（押し合いで、接触耐性で負けて押し出されているか）。
 
 `error` の `code`：`bad_message`（読めない・名前が空・知らない種類・知らない個体・選べない距離や出走数）、`version`（版が違う）、
 `no_name`（名乗る前にはできない）、`rooms_full`（部屋の数が上限）、`room_name_taken`（同じ名前の部屋がある）、`no_room`（その部屋は無い）、

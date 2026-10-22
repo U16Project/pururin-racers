@@ -45,6 +45,13 @@ const NUMBER_RANGES := {
 	"boost_heart_rise_multiplier": [1.0, 10.0],
 	"boost_debt_penalty_scale": [0.0, 1.0],
 	"push_load_multiplier": [1.0, 20.0],
+	# 押し合いの負荷：接触耐性の差1ごとに、負けた側は増え、勝った側は減る割合。勝った側は、下限の割合より下げない。
+	"push_load_per_stat_diff": [0.0, 1.0],
+	"push_load_min_ratio": [0.0, 1.0],
+	# 押し合いで、負けた側が横へ押し出される速さ（m/s）：差0の基準＋差1ごとの増え。上限まで。
+	"push_speed_base_m_per_s": [0.0, 20.0],
+	"push_speed_per_stat_diff_m_per_s": [0.0, 20.0],
+	"push_speed_max_m_per_s": [0.0, 20.0],
 	"contact_touch_margin_m": [0.0, 3.0],
 	"contact_heart_load_bpm_per_s": [0.0, 50.0],
 	"contact_stamina_load_l_per_s": [0.0, 10.0],

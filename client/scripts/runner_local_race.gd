@@ -36,6 +36,8 @@ var _net_offset := 0.0
 var _net_speed_mps := 0.0
 var _net_age_s := 0.0
 var _net_air_aero := 0.0
+var _net_air_base := 0.0
+var _net_air_rear := 0.0
 var _net_air_draft := 0.0
 var _net_has_state := false
 ## 映すだけの走者が、届いた位置へ追いつく速さ（1秒あたりの割合）と、届かないあいだ先へ進めてよい秒数の上限。
@@ -98,6 +100,8 @@ var _contact_level: float = 0.0
 var _body: Node3D
 ## 押し合いで、接触耐性で負けて押し出されているか。
 var _lost_push: bool = false
+## 押し合いの相手との、接触耐性の差（自分 − 相手）。押し合いでないときは0。
+var _push_stat_diff: int = 0
 ## 前のフレームの位置と向き（体の傾きを決めるのに使う）。
 var _previous_position := Vector3.ZERO
 var _previous_forward := Vector3.FORWARD
@@ -340,15 +344,21 @@ func apply_rear_assist_details(details: Dictionary) -> void:
 ## 空気抵抗の減りの内訳（HUD用）。aero_rear＝空力と後方支援（緑）、draft＝ドラフト（青）、total＝合計。
 ## 合計は実際の走行計算と同じ式（空力倍率 × (1 − 合成した減り)）で求める。
 ## 空力が5より低く空気抵抗が増える分は、緑を0として表示し、合計には含めない。
+## 操作盤（ハート型）は、緑を2つに分けて出す：base＝空力の能力だけで、いつも減っている分（空力1を0%として数える）、
+## rear＝後ろの走者から受ける後方支援の分。draft はそのまま。
 func get_air_reduction_breakdown() -> Dictionary:
 	if puppet:
-		return {"aero_rear": _net_air_aero, "draft": _net_air_draft, "total": _net_air_aero + _net_air_draft}
+		return {"aero_rear": _net_air_aero, "draft": _net_air_draft, "total": _net_air_aero + _net_air_draft, "base": _net_air_base, "rear": _net_air_rear}
 	var aero_multiplier := _aero_air_resistance_multiplier()
 	var rear := get_rear_assist_air_factor()
 	var combined := _draft_air_resistance_factor()
 	var total := maxf(1.0 - aero_multiplier * (1.0 - combined), 0.0)
 	var aero_rear := clampf(1.0 - aero_multiplier * (1.0 - rear), 0.0, total)
-	return {"aero_rear": aero_rear, "draft": maxf(total - aero_rear, 0.0), "total": total}
+	return {
+		"aero_rear": aero_rear, "draft": maxf(total - aero_rear, 0.0), "total": total,
+		"base": maxf(1.0 - aero_multiplier / LocalRaceMath.aero_air_resistance_multiplier(1), 0.0),
+		"rear": aero_multiplier * rear,
+	}
 
 
 func apply_contact_count(count: int) -> void:
@@ -367,9 +377,11 @@ func get_push_entry() -> Dictionary:
 
 
 ## 押し合いの結果を反映する。横位置を更新して、姿勢を取り直す。lost は、接触耐性で負けて押し出されたか。
-func apply_push_result(offset: float, in_contest: bool, lost: bool) -> void:
+## stat_diff は、勝負した相手との接触耐性の差（自分 − 相手）。押し合いの負荷の大きさを決める。
+func apply_push_result(offset: float, in_contest: bool, lost: bool, stat_diff: int) -> void:
 	_in_push_contest = in_contest
 	_lost_push = lost
+	_push_stat_diff = stat_diff if in_contest else 0
 	if not is_equal_approx(offset, _offset):
 		_offset = TrackMath.clamp_offset(offset)
 		_apply_pose()
@@ -377,6 +389,11 @@ func apply_push_result(offset: float, in_contest: bool, lost: bool) -> void:
 
 func is_in_push_contest() -> bool:
 	return _in_push_contest
+
+
+## 押し合いで、接触耐性で負けて押し出されているか。
+func is_losing_push() -> bool:
+	return _lost_push
 
 
 ## 走者の体（コントローラが付けた "Body"）。まだ付いていなければ null。
@@ -459,16 +476,23 @@ func _contact_resistance_stat() -> int:
 	return int(_effective_stats.get("contact_resistance", 5))
 
 
-## 押し合いの勝負が起きた走者は、接触の負荷が大きくなる（接触していない扱いでも、最低1人分）。
+## 接触の負荷の、人数・倍率・負荷を決める接触耐性。押し合いの勝負が起きた走者は、相手との差で倍率が決まり
+## （接触していない扱いでも、最低1人分）、自分の接触耐性では軽くしない（基準の値で計算する）。
+## 押し合いでなく、横に触れているだけのときは、自分の接触耐性で軽くなる。
 func _load_count_and_multiplier() -> Array:
 	if _in_push_contest:
-		return [maxi(_contact_count, 1), LocalRaceMath.PUSH_LOAD_MULTIPLIER]
-	return [_contact_count, 1.0]
+		return [maxi(_contact_count, 1), LocalRaceMath.push_load_multiplier(_push_stat_diff), LocalRaceMath.CONTACT_RESISTANCE_REFERENCE_STAT]
+	return [_contact_count, 1.0, _contact_resistance_stat()]
+
+
+## 押し合いの負荷の倍率（押し合いでなければ1）。
+func get_push_load_multiplier() -> float:
+	return float(_load_count_and_multiplier()[1])
 
 
 func get_contact_heart_load_bpm_per_s() -> float:
 	var load := _load_count_and_multiplier()
-	return LocalRaceMath.contact_heart_load_bpm_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
+	return LocalRaceMath.contact_heart_load_bpm_per_s(int(load[0]), int(load[2])) * float(load[1])
 
 
 ## 直近のフレームの横移動を、1秒あたりに直した心拍の増え（表示・記録用）。
@@ -482,7 +506,7 @@ func get_lateral_move_stamina_load_l_per_s() -> float:
 
 func get_contact_stamina_load_l_per_s() -> float:
 	var load := _load_count_and_multiplier()
-	return LocalRaceMath.contact_stamina_load_l_per_s(int(load[0]), _contact_resistance_stat()) * float(load[1])
+	return LocalRaceMath.contact_stamina_load_l_per_s(int(load[0]), int(load[2])) * float(load[1])
 
 
 func get_rear_assist_air_factor() -> float:
@@ -497,6 +521,10 @@ func apply_online_state(state: Dictionary) -> void:
 	_net_age_s = 0.0
 	_net_air_aero = float(state["air_aero"])
 	_net_air_draft = float(state["air_draft"])
+	# 空力の内訳と、押し合いの負けは、あとから足した項目。古い版のサーバーは送らないので、無ければ0・負けていない。
+	_net_air_base = float(state.get("air_base", 0.0))
+	_net_air_rear = float(state.get("air_rear", 0.0))
+	_lost_push = bool(state.get("push_lost", false))
 	# 最初の1回は、その場所へ直接置く。
 	if not _net_has_state:
 		_net_has_state = true
@@ -773,6 +801,9 @@ func get_online_state() -> Dictionary:
 		"stamina_ratio": get_stamina_ratio(),
 		"air_aero": float(air["aero_rear"]),
 		"air_draft": float(air["draft"]),
+		"air_base": float(air["base"]),
+		"air_rear": float(air["rear"]),
+		"push_lost": _lost_push,
 		"dash_ratio": get_dash_time_ratio(),
 		"boost_ratio": get_boost_time_ratio(),
 		"boost_uses_left": get_boost_uses_left(),

@@ -532,13 +532,14 @@ func _resolve_pushes() -> void:
 	var entries: Array = []
 	for runner in _runners:
 		entries.append(runner.call("get_push_entry"))
-	var result: Dictionary = LocalRaceMath.resolve_lateral_pushes(entries)
+	var result: Dictionary = LocalRaceMath.resolve_lateral_pushes(entries, get_process_delta_time())
 	var offsets: Dictionary = result["offsets"]
 	var contest: Array = result["contest_ids"]
 	var lost: Array = result["lost_ids"]
+	var diffs: Dictionary = result["diffs"]
 	for index in _runners.size():
 		var identifier := str(entries[index]["id"])
-		_runners[index].call("apply_push_result", float(offsets.get(identifier, entries[index]["offset"])), identifier in contest, identifier in lost)
+		_runners[index].call("apply_push_result", float(offsets.get(identifier, entries[index]["offset"])), identifier in contest, identifier in lost, int(diffs.get(identifier, 0)))
 
 
 func _spawn_field() -> void:
@@ -1262,7 +1263,7 @@ func _update_detail_text() -> void:
 		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
 	))
 	var draft_status: Dictionary = _player.call("get_draft_status")
-	lines.append("押し合い %s" % ("発生中（負荷x%.1f）" % LocalRaceMath.PUSH_LOAD_MULTIPLIER if _player.call("is_in_push_contest") else "なし"))
+	lines.append("押し合い %s" % ("発生中（負荷x%.2f）" % float(_player.call("get_push_load_multiplier")) if _player.call("is_in_push_contest") else "なし"))
 	lines.append("ダッシュ %s　ブースト %dpt 残り%d回　推進力x%.2f" % ["効果中" if _player.call("is_dash_active") else "なし", int(roundf(float(_player.call("get_boost_points")))), int(_player.call("get_boost_uses_left")), float(_player.call("get_drive_boost_multiplier"))])
 	lines.append("横移動 負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_lateral_move_heart_load_bpm_per_s"), _player.call("get_lateral_move_stamina_load_l_per_s")])
 	lines.append("接触 %d人　負荷 心拍+%.1fbpm/s 体力-%.3fL/s" % [_player.call("get_contact_count"), _player.call("get_contact_heart_load_bpm_per_s"), _player.call("get_contact_stamina_load_l_per_s")])
@@ -1391,6 +1392,12 @@ func _update_race_hud() -> void:
 		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
 		"air_green": float(air_breakdown["aero_rear"]),
 		"air_blue": float(air_breakdown["draft"]),
+		# 操作盤（ハート型）の空力のゲージ：根本（黄）＝空力の能力の分、緑＝後方支援の分、青＝ドラフト。
+		"air_base": float(air_breakdown["base"]),
+		"air_rear": float(air_breakdown["rear"]),
+		# 押し合い中か（体力の削られた分を赤く残す）と、押し負けているか（ハートが赤く震える）。
+		"pushing": bool(_player.call("is_in_push_contest")),
+		"push_lost": bool(_player.call("is_losing_push")),
 		"countdown": not _race_started,
 	}
 	if bool(_player.call("is_finished")):

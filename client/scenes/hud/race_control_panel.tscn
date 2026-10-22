@@ -286,6 +286,21 @@ shader_parameter/marker_color = Color(1, 1, 1, 1)
 shader_parameter/marker_width = 4.0
 shader_parameter/marker_overhang = 4.0
 
+[sub_resource type="Gradient" id="Gradient_aero_base"]
+colors = PackedColorArray(1, 0.86, 0.3, 1, 1, 0.86, 0.3, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aero_base"]
+shader = ExtResource("1_r0h6u")
+
+[sub_resource type="Gradient" id="Gradient_stamina_hit"]
+colors = PackedColorArray(1, 0.45, 0.55, 1, 1, 0.45, 0.55, 1)
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stamina_hit"]
+shader = ExtResource("1_r0h6u")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_stamina_top"]
+shader = ExtResource("1_r0h6u")
+
 [node name="RaceControlPanel" type="Control" unique_id=1752088014]
 custom_minimum_size = Vector2(904, 499)
 layout_mode = 3
@@ -452,6 +467,49 @@ glow_strength = 0.0
 gloss_strength = 0.0
 marker_at = 0.5
 
+[node name="StaminaHit" type="ColorRect" parent="Gauges"]
+material = SubResource("ShaderMaterial_stamina_hit")
+layout_mode = 0
+offset_left = 255.99954
+offset_top = 66.2991
+offset_right = 402.9994
+offset_bottom = 377.00836
+mouse_filter = 2
+script = ExtResource("1_arc")
+center = Vector2(-55.999847, 133.70055)
+radius = 161.99968
+thickness = 28.0
+start_deg = 150.0
+end_deg = 50.0
+cap_radius = 8.0
+gradient = SubResource("Gradient_stamina_hit")
+track_color = Color(1, 1, 1, 0)
+track_edge_color = Color(1, 1, 1, 0)
+glow_strength = 0.0
+gloss_strength = 0.0
+
+[node name="StaminaTop" type="ColorRect" parent="Gauges"]
+material = SubResource("ShaderMaterial_stamina_top")
+layout_mode = 0
+offset_left = 255.99954
+offset_top = 66.2991
+offset_right = 402.9994
+offset_bottom = 377.00836
+mouse_filter = 2
+script = ExtResource("1_arc")
+center = Vector2(-55.999847, 133.70055)
+radius = 161.99968
+thickness = 28.0
+start_deg = 150.0
+end_deg = 50.0
+cap_radius = 8.0
+gradient = SubResource("Gradient_stamina")
+track_color = Color(1, 1, 1, 0)
+track_edge_color = Color(1, 1, 1, 0)
+glow_strength = 0.0
+gloss_strength = 0.0
+marker_at = 0.5
+
 [node name="Heart" type="ColorRect" parent="." unique_id=611058645]
 material = SubResource("ShaderMaterial_dwwwi")
 layout_mode = 0
@@ -543,6 +601,28 @@ start_deg = 233.1
 end_deg = 271.2
 cap_radius = 6.0
 gradient = SubResource("Gradient_7gc6r")
+track_color = Color(1, 1, 1, 0)
+track_edge_color = Color(1, 1, 1, 0)
+glow_strength = 0.0
+gloss_strength = 0.0
+
+[node name="AeroBase" type="ColorRect" parent="Aero"]
+material = SubResource("ShaderMaterial_aero_base")
+layout_mode = 0
+offset_left = -8.034149
+offset_top = 96.47789
+offset_right = 127.979004
+offset_bottom = 307.0014
+mouse_filter = 2
+script = ExtResource("1_arc")
+value = 0.1
+center = Vector2(318.8102, 15.488876)
+radius = 274.84082
+thickness = 34.0
+start_deg = 233.1
+end_deg = 271.2
+cap_radius = 6.0
+gradient = SubResource("Gradient_aero_base")
 track_color = Color(1, 1, 1, 0)
 track_edge_color = Color(1, 1, 1, 0)
 glow_strength = 0.0

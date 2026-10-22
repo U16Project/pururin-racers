@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="698" height="555" viewBox="0 0 698 555">
+  <title>操作盤・下書き基準の部品別清書</title>
+  <desc>698×555のsource_sketch.pngを基準とした静止画。ゲージ値は下書きの見本値。各部品は独立した編集可能な図形。</desc>
+  <defs>
+    <path id="heart-shape" d="M283 271 C271 245 258 233 239 233 C215 230 203 248 205 278 C208 331 228 374 284 411 C310 377 350 346 365 314 C379 285 369 251 357 236 C338 213 305 224 283 271 Z"/>
+    <clipPath id="heart-clip"><use xlink:href="#heart-shape"/></clipPath>
+    <linearGradient id="speed-color" x1="0" y1="220" x2="0" y2="375" gradientUnits="userSpaceOnUse"><stop stop-color="#5186f3"/><stop offset="1" stop-color="#a5c5ff"/></linearGradient>
+    <style>
+      .word { font-family:'Comic Sans MS',sans-serif; font-size:30px; font-style:italic; fill:#ffffff; }
+      .number { font-family:'Comic Sans MS',sans-serif; font-style:italic; fill:#f2ef22; }
+      .track { fill:none; stroke:#293735; stroke-linecap:round; stroke-linejoin:round; }
+      .line { fill:none; stroke-linecap:round; stroke-linejoin:round; }
+      .notch { stroke-width:2.5; stroke-linejoin:round; }
+    </style>
+  </defs>
+  <g id="background" inkscape:groupmode="layer" inkscape:label="00 背景（確認用・非表示可）"><rect width="698" height="555" fill="#545c5b"/></g>
+  <g id="aero" inkscape:groupmode="layer" inkscape:label="01 空力ゲージ">
+    <path id="aero-track" class="track" stroke-width="25" d="M109 249 C114 289 131 341 161 393"/>
+    <path id="aero-blue" class="line" stroke="#008bea" stroke-width="22" d="M129 325 C136 343 143 361 149 373"/>
+    <path id="aero-green" class="line" stroke="#29f35d" stroke-width="22" d="M150 376 Q155 387 161 393"/>
+    <text id="aero-label" class="word" x="64" y="198">aero</text>
+    <text id="aero-value" class="number" x="72" y="245" font-size="46">68</text>
+    <text id="aero-unit" class="word" x="128" y="245" font-size="23">%</text>
+  </g>
+  <g id="speed" inkscape:groupmode="layer" inkscape:label="02 速度ゲージ">
+    <path id="speed-track" class="track" stroke-width="21" d="M242 201 C202 207 180 229 174 265 C166 305 172 344 189 372"/>
+    <path id="speed-fill" class="line" stroke="url(#speed-color)" stroke-width="17" d="M185 229 C174 246 170 267 171 292 C170 320 176 347 189 372"/>
+    <text id="speed-label" class="word" x="271" y="151" font-size="33">Speed</text>
+    <text id="speed-value" class="number" x="254" y="212" font-size="62">63</text>
+    <text id="speed-unit" class="word" x="333" y="204" font-size="24">km/h</text>
+  </g>
+  <g id="heart" inkscape:groupmode="layer" inkscape:label="03 ハート・水位">
+    <use id="heart-empty" xlink:href="#heart-shape" fill="#545c5b"/>
+    <g id="heart-water" clip-path="url(#heart-clip)"><path d="M197 314 L385 299 L385 426 L197 426 Z" fill="#11ffef"/></g>
+    <use id="heart-outline" xlink:href="#heart-shape" fill="none" stroke="#ff2797" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <g id="heart-number" inkscape:groupmode="layer" inkscape:label="04 心拍数・黒帯">
+    <path id="bpm-band" d="M241 298 L329 286 L335 332 L245 344 Z" fill="#020707"/>
+    <text id="bpm-value" class="word" x="252" y="331" font-size="38" transform="rotate(-5 252 331)">143</text>
+    <text id="bpm-unit" class="word" x="326" y="325" font-size="18">bpm</text>
+  </g>
+  <g id="stamina" inkscape:groupmode="layer" inkscape:label="05 体力ゲージ">
+    <path id="stamina-track" class="track" stroke-width="22" d="M393 247 C410 278 410 312 392 346 C374 379 346 406 319 423"/>
+    <path id="stamina-green" class="line" stroke="#a5fb88" stroke-width="19" d="M401 316 Q400 327 396 335"/>
+    <path id="stamina-yellow" class="line" stroke="#f8ec85" stroke-width="19" d="M395 337 Q391 348 386 356"/>
+    <path id="stamina-orange" class="line" stroke="#ffba87" stroke-width="19" d="M385 358 Q379 368 370 377"/>
+    <path id="stamina-red" class="line" stroke="#ff4777" stroke-width="19" d="M368 380 Q348 404 319 423"/>
+    <text id="stamina-label" class="word" x="204" y="451" font-size="30">Stamina</text>
+    <text id="stamina-value" class="number" x="244" y="489" font-size="47">69</text>
+    <text id="stamina-unit" class="word" x="294" y="487" font-size="23">%</text>
+  </g>
+  <g id="notch" inkscape:groupmode="layer" inkscape:label="06 ノッチ（6本を個別編集可）">
+    <path id="notch-1" class="notch" d="M386 396 L437 392 L430 420 L355 427 Z" fill="#0eeedc" stroke="#0eeedc"/>
+    <path id="notch-2" class="notch" d="M407 358 L450 354 L437 380 L385 387 Z" fill="#16f8ae" stroke="#16f8ae"/>
+    <path id="notch-3" class="notch" d="M414 322 L472 318 L458 345 L410 350 Z" fill="#88f327" stroke="#88f327"/>
+    <path id="notch-4" class="notch" d="M424 281 L502 278 L485 307 L418 313 Z" fill="#e4f02b" stroke="#e4f02b"/>
+    <path id="notch-5" class="notch" d="M430 244 L542 238 L523 263 L426 273 Z" fill="#ffc02a" stroke="#ffc02a"/>
+    <path id="notch-6" class="notch" d="M432 194 L584 190 L561 225 L430 236 Z" fill="#ff741a" stroke="#ff741a"/>
+    <text id="notch-label" class="word" x="435" y="181" font-size="29">Notch</text>
+    <text id="notch-value" class="number" x="519" y="180" font-size="55">6</text>
+  </g>
+  <g id="boost" inkscape:groupmode="layer" inkscape:label="07 ブースト（3本を個別編集可）">
+    <path id="boost-1" d="M452 429 L472 425 L499 381 L483 383 Z" fill="#f17c16"/>
+    <path id="boost-2" d="M499 375 L517 371 L540 322 L525 325 Z" fill="#f17c16"/>
+    <path id="boost-3" d="M535 310 L550 307 L581 249 L568 252 Z" fill="#f17c16"/>
+    <text id="boost-label" class="word" x="416" y="465" font-size="29">Boost</text>
+    <text id="boost-count" class="word" x="416" y="505" font-size="33">(3)</text>
+  </g>
+  <g id="dash" inkscape:groupmode="layer" inkscape:label="08 ダッシュゲージ">
+    <path id="dash-track" class="track" stroke-width="28" d="M587 289 Q582 330 562 376"/>
+    <path id="dash-fill" class="line" stroke="#22c5f0" stroke-width="24" d="M580 331 Q573 355 562 376"/>
+    <text id="dash-label" class="word" x="554" y="431" font-size="30">Dash</text>
+    <text id="dash-count" class="word" x="545" y="461" font-size="28">(∞)</text>
+  </g>
+  <g id="header" inkscape:groupmode="layer" inkscape:label="09 名前・属性・脚質">
+    <text id="pururin-name" x="172" y="103" font-family="Noto Sans CJK JP,sans-serif" font-size="30" fill="#ffffdf">アカネ</text>
+    <text id="trainer-name" class="word" x="281" y="103" font-size="31" fill="#ffffdf">(U16)</text>
+    <ellipse id="attribute-base" cx="445" cy="85" rx="20" ry="19" fill="#293735"/>
+    <path id="attribute-mark" d="M443 102 C433 100 428 93 431 83 L435 76 L439 85 L444 73 L447 84 L454 76 L453 91 C452 98 449 102 443 102 Z" fill="#ed1244"/>
+    <path id="style-active" class="line" stroke="#006aaf" stroke-width="11" d="M495 72 L483 88 L495 101"/>
+    <path id="style-2" class="line" stroke="#ffffdf" stroke-width="3.5" d="M511 72 L503 84 L512 94"/>
+    <path id="style-3" class="line" stroke="#ffffdf" stroke-width="3.5" d="M527 72 L519 84 L528 94"/>
+    <path id="style-4" class="line" stroke="#ffffdf" stroke-width="3.5" d="M543 72 L535 84 L544 94"/>
+  </g>
+</svg>

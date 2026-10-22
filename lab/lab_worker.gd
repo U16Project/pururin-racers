@@ -19,6 +19,11 @@ func _initialize() -> void:
 		if parts.size() == 2:
 			args[parts[0]] = parts[1]
 	var file := FileAccess.open(str(args["job"]), FileAccess.READ)
+	# 仕事のファイルが無い・読めないときは、待ち続けずに、すぐ止める。
+	if file == null:
+		push_error("仕事のファイルがありません: " + str(args["job"]))
+		quit(1)
+		return
 	_job = JSON.parse_string(file.get_as_text())
 	_out_path = str(args["out"])
 	_next.call_deferred()

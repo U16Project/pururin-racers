@@ -101,9 +101,19 @@ static var CONTACT_RESISTANCE_MULTIPLIER_PER_STAT: float:
 	get:
 		return Config.number("contact_resistance_multiplier_per_stat")
 ## 押し合い（横に動いて他の走者に重なったときの勝負）。
-static var PUSH_LOAD_MULTIPLIER: float:
-	get:
-		return Config.number("push_load_multiplier")
+## 押し合いの負荷の倍率。diff は自分の接触耐性 − 相手の接触耐性（負けているとマイナス）。
+## 差0で push_load_multiplier。差1ごとに、負けた側は増え、勝った側は減る（下限あり）。
+static func push_load_multiplier(diff: int) -> float:
+	var ratio := maxf(Config.number("push_load_min_ratio"), 1.0 - Config.number("push_load_per_stat_diff") * float(diff))
+	return Config.number("push_load_multiplier") * ratio
+
+
+## 押し合いで、負けた側が横へ押し出される速さ（m/s）。差が大きいほど速い（上限まで）。差0は、両方が半分ずつ離れる速さの合計。
+static func push_speed_m_per_s(stat_diff: int) -> float:
+	return minf(
+		Config.number("push_speed_base_m_per_s") + Config.number("push_speed_per_stat_diff_m_per_s") * float(absi(stat_diff)),
+		Config.number("push_speed_max_m_per_s")
+	)
 const PUSH_PASSES := 4
 ## 同時に数える接触の最大人数（左右）。
 const CONTACT_COUNT_MAX := 2
@@ -373,19 +383,22 @@ static func limit_offset_by_stronger_neighbors(
 	return result
 
 
-## 体の重なりを、横の押し合いで解く。勝ち負けは接触耐性の大小だけで決まる。
-## entries の各要素: {id, progress, offset, old_offset(動く前), stat(接触耐性)}。
-## 接触耐性が高い方は動かず、低い方が重なり全部ぶん横へ押し出される。同じなら、両方が半分ずつ離れる。
+## 体の重なりを、横の押し合いで解く。勝ち負けは接触耐性の大小で決まり、押し出す速さは差で決まる。
+## entries の各要素: {id, progress, offset, old_offset(動く前), stat(接触耐性)}。delta は、このフレームの秒数。
+## 低い方は、このフレームに「押し出す速さ × delta」まで横へ押し出される。押し出しきれなかった重なりは、
+## 高い方が押し返される（差が小さいと、強い側も押し込めない）。同じなら、両方が半分ずつ離れる。
 ## 壁で押し出せなかった分は、相手が逆向きに動いて解く。
 ## 押し出された走者が次の走者と重なれば、その二人で同じ勝負をする（最大 PUSH_PASSES 回）。
-## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID, "lost_ids": 接触耐性で負けて押し出された走者のID}
-static func resolve_lateral_pushes(entries: Array) -> Dictionary:
+## 戻り値: {"offsets": {id: 横位置}, "contest_ids": 勝負が起きた走者のID, "lost_ids": 接触耐性で負けて押し出された走者のID,
+##         "diffs": {id: 勝負した相手との接触耐性の差（自分 − 相手。相手が何人かいれば、いちばん不利な差）}}
+static func resolve_lateral_pushes(entries: Array, delta: float) -> Dictionary:
 	var count := entries.size()
 	var pos: Array[float] = []
 	for entry in entries:
 		pos.append(float(entry["offset"]))
 	var contest := {}
 	var lost := {}
+	var diffs := {}
 	var max_abs := TrackMath.MAX_ABS_OFFSET_M
 	for pass_index in PUSH_PASSES:
 		var correction: Array[float] = []
@@ -405,16 +418,22 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 					side = float(entries[j].get("old_offset", pos[j])) - float(entries[i].get("old_offset", pos[i]))
 				var direction := 1.0 if side >= 0.0 else -1.0
 				var overlap := required_lateral_gap(float(entries[i]["progress"]) - float(entries[j]["progress"])) - absf(pos[j] - pos[i])
-				var stat_i := int(entries[i].get("stat", 5))
-				var stat_j := int(entries[j].get("stat", 5))
-				# i が動く割合。接触耐性が低い方が全部、同じなら半分ずつ。
+				var stat_i := int(entries[i]["stat"])
+				var stat_j := int(entries[j]["stat"])
+				var id_i := str(entries[i]["id"])
+				var id_j := str(entries[j]["id"])
+				diffs[id_i] = mini(int(diffs.get(id_i, stat_i - stat_j)), stat_i - stat_j)
+				diffs[id_j] = mini(int(diffs.get(id_j, stat_j - stat_i)), stat_j - stat_i)
+				# i が動く割合。同じなら半分ずつ。差があれば、低い方が押し出す速さの分だけ動き、残りは高い方が押し返される。
 				var share_i := 0.5
-				if stat_i > stat_j:
-					share_i = 0.0
-					lost[str(entries[j]["id"])] = true
-				elif stat_i < stat_j:
-					share_i = 1.0
-					lost[str(entries[i]["id"])] = true
+				if stat_i != stat_j:
+					var pushed_share := clampf(push_speed_m_per_s(stat_i - stat_j) * delta / maxf(overlap, 0.0001), 0.0, 1.0)
+					if stat_i > stat_j:
+						share_i = 1.0 - pushed_share
+						lost[id_j] = true
+					else:
+						share_i = pushed_share
+						lost[id_i] = true
 				var want_i := -direction * overlap * share_i
 				var want_j := direction * overlap * (1.0 - share_i)
 				var moved_i := clampf(pos[i] + correction[i] + want_i, -max_abs, max_abs) - pos[i] - correction[i]
@@ -435,7 +454,7 @@ static func resolve_lateral_pushes(entries: Array) -> Dictionary:
 	var offsets := {}
 	for k in count:
 		offsets[str(entries[k]["id"])] = pos[k]
-	return {"offsets": offsets, "contest_ids": contest.keys(), "lost_ids": lost.keys()}
+	return {"offsets": offsets, "contest_ids": contest.keys(), "lost_ids": lost.keys(), "diffs": diffs}
 
 
 ## 操作性による、左右に動く負荷の倍率（基準値で1.0、高いほど小さい）。
