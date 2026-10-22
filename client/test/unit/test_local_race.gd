@@ -832,7 +832,9 @@ func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with
 		var natural_speed := LocalRaceMath.top_speed_natural_speed_kmh(stat)
 		var solo := _notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(15))
 		assert_true(is_finite(solo))
-		assert_almost_eq(solo, natural_speed, 0.05)
+		# 空力5（基準）なら、自然な最高速に落ち着く。空力が高ければ、ひとりでもそれより速い。
+		assert_almost_eq(_notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(5)), natural_speed, 0.05)
+		assert_gt(solo, natural_speed + 0.5)
 		# ドラフトは最高速の上限を作らず、空気抵抗の軽減分だけ自然に速度が伸びる。
 		assert_gt(_notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)), solo + 0.5)
 		assert_gt(_notch_six_equilibrium_speed(stat, 0.4, LocalRaceMath.aero_air_resistance_multiplier(15)), _notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)))

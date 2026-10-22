@@ -795,7 +795,7 @@ static func top_speed_natural_speed_kmh(top_speed: int) -> float:
 ## ノッチ6・空力5・ドラフトなしで、空気抵抗が基準（top_speed_reference_air_coefficient）のとき、
 ## 各最高速値の自然到達速度で推進力と抵抗が釣り合う。実際の空気抵抗が基準より強ければ、その分だけ遅く釣り合う
 ## （空気抵抗を上げると、ひとりで風を受けて走る側が、素直に遅くなる）。
-## 補正は速度の二乗に応じて現れる。空力は、実際に残る空気抵抗と同じ割合で入れる。
+## 補正は、ひとりで釣り合う速さまでは速度の二乗に応じて現れ、それより上では増えない。空力は補正に入れず、空気抵抗の側だけで効く。
 ## ドラフトは補正に含めない。軽くなった空気抵抗の分だけ、速度は自然に自然最高速を超えて伸びる。
 static func top_speed_drive_adjustment_kmh_per_s(
 	speed_kmh: float,
@@ -810,10 +810,18 @@ static func top_speed_drive_adjustment_kmh_per_s(
 	var level_force := drive_force_kmh_per_s(level)
 	var natural_speed := top_speed_natural_speed_kmh(top_speed)
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
-	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + TOP_SPEED_REFERENCE_AIR_COEFFICIENT * natural_speed * natural_speed * safe_air_multiplier
+	# 自然な最高速は、空力5（基準）の子が、ひとりで全力のときに釣り合う速さ。補正は基準の空力で決め、
+	# 実際の空力は、空気抵抗の側にだけ効かせる（空力が高い子は、ひとりでも速く走れる）。
+	var force_at_natural_speed := ROLLING_RESISTANCE_KMH_PER_S + TOP_SPEED_REFERENCE_AIR_COEFFICIENT * natural_speed * natural_speed
 	var level_share := level_force / maxf(max_drive_force, 0.001)
-	var speed_ratio := maxf(speed_kmh, MIN_SPEED_KMH) / maxf(natural_speed, 0.001)
-	return (force_at_natural_speed - max_drive_force) * level_share * speed_ratio * speed_ratio
+	var gain := (force_at_natural_speed - max_drive_force) * level_share / maxf(natural_speed * natural_speed, 0.001)
+	# 補正は、ひとりで走ったときに釣り合う速さ（このノッチ・空力で、風よけなし）までは速さの2乗で増え、
+	# それより上では増やさない。上でも増やすと、補正が空気抵抗をほとんど打ち消してしまい、
+	# ドラフトやブーストで空気抵抗や推進力が少し変わるだけで、速さが大きく伸びる（釣り合う速さがなくなることもある）。
+	var solo_room := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_air_multiplier - gain
+	var solo_speed := sqrt(maxf(level_force - ROLLING_RESISTANCE_KMH_PER_S, 0.0) / solo_room) if solo_room > 0.0 else INF
+	var speed := minf(maxf(speed_kmh, MIN_SPEED_KMH), solo_speed)
+	return gain * speed * speed
 
 
 static func stat_acceleration_response_multiplier(acceleration: int) -> float:
