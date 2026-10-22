@@ -7,7 +7,7 @@
       "profile_id": "balanced",
       "portrait_path": "res://assets/ui/cpu_trainers/yuu_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "レース場で働きながら、トレーナーの腕を磨く青年。プルの様子をよく見て、前の集団から離れないよう指示を送る。抜け出せる道を見つけると、迷わず前進を促す。"
+      "introduction": "レース場で働きながら、トレーナーの腕を磨く青年。集団の中で温存して、最後の直線で一気に抜け出す。"
     },
     {
       "id": "homura",
@@ -15,7 +15,7 @@
       "profile_id": "front",
       "portrait_path": "res://assets/ui/cpu_trainers/homura_v02.png",
       "favorite_running_style": "escape",
-      "introduction": "市場と町の店を行き来する、元気な配達人。レースでは、混み合う前にプルを先頭へ送り出したい。後ろの動きに振り回されず、先に取った位置を守るよう指示する。"
+      "introduction": "市場と町の店を行き来する、元気な配達人。とにかくスタートダッシュで、ほかのプルを置き去りにして、ぶっちぎりでゴールを目指す。"
     },
     {
       "id": "shizuku",
@@ -23,7 +23,7 @@
       "profile_id": "balanced",
       "portrait_path": "res://assets/ui/cpu_trainers/shizuku_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "農園の水路を手入れする女性。プルの疲れや周囲の変化によく気づき、苦しくなる前にペースを緩めるよう伝える。前を見失わない位置を保ち、余力が戻れば追うよう促す。"
+      "introduction": "農園の水路を手入れする女性。中盤は全体のペースに合わせて柔軟に走りを変え、終盤は早めに良い位置をキープし仕掛ける。"
     },
     {
       "id": "daichi",
@@ -31,7 +31,7 @@
       "profile_id": "draft",
       "portrait_path": "res://assets/ui/cpu_trainers/daichi_v03.png",
       "favorite_running_style": "stalk",
-      "introduction": "城下町へ野菜を届ける農園主。序盤はプルを急がせず、集団について力を残すよう指示する。前のプルが疲れ始めるころを見計らい、少しずつ追い上げを促す。"
+      "introduction": "城下町へ野菜を届ける農園主。序盤は集団の中で力をため、前が疲れたころから、じわじわと長く追い上げる。"
     },
     {
       "id": "hayate",
@@ -39,7 +39,7 @@
       "profile_id": "late",
       "portrait_path": "res://assets/ui/cpu_trainers/hayate_v03.png",
       "favorite_running_style": "closer",
-      "introduction": "山を越える旅人を案内する青年。レースでは、プルに後ろで待つよう伝えながら、前の集団の動きを見ている。追い始める場所を決めると、ためらわず前へ向かわせる。"
+      "introduction": "山を越える旅人を案内する青年。後ろでじっと待ち、仕掛けると決めたら、外から一気に抜き去る。"
     },
     {
       "id": "akari",
@@ -47,7 +47,7 @@
       "profile_id": "balanced",
       "portrait_path": "res://assets/ui/cpu_trainers/akari_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "市場でパン屋を営む、気さくな女性。プルが無理なく走れる場所を選び、前の集団についていくよう指示する。終盤に並びかけられてもすぐには引かず、競り合うよう励ます。"
+      "introduction": "市場でパン屋を営む、気さくな女性。集団を引き連れ、トップを追い、直線で押しのけ、一気にゴールを目指す。"
     },
     {
       "id": "minato",
@@ -55,7 +55,7 @@
       "profile_id": "draft",
       "portrait_path": "res://assets/ui/cpu_trainers/minato_v03.png",
       "favorite_running_style": "stalk",
-      "introduction": "港で荷船に乗る船乗り。プルを集団の後ろにつかせ、力を残しながら進める道を探す。前が開けばすぐに知らせ、隙間を抜けて追い上げるよう指示する。"
+      "introduction": "港で荷船に乗る船乗り。集団の後ろで力を残し、前が開いたら、すぐ隙間を抜けて追い上げる。"
     },
     {
       "id": "gantetsu",
@@ -63,7 +63,7 @@
       "profile_id": "front",
       "portrait_path": "res://assets/ui/cpu_trainers/gantetsu_v02.png",
       "favorite_running_style": "escape",
-      "introduction": "城壁や石橋の修繕を担う石工。集団の中で進路を塞がれることを嫌い、早めにプルを前へ出す。先頭を取った後は走るペースを整え、追ってくるプルに備えるよう伝える。"
+      "introduction": "城壁や石橋の修繕を担う石工。とことん前方で粘らせ、最後は根性で他のプルを押しのける。"
     },
     {
       "id": "hinata",
@@ -79,7 +79,7 @@
       "profile_id": "draft",
       "portrait_path": "res://assets/ui/cpu_trainers/kaede_v02.png",
       "favorite_running_style": "stalk",
-      "introduction": "レース場で着順や走りを記録する女性。ほかのプルがいつ前へ出たか、どこで遅れ始めたかをよく覚えている。担当するプルには集団の後ろについていくよう伝え、前のプルの勢いが鈍ったところで追い上げを指示する。"
+      "introduction": "レース場で着順や走りを記録する女性。集団の後ろで相手をよく見て、前の勢いが落ちたところを、直線でかわす。"
     },
     {
       "id": "ren",
@@ -95,7 +95,7 @@
       "profile_id": "late",
       "portrait_path": "res://assets/ui/cpu_trainers/ibuki_v03.png",
       "favorite_running_style": "closer",
-      "introduction": "山麓でぷるりんの世話をする青年。周囲が先を急いでも、担当するプルには落ち着いて待つよう伝える。十分に力を残せたと見れば追い上げを指示し、ゴールまで走り切るよう励ます。"
+      "introduction": "山麓でぷるりんの世話をする青年。前が急いでも慌てず後方で待機し、直線で一気に爆発。プルの合間をすり抜けゴールに迫る。"
     },
     {
       "id": "tsubaki",

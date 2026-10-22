@@ -268,10 +268,11 @@ static func drive_diagnostics_kmh_per_s(
 		# ブレーキ中は推進力の代わりに制動寄与を負値で入れる。
 		drive_contribution = -BRAKE_DECELERATION_KMH_PER_S
 	elif level > 0.0:
-		drive_contribution = drive_force_kmh_per_s(level) + top_speed_drive_adjustment_kmh_per_s
+		# ダッシュ・ブーストは、ノッチの推進力だけを一時的に増やす（抵抗と、最高速の補正には触れない）。
+		# 補正にも掛けると、補正は速さの2乗で増えるため、倍率が大きいとき釣り合う速さがなくなり、どこまでも加速する。
+		drive_contribution = drive_force_kmh_per_s(level) * maxf(drive_boost_multiplier, 0.0) + top_speed_drive_adjustment_kmh_per_s
 	if drive_contribution > 0.0:
-		# ダッシュ・ブーストは、推進力そのものを一時的に増やす（抵抗には触れない）。
-		drive_contribution *= maxf(drive_boost_multiplier, 0.0) * clampf(propulsion_efficiency, 0.0, 1.0)
+		drive_contribution *= clampf(propulsion_efficiency, 0.0, 1.0)
 	var safe_speed := maxf(speed_kmh, MIN_SPEED_KMH)
 	var rolling_resistance := ROLLING_RESISTANCE_KMH_PER_S
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
@@ -492,8 +493,13 @@ static func dash_thrust_bonus(acceleration_stat: int = 5, handling_stat: int = 5
 	return maxf(Config.number("dash_thrust_bonus") * scale, 0.0)
 
 
-## ブーストの今のポイント。押した直後のポイントから、残り時間に比例して、まっすぐ0へ減る。
+## ブーストの今のポイント。効いている間（残り時間がある間）は、押した直後のポイントのまま保つ。切れたら0。
 static func boost_points(points_at_press: float, time_left_s: float) -> float:
+	return maxf(points_at_press, 0.0) if time_left_s > 0.0 else 0.0
+
+
+## 重ねて押したときに受け継ぐポイント。押した直後のポイントのうち、残り時間の割合ぶん（早く重ねるほど多い）。
+static func boost_carry_points(points_at_press: float, time_left_s: float) -> float:
 	return maxf(points_at_press, 0.0) * clampf(time_left_s / maxf(Config.number("boost_duration_s"), 0.001), 0.0, 1.0)
 
 

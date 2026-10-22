@@ -25,6 +25,15 @@ func test_drive_boost_multiplier_scales_only_the_drive_force() -> void:
 	assert_almost_eq(float(boosted["drive_contribution_kmh_per_s"]), float(plain["drive_contribution_kmh_per_s"]) * 1.5, 0.0001)
 	assert_almost_eq(float(boosted["air_resistance_kmh_per_s"]), float(plain["air_resistance_kmh_per_s"]), 0.0001)
 	assert_almost_eq(float(boosted["rolling_resistance_kmh_per_s"]), float(plain["rolling_resistance_kmh_per_s"]), 0.0001)
+	# 最高速の補正には、倍率をかけない（補正は、そのまま足すだけ）。
+	var adjustment := 3.0
+	var plain_adjusted := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, adjustment)
+	var boosted_adjusted := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, adjustment, 1.0, 1.0, 1.0, false, 1.5)
+	assert_almost_eq(
+		float(boosted_adjusted["drive_contribution_kmh_per_s"]) - float(plain_adjusted["drive_contribution_kmh_per_s"]),
+		LocalRaceMath.drive_force_kmh_per_s(4.0) * 0.5,
+		0.0001
+	)
 	# 倍率1.0は、今までと同じ。
 	var same := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 4.0, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.0)
 	assert_almost_eq(float(same["total_acceleration_kmh_per_s"]), float(plain["total_acceleration_kmh_per_s"]), 0.0001)
@@ -43,12 +52,15 @@ func test_dash_thrust_grows_with_acceleration_and_a_little_with_handling() -> vo
 	assert_gte(LocalRaceMath.dash_thrust_bonus(1, 1), 0.0)
 
 
-func test_boost_points_fall_in_a_straight_line_to_zero() -> void:
+func test_boost_points_hold_while_active_and_end_at_zero() -> void:
 	var duration := LocalRaceMath.Config.number("boost_duration_s")
 	var per_use := LocalRaceMath.Config.number("boost_points_per_use")
 	assert_almost_eq(LocalRaceMath.boost_points(per_use, duration), per_use, 0.0001)
-	assert_almost_eq(LocalRaceMath.boost_points(per_use, duration * 0.5), per_use * 0.5, 0.0001)
+	assert_almost_eq(LocalRaceMath.boost_points(per_use, duration * 0.5), per_use, 0.0001)
 	assert_eq(LocalRaceMath.boost_points(per_use, 0.0), 0.0)
+	# 重ねたときに受け継ぐのは、残り時間の割合ぶん。
+	assert_almost_eq(LocalRaceMath.boost_carry_points(per_use, duration * 0.5), per_use * 0.5, 0.0001)
+	assert_eq(LocalRaceMath.boost_carry_points(per_use, 0.0), 0.0)
 	assert_almost_eq(LocalRaceMath.boost_thrust_bonus(per_use, 1.0), per_use * LocalRaceMath.Config.number("boost_thrust_per_point"), 0.0001)
 
 
@@ -102,7 +114,7 @@ func test_boost_stacks_on_the_remaining_points_and_is_limited_in_uses() -> void:
 	var max_uses := int(LocalRaceMath.Config.number("boost_max_uses"))
 	assert_true(runner.call("trigger_boost"))
 	assert_almost_eq(float(runner.call("get_boost_points")), per_use, 0.0001)
-	# 半分の時間が過ぎたところで重ねる。残りの半分に、上乗せされ、残り時間が戻る。
+	# 半分の時間が過ぎたところで重ねる。残り時間の割合ぶん（半分）を割り増しして受け継ぎ、1回ぶんを足し、残り時間が戻る。
 	runner.set("_boost_time_left", duration * 0.5)
 	assert_true(runner.call("trigger_boost"))
 	assert_almost_eq(float(runner.call("get_boost_points")), per_use + per_use * 0.5 * (1.0 + LocalRaceMath.Config.number("boost_stack_bonus")), 0.0001)

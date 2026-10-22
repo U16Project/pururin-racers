@@ -616,7 +616,7 @@ func trigger_boost() -> bool:
 	if not _can_use_drive_action() or get_boost_uses_left() <= 0:
 		return false
 	# 残っているポイントは、割り増しして受け継ぐ（早めに重ねるほど有利）。
-	_boost_points_at_press = LocalRaceMath.boost_points_after_press(get_boost_points())
+	_boost_points_at_press = LocalRaceMath.boost_points_after_press(LocalRaceMath.boost_carry_points(_boost_points_at_press, _boost_time_left))
 	_boost_time_left = LocalRaceMath.Config.number("boost_duration_s")
 	_boost_uses += 1
 	_heart_rate_bpm = minf(
