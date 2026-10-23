@@ -1,0 +1,104 @@
+{
+  "_note": "強化学習の設定（すべて仮）。ゲーム本体の設定ではない。",
+  "decide_every_s": 0.5,
+  "fixed_fps": 30,
+  "workers": 8,
+  "cut_after_winner_s": 30.0,
+  "time_limit_s": 600.0,
+  "field": 8,
+  "trainee": "player-1",
+  "distances_m": [
+    2000
+  ],
+  "reward": {
+    "_note": "ゴールの着順の点（1位から順）。1位でなかったときは、1位とのタイム差が小さいほど gap_bonus まで足す（gap_scale_s 秒差で0）。前へ進んだ分の点（レース全体を進むと、この値）。2位の点＋gap_bonus が1位の点より小さいこと",
+    "place": [
+      1.0,
+      0.4,
+      0.2,
+      0.0,
+      -0.1,
+      -0.2,
+      -0.3,
+      -0.4
+    ],
+    "gap_bonus": 0.3,
+    "gap_scale_s": 5.0,
+    "progress_total": 0.2,
+    "style": {
+      "_note": "性格に合った走りの点（2026-10-24 ユーザー確認済みの案）。中ほど（mid_from〜mid_to の割合）で性格の「いたい順位」にいた割合 × place（終盤にいたい順位があるトレーナーは、終盤も数える）。後ろにつく性格は、中ほどで風よけ（received_draft_p が draft_at_least 以上）をもらっていた割合、つかない性格はもらっていなかった割合 × draft。place＋draft は、着順の点のいちばん小さい差より小さくすること",
+      "place": 0.05,
+      "draft": 0.03,
+      "mid_from": 0.25,
+      "mid_to": 0.75,
+      "draft_at_least": 0.05
+    }
+  },
+  "observe": {
+    "_note": "前後の差（m）は gap_scale_m で割って -1〜1 に収める。集団は、前後の間が group_gap_m より開いたら別の組。typical_finish_s は、その距離のふつうのゴールのタイム（ゲームのCPUだけのレースの1位のタイムの平均。流れが速いか遅いかを見るため）",
+    "gap_scale_m": 100.0,
+    "speed_scale_kmh": 100.0,
+    "group_gap_m": 5.0,
+    "typical_finish_s": {
+      "2000": 141.0
+    }
+  },
+  "seeds": {
+    "_note": "学ぶレースと、比べるレースのくじの番号を分ける",
+    "train_from": 1000000,
+    "eval_from": 1,
+    "eval_races": 200
+  },
+  "ppo": {
+    "learning_rate": 0.0003,
+    "n_steps": 512,
+    "batch_size": 1024,
+    "n_epochs": 10,
+    "gamma": 0.998,
+    "gae_lambda": 0.95,
+    "ent_coef": 0.01,
+    "net": [
+      256,
+      256
+    ]
+  },
+  "demo": {
+    "_note": "お手本（あなたの走りの記録）。since より後の記録を使う。line_threshold_m：0.5秒でこれ以上ラインが動いたら「内へ／外へ」と数える。strength_by_races：お手本の本数 → 寄せる強さ（0〜1。間は直線で引く）。pretrain_batches：学び始めのまね（強さ1のときの回数）。keep_start：学びの途中で寄せる力のはじめの強さ（強さ1のとき）。keep_half_life_steps：この判断の数ごとに、寄せる力が半分になる。keep_batches：頭を直すたびの、まねの回数。reload_every_steps：この判断の数ごとに、新しい記録を読み直す。place_weight：お手本のレースの着順ごとの重さ（良かったレースほど少し重く見る）",
+    "since": "2026-10-22T22:00:00",
+    "line_threshold_m": 0.3,
+    "strength_by_races": [
+      [
+        0,
+        0.0
+      ],
+      [
+        5,
+        0.2
+      ],
+      [
+        30,
+        0.6
+      ],
+      [
+        100,
+        1.0
+      ]
+    ],
+    "pretrain_batches": 3000,
+    "batch_size": 256,
+    "keep_start": 0.5,
+    "keep_half_life_steps": 500000,
+    "keep_batches": 20,
+    "reload_every_steps": 250000,
+    "place_weight": [
+      1.0,
+      0.85,
+      0.7,
+      0.55,
+      0.4,
+      0.3,
+      0.2,
+      0.2
+    ]
+  }
+}
