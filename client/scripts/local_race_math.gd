@@ -20,8 +20,10 @@ static var PLAYER_MAX_SPEED_KMH: float:
 		return TOP_SPEED_NATURAL_MAX_KMH
 
 ## M5.1 出力操作実験。出力は整数ノッチだが、入力は長押しでリピートする。
-## ノッチは0（ニュートラル）〜最大。制動はノッチではなく別のブレーキ操作で行う。
-const DRIVE_LEVEL_MIN := 0.0
+## ノッチは最小（drive_level_min。現行1。ノッチ0は廃止）〜最大。制動はノッチではなく別のブレーキ操作で行う。
+static var DRIVE_LEVEL_MIN: float:
+	get:
+		return Config.number("drive_level_min")
 static var DRIVE_LEVEL_MAX: float:
 	get:
 		return Config.number("drive_level_max")
@@ -1271,10 +1273,10 @@ static func cpu_heart_safe_drive_level(
 ) -> float:
 	if current_bpm < Config.number("cpu_heart_drop_threshold_bpm"):
 		return clamp_drive_level(proposed_drive_level)
-	for drive_level in range(int(DRIVE_LEVEL_MAX), -1, -1):
+	for drive_level in range(int(DRIVE_LEVEL_MAX), int(DRIVE_LEVEL_MIN) - 1, -1):
 		if heart_rate_net_rate_bpm_per_s(current_bpm, float(drive_level), cardio_stat, adaptation) + extra_load_bpm_per_s < 0.0:
 			return float(drive_level)
-	return 0.0
+	return DRIVE_LEVEL_MIN
 
 
 static func heart_rate_recovery_rate_base_bpm_per_s(cardio_stat: int) -> float:
@@ -1356,9 +1358,10 @@ static func stamina_consumption_l_per_s(
 	heart_rate_bpm: float = -1.0,
 	load_multiplier: float = -1.0
 ) -> float:
-	var level := clamp_drive_level(drive_level)
-	if level <= 0.0:
+	# ブレーキ中は、走者が出力0（drive_level 0）を渡す。ノッチの最小（1）に引き上げずに、消費0とする（ブレーキは体力を使わない）。
+	if drive_level <= 0.0:
 		return 0.0
+	var level := clamp_drive_level(drive_level)
 	var effort := level / float(DRIVE_LEVEL_MAX)
 	var safe_heart := Config.number("heart_rate_min_bpm") if heart_rate_bpm < 0.0 else heart_rate_bpm
 	var heart_ratio := clampf(

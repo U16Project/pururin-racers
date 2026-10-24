@@ -8,12 +8,15 @@ const PATH := "res://data/config/local_race.json"
 const NUMBER_RANGES := {
 	"schema_version": [1.0, 1.0],
 	"drive_level_max": [1.0, 100.0],
+	"drive_level_min": [0.0, 100.0],
 	"drive_level_step": [1.0, 1.0],
 	"start_countdown_seconds": [0.0, 30.0],
 	"race_entry_wait_seconds": [0.0, 30.0],
 	"player_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_level": [-100.0, 100.0],
 	"cpu_start_drive_duration_seconds": [0.0, 30.0],
+	# 育てたCPU（強化学習の頭）の操作が届くまでの遅れ（人の反応に合わせる）。ラボの育成でも、ゲームに入れたときも、これを使う。
+	"cpu_reaction_delay_s": [0.0, 2.0],
 	"min_speed_kmh": [0.0, 75.0],
 	# ゴール後：ゴールから start の距離で速さを落とし始め、end の距離からは、ゆっくりの速さで進む。
 	"finish_slowdown_start_m": [0.0, 1000.0],
@@ -193,9 +196,11 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
-	for key in ["drive_level_max", "drive_level_step"]:
+	for key in ["drive_level_max", "drive_level_min", "drive_level_step"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
+	if float(data["drive_level_min"]) > float(data["drive_level_max"]):
+		errors.append("drive_level_min: drive_level_max 以下が必要です")
 	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat", "handling_steer_reference_stat", "contact_resistance_reference_stat"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)

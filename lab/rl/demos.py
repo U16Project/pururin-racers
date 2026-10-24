@@ -94,7 +94,7 @@ class DemoBank:
             loss.backward()
             torch.nn.utils.clip_grad_norm_(policy.parameters(), 0.5)
             policy.optimizer.step()
-            total += float(log_prob.mean().exp())
+            total += float(log_prob.detach().mean().exp())
         return total / batches
 
 

@@ -92,11 +92,8 @@ func test_dash_refreshes_but_does_not_stack_and_ends_after_its_duration() -> voi
 	assert_almost_eq(float(runner.call("get_drive_boost_multiplier")), 1.0, 0.0001)
 
 
-func test_dash_and_boost_need_a_positive_notch_and_no_brake() -> void:
+func test_dash_and_boost_need_no_brake() -> void:
 	var runner := _runner()
-	runner.call("set_drive_level", 0.0)
-	assert_false(runner.call("trigger_dash"))
-	assert_false(runner.call("trigger_boost"))
 	runner.call("set_drive_level", 4.0)
 	runner.call("set_braking", true)
 	assert_false(runner.call("trigger_dash"))

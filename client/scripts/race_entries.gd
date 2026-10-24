@@ -228,7 +228,10 @@ func start() -> void:
 		return
 	_transitioning = true
 	UIAudio.play_confirmation()
-	_navigate("res://scenes/local_race.tscn")
+	if Session.race_starter.is_valid():
+		Session.race_starter.call()
+	else:
+		_navigate("res://scenes/local_race.tscn")
 
 func back() -> void:
 	if _transitioning:
@@ -254,3 +257,4 @@ func _dim_label(text: String) -> Label:
 	var label := Style.label(text, 13, Style.COLOR_DIM)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
+

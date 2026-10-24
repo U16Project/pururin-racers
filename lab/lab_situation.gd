@@ -1,6 +1,10 @@
 extends RefCounted
 ## CPU育成ラボ：頭が見る、今の状況（そのままの単位：m・bpm・km/h）。
 ## ラインは「内側がマイナス、外側がプラス」のm（コースの向きによらず同じ）。
+## 走っているレース（read）からも、ゲームの記録ファイルの1コマ（from_records）からも、同じ形で作る
+## （記録からあなたの走りを写すときに、頭が、走っているときと同じものを見るように）。
+## 記録の1体ぶん（record）は、ゲームの記録ファイルの runners の1つと同じ名前の項目を使う：
+## race_progress・offset・speed・actual_speed_kmh・heart_rate_bpm・stamina_ratio・drive_level・boost_uses_left・dash_active。
 
 const TrackMath := preload("res://scripts/track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
@@ -26,54 +30,75 @@ static func inside_sign(curve: Curve3D) -> float:
 	return 1.0 if TrackMath.distance_multiplier(1.0, best) < TrackMath.distance_multiplier(-1.0, best) else -1.0
 
 
-static func read(runner: Node3D, runners: Array, curve: Curve3D, route: Dictionary, inside: float, now_s: float) -> Dictionary:
+## 走っている走者の、記録と同じ形の1体ぶん。
+static func record_of(runner: Node3D) -> Dictionary:
 	var snap: Dictionary = runner.call("get_telemetry_snapshot")
-	var distance_m := float(runner.call("get_race_distance"))
-	var progress := float(snap["race_progress"])
+	return {
+		"race_progress": float(snap["race_progress"]), "offset": float(snap["offset"]), "speed": float(snap["speed"]),
+		"actual_speed_kmh": float(snap["actual_speed"]), "heart_rate_bpm": float(snap["heart_rate_bpm"]),
+		"stamina_ratio": float(snap["stamina_ratio"]), "drive_level": float(runner.call("get_drive_level")),
+		"boost_uses_left": int(snap["boost_uses_left"]), "dash_active": bool(runner.call("is_dash_active")),
+	}
+
+
+static func read(runner: Node3D, runners: Array, curve: Curve3D, route: Dictionary, inside: float, now_s: float) -> Dictionary:
+	var others: Array = []
+	for other: Node3D in runners:
+		if other != runner:
+			others.append(record_of(other))
+	return from_records(record_of(runner), others, float(runner.call("get_race_distance")), curve, route, inside, now_s)
+
+
+## me＝自分の1体ぶん、others＝ほかの全員の1体ぶん。
+static func from_records(me: Dictionary, others: Array, distance_m: float, curve: Curve3D, route: Dictionary, inside: float, now_s: float) -> Dictionary:
+	var progress := float(me["race_progress"])
+	var line := -inside * float(me["offset"])
 	var s := {
 		"now_s": now_s,
 		"distance_m": distance_m,
 		"progress_m": progress,
 		"remaining_m": maxf(distance_m - progress, 0.0),
-		"notch": int(round(float(runner.call("get_drive_level")))),
-		"heart_bpm": float(snap["heart_rate_bpm"]),
-		"stamina": float(snap["stamina_ratio"]),
-		"speed_kmh": float(snap["speed"]),
-		"actual_speed_kmh": float(snap["actual_speed"]),
-		"line_m": -inside * float(snap["offset"]),
+		"notch": int(round(float(me["drive_level"]))),
+		"heart_bpm": float(me["heart_rate_bpm"]),
+		"stamina": float(me["stamina_ratio"]),
+		"speed_kmh": float(me["speed"]),
+		"actual_speed_kmh": float(me["actual_speed_kmh"]),
+		"line_m": line,
 		"line_max_m": TrackMath.MAX_ABS_OFFSET_M,
 		"corner_now": _is_corner(curve, route, progress),
 		"corner_ahead": _is_corner(curve, route, progress + LOOK_AHEAD_M),
-		"boost_left": int(snap["boost_uses_left"]),
-		"dash_active": bool(runner.call("is_dash_active")),
+		"boost_left": int(me["boost_uses_left"]),
+		"dash_active": bool(me["dash_active"]),
 	}
-	# 順位と、前の走者：すぐ前（ラインに関係なく、いちばん近い前）と、同じラインのすぐ前。
-	var line := float(s["line_m"])
+	# 順位と、前後の走者：すぐ前（ラインに関係なく、いちばん近い前）、同じラインのすぐ前、すぐ後ろ。
 	var better := 0
-	var ahead: Node3D = null
+	var ahead := {}
 	var ahead_gap := INF
-	var lane: Node3D = null
+	var lane := {}
 	var lane_gap := INF
-	for other: Node3D in runners:
-		if other == runner:
-			continue
-		var gap := float(other.call("get_race_progress")) - progress
+	var behind_gap := INF
+	for other: Dictionary in others:
+		var gap := float(other["race_progress"]) - progress
 		if gap <= 0.001:
+			behind_gap = minf(behind_gap, -gap)
 			continue
 		better += 1
 		if gap < ahead_gap:
 			ahead_gap = gap
 			ahead = other
-		if absf(-inside * float(other.call("get_offset")) - line) < SAME_LINE_M and gap < lane_gap:
+		if absf(-inside * float(other["offset"]) - line) < SAME_LINE_M and gap < lane_gap:
 			lane_gap = gap
 			lane = other
-	s["place_ratio"] = float(better) / maxf(float(runners.size() - 1), 1.0)
-	s["has_ahead"] = ahead != null
+	s["place"] = better + 1
+	s["field"] = others.size() + 1
+	s["place_ratio"] = float(better) / maxf(float(others.size()), 1.0)
+	s["has_ahead"] = not ahead.is_empty()
 	s["ahead_gap_m"] = ahead_gap
-	s["ahead_line_m"] = -inside * float(ahead.call("get_offset")) if ahead != null else 0.0
-	s["has_lane_ahead"] = lane != null
+	s["ahead_line_m"] = -inside * float(ahead["offset"]) if not ahead.is_empty() else 0.0
+	s["has_lane_ahead"] = not lane.is_empty()
 	s["lane_ahead_gap_m"] = lane_gap
-	s["lane_ahead_line_m"] = -inside * float(lane.call("get_offset")) if lane != null else 0.0
+	s["lane_ahead_line_m"] = -inside * float(lane["offset"]) if not lane.is_empty() else 0.0
+	s["behind_gap_m"] = behind_gap
 	return s
 
 

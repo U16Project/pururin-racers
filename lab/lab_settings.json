@@ -1,5 +1,6 @@
 {
   "_note": "CPU育成ラボの設定（すべて仮）。ゲーム本体の設定ではない。",
+  "teacher_since": "2026-10-24T00:39:25",
   "decide_every_s": 0.5,
   "cut_after_winner_s": 30.0,
   "workers": 8,
@@ -14,6 +15,7 @@
     "candidates": 10,
     "races": 10,
     "start_sigma": 0.3,
+    "teacher_sigma": 0.1,
     "check_races": 10,
     "hall_of_fame": 4
   }

@@ -173,7 +173,7 @@ func setup_for_race(
 	# カウントダウン中は全員停止し、開始と同時に選択済みの出力で発進する。
 	_current_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
 	_actual_speed_kmh = LocalRaceMath.MIN_SPEED_KMH
-	_drive_level = 0.0
+	_drive_level = LocalRaceMath.DRIVE_LEVEL_MIN
 	_braking = false
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
@@ -631,9 +631,14 @@ func _can_use_drive_action() -> bool:
 	return player_controlled and _race_active and not _finished and not _braking and _drive_level > 0.0
 
 
-## ダッシュ。押した瞬間に呼ぶ。効果は重ならず、残り時間が延びる。
+## 体力が、借りられる下限（表示で -100%）まで来ているか。ここまで来ると、ダッシュは使えない。
+func is_stamina_exhausted() -> bool:
+	return _stamina <= -LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l) + 0.0001
+
+
+## ダッシュ。押した瞬間に呼ぶ。効果は重ならず、残り時間が延びる。体力が下限（-100%）のときは使えない。
 func trigger_dash() -> bool:
-	if not _can_use_drive_action():
+	if not _can_use_drive_action() or is_stamina_exhausted():
 		return false
 	_dash_time_left = LocalRaceMath.Config.number("dash_duration_s")
 	return true
@@ -867,6 +872,7 @@ func get_telemetry_snapshot() -> Dictionary:
 	snapshot["boost_uses_left"] = get_boost_uses_left()
 	snapshot["lateral_move_heart_load_bpm_per_s"] = get_lateral_move_heart_load_bpm_per_s()
 	snapshot["rotation_y"] = rotation.y
+	snapshot["remote_controlled"] = remote_controlled
 	return snapshot
 
 

@@ -17,6 +17,7 @@ const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const PururinTile := preload("res://scripts/menu/pururin_tile.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 ## ヘッドレスではOSの窓モードが変わらないため、入力が要求した切替を記録する。
 class TitleInputProbe extends "res://scripts/options_screen.gd":
@@ -497,9 +498,11 @@ func test_detail_preview_uses_attribute_adjusted_pre_race_stats() -> void:
 	assert_eq(preview["display_name"], "アカネ")
 	assert_eq(preview["attribute"], "火")
 	assert_eq(preview["running_style"], "逃げ")
-	assert_eq(preview["pre_race_stats"]["acceleration"], 9)
-	assert_eq(preview["pre_race_stats"]["cardio"], 8)
-	assert_eq(preview["pre_race_stats"]["top_speed"], 5)
+	# 期待値は、一覧の配分と属性から作る（配分を変えても壊れないように）。
+	var pururin := PururinRosterConfig.pururin_by_id("cpu-1")
+	var expected := PururinStatsMath.pre_race_stats(str(pururin["attribute"]), pururin["allocation"])
+	for stat_id: String in ["acceleration", "cardio", "top_speed"]:
+		assert_eq(preview["pre_race_stats"][stat_id], expected[stat_id], stat_id)
 	assert_eq(PururinDetail.preview_for("unknown"), {})
 
 

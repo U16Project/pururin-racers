@@ -33,9 +33,11 @@ def roster_ids() -> list:
 
 
 def make_spec(race_seed: int, settings: dict, roster: list) -> dict:
-    """くじの番号から、1レース（距離・出る8体・枠順）を決める。同じ番号なら、いつも同じレース。8席全部が育てるCPU。"""
+    """くじの番号から、1レース（距離・出る8体・枠順）を決める。同じ番号なら、いつも同じレース。8席全部が育てるCPU。
+    出る子は、育てるCPU（brains の1つ目）が受け持つ子から選ぶ。"""
     rng = random.Random(race_seed)
-    lineup = list(roster)
+    members = [v for k, v in settings["brains"].items() if not k.startswith("_")][0]
+    lineup = list(roster) if members == "all" else list(members)
     rng.shuffle(lineup)
     lineup = lineup[: settings["field"]]
     return {
@@ -49,22 +51,26 @@ def make_spec(race_seed: int, settings: dict, roster: list) -> dict:
 class Godot:
     """画面なしのゴドー1本。"""
 
-    def __init__(self, settings: dict, index: int, log_dir):
+    def __init__(self, settings: dict, index: int, log_dir, window: bool = False, extra_args=()):
         self._server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._server.bind(("127.0.0.1", 0))
         self._server.listen(1)
         port = self._server.getsockname()[1]
         log_path = Path(log_dir) / f"godot_{index}_{os.getpid()}.log"
+        self.log_path = log_path
         log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log = open(log_path, "w", encoding="utf-8")
+        # 画面なしは早回し。画面あり（人と走る）は、ふつうの速さ。
+        speed = [] if window else ["--headless", "--fixed-fps", str(int(settings["fixed_fps"]))]
         self._proc = subprocess.Popen(
-            [str(GODOT), "--headless", "--fixed-fps", str(int(settings["fixed_fps"])), "--path", str(CLIENT),
-             "-s", str(RL_DIR / "rl_worker.gd"), "--", f"port={port}", f"field={int(settings['field'])}"],
+            [str(GODOT), *speed, "--path", str(CLIENT), "-s", str(RL_DIR / "rl_worker.gd"), "--",
+             f"port={port}", f"field={int(settings['field'])}", *extra_args],
             stdout=self._log, stderr=subprocess.STDOUT,
         )
         self._server.settimeout(120)
         self._conn, _ = self._server.accept()
-        self._conn.settimeout(600)
+        # 画面なしの育成では、10分返事がなければ止まったとみなす。人と走るときは、選ぶ画面で待つことがあるので、待ち時間の制限をなくす。
+        self._conn.settimeout(None if window else 600)
         self._file = self._conn.makefile("rwb")
         self.hello = self.read()
 
@@ -78,6 +84,9 @@ class Godot:
             raise RuntimeError("ゴドーとのつながりが切れました（runs のログを見る）")
         return json.loads(line)
 
+    def is_running(self) -> bool:
+        return self._proc.poll() is None
+
     def close(self):
         try:
             self.send({"cmd": "close"})
@@ -90,16 +99,23 @@ class Godot:
 
 
 class GodotVecEnv(VecEnv):
-    """ゴドー workers 本 × 8席 を、学習の場 workers×8 個として扱う（席の並びは、ゴドーの順、枠の順）。
+    """ゴドー workers 本の、育てるCPUの席を、学習の場として扱う。
 
+    pool（相手の控え室）を渡すと、1レースのうち pool.seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。
+    のこりの席（learn 席）が学習の場になる：学習の場の数＝ workers × learn。どの枠が学ぶ席かは、レースごとにくじで変える。
+    控え室が空のときは、その席も本命（main_model）が走らせる（学ばない）。
     seeds を渡すと、その番号のレースを順に走らせる。渡さなければ、学ぶ用の番号からくじで選ぶ。
-    レースが1本終わるたびに、その結果を self.races に足す。
+    レースが1本終わるたびに、その結果を self.races に足す（"pool"：枠 → 相手役の名前）。
     """
 
-    def __init__(self, settings: dict, workers: int, log_dir=None, seeds=None, rng_seed=0):
+    def __init__(self, settings: dict, workers: int, log_dir=None, seeds=None, rng_seed=0, pool=None):
         self.settings = settings
         self.roster = roster_ids()
         self.field = settings["field"]
+        self.pool = pool
+        self.pool_seats = int(settings["pool"]["seats"]) if pool is not None else 0
+        self.learn = self.field - self.pool_seats
+        self.main_model = None
         self.seeds = list(seeds) if seeds is not None else None
         self._cursor = 0
         self._rng = random.Random(settings["seeds"]["train_from"] + rng_seed)
@@ -108,13 +124,17 @@ class GodotVecEnv(VecEnv):
         hello = self.godots[0].hello
         self.obs_size = int(hello["obs_size"])
         self.action_sizes = [int(n) for n in hello["action_sizes"]]
-        super().__init__(workers * self.field,
+        super().__init__(workers * self.learn,
                          gym.spaces.Box(-5.0, 5.0, shape=(self.obs_size,), dtype=np.float32),
                          gym.spaces.MultiDiscrete(self.action_sizes))
         self._obs = np.zeros((self.num_envs, self.obs_size), dtype=np.float32)
         self._masks = np.ones((self.num_envs, sum(self.action_sizes)), dtype=bool)
         self._actions = None
         self.races = []
+        # ゴドーごとの、学ぶ席の枠（学習の場の順）と、控え室の席（枠 → 相手役の名前。本命が代わりに走るときは None）。
+        self._learn_gates = [list(range(self.learn)) for _ in range(workers)]
+        self._pool_gates = [{} for _ in range(workers)]
+        self._pool_obs = [{} for _ in range(workers)]
 
     # ------------------------------------------------------------ レース
     def _next_seed(self) -> int:
@@ -126,20 +146,44 @@ class GodotVecEnv(VecEnv):
 
     def _start(self, w: int) -> None:
         g = self.godots[w]
+        gates = list(range(self.field))
+        self._rng.shuffle(gates)
+        self._pool_gates[w] = {gate: self.pool.pick(self._rng) for gate in gates[:self.pool_seats]}
+        self._learn_gates[w] = sorted(gates[self.pool_seats:])
         g.send({"cmd": "reset", "spec": make_spec(self._next_seed(), self.settings, self.roster), "settings": self.settings})
         message = g.read()
         if message["over"]:
             raise RuntimeError("レースが、最初の判断の前に終わりました")
         self._take(w, message)
 
+    def _slot(self, w: int, gate: int) -> int:
+        """学ぶ席の枠 → 学習の場の番号（学ぶ席でなければ -1）。"""
+        learn = self._learn_gates[w]
+        return w * self.learn + learn.index(gate) if gate in learn else -1
+
     def _take(self, w: int, message: dict) -> np.ndarray:
-        rewards = np.zeros(self.field, dtype=np.float32)
+        rewards = np.zeros(self.learn, dtype=np.float32)
+        self._pool_obs[w] = {}
         for seat in message["seats"]:
-            k = w * self.field + int(seat["gate"])
+            gate = int(seat["gate"])
+            k = self._slot(w, gate)
+            if k < 0:
+                self._pool_obs[w][gate] = (np.asarray(seat["obs"], dtype=np.float32), np.asarray(seat["mask"], dtype=bool))
+                continue
             self._obs[k] = np.asarray(seat["obs"], dtype=np.float32)
             self._masks[k] = np.asarray(seat["mask"], dtype=bool)
-            rewards[int(seat["gate"])] = float(seat["reward"])
+            rewards[k - w * self.learn] = float(seat["reward"])
         return rewards
+
+    def _pool_actions(self, w: int) -> dict:
+        """控え室の席の操作（相手役のCPU、控え室が空なら本命が決める）。"""
+        out = {}
+        for gate, (obs, mask) in self._pool_obs[w].items():
+            name = self._pool_gates[w].get(gate)
+            model = self.pool.model(name) if name else self.main_model
+            action, _ = model.predict(obs, action_masks=mask, deterministic=True)
+            out[str(gate)] = [int(a) for a in action]
+        return out
 
     # ------------------------------------------------------------ 学習の場
     def reset(self):
@@ -152,21 +196,28 @@ class GodotVecEnv(VecEnv):
 
     def step_wait(self):
         for w, g in enumerate(self.godots):
-            part = self._actions[w * self.field:(w + 1) * self.field]
-            g.send({"cmd": "step", "actions": {str(i): [int(a) for a in part[i]] for i in range(self.field)}})
+            part = self._actions[w * self.learn:(w + 1) * self.learn]
+            actions = {str(gate): [int(a) for a in part[i]] for i, gate in enumerate(self._learn_gates[w])}
+            actions.update(self._pool_actions(w))
+            g.send({"cmd": "step", "actions": actions})
         rewards = np.zeros(self.num_envs, dtype=np.float32)
         dones = np.zeros(self.num_envs, dtype=bool)
         infos = [{} for _ in range(self.num_envs)]
         for w, g in enumerate(self.godots):
             message = g.read()
-            rewards[w * self.field:(w + 1) * self.field] = self._take(w, message)
+            rewards[w * self.learn:(w + 1) * self.learn] = self._take(w, message)
             if message["over"]:
                 race = message["race"]
+                named = {gate: name for gate, name in self._pool_gates[w].items() if name}
+                race["pool"] = {str(gate): name for gate, name in named.items()}
                 self.races.append(race)
+                if self.pool is not None:
+                    self.pool.record(race["results"], named)
                 for result in race["results"]:
-                    k = w * self.field + int(result["gate"])
-                    dones[k] = True
-                    infos[k] = {**result, "terminal_observation": self._obs[k].copy()}
+                    k = self._slot(w, int(result["gate"]))
+                    if k >= 0:
+                        dones[k] = True
+                        infos[k] = {**result, "terminal_observation": self._obs[k].copy()}
                 self._start(w)
         return self._obs.copy(), rewards, dones, infos
 

@@ -52,7 +52,7 @@ static func _frame_size() -> int:
 	return n
 
 
-## ctx：{distance_m, elapsed_s, curve, route, inside, field, scales（rl_settings の observe）}
+## ctx：{distance_m, elapsed_s, curve, route, inside, field, scales（rl_settings の observe）, trainer_id（無くてよい）}
 ## me＝学ぶ席の1体ぶん、others＝ほかの全員の1体ぶん。
 static func from_records(me: Dictionary, others: Array, ctx: Dictionary) -> PackedFloat32Array:
 	var scales: Dictionary = ctx["scales"]
@@ -124,7 +124,8 @@ static func from_records(me: Dictionary, others: Array, ctx: Dictionary) -> Pack
 	out.append(1.0 if bool(me["braking"]) else 0.0)
 	# 自分の能力（レース前の値と、順位と区間で変わる実際の値）、属性、脚質、トレーナーの性格
 	out.append_array(_runner_block(me))
-	out.append_array(_frame(str(me["id"])))
+	# トレーナーは、レース選択で席ごとに選べる（ctx.trainer_id）。無ければ、その子のふだんのトレーナー。
+	out.append_array(_frame(str(ctx.get("trainer_id", default_trainer(str(me["id"]))))))
 	# ほかの走者：前を走る順に。
 	var my_id := str(me["id"])
 	var sorted_others: Array = others.duplicate()
@@ -172,7 +173,9 @@ static func mask_from(me: Dictionary, level: float, inside: float) -> PackedByte
 		out.append_array([1 if level > LocalRaceMath.DRIVE_LEVEL_MIN else 0, 1, 1 if level < LocalRaceMath.DRIVE_LEVEL_MAX else 0])
 	out.append_array([1 if line > -limit else 0, 1, 1 if line < limit else 0])
 	out.append_array([1, 1])
-	out.append_array([1, 1 if can_act else 0])
+	# ダッシュは、体力が借りられる下限（-100%）のときも受け付けない（ゲームの決まり）。
+	var exhausted := float(me["stamina"]) <= -LocalRaceMath.stamina_debt_limit_l(float(me["stamina_capacity_l"])) + 0.0001
+	out.append_array([1, 1 if can_act and not exhausted else 0])
 	out.append_array([1, 1 if can_act and int(me["boost_uses_left"]) > 0 else 0])
 	return out
 
@@ -270,9 +273,13 @@ static func _info(runner_id: String) -> Dictionary:
 	return info
 
 
-## そのぷるりんのトレーナーの性格の数字（lab/trainer_styles.json の frame）。無ければ空。
-static func trainer_frame(runner_id: String) -> Dictionary:
-	var trainer_id := str(_info(runner_id)["trainer_id"])
+## そのぷるりんの、ふだんのトレーナー（個体一覧の trainer_id）。
+static func default_trainer(runner_id: String) -> String:
+	return str(_info(runner_id)["trainer_id"])
+
+
+## トレーナーの性格の数字（lab/trainer_styles.json の frame）。無ければ空。
+static func trainer_frame(trainer_id: String) -> Dictionary:
 	var text := FileAccess.get_file_as_string(ProjectSettings.globalize_path("res://").path_join(TRAINER_STYLES_PATH))
 	var data: Variant = JSON.parse_string(text) if not text.is_empty() else null
 	if data is Dictionary and (data["trainers"] as Dictionary).has(trainer_id):
@@ -281,11 +288,10 @@ static func trainer_frame(runner_id: String) -> Dictionary:
 
 
 ## トレーナーの性格の数字を、並びにしたもの。無ければ0を並べる。
-static func _frame(runner_id: String) -> PackedFloat32Array:
-	var trainer_id := str(_info(runner_id)["trainer_id"])
+static func _frame(trainer_id: String) -> PackedFloat32Array:
 	if _frames.has(trainer_id):
 		return _frames[trainer_id]
-	var frame := trainer_frame(runner_id)
+	var frame := trainer_frame(trainer_id)
 	var out := PackedFloat32Array()
 	for key: Array in FRAME_KEYS:
 		var name := str(key[0])

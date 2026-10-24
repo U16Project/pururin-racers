@@ -1,5 +1,5 @@
 {
-  "_note": "トレーナーの走らせ方（性格）。ユーザーと決めたもの。育成は、この性格の中で細かい数字を探す（性格そのものは育成で変えない）。今はラボだけが使う。ゲームのCPUはまだ読まない。",
+  "_note": "トレーナーの走らせ方（性格）。ユーザーと決めたもの。育成は、この性格の中で細かい数字を探す（性格そのものは育成で変えない）。frame は、頭が使う性格の枠（数字）。place＝いたい順位（1位から）、late_place＝終盤にいたい順位（無ければ place のまま）、retake＝抜かれたときに取り返す強さ（0〜1）、hold＝詰められたときに引かない強さ（0〜1）、save_after_s＝余裕がこの秒数続いたら下げる（範囲）、follow_m＝前の何m以内なら後ろにつくか（範囲。[0,0]はつかない）、follow_only_within_place＝この順位以内のときだけ後ろにつく（0は制限なし）、spurt_m_2000＝スパートを始める残り距離（2000mのときの範囲。ほかの距離は長さに比例）、line＝ラインの癖。今はラボだけが使う。",
   "trainers": {
     "homura": {
       "name": "ホムラ",
@@ -11,7 +11,29 @@
       "save_stamina": "1位で、後ろと差があるときだけ下げる",
       "draft": "後ろにつかない",
       "spurt": "早め（後ろに並ばれる前に、突き放しにかかる）",
-      "weakness_kept": "競り合いでも引かないので、体力を使いすぎて最後に落ちることがある"
+      "weakness_kept": "競り合いでも引かないので、体力を使いすぎて最後に落ちることがある",
+      "frame": {
+        "place": [
+          1,
+          1
+        ],
+        "retake": 1.0,
+        "hold": 1.0,
+        "save_after_s": [
+          8,
+          20
+        ],
+        "follow_m": [
+          0,
+          0
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          600,
+          1200
+        ],
+        "line": "none"
+      }
     },
     "gantetsu": {
       "name": "ガンテツ",
@@ -23,7 +45,29 @@
       "save_stamina": "強い（前方にいて余裕があれば下げる）",
       "draft": "前方の中でなら、後ろにつくこともある",
       "spurt": "遅め。ためた体力で長く押す",
-      "weakness_kept": "出足が遅く、前で詰まると抜け出す加速がない"
+      "weakness_kept": "出足が遅く、前で詰まると抜け出す加速がない",
+      "frame": {
+        "place": [
+          1,
+          3
+        ],
+        "retake": 0.0,
+        "hold": 0.6,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          0,
+          10
+        ],
+        "follow_only_within_place": 3,
+        "spurt_m_2000": [
+          400,
+          1000
+        ],
+        "line": "none"
+      }
     },
     "yuu": {
       "name": "ユウ",
@@ -35,7 +79,29 @@
       "save_stamina": "ふつう",
       "draft": "進んで後ろにつく",
       "spurt": "最後の直線",
-      "weakness_kept": "大きな弱点はないが、とがった強みも最高速だけ"
+      "weakness_kept": "大きな弱点はないが、とがった強みも最高速だけ",
+      "frame": {
+        "place": [
+          3,
+          4
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          3,
+          10
+        ],
+        "follow_m": [
+          5,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          200,
+          500
+        ],
+        "line": "none"
+      }
     },
     "shizuku": {
       "name": "シズク",
@@ -47,7 +113,33 @@
       "save_stamina": "全体のペースが遅ければ下げ、速ければ合わせる",
       "draft": "選ぶ",
       "spurt": "早め",
-      "weakness_kept": "最後の一押し（最高速・加速）は弱い"
+      "weakness_kept": "最後の一押し（最高速・加速）は弱い",
+      "frame": {
+        "place": [
+          3,
+          6
+        ],
+        "late_place": [
+          1,
+          3
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          3,
+          10
+        ],
+        "follow_m": [
+          0,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          500,
+          1000
+        ],
+        "line": "none"
+      }
     },
     "akari": {
       "name": "アカリ",
@@ -59,7 +151,29 @@
       "save_stamina": "ふつう",
       "draft": "選ばない（前目で他のプルを従えて走る）",
       "spurt": "最後の直線で押しのけて前へ",
-      "weakness_kept": "前で風を受けるので体力を使う。自分から抜け出す最高速はない"
+      "weakness_kept": "前で風を受けるので体力を使う。自分から抜け出す最高速はない",
+      "frame": {
+        "place": [
+          2,
+          3
+        ],
+        "retake": 0.5,
+        "hold": 0.6,
+        "save_after_s": [
+          3,
+          10
+        ],
+        "follow_m": [
+          0,
+          0
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          200,
+          500
+        ],
+        "line": "none"
+      }
     },
     "daichi": {
       "name": "ダイチ",
@@ -71,7 +185,29 @@
       "save_stamina": "強い（序盤）",
       "draft": "選ぶ",
       "spurt": "早め・長い（残りが多いうちから、少しずつ上げる）",
-      "weakness_kept": "瞬発力の勝負（最後の直線だけの競り合い）に弱い"
+      "weakness_kept": "瞬発力の勝負（最後の直線だけの競り合い）に弱い",
+      "frame": {
+        "place": [
+          5,
+          6
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          0,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          600,
+          1200
+        ],
+        "line": "none"
+      }
     },
     "minato": {
       "name": "ミナト",
@@ -83,7 +219,29 @@
       "save_stamina": "強い（集団の後ろで）",
       "draft": "進んで後ろにつく",
       "spurt": "前が開いたとき（隙間を見つけたら、すぐ）",
-      "weakness_kept": "前がふさがったままだと、力を出し切れない"
+      "weakness_kept": "前がふさがったままだと、力を出し切れない",
+      "frame": {
+        "place": [
+          5,
+          6
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          5,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          200,
+          800
+        ],
+        "line": "gap"
+      }
     },
     "kaede": {
       "name": "カエデ",
@@ -95,7 +253,29 @@
       "save_stamina": "強い",
       "draft": "選ぶ",
       "spurt": "前の走者の速さが落ちてきたとき（最後の直線が多い）",
-      "weakness_kept": "加速が遅く、仕掛けが遅れると届かない"
+      "weakness_kept": "加速が遅く、仕掛けが遅れると届かない",
+      "frame": {
+        "place": [
+          5,
+          6
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          0,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          200,
+          600
+        ],
+        "line": "outside_late"
+      }
     },
     "hayate": {
       "name": "ハヤテ",
@@ -107,7 +287,29 @@
       "save_stamina": "強い",
       "draft": "選ぶ（待つあいだ）",
       "spurt": "決めた所から外へ出て、一気に",
-      "weakness_kept": "前が速すぎる展開だと届かない。内で詰まると力を出せない"
+      "weakness_kept": "前が速すぎる展開だと届かない。内で詰まると力を出せない",
+      "frame": {
+        "place": [
+          7,
+          8
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          0,
+          15
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          300,
+          800
+        ],
+        "line": "outside_late"
+      }
     },
     "ibuki": {
       "name": "イブキ",
@@ -120,7 +322,29 @@
       "draft": "あまり頼らない",
       "spurt": "最後の直線で一気に",
       "line": "直線では、プルの合間の空いた所をすり抜ける",
-      "weakness_kept": "体力と心肺が低く、早く仕掛けると持たない"
+      "weakness_kept": "体力と心肺が低く、早く仕掛けると持たない",
+      "frame": {
+        "place": [
+          7,
+          8
+        ],
+        "retake": 0.0,
+        "hold": 0.0,
+        "save_after_s": [
+          1,
+          5
+        ],
+        "follow_m": [
+          0,
+          5
+        ],
+        "follow_only_within_place": 0,
+        "spurt_m_2000": [
+          200,
+          500
+        ],
+        "line": "gap"
+      }
     }
   }
 }

@@ -3,9 +3,15 @@ extends Node
 ## spec.seats に書いた枠が、育てるCPUの席（ふつうは8席全部）。書いていない枠は、今のゲームのCPU。
 ## レースの作り方は lab/lab_race.gd と同じ（オンラインのサーバーと同じ作り方）。
 ## 決める間ごとに、全部の席の「見たもの・選べる操作・点」をまとめて Python に送り、返ってきた操作を席に入れる。
+## 育てるCPUの操作は、決めてから cpu_reaction_delay_s（ゲームの設定。人の反応に合わせる）たってから席に届く。
 ## ゴールした席は、レースが終わるまで、操作を「何もしない」だけにして待つ（点は0）。レースが終わったら、全部の席の結果を送る。
+## spec.human_gate の枠は人の席（画面あり・景色あり。ふつうのオフラインと同じく、レースの記録ファイルを書く）。
+## 人がいるレースは、打ち切らない。結果の板の「もう1回」「戻る」は、retry_requested・back_requested で知らせる（rl_worker.gd が受ける）。
 
 signal race_done
+## 人と走るとき：結果の板の「もう1回」（retry）と「戻る」（back）。
+signal retry_requested
+signal back_requested
 
 const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 const ONLINE_SERVER_SCRIPT := "res://scripts/online/online_server.gd"
@@ -13,6 +19,7 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const LabSituation := preload("../lab_situation.gd")
 const RlObserve := preload("rl_observe.gd")
+const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 const TRAINEE_NAME := "（訓練中CPU）"
 ## 席の、通信の番号（1枠目が 1001）。
@@ -31,6 +38,8 @@ var _done := false
 var _first_finish_s := -1.0
 ## 枠 → 席の記録（今の操作、進んだ距離、ダッシュ・ブーストの回数、性格の数え など）。
 var _seats := {}
+## 人の席の枠（いなければ -1）。
+var _human_gate := -1
 
 
 func start(link, spec: Dictionary, settings: Dictionary) -> void:
@@ -39,31 +48,74 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 	_settings = settings
 	# JSON から来た番号は小数なので、整数にそろえる。
 	var seat_gates: Array = (spec.get("seats", []) as Array).map(func(g): return int(g))
+	_human_gate = int(spec.get("human_gate", -1))
 	var OnlineServerScript: GDScript = load(ONLINE_SERVER_SCRIPT)
 	var entries: Array = []
+	# 席ごとのトレーナー（レース選択で選んだもの）。無ければ、その子のふだんのトレーナー。
+	var trainers: Dictionary = spec.get("trainers", {})
 	for gate in (spec["lineup"] as Array).size():
+		# 空き枠（レース選択で選ばなかった枠）は、だれも走らない。
+		if str(spec["lineup"][gate]).is_empty():
+			continue
 		var pururin := PururinRosterConfig.pururin_by_id(str(spec["lineup"][gate]))
+		var trainer_id := str(trainers.get(str(gate), RlObserve.default_trainer(str(pururin["id"]))))
 		var peer := PEER_BASE + gate + 1 if seat_gates.has(gate) else 0
-		entries.append(OnlineServerScript._entry(gate, pururin, peer, TRAINEE_NAME if peer != 0 else ""))
+		var entry: Dictionary = OnlineServerScript._entry(gate, pururin, peer, TRAINEE_NAME if peer != 0 else "")
+		# 人の席：この画面の「自分」。名前は、トレーナーの名前。
+		if gate == _human_gate:
+			entry["player"] = true
+			entry["trainer_name"] = RaceSession.trainer_name_for(str(pururin["id"]), true)
+		entries.append(entry)
 		if peer != 0:
 			_seats[gate] = {
 				"peer": peer, "steer": 0.0, "brake": false, "last_progress": 0.0, "mid_place": 0, "dash": 0, "boost": 0,
-				"steps": 0, "paid": false, "frame": RlObserve.trainer_frame(str(pururin["id"])),
+				"steps": 0, "paid": false, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
 				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0},
 			}
 	entries = OnlineServerScript._with_runner_ids(entries)
 	# ゲームのCPUは、ラインを選ぶところでくじを使う。同じ番号なら同じ走りになるように、くじをそろえる。
 	seed(int(spec["seed"]))
 	RaceSession.select_distance(float(spec["distance_m"]))
-	RaceSession.set_course_only(true)
+	RaceSession.set_course_only(_human_gate < 0)
 	RaceSession.set_online_entries(entries)
 	_race = (load(LOCAL_RACE_SCENE) as PackedScene).instantiate()
 	# オンラインのサーバーと同じ扱いにする（レースの記録ファイルを書かない・音を鳴らさない）。
 	_race.set("_online_host", true)
 	add_child(_race)
 	RaceSession.set_online_entries([])
+	if _human_gate >= 0:
+		_show_for_human()
 	var track: Path3D = _race.get("_track")
 	_inside = LabSituation.inside_sign(track.curve)
+
+
+## 人と走るとき：サーバーの扱いで止まった、画面・音・人の操作を、ふつうのオフラインのレースと同じに戻す（lab/lab_race.gd と同じ）。
+## 結果の板のボタンは、ラボの動きに付け替える（ゲームのメニューへは行かない）。
+func _show_for_human() -> void:
+	_race.set("_online_host", false)
+	_race.set_process_unhandled_input(true)
+	for runner: Node3D in _race.call("get_runners_for_simulation"):
+		runner.set("presentation_enabled", true)
+		var body := runner.get_node_or_null("Body")
+		if body != null:
+			body.process_mode = Node.PROCESS_MODE_INHERIT
+	(_race.get("_camera") as Node).process_mode = Node.PROCESS_MODE_INHERIT
+	_race.get_node("UI").process_mode = Node.PROCESS_MODE_INHERIT
+	var retry: Button = _race.get("_result_retry_button")
+	_disconnect_menu(retry)
+	retry.pressed.connect(func(): retry_requested.emit())
+	for name in ["_result_return_button", "_pause_return_button"]:
+		var button: Button = _race.get(name)
+		_disconnect_menu(button)
+		button.pressed.connect(func(): back_requested.emit())
+
+
+static func _disconnect_menu(button: Button) -> void:
+	# ゲームのメニューへ行くつなぎだけを外す（ボタンの音などは残す）。
+	for connection: Dictionary in button.pressed.get_connections():
+		var callable: Callable = connection["callable"]
+		if str(callable.get_method()) in ["_retry_same_race", "_return_to_race_select", "_on_pause_return_pressed"]:
+			button.pressed.disconnect(callable)
 
 
 func is_ok() -> bool:
@@ -81,13 +133,13 @@ func _process(delta: float) -> void:
 			_seats[gate]["mid_place"] = _place_of(runner, runners)
 	if _first_finish_s < 0.0 and runners.any(func(r): return bool(r.call("is_finished"))):
 		_first_finish_s = _elapsed
-	var cut := _first_finish_s >= 0.0 and _elapsed - _first_finish_s > float(_settings["cut_after_winner_s"])
-	if bool(_race.call("is_race_over")) or cut or _elapsed > float(_settings["time_limit_s"]):
+	# 人がいるレースは、打ち切らない（人のゴールを待つ）。
+	var cut := _human_gate < 0 and _first_finish_s >= 0.0 and _elapsed - _first_finish_s > float(_settings["cut_after_winner_s"])
+	if bool(_race.call("is_race_over")) or cut or (_human_gate < 0 and _elapsed > float(_settings["time_limit_s"])):
 		_finish(runners, cut)
 		return
 	if _seats.is_empty():
 		return
-	var notch_press := false
 	_next_decide_s -= delta
 	if _next_decide_s <= 0.0:
 		_next_decide_s = float(_settings["decide_every_s"])
@@ -104,14 +156,21 @@ func _process(delta: float) -> void:
 			_done = true
 			race_done.emit()
 			return
-		notch_press = true
+		# 決めた操作は、反応の遅れのあとに届く。
+		var arrive_at := _elapsed + LocalRaceMath.Config.number("cpu_reaction_delay_s")
 		var actions: Dictionary = reply["actions"]
 		for gate: int in _seats:
 			if actions.has(str(gate)):
-				_apply(gate, _seats[gate], actions[str(gate)])
+				(_seats[gate]["queue"] as Array).append({"at": arrive_at, "action": actions[str(gate)]})
 	for gate: int in _seats:
 		var seat: Dictionary = _seats[gate]
-		_race.call("set_remote_input", int(seat["peer"]), float(seat["steer"]), float(seat.get("notch", 0.0)) if notch_press else 0.0, bool(seat["brake"]))
+		# ノッチは、操作が届いたコマにだけ1段押す（押してすぐ離す）。ラインとブレーキは、次の操作が届くまで押し続ける。
+		var notch_press := 0.0
+		var queue: Array = seat["queue"]
+		while not queue.is_empty() and float(queue[0]["at"]) <= _elapsed + 0.0001:
+			_apply(gate, seat, queue.pop_front()["action"])
+			notch_press = float(seat["notch"])
+		_race.call("set_remote_input", int(seat["peer"]), float(seat["steer"]), notch_press, bool(seat["brake"]))
 
 
 ## 1席ぶんの、見たもの・選べる操作・この間にもらった点。
@@ -131,9 +190,10 @@ func _report(runner: Node3D, runners: Array, seat: Dictionary) -> Dictionary:
 	else:
 		seat["steer"] = 0.0
 		seat["brake"] = false
+		(seat["queue"] as Array).clear()
 	return {
 		"gate": int(runner.get("gate_index")), "reward": reward, "mask": mask,
-		"obs": Array(RlObserve.from_records(me, _snapshots(runners, runner), _ctx(runner))),
+		"obs": Array(RlObserve.from_records(me, _snapshots(runners, runner), _ctx(runner, str(seat["trainer_id"])))),
 	}
 
 
@@ -145,8 +205,10 @@ func _apply(gate: int, seat: Dictionary, action: Array) -> void:
 	seat["brake"] = int(action[2]) == 1
 	if int(action[3]) == 1 and bool(_race.call("trigger_remote_action", int(seat["peer"]), "dash")):
 		seat["dash"] = int(seat["dash"]) + 1
+		(seat["dash_at"] as Array).append(snappedf(_elapsed, 0.01))
 	if int(action[4]) == 1 and bool(_race.call("trigger_remote_action", int(seat["peer"]), "boost")):
 		seat["boost"] = int(seat["boost"]) + 1
+		(seat["boost_at"] as Array).append(snappedf(_elapsed, 0.01))
 
 
 func _snapshots(runners: Array, me: Node3D) -> Array:
@@ -157,11 +219,11 @@ func _snapshots(runners: Array, me: Node3D) -> Array:
 	return out
 
 
-func _ctx(runner: Node3D) -> Dictionary:
+func _ctx(runner: Node3D, trainer_id: String) -> Dictionary:
 	var track: Path3D = _race.get("_track")
 	return {
 		"distance_m": float(_spec["distance_m"]), "elapsed_s": _elapsed, "curve": track.curve, "route": runner.get("_race_route"),
-		"inside": _inside, "field": int(_settings["field"]), "scales": _settings["observe"],
+		"inside": _inside, "field": int(_settings["field"]), "scales": _settings["observe"], "trainer_id": trainer_id,
 	}
 
 
@@ -255,7 +317,7 @@ func _finish(runners: Array, cut: bool) -> void:
 		var gate := int(runner.get("gate_index"))
 		var finished := bool(runner.call("is_finished"))
 		var result := {
-			"gate": gate, "pururin": str(spec_id(gate)), "seat": _seats.has(gate), "place": _place_of(runner, runners),
+			"gate": gate, "pururin": str(spec_id(gate)), "seat": _seats.has(gate), "human": gate == _human_gate, "place": _place_of(runner, runners),
 			"time": float(runner.call("get_finish_time")) if finished else -1.0, "winner_time": winner,
 			"stamina_left": float(runner.call("get_stamina_ratio")),
 		}
@@ -270,6 +332,7 @@ func _finish(runners: Array, cut: bool) -> void:
 			result.merge({
 				"mid_place": int(seat["mid_place"]) if int(seat["mid_place"]) > 0 else int(result["place"]),
 				"dash_uses": seat["dash"], "boost_uses": seat["boost"], "steps": seat["steps"],
+				"dash_at_s": seat["dash_at"], "boost_at_s": seat["boost_at"],
 				"style_reward": _style_reward(seat),
 				"place_fit": float(fit["place_hit"]) / maxf(float(fit["place_n"]), 1.0),
 				"draft_fit": float(fit["draft_hit"]) / maxf(float(fit["draft_n"]), 1.0),
@@ -282,7 +345,9 @@ func _finish(runners: Array, cut: bool) -> void:
 		"seats": reports, "over": true,
 		"race": {"seed": int(_spec["seed"]), "distance_m": float(_spec["distance_m"]), "race_s": _elapsed, "cut": cut, "results": results},
 	})
-	race_done.emit()
+	# 人がいるレースは、結果の板を見せたまま待つ（「もう1回」で次へ）。
+	if _human_gate < 0:
+		race_done.emit()
 
 
 func spec_id(gate: int) -> String:

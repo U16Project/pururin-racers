@@ -201,6 +201,17 @@ func _drive_force(level: int) -> float:
 	return float(LocalRaceMath.DRIVE_FORCE_BY_LEVEL_KMH_PER_S[level])
 
 
+## ノッチ6・風よけなしで、ひとりで釣り合う速さ（式から作る）。空気抵抗が基準（top_speed_reference_air_coefficient）と同じで空力5なら、自然な最高速になる。
+## 実際の空気抵抗が基準より強ければ、その分だけ遅く釣り合う（top_speed_drive_adjustment_kmh_per_s の説明のとおり）。
+func _expected_solo_speed(top_speed: int, aero_multiplier: float = 1.0, level: float = 6.0) -> float:
+	var natural := LocalRaceMath.top_speed_natural_speed_kmh(top_speed)
+	var max_force := LocalRaceMath.drive_force_kmh_per_s(LocalRaceMath.DRIVE_LEVEL_MAX)
+	var level_force := LocalRaceMath.drive_force_kmh_per_s(level)
+	var force_at_natural := LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S + LocalRaceMath.TOP_SPEED_REFERENCE_AIR_COEFFICIENT * natural * natural
+	var gain := (force_at_natural - max_force) * (level_force / max_force) / (natural * natural)
+	return sqrt((level_force - LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S) / (LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * aero_multiplier - gain))
+
+
 func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> void:
 	var low := LocalRaceMath.Config.number("top_speed_natural_min_kmh")
 	var high := LocalRaceMath.Config.number("top_speed_natural_max_kmh")
@@ -208,8 +219,8 @@ func test_top_speed_maps_one_to_fifteen_directly_without_per_runner_tiers() -> v
 	assert_almost_eq(LocalRaceMath.top_speed_natural_speed_kmh(5), lerpf(low, high, 4.0 / 14.0), 0.0001)
 	assert_almost_eq(LocalRaceMath.top_speed_natural_speed_kmh(8), lerpf(low, high, 7.0 / 14.0), 0.0001)
 	assert_eq(LocalRaceMath.top_speed_natural_speed_kmh(15), high)
-	assert_almost_eq(_natural_speed_after_sixty_seconds(1, 5), low, 0.05)
-	assert_almost_eq(_natural_speed_after_sixty_seconds(15, 5), high, 0.05)
+	assert_almost_eq(_natural_speed_after_sixty_seconds(1, 5), _expected_solo_speed(1), 0.05)
+	assert_almost_eq(_natural_speed_after_sixty_seconds(15, 5), _expected_solo_speed(15), 0.05)
 
 
 func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> void:
@@ -217,10 +228,15 @@ func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> voi
 	add_child(race)
 	var player: Node = race.get_node("Runners/Runner1")
 	var stats: Dictionary = player.call("get_effective_stats")
-	assert_eq(stats["top_speed"], 8)
-	assert_eq(stats["acceleration"], 5)
-	assert_almost_eq(player.call("get_natural_top_speed"), LocalRaceMath.top_speed_natural_speed_kmh(8), 0.001)
-	assert_almost_eq(player.call("get_max_speed"), LocalRaceMath.top_speed_natural_speed_kmh(8), 0.001)
+	# 期待値は、一覧の個体の能力から作る（能力の配分を変えても壊れないように）。
+	var pururin := PururinRosterConfig.pururin_by_id(str(player.call("get_snapshot")["id"]))
+	var runners: Array = race.call("get_runners_for_simulation")
+	var expected := PururinStatsMath.effective_stats(str(pururin["attribute"]), pururin["allocation"], str(pururin["running_style"]),
+		int(race.call("_live_place", player)), float(player.call("get_race_progress")) / float(race.get("_race_distance_m")), runners.size())
+	assert_eq(int(stats["top_speed"]), int(expected["top_speed"]))
+	assert_eq(int(stats["acceleration"]), int(expected["acceleration"]))
+	assert_almost_eq(player.call("get_natural_top_speed"), LocalRaceMath.top_speed_natural_speed_kmh(int(stats["top_speed"])), 0.001)
+	assert_almost_eq(player.call("get_max_speed"), LocalRaceMath.top_speed_natural_speed_kmh(int(stats["top_speed"])), 0.001)
 	race.free()
 
 
@@ -311,7 +327,7 @@ func test_acceleration_response_is_linear_and_does_not_raise_equilibrium() -> vo
 	for stat: int in [1, 5, 10, 15]:
 		assert_almost_eq(LocalRaceMath.stat_acceleration_response_multiplier(stat), 1.0 + 0.05 * (stat - 5), 0.00001)
 		for top_speed: int in [1, 5, 10, 15]:
-			assert_almost_eq(_natural_speed_after_sixty_seconds(top_speed, stat), LocalRaceMath.top_speed_natural_speed_kmh(top_speed), 0.05)
+			assert_almost_eq(_natural_speed_after_sixty_seconds(top_speed, stat), _expected_solo_speed(top_speed), 0.05)
 	var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(50.0, 6.0, 5)
 	var low := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, adjustment, 1.0, 1.0, 0.8)
 	var high := LocalRaceMath.drive_diagnostics_kmh_per_s(50.0, 6.0, 0.0, adjustment, 1.0, 1.0, 1.5)
@@ -320,14 +336,14 @@ func test_acceleration_response_is_linear_and_does_not_raise_equilibrium() -> vo
 
 
 func test_acceleration_response_does_not_change_coasting_braking_or_positive_notch_deceleration() -> void:
-	for notch: float in [0.0, 3.0, 6.0]:
+	for notch: float in [LocalRaceMath.DRIVE_LEVEL_MIN, 3.0, 6.0]:
 		var low := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, 0.1, 0.0, 0.0, 1.0, 1.0, 0.8)
 		var high := LocalRaceMath.advance_drive_speed_kmh(90.0, notch, 0.1, 0.0, 0.0, 1.0, 1.0, 1.5)
 		assert_almost_eq(low, high, 0.00001)
 	var braked_low := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 0.1, 0.0, 0.0, 1.0, 1.0, 0.8, true)
 	var braked_high := LocalRaceMath.advance_drive_speed_kmh(90.0, 6.0, 0.1, 0.0, 0.0, 1.0, 1.0, 1.5, true)
 	assert_almost_eq(braked_low, braked_high, 0.00001)
-	var equilibrium_speed := LocalRaceMath.top_speed_natural_speed_kmh(5)
+	var equilibrium_speed := _expected_solo_speed(5)
 	var adjustment := LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(equilibrium_speed, 6.0, 5)
 	assert_almost_eq(LocalRaceMath.advance_drive_speed_kmh(equilibrium_speed, 6.0, 0.1, 0.0, adjustment, 1.0, 1.0, 1.5), equilibrium_speed, 0.00001)
 
@@ -365,13 +381,15 @@ func test_acceleration_response_keeps_force_inputs_and_applies_only_to_positive_
 
 
 func test_drive_level_is_clamped_and_steps_by_one() -> void:
-	assert_eq(LocalRaceMath.clamp_drive_level(-9.0), 0.0)
-	assert_eq(LocalRaceMath.clamp_drive_level(9.0), 6.0)
-	assert_eq(LocalRaceMath.step_drive_level(0.0, 1.0), 1.0)
-	assert_eq(LocalRaceMath.step_drive_level(0.0, -1.0), 0.0)
-	assert_eq(LocalRaceMath.step_drive_level(5.0, 1.0), 6.0)
-	assert_eq(LocalRaceMath.step_drive_level(6.0, 1.0), 6.0)
-	assert_eq(LocalRaceMath.step_drive_level(1.0, -1.0), 0.0)
+	# ノッチ0は廃止。いちばん下は drive_level_min。
+	var lowest := LocalRaceMath.DRIVE_LEVEL_MIN
+	var highest := LocalRaceMath.DRIVE_LEVEL_MAX
+	assert_eq(LocalRaceMath.clamp_drive_level(-9.0), lowest)
+	assert_eq(LocalRaceMath.clamp_drive_level(99.0), highest)
+	assert_eq(LocalRaceMath.step_drive_level(lowest, -1.0), lowest)
+	assert_eq(LocalRaceMath.step_drive_level(lowest, 1.0), lowest + 1.0)
+	assert_eq(LocalRaceMath.step_drive_level(highest - 1.0, 1.0), highest)
+	assert_eq(LocalRaceMath.step_drive_level(highest, 1.0), highest)
 
 
 func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
@@ -380,9 +398,9 @@ func test_local_player_starts_in_neutral_and_clamps_the_notch() -> void:
 	add_child(runner)
 	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
 	assert_eq(runner.call("get_current_speed"), LocalRaceMath.MIN_SPEED_KMH)
-	assert_eq(runner.call("get_drive_level"), 0.0)
+	assert_eq(runner.call("get_drive_level"), LocalRaceMath.DRIVE_LEVEL_MIN)
 	runner.call("set_drive_level", 99.0)
-	assert_eq(runner.call("get_drive_level"), 6.0)
+	assert_eq(runner.call("get_drive_level"), LocalRaceMath.DRIVE_LEVEL_MAX)
 	runner.free()
 
 
@@ -394,9 +412,11 @@ func test_drive_zero_level_naturally_slows_but_respects_floor() -> void:
 
 func test_drive_braking_slows_but_does_not_stop() -> void:
 	# 最低速度に当たらないよう、短い時間（0.1秒）で比べる。
-	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 0.1, 0.0, 0.0, 1.0, 1.0, 1.0, true)
-	var coasting := LocalRaceMath.advance_drive_speed_kmh(70.0, 0.0, 0.1)
-	assert_almost_eq(coasting - braked, LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S * 0.1, 0.001)
+	# ブレーキは、いちばん低いノッチの推進力の代わりに、制動の力を入れる。
+	var lowest := LocalRaceMath.DRIVE_LEVEL_MIN
+	var braked := LocalRaceMath.advance_drive_speed_kmh(70.0, lowest, 0.1, 0.0, 0.0, 1.0, 1.0, 1.0, true)
+	var cruising := LocalRaceMath.advance_drive_speed_kmh(70.0, lowest, 0.1)
+	assert_almost_eq(cruising - braked, (LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S + LocalRaceMath.drive_force_kmh_per_s(lowest)) * 0.1, 0.001)
 	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, true), 40.0)
 
 
@@ -835,7 +855,7 @@ func test_notch_six_converges_to_natural_speed_without_draft_and_exceeds_it_with
 		var solo := _notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(15))
 		assert_true(is_finite(solo))
 		# 空力5（基準）なら、自然な最高速に落ち着く。空力が高ければ、ひとりでもそれより速い。
-		assert_almost_eq(_notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(5)), natural_speed, 0.05)
+		assert_almost_eq(_notch_six_equilibrium_speed(stat, 0.0, LocalRaceMath.aero_air_resistance_multiplier(5)), _expected_solo_speed(stat, LocalRaceMath.aero_air_resistance_multiplier(5)), 0.05)
 		assert_gt(solo, natural_speed + 0.5)
 		# ドラフトは最高速の上限を作らず、空気抵抗の軽減分だけ自然に速度が伸びる。
 		assert_gt(_notch_six_equilibrium_speed(stat, 0.2, LocalRaceMath.aero_air_resistance_multiplier(15)), solo + 0.5)
@@ -1015,6 +1035,7 @@ func test_lateral_move_adds_heart_and_stamina_load_to_the_runner() -> void:
 		runner.set("_lateral_move_m", moved)
 		var heart_before := float(runner.call("get_heart_rate_bpm"))
 		var stamina_before := float(runner.call("get_stamina"))
+		# 出力0（ブレーキ中と同じ）で比べる：ノッチの分の消費が無く、横移動の分だけが差になる。
 		runner.call("_update_condition_for_drive_level", 0.0, 1.0)
 		results[moved] = {"heart": float(runner.call("get_heart_rate_bpm")) - heart_before, "stamina": stamina_before - float(runner.call("get_stamina"))}
 		runner.free()
@@ -1128,8 +1149,10 @@ func test_stamina_capacity_is_fuel_tank_and_consumption_is_stat_independent() ->
 	for stamina_stat: int in [1, 5, 10, 15]:
 		assert_almost_eq(LocalRaceMath.stamina_capacity_l(stamina_stat), capacity_base + capacity_per_stat * stamina_stat, 0.0001)
 	assert_gt(LocalRaceMath.stamina_capacity_l(15), LocalRaceMath.stamina_capacity_l(1))
+	# ノッチは最小でも1なので、走っているあいだは、いちばん低いノッチでも少し減る（自動では回復しない）。
+	assert_lt(LocalRaceMath.stamina_delta_l_per_s(LocalRaceMath.DRIVE_LEVEL_MIN, 200.0), 0.0)
+	# ブレーキ中（出力0）は、使わない。
 	assert_eq(LocalRaceMath.stamina_delta_l_per_s(0.0, 200.0), 0.0)
-	assert_eq(LocalRaceMath.stamina_delta_l_per_s(-1.0, 200.0), 0.0)
 	assert_lt(LocalRaceMath.stamina_delta_l_per_s(6.0, 200.0), 0.0)
 	assert_almost_eq(
 		LocalRaceMath.stamina_consumption_l_per_s(6.0, 200.0, 1.15),
@@ -1305,14 +1328,16 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(lines.has("集団補正 x1.00"))
 	assert_false(_detail_text(race).contains("上限補正"))
 	assert_true(lines.has("対象1 CPU2 前4.0m 横1.0m"))
-	assert_true(lines.has("推進力 +0.00km/h/s"))
+	# 推進力は、いちばん低いノッチ（最小）でも出る。走者の診断の値から作る。
+	var drive := float(player.call("get_drive_diagnostics")["drive_contribution_kmh_per_s"])
+	assert_true(lines.has("推進力 %+.2fkm/h/s" % drive))
 	assert_true(lines.has("転がり抵抗 %+.2fkm/h/s" % -LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S))
 	# 40km/h・空力5・基準比100%の組み合わせ。設定の現値に依存せず式から期待値を作る。
 	var air := LocalRaceMath.AIR_RESISTANCE_QUADRATIC_COEFFICIENT * 40.0 * 40.0
 	assert_true(lines.has("空気抵抗（二乗） %+.2fkm/h/s" % -air))
 	var reduction := air * LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(1.0)
 	assert_true(lines.has("ドラフト軽減 %+.2fkm/h/s" % reduction))
-	assert_true(lines.has("計算加速度 %+.2fkm/h/s" % (-(LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S + air - reduction))))
+	assert_true(lines.has("計算加速度 %+.2fkm/h/s" % (drive - (LocalRaceMath.ROLLING_RESISTANCE_KMH_PER_S + air - reduction))))
 	for line in lines:
 		if line.begins_with("推進力") or line.begins_with("転がり抵抗") \
 				or line.begins_with("空気抵抗（二乗）") or line.begins_with("ドラフト軽減") \

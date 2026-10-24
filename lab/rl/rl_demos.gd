@@ -4,6 +4,8 @@ extends SceneTree
 ## 記録1本ごとに、1つのファイルに書く（作ったものは作り直さない。新しい記録だけ足す）。
 ## 起動（client/ で）：godot --headless --path . -s ../lab/rl/rl_demos.gd -- out=<書く場所> since=<この日時より後の記録>
 ## 使う記録：since より後に保存され、あなたが操作して、ゴールまで走ったレース（ぷるりん・距離は問わない）。
+## ふつうのオフラインのレースも、ラボで育てるCPUと走ったレース（play.py）も、同じ置き場に記録が残るので、どちらも使う。
+## 育てるCPUの席は、記録の remote_controlled（通信ごしに操作）で見分けて外す。
 ## こわれた記録・古い形の記録・途中でやめたレースは外す。使った・外した記録の一覧を <書く場所>/_index.json に書く。
 
 const RlObserve := preload("rl_observe.gd")
@@ -15,7 +17,7 @@ const LOG_DIR := "user://pururin_race_logs"
 ## 記録の1体ぶんに、これが全部ないと使わない（古い形の記録）。
 const NEEDED := ["race_progress", "offset", "speed", "actual_speed_kmh", "heart_rate_bpm", "stamina_ratio", "drive_level", "boost_uses_left",
 	"dash_active", "boost_points", "draft", "in_push_contest", "contact_heart_load_bpm_per_s", "overheat_ratio",
-	"overheat_propulsion_efficiency", "propulsion_efficiency", "braking", "effective_stats", "gate", "finished"]
+	"overheat_propulsion_efficiency", "propulsion_efficiency", "braking", "effective_stats", "gate", "finished", "stamina", "stamina_capacity_l"]
 const SETTINGS_PATH := "../lab/rl/rl_settings.json"
 
 
@@ -51,7 +53,7 @@ func _initialize() -> void:
 		if not str(checked["reason"]).is_empty():
 			index[name] = checked.merged({"used": false})
 			continue
-		var demo := _demo(data, settings)
+		var demo := _demo(data, settings, str(checked["player_id"]))
 		if demo.is_empty():
 			index[name] = checked.merged({"used": false, "reason": "使える場面がない"}, true)
 			continue
@@ -59,6 +61,7 @@ func _initialize() -> void:
 		var file := FileAccess.open(target, FileAccess.WRITE)
 		file.store_string(JSON.stringify(demo))
 		file.close()
+		checked.erase("player_id")
 		index[name] = checked.merged({"used": true})
 		made += 1
 	var index_file := FileAccess.open(out_dir.path_join("_index.json"), FileAccess.WRITE)
@@ -79,13 +82,13 @@ static func _check(data: Variant) -> Dictionary:
 	if runners.is_empty() or not (runners[0] as Dictionary).has_all(NEEDED):
 		out["reason"] = "古い形の記録"
 		return out
-	var player_id := ""
-	for record: Dictionary in runners:
-		if bool(record.get("player", false)):
-			player_id = str(record["id"])
-	if player_id.is_empty():
+	# 「人が操作」でも、通信ごしに操作されている席（ラボで走らせた、育てるCPUの席）は、人ではない。
+	var players: Array = runners.filter(func(r): return bool(r.get("player", false)) and not bool(r.get("remote_controlled", false))).map(func(r): return str(r["id"]))
+	if players.is_empty():
 		out["reason"] = "人が操作していない"
 		return out
+	var player_id := str(players[0])
+	out["player_id"] = player_id
 	out["pururin"] = player_id.split("#")[0]
 	for result: Dictionary in data.get("final_results", []):
 		if str(result.get("id", "")) == player_id:
@@ -95,15 +98,9 @@ static func _check(data: Variant) -> Dictionary:
 	return out
 
 
-## 1本の記録から、お手本の組の並び。あなたが操作した走者がいなければ空。
-func _demo(data: Dictionary, settings: Dictionary) -> Dictionary:
+## 1本の記録から、お手本の組の並び。player_id＝あなたが操作した走者。
+func _demo(data: Dictionary, settings: Dictionary, player_id: String) -> Dictionary:
 	var samples: Array = data["samples"]
-	var player_id := ""
-	for record: Dictionary in samples[0]["runners"]:
-		if bool(record["player"]):
-			player_id = str(record["id"])
-	if player_id.is_empty():
-		return {}
 	var distance := float(data["race_distance_m"])
 	var path3d := Path3D.new()
 	LocalRaceMath.apply_course_to_path(path3d)

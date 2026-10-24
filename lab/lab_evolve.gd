@@ -47,14 +47,22 @@ func _initialize() -> void:
 	_seed = int(args.get("seed", "1"))
 	_rng.seed = _seed
 	_batch = LabBatch.new(settings, LabScore.lab_dir().path_join("runs/%s" % str(args["out"])))
-	var start: Array = []
+	var middle: Array = []
 	for i in KnobBrain.slots(_knobs).size():
-		# 最初は、どのつまみも範囲のまん中。
-		start.append(0.5)
+		middle.append(0.5)
 	for p: Dictionary in PururinRosterConfig.values()["roster"]:
 		var id := str(p["id"])
 		_pururins.append(id)
-		_cma[id] = Cma.new(start, float(_evolve["start_sigma"]), int(_evolve["candidates"]))
+		# あなたの走りを写した頭（lab/brains/<ぷるりん>.json）があれば、そこから小さく散らして始める。
+		# 無ければ、どのつまみも範囲のまん中から、大きく散らして始める。
+		var teacher := KnobBrain.load_file(LabScore.lab_dir().path_join("brains/%s.json" % id))
+		if teacher.is_empty():
+			_cma[id] = Cma.new(middle, float(_evolve["start_sigma"]), int(_evolve["candidates"]))
+			print("%s：写した頭がないので、まん中から始めます" % id)
+		else:
+			var missing: Array = []
+			_cma[id] = Cma.new(KnobBrain.to_unit(teacher, _knobs, missing), float(_evolve["teacher_sigma"]), int(_evolve["candidates"]))
+			print("%s：写した頭から始めます%s" % [id, ("（頭に無いつまみ %s は、まん中）" % ", ".join(missing)) if not missing.is_empty() else ""])
 		_hall[id] = []
 	_start_training()
 
