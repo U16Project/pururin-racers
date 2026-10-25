@@ -145,7 +145,6 @@
   "overheat_propulsion_efficiency_min": 0.50,
   "overheat_exposure_efficiency_loss_per_s": 0.010,
   "overheat_exposure_recovery_per_s": 2.50,
-  "draft_assist_max_kmh": 4.0,
   "draft_forward_min_m": 1.5,
   "draft_forward_max_m": 8.0,
   "draft_lateral_range_m": 3.0,

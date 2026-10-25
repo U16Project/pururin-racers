@@ -40,6 +40,8 @@ var _first_finish_s := -1.0
 var _seats := {}
 ## 人の席の枠（いなければ -1）。
 var _human_gate := -1
+## 観戦するとき、画面で追う枠（あなたの枠をCPUにしたとき。観戦でなければ -1）。
+var _watch_gate := -1
 
 
 func start(link, spec: Dictionary, settings: Dictionary) -> void:
@@ -49,6 +51,9 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 	# JSON から来た番号は小数なので、整数にそろえる。
 	var seat_gates: Array = (spec.get("seats", []) as Array).map(func(g): return int(g))
 	_human_gate = int(spec.get("human_gate", -1))
+	_watch_gate = int(spec.get("watch_gate", -1))
+	# 枠ごとの、走らせているCPUの名前（人と走るとき、トレーナー欄に出す）。
+	var labels: Dictionary = spec.get("labels", {})
 	var OnlineServerScript: GDScript = load(ONLINE_SERVER_SCRIPT)
 	var entries: Array = []
 	# 席ごとのトレーナー（レース選択で選んだもの）。無ければ、その子のふだんのトレーナー。
@@ -60,7 +65,7 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 		var pururin := PururinRosterConfig.pururin_by_id(str(spec["lineup"][gate]))
 		var trainer_id := str(trainers.get(str(gate), RlObserve.default_trainer(str(pururin["id"]))))
 		var peer := PEER_BASE + gate + 1 if seat_gates.has(gate) else 0
-		var entry: Dictionary = OnlineServerScript._entry(gate, pururin, peer, TRAINEE_NAME if peer != 0 else "")
+		var entry: Dictionary = OnlineServerScript._entry(gate, pururin, peer, str(labels.get(str(gate), TRAINEE_NAME)) if peer != 0 else "")
 		# 人の席：この画面の「自分」。名前は、トレーナーの名前。
 		if gate == _human_gate:
 			entry["player"] = true
@@ -70,30 +75,54 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 			_seats[gate] = {
 				"peer": peer, "steer": 0.0, "brake": false, "last_progress": 0.0, "mid_place": 0, "dash": 0, "boost": 0,
 				"steps": 0, "paid": false, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
-				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0},
+				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "drafting": 0, "running": 0},
+				"boost_remaining": [],
 			}
 	entries = OnlineServerScript._with_runner_ids(entries)
 	# ゲームのCPUは、ラインを選ぶところでくじを使う。同じ番号なら同じ走りになるように、くじをそろえる。
 	seed(int(spec["seed"]))
 	RaceSession.select_distance(float(spec["distance_m"]))
-	RaceSession.set_course_only(_human_gate < 0)
+	RaceSession.set_course_only(not _on_screen())
 	RaceSession.set_online_entries(entries)
 	_race = (load(LOCAL_RACE_SCENE) as PackedScene).instantiate()
 	# オンラインのサーバーと同じ扱いにする（レースの記録ファイルを書かない・音を鳴らさない）。
 	_race.set("_online_host", true)
 	add_child(_race)
 	RaceSession.set_online_entries([])
-	if _human_gate >= 0:
+	if _on_screen():
 		_show_for_human()
+		_name_runners(spec.get("shorts", {}))
 	var track: Path3D = _race.get("_track")
 	_inside = LabSituation.inside_sign(track.curve)
 
 
-## 人と走るとき：サーバーの扱いで止まった、画面・音・人の操作を、ふつうのオフラインのレースと同じに戻す（lab/lab_race.gd と同じ）。
+## 順位表で、どのCPUが走らせているか分かるように、名前の後ろにCPUの短い名前を付ける（例：「ミント［脚質1 20:27］」）。
+func _name_runners(shorts: Dictionary) -> void:
+	for runner: Node3D in _race.call("get_runners_for_simulation"):
+		var short := str(shorts.get(str(int(runner.get("gate_index"))), ""))
+		if not short.is_empty():
+			runner.set("display_name", "%s［%s］" % [str(runner.get("display_name")), short])
+
+
+## 画面に出すレースか（人が走る、または観戦する）。
+func _on_screen() -> bool:
+	return _human_gate >= 0 or _watch_gate >= 0
+
+
+## 人と走るとき・観戦するとき：サーバーの扱いで止まった、画面・音・人の操作を、ふつうのオフラインのレースと同じに戻す（lab/lab_race.gd と同じ）。
+## 観戦では、追う枠の走者を「自分」として画面（操作盤・カメラ）に出す。一時停止などの操作はできる。走りの操作はCPUに届かない。
 ## 結果の板のボタンは、ラボの動きに付け替える（ゲームのメニューへは行かない）。
 func _show_for_human() -> void:
 	_race.set("_online_host", false)
+	# 観戦でも、一時停止やメニューの操作は受け付ける（ダッシュ・ブースト・ブレーキは、ゲームが追っている枠へ届けない）。
 	_race.set_process_unhandled_input(true)
+	if _human_gate < 0:
+		for runner: Node3D in _race.call("get_runners_for_simulation"):
+			if int(runner.get("gate_index")) == _watch_gate:
+				_race.set("_player", runner)
+				var camera: Node = _race.get("_camera")
+				if camera.has_method("set_follow_target"):
+					camera.call("set_follow_target", runner)
 	for runner: Node3D in _race.call("get_runners_for_simulation"):
 		runner.set("presentation_enabled", true)
 		var body := runner.get_node_or_null("Body")
@@ -108,6 +137,8 @@ func _show_for_human() -> void:
 		var button: Button = _race.get(name)
 		_disconnect_menu(button)
 		button.pressed.connect(func(): back_requested.emit())
+		# ラボでは、戻る先はCPUを選ぶ画面。
+		button.text = "CPUを選ぶ画面へ戻る"
 
 
 static func _disconnect_menu(button: Button) -> void:
@@ -125,6 +156,9 @@ func is_ok() -> bool:
 func _process(delta: float) -> void:
 	if not is_ok() or _done or not bool(_race.call("is_race_started")):
 		return
+	# 一時停止中は、時間を進めず、CPUにも決めさせない。
+	if bool(_race.get("_paused")):
+		return
 	_elapsed += delta
 	var runners: Array = _race.call("get_runners_for_simulation")
 	for runner: Node3D in runners:
@@ -133,9 +167,9 @@ func _process(delta: float) -> void:
 			_seats[gate]["mid_place"] = _place_of(runner, runners)
 	if _first_finish_s < 0.0 and runners.any(func(r): return bool(r.call("is_finished"))):
 		_first_finish_s = _elapsed
-	# 人がいるレースは、打ち切らない（人のゴールを待つ）。
-	var cut := _human_gate < 0 and _first_finish_s >= 0.0 and _elapsed - _first_finish_s > float(_settings["cut_after_winner_s"])
-	if bool(_race.call("is_race_over")) or cut or (_human_gate < 0 and _elapsed > float(_settings["time_limit_s"])):
+	# 画面に出すレース（人が走る・観戦）は、打ち切らない（全員のゴールを待つ）。
+	var cut := not _on_screen() and _first_finish_s >= 0.0 and _elapsed - _first_finish_s > float(_settings["cut_after_winner_s"])
+	if bool(_race.call("is_race_over")) or cut or (not _on_screen() and _elapsed > float(_settings["time_limit_s"])):
 		_finish(runners, cut)
 		return
 	if _seats.is_empty():
@@ -209,6 +243,7 @@ func _apply(gate: int, seat: Dictionary, action: Array) -> void:
 	if int(action[4]) == 1 and bool(_race.call("trigger_remote_action", int(seat["peer"]), "boost")):
 		seat["boost"] = int(seat["boost"]) + 1
 		(seat["boost_at"] as Array).append(snappedf(_elapsed, 0.01))
+		_count_spurt(seat)
 
 
 func _snapshots(runners: Array, me: Node3D) -> Array:
@@ -248,6 +283,10 @@ func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 	var fit: Dictionary = seat["fit"]
 	var style: Dictionary = _settings["reward"]["style"]
 	var ratio := float(runner.call("get_race_progress")) / float(_spec["distance_m"])
+	# レース全体で、風よけをもらっていた割合（進み具合の記録用。点には使わない）。
+	fit["running"] = int(fit["running"]) + 1
+	if float(runner.call("get_telemetry_snapshot")["draft"]["received_draft_p"]) >= float(style["draft_at_least"]):
+		fit["drafting"] = int(fit["drafting"]) + 1
 	var place := _place_of(runner, runners)
 	var wanted: Array = []
 	if ratio >= float(style["mid_from"]) and ratio < float(style["mid_to"]):
@@ -265,7 +304,22 @@ func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 			fit["place_hit"] = int(fit["place_hit"]) + 1
 
 
-## 性格に合った走りの点（着順・タイム差の点より、はっきり小さい）。
+## ブーストを押した位置を数える。トレーナーの「スパートを始める残り距離」（spurt_m_2000。ほかの距離は長さに比例）の中で押したら、スパートの点の数に入れる。
+func _count_spurt(seat: Dictionary) -> void:
+	var runner: Node3D = _race.call("remote_runner", int(seat["peer"]))
+	if runner == null:
+		return
+	var distance := float(_spec["distance_m"])
+	var remaining := distance - float(runner.call("get_race_progress"))
+	(seat["boost_remaining"] as Array).append(roundf(remaining))
+	var spurt: Variant = (seat["frame"] as Dictionary).get("spurt_m_2000")
+	if spurt is Array and (spurt as Array).size() == 2:
+		var scale := distance / 2000.0
+		if remaining >= float(spurt[0]) * scale and remaining <= float(spurt[1]) * scale:
+			seat["fit"]["spurt_hits"] = int(seat["fit"]["spurt_hits"]) + 1
+
+
+## 性格に合った走りの点。
 func _style_reward(seat: Dictionary) -> float:
 	var fit: Dictionary = seat["fit"]
 	var style: Dictionary = _settings["reward"]["style"]
@@ -274,6 +328,7 @@ func _style_reward(seat: Dictionary) -> float:
 		out += float(style["place"]) * float(fit["place_hit"]) / float(fit["place_n"])
 	if int(fit["draft_n"]) > 0:
 		out += float(style["draft"]) * float(fit["draft_hit"]) / float(fit["draft_n"])
+	out += float(style["spurt_per_boost"]) * int(fit["spurt_hits"])
 	return out
 
 
@@ -336,6 +391,8 @@ func _finish(runners: Array, cut: bool) -> void:
 				"style_reward": _style_reward(seat),
 				"place_fit": float(fit["place_hit"]) / maxf(float(fit["place_n"]), 1.0),
 				"draft_fit": float(fit["draft_hit"]) / maxf(float(fit["draft_n"]), 1.0),
+				"spurt_hits": int(fit["spurt_hits"]), "boost_remaining_m": seat["boost_remaining"],
+				"draft_share": float(fit["drafting"]) / maxf(float(fit["running"]), 1.0),
 			})
 			var report := _report(runner, runners, seat)
 			report["reward"] = reward
@@ -345,8 +402,8 @@ func _finish(runners: Array, cut: bool) -> void:
 		"seats": reports, "over": true,
 		"race": {"seed": int(_spec["seed"]), "distance_m": float(_spec["distance_m"]), "race_s": _elapsed, "cut": cut, "results": results},
 	})
-	# 人がいるレースは、結果の板を見せたまま待つ（「もう1回」で次へ）。
-	if _human_gate < 0:
+	# 画面に出すレースは、結果の板を見せたまま待つ（「もう1回」で次へ）。
+	if not _on_screen():
 		race_done.emit()
 
 

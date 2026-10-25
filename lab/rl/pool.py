@@ -4,6 +4,8 @@
 - 育成中に1時間ごとに保存する版は、ここにも自動で入る（train.py）。
 - 置くのは pool.max 体まで。超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない。
 - 1レースのうち pool.seats 席を、ここからくじで選んだCPUが走らせる（走らせるだけで、学ばない）。
+- pool.always_run の育成のいちばん新しいCPU（latest.zip）は、控え室とは別に、どのレースにも1席必ず入る（その育成自身のレースでは入らない）。
+  成績の表では「<育成の名前>_最新」として出す。
 - 相手役ごとに、本命（育てているCPU）と走ったときの着順を記録する。育成ごとに別のファイル（_成績_<育成の名前>.json）。
 
 成績の表と、管理のアドバイス：/media/u16/Backup/pururin-rl-venv/bin/python lab/rl/pool.py
@@ -27,6 +29,12 @@ class Pool:
         self.stats = json.loads(self.stats_path.read_text(encoding="utf-8")) if self.stats_path.exists() else {}
         self._models = {}
         self.names = []
+        # どのレースにも必ず入れる育成（その育成自身のレースでは入れない）。
+        always = str(self.settings.get("always_run", ""))
+        self.always_run = always if always and always != run else ""
+        self.always_name = f"{self.always_run}_最新" if self.always_run else ""
+        self._always_model = None
+        self._always_mtime = 0.0
         self.reload()
 
     # ------------------------------------------------------------ 置き場所
@@ -58,14 +66,32 @@ class Pool:
             self.reload()
         return None
 
+    def always(self):
+        """必ず入れる育成の、いちばん新しいCPU（まだ無ければ None）。ファイルが新しくなっていたら読み直す。"""
+        path = RL_DIR / "runs" / self.always_run / "latest.zip"
+        if not self.always_run or not path.exists():
+            return None
+        if path.stat().st_mtime != self._always_mtime:
+            from sb3_contrib import MaskablePPO
+            try:
+                self._always_model = MaskablePPO.load(path, device="cpu")
+                self._always_mtime = path.stat().st_mtime
+            except Exception:
+                # 育成が書き込んでいる途中だったなど（読み方によって、いろいろな失敗の形になる）。前に読んだものを使い続ける。
+                pass
+        return self._always_model
+
     def model(self, name: str):
         """相手役のCPU（読み込めなければ None）。一度読んだものは、ファイルが外されても使える。"""
+        if name and name == self.always_name:
+            return self.always()
         if name not in self._models:
             from sb3_contrib import MaskablePPO
             path = self.dir / f"{name}.zip"
             try:
                 self._models[name] = MaskablePPO.load(path, device="cpu")
-            except (FileNotFoundError, OSError, ValueError):
+            except Exception:
+                # 外された・書き込みの途中など。読めなければ、その席は本命が走る。
                 return None
         return self._models[name]
 
@@ -110,6 +136,11 @@ def report():
             beat = s["beat"] / max(s["pairs"], 1)
             rows.append((name, s["races"], beat))
             print(f"{name} | {'○' if name.startswith(FIXED) else ''} | {s['races']} | {s['place_sum'] / s['races']:.2f} | "
+                  f"{s['main_place_sum'] / max(s['main_count'], 1):.2f} | {beat:.2f}")
+        for name in [n for n in stats if n.endswith("_最新") and stats[n]["races"] > 0]:
+            s = stats[name]
+            beat = s["beat"] / max(s["pairs"], 1)
+            print(f"{name}（必ず入る枠） |  | {s['races']} | {s['place_sum'] / s['races']:.2f} | "
                   f"{s['main_place_sum'] / max(s['main_count'], 1):.2f} | {beat:.2f}")
         own = [(n, stats[n]["races"], stats[n]["beat"] / max(stats[n]["pairs"], 1)) for n in pool.names
                if n.startswith(run + "_") and n in stats and stats[n]["races"] > 0]

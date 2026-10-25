@@ -60,9 +60,6 @@ static var DRIVE_FORCE_BY_LEVEL_KMH_PER_S: Array:
 static var BRAKE_DECELERATION_KMH_PER_S: float:
 	get:
 		return Config.number("brake_deceleration_kmh_per_s")
-static var DRAFT_SPEED_BONUS_MAX_KMH: float:
-	get:
-		return Config.number("draft_assist_max_kmh")
 static var DRAFT_CHAIN_ATTENUATION: float:
 	get:
 		return Config.number("draft_chain_attenuation")
@@ -600,11 +597,6 @@ static func draft_aggregate_contributions_p(contributions: Array) -> float:
 
 static func draft_air_resistance_factor(received_draft_p: float, pack_stat: int = 5) -> float:
 	return DRAFT_AIR_RESISTANCE_FACTOR * draft_effective_ratio(received_draft_p, pack_stat)
-
-
-static func draft_assist_speed_kmh(received_draft_p: float, pack_stat: int = 5) -> float:
-	"""ローカル目標速度方式の受取率→速度補助。通常ノッチ方式では診断用。"""
-	return DRAFT_SPEED_BONUS_MAX_KMH * draft_effective_ratio(received_draft_p, pack_stat)
 
 
 static func draft_wake_from_speed(speed_kmh: float) -> float:

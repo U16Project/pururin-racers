@@ -20,14 +20,15 @@
   "train": {
     "_note": "report_every_races：この本数ごとに progress.csv に1行書く。save_version_every_min：この分ごとに、その時点のCPUを版として保存する（新旧を比べる用）。save_latest_every_min：この分ごとに latest.zip を上書きする（人と走るときの相手）",
     "report_every_races": 100,
-    "save_version_every_min": 60,
+    "save_version_every_min": 30,
     "save_latest_every_min": 10
   },
   "pool": {
-    "_note": "相手の控え室（lab/rl/runs/<dir>/）。1レースのうち seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。置くのは max 体まで（超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない）。育成の1時間ごとの版は自動で入る",
+    "_note": "相手の控え室（lab/rl/runs/<dir>/）。1レースのうち seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。置くのは max 体まで（超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない）。育成の1時間ごとの版は自動で入る。always_run：どのレースにも1席、この育成のいちばん新しいCPU（runs/<always_run>/latest.zip）を必ず入れる（その育成自身のレースでは入れない。空にすると、この枠は無し）",
     "dir": "控え室",
     "seats": 2,
-    "max": 10
+    "max": 20,
+    "always_run": "分身1"
   },
   "reward": {
     "_note": "ゴールの着順の点（1位から順）。1位でなかったときは、1位とのタイム差が小さいほど gap_bonus まで足す（gap_scale_s 秒差で0）。前へ進んだ分の点（レース全体を進むと、この値）。2位の点＋gap_bonus が1位の点より小さいこと",
@@ -45,12 +46,13 @@
     "gap_scale_s": 5.0,
     "progress_total": 0.2,
     "style": {
-      "_note": "性格に合った走りの点（2026-10-24 ユーザー確認済みの案）。中ほど（mid_from〜mid_to の割合）で性格の「いたい順位」にいた割合 × place（終盤にいたい順位があるトレーナーは、終盤も数える）。後ろにつく性格は、中ほどで風よけ（received_draft_p が draft_at_least 以上）をもらっていた割合、つかない性格はもらっていなかった割合 × draft。place＋draft は、着順の点のいちばん小さい差より小さくすること",
+      "_note": "性格に合った走りの点（2026-10-24・10-25 ユーザー確認済み）。中ほど（mid_from〜mid_to の割合）で性格の「いたい順位」にいた割合 × place（終盤にいたい順位があるトレーナーは、終盤も数える）。後ろにつく性格は、中ほどで風よけ（received_draft_p が draft_at_least 以上）をもらっていた割合、つかない性格はもらっていなかった割合 × draft。ブーストを、トレーナーの「スパートを始める残り距離」（spurt_m_2000。ほかの距離は長さに比例）の中で押したら、1回ごとに spurt_per_boost（範囲の外は0。減点しない）。合計は最大 0.05＋0.08＋0.09＝0.22 で、4位と5位の差（0.1）より大きい。1位を取る点よりは、はっきり小さい（2026-10-25、スタートの全力ブーストとドラフトを使わない走りへの対策）",
       "place": 0.05,
-      "draft": 0.03,
+      "draft": 0.08,
       "mid_from": 0.25,
       "mid_to": 0.75,
-      "draft_at_least": 0.05
+      "draft_at_least": 0.05,
+      "spurt_per_boost": 0.03
     }
   },
   "observe": {

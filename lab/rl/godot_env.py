@@ -102,6 +102,7 @@ class GodotVecEnv(VecEnv):
     """ゴドー workers 本の、育てるCPUの席を、学習の場として扱う。
 
     pool（相手の控え室）を渡すと、1レースのうち pool.seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。
+    さらに pool.always_run があれば、1席をその育成のいちばん新しいCPUが走らせる（学ばない）。
     のこりの席（learn 席）が学習の場になる：学習の場の数＝ workers × learn。どの枠が学ぶ席かは、レースごとにくじで変える。
     控え室が空のときは、その席も本命（main_model）が走らせる（学ばない）。
     seeds を渡すと、その番号のレースを順に走らせる。渡さなければ、学ぶ用の番号からくじで選ぶ。
@@ -114,7 +115,9 @@ class GodotVecEnv(VecEnv):
         self.field = settings["field"]
         self.pool = pool
         self.pool_seats = int(settings["pool"]["seats"]) if pool is not None else 0
-        self.learn = self.field - self.pool_seats
+        # どのレースにも必ず入れる育成のいちばん新しいCPUの席（pool.always_run。その育成自身のレースでは無し）。
+        self.always_seats = 1 if pool is not None and pool.always_run else 0
+        self.learn = self.field - self.pool_seats - self.always_seats
         self.main_model = None
         self.seeds = list(seeds) if seeds is not None else None
         self._cursor = 0
@@ -149,7 +152,9 @@ class GodotVecEnv(VecEnv):
         gates = list(range(self.field))
         self._rng.shuffle(gates)
         self._pool_gates[w] = {gate: self.pool.pick(self._rng) for gate in gates[:self.pool_seats]}
-        self._learn_gates[w] = sorted(gates[self.pool_seats:])
+        for gate in gates[self.pool_seats:self.pool_seats + self.always_seats]:
+            self._pool_gates[w][gate] = self.pool.always_name
+        self._learn_gates[w] = sorted(gates[self.pool_seats + self.always_seats:])
         g.send({"cmd": "reset", "spec": make_spec(self._next_seed(), self.settings, self.roster), "settings": self.settings})
         message = g.read()
         if message["over"]:
@@ -208,7 +213,8 @@ class GodotVecEnv(VecEnv):
             rewards[w * self.learn:(w + 1) * self.learn] = self._take(w, message)
             if message["over"]:
                 race = message["race"]
-                named = {gate: name for gate, name in self._pool_gates[w].items() if name}
+                # 相手役の成績に数えるのは、実際にその相手役が走った席だけ（読めずに本命が代わりに走った席は数えない）。
+                named = {gate: name for gate, name in self._pool_gates[w].items() if name and self.pool.model(name) is not None}
                 race["pool"] = {str(gate): name for gate, name in named.items()}
                 self.races.append(race)
                 if self.pool is not None:

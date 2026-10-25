@@ -198,6 +198,10 @@ func trainer_color() -> Color:
 func trainer_text() -> String:
 	if _view_only:
 		return _view_tag
+	# ラボから起動したときは、その枠を走らせるCPUの名前を出す。
+	var driver := RaceSession.driver_label_for_slot(slot) if not _pururin_id.is_empty() else ""
+	if not driver.is_empty():
+		return driver
 	if _is_user:
 		return RaceSession.trainer_name_for(_pururin_id, true)
 	return CPU_TAG if _taken else str(RaceSession.trainer_for_slot(slot).get("name", CPU_TAG))

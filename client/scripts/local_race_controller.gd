@@ -330,14 +330,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		else:
 			_set_paused(false)
 		get_viewport().set_input_as_handled()
-	elif not _paused and _race_started and _player != null and RaceControllerInput.is_dash_pressed(event):
+	elif not _paused and _race_started and _player_takes_input() and RaceControllerInput.is_dash_pressed(event):
 		# オンラインでは、押したことをサーバーへ送る（音は、効いたことが届いてから鳴らす）。
 		if _online_view:
 			_online_client.send(OnlineProtocol.ACTION, {"kind": OnlineProtocol.ACTION_DASH})
 		elif bool(_player.call("trigger_dash")):
 			RaceAudio.play_dash()
 		get_viewport().set_input_as_handled()
-	elif not _paused and _race_started and _player != null and RaceControllerInput.is_boost_pressed(event):
+	elif not _paused and _race_started and _player_takes_input() and RaceControllerInput.is_boost_pressed(event):
 		if _online_view:
 			_online_client.send(OnlineProtocol.ACTION, {"kind": OnlineProtocol.ACTION_BOOST})
 		elif bool(_player.call("trigger_boost")):
@@ -370,7 +370,7 @@ func _process(_delta: float) -> void:
 		return
 	# ゆっくりの戻しは、一時停止中でも進める（止めたまま、ゆっくりが残らないように）。
 	_celebration.advance(_delta)
-	if _player != null:
+	if _player_takes_input():
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
 	for peer_id: int in _remote_runners:
 		var remote_input: Dictionary = _remote_inputs[peer_id]
@@ -947,6 +947,12 @@ func online_result_rows() -> Array:
 	return rows
 
 
+## 画面の「自分」が、この画面のキー・パッドで動く走者か。
+## ラボの観戦では、通信ごしに動く走者（育てるCPU）を「自分」として画面に出すので、ダッシュ・ブースト・ブレーキは届けない。
+func _player_takes_input() -> bool:
+	return _player != null and not bool(_player.get("remote_controlled"))
+
+
 func is_race_started() -> bool:
 	return _race_started
 
@@ -1260,7 +1266,7 @@ func _update_detail_text() -> void:
 	lines.append_array(_drive_diagnostic_hud_lines(_player.call("get_drive_diagnostics")))
 	lines.append_array(DraftHudFormatter.status_lines(
 		# ローカルは速度上限を直接上げず、空気抵抗軽減で自然に速度が伸びる。
-		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true, false
+		_player.call("get_draft_status"), LocalRaceMath.draft_response_reference_p(), false, true, true
 	))
 	var draft_status: Dictionary = _player.call("get_draft_status")
 	lines.append("押し合い %s" % ("発生中（負荷x%.2f）" % float(_player.call("get_push_load_multiplier")) if _player.call("is_in_push_contest") else "なし"))
@@ -1360,7 +1366,8 @@ func _update_race_hud() -> void:
 	var state := {
 		"place": place,
 		"player_name": str(_player.get("display_name")),
-		"trainer_name": RaceSession.trainer_name_for(str(_player.call("get_snapshot")["id"]), true),
+		# その走者のトレーナー名（出走の一覧で決めたもの）。ふつうは、登録したユーザーの名前。
+		"trainer_name": str((_player.get("_pururin") as Dictionary).get("trainer_name", RaceSession.trainer_name_for(str(_player.call("get_snapshot")["id"]), true))),
 		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
 		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,

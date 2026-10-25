@@ -1,21 +1,22 @@
-"""強化学習：育てているCPUと、人がいっしょに走る（画面あり・景色あり。ふつうのオフラインと同じ見た目）。
+"""強化学習：育てているCPUと、人がいっしょに走る・CPUだけのレースを観戦する（画面あり・景色あり。ふつうのオフラインと同じ見た目）。
 
-ゲームのレース選択の画面（ふつうのオフラインと同じ）で、子・枠・距離・相手のトレーナーを選んで「スタート」。
-あなたの席はあなた。ほかの選んだ席は、育てているCPU（本命）が走らせる（席ごとに選んだトレーナーの性格を、CPUに伝える）。
-そのうち rl_settings.json の pool.seats 席（--pool で変えられる）は、相手の控え室からくじで選んだCPUが走らせる。
-本命は、レースを始めるたびに、その育成のいちばん新しいCPU（lab/rl/runs/<育成の名前>/latest.zip）を読み直す。
-結果の板の「もう1回」で同じ内容の次のレース、「戻る」でレース選択の画面へ。画面を閉じると終わる。
+起動すると、まず「CPUを選ぶ画面」が出る。
+  いちばん上の行は、あなたの枠（レース選択で自分にした枠）。最初は「あなた」。CPUにすると観戦。
+  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は全部、本命（--run の育成の最新）。
+  選べるCPU：育成の最新（育成1・脚質1・分身1 など、runs/ の中で latest.zip があるもの）と、控え室の版の全部。
+決定すると、ゲームのレース選択の画面（ふつうのオフラインと同じ）→ 出走表の「レース開始」でレース。
+レース中・結果の板のトレーナー欄には、その枠を走らせているCPUの名前が出る。
+「最新」を選んだ枠は、レースを始めるたびに、その育成のいちばん新しいCPUを読み直す。
+結果の板の「もう1回」で同じ内容の次のレース、「戻る」でCPUを選ぶ画面へ。画面を閉じると終わる。
 あなたのレースは、ふつうのオフラインと同じく記録が残り、育成のお手本に自動で足される。
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/play.py
-  本命にする育成：--run 脚質1（書かなければ 育成1）
-  控え室から走らせる席の数：--pool 0（書かなければ rl_settings.json の pool.seats）
+  最初に選ばれている本命：--run 脚質1（書かなければ 育成1）
 """
 
 import argparse
 import json
-import random
 import time
 
 from sb3_contrib import MaskablePPO
@@ -30,54 +31,92 @@ def display_names() -> dict:
         return {p["id"]: p["display_name"] for p in json.load(f)["roster"]}
 
 
+def choices(main_run: str, pool: Pool) -> list:
+    """選べるCPUの一覧（最初の1つが本命）。id は「run:育成の名前」か「pool:控え室の版の名前」。"""
+    runs = sorted(p.parent.name for p in (RL_DIR / "runs").glob("*/latest.zip"))
+    runs.sort(key=lambda r: r != main_run)
+    items = [{"id": f"run:{r}", "label": f"{r}・最新" + ("（本命）" if r == main_run else "")} for r in runs]
+    items += [{"id": f"pool:{n}", "label": n} for n in pool.names]
+    return items
+
+
+class Drivers:
+    """CPUの id → 読み込んだCPU。育成の最新は、ファイルが新しくなっていたら読み直す。"""
+
+    def __init__(self, pool: Pool):
+        self.pool = pool
+        self._latest = {}
+
+    def get(self, driver_id: str):
+        kind, _, name = driver_id.partition(":")
+        if kind == "pool":
+            return self.pool.model(name)
+        path = RL_DIR / "runs" / name / "latest.zip"
+        mtime = path.stat().st_mtime if path.exists() else 0.0
+        cached = self._latest.get(name)
+        if cached is None or cached[0] != mtime:
+            try:
+                self._latest[name] = (mtime, MaskablePPO.load(path, device="cpu"))
+            except Exception:
+                # 書き込みの途中など。前に読んだものを使い続ける。
+                if cached is None:
+                    return None
+        return self._latest[name][1]
+
+    def saved_at(self, driver_id: str) -> str:
+        kind, _, name = driver_id.partition(":")
+        if kind != "run" or name not in self._latest:
+            return ""
+        return time.strftime("%m/%d %H:%M", time.localtime(self._latest[name][0]))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run", default="育成1")
-    parser.add_argument("--pool", type=int, default=-1, help="控え室から走らせる席の数（-1なら rl_settings.json の pool.seats）")
     parser.add_argument("--shot", default="", help="確かめ用：この秒数で画面を撮って閉じる（秒,ファイル）")
     args = parser.parse_args()
     settings = load_settings()
-    pool_seats = args.pool if args.pool >= 0 else int(settings["pool"]["seats"])
-    model_path = RL_DIR / "runs" / args.run / "latest.zip"
-    if not model_path.exists():
-        raise SystemExit(f"育てたCPUがまだありません：{model_path}（train.py で育成を始めて、10分ほど待つ）")
+    pool = Pool(settings, args.run)
+    items = choices(args.run, pool)
+    if not items:
+        raise SystemExit("育てたCPUがまだありません（train.py で育成を始めて、10分ほど待つ）")
     extra = []
     if args.shot:
         seconds, path = args.shot.split(",", 1)
         extra = [f"shot_after_s={seconds}", f"shot={path}"]
     godot = Godot(settings, 0, RL_DIR / "runs" / "play_logs", window=True, extra_args=["select=1", *extra])
+    godot.send({"cmd": "choices", "items": items})
     names = display_names()
-    pool = Pool(settings)
-    rng = random.Random()
+    drivers = Drivers(pool)
     race_no = 0
-    model = None
     by_gate = {}
+    labels = {}
     try:
         while True:
             message = godot.read()
             if "start" in message:
-                # レースを始める：本命のいちばん新しいCPUを読み直し、控え室から走らせる席を、くじで決める。
-                model = MaskablePPO.load(model_path, device="cpu")
-                saved = time.strftime("%m/%d %H:%M", time.localtime(model_path.stat().st_mtime))
                 spec = message["start"]
-                pool.reload()
-                seats = list(spec["seats"])
-                rng.shuffle(seats)
-                by_gate = {gate: pool.pick(rng) for gate in seats[:pool_seats]} if pool.names else {}
+                by_gate = {int(g): d for g, d in spec.get("drivers", {}).items()}
+                labels = {int(g): l for g, l in spec.get("labels", {}).items()}
+                for d in set(by_gate.values()):
+                    drivers.get(d)
                 race_no += 1
-                print(f"レース {race_no}：{int(spec['distance_m'])}m、あなたは {spec['human_gate'] + 1} 枠。"
-                      f"本命：{args.run} の {saved} 保存のCPU。控え室から {len(by_gate)} 席", flush=True)
+                who = "あなたは %d 枠" % (spec["human_gate"] + 1) if spec["human_gate"] >= 0 else "観戦（%d 枠を追う）" % (spec["watch_gate"] + 1)
+                print(f"レース {race_no}：{int(spec['distance_m'])}m、{who}", flush=True)
+                for gate in sorted(by_gate):
+                    saved = drivers.saved_at(by_gate[gate])
+                    print(f"  {gate + 1}枠 {names.get(spec['lineup'][gate], spec['lineup'][gate])}：{labels[gate]}" + (f"（{saved} 保存）" if saved else ""), flush=True)
                 godot.send({"cmd": "reset", "spec": spec, "settings": settings})
             elif message.get("over"):
                 for r in sorted(message["race"]["results"], key=lambda r: r["place"]):
-                    who = "あなた" if r["human"] else (f"控え室：{by_gate[r['gate']]}" if r["gate"] in by_gate else "本命")
-                    print(f"  {r['place']}位 {who}（{names.get(r['pururin'], r['pururin'])}）{r['time']:.2f} 秒", flush=True)
+                    who = "あなた" if r["human"] else labels.get(r["gate"], "CPU")
+                    print(f"  {r['place']}位 {names.get(r['pururin'], r['pururin'])}（{who}）{r['time']:.2f} 秒", flush=True)
             elif "seats" in message:
                 actions = {}
                 for seat in message["seats"]:
                     gate = int(seat["gate"])
-                    driver = (pool.model(by_gate[gate]) if gate in by_gate else None) or model
-                    action, _ = driver.predict(seat["obs"], action_masks=seat["mask"], deterministic=True)
+                    model = drivers.get(by_gate.get(gate, items[0]["id"])) or drivers.get(items[0]["id"])
+                    action, _ = model.predict(seat["obs"], action_masks=seat["mask"], deterministic=True)
                     actions[str(gate)] = [int(a) for a in action]
                 godot.send({"cmd": "step", "actions": actions})
     except RuntimeError:

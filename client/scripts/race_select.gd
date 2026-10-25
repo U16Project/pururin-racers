@@ -458,6 +458,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func go_to_title() -> void:
+	if RaceSession.race_select_back.is_valid():
+		RaceSession.race_select_back.call()
+		return
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
 
 

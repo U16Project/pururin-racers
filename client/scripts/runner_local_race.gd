@@ -295,7 +295,6 @@ func get_draft_status() -> Dictionary:
 		"received_draft_p": _received_draft_p,
 		"effective_draft_ratio": LocalRaceMath.draft_effective_ratio(_received_draft_p, _effective_pack_stat()),
 		"pack_draft_effective_multiplier": LocalRaceMath.pack_draft_effective_multiplier(_effective_pack_stat()),
-		"draft_speed_bonus_kmh": LocalRaceMath.draft_assist_speed_kmh(_received_draft_p, _effective_pack_stat()),
 		"direct_source_ids": _direct_source_ids.duplicate(),
 		"chain_source_ids": _chain_source_ids.duplicate(),
 		"draft_source_ids": _direct_source_ids.duplicate(),

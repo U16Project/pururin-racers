@@ -117,7 +117,9 @@ func _ready() -> void:
 		style_mark.draw.connect(func() -> void:
 			Hud.draw_style_chevrons(style_mark, Vector2(1.0, style_mark.size.y * 0.5), Hud.COLOR_STYLE_MATCH, StatsMath.rank_group_count(), StatsMath.style_rank_group_index(style_id), CHEVRON_SCALE))
 		summary.add_child(style_mark)
-		summary.add_child(_dim_label("%s　%s" % [STYLE_NAMES.get(style_id, ""), trainer_name]))
+		# ラボから起動したときは、その枠を走らせるCPUの名前も添える。
+		var driver := Session.driver_label_for_slot(gate)
+		summary.add_child(_dim_label("%s　%s%s" % [STYLE_NAMES.get(style_id, ""), trainer_name, "［%s］" % driver if not driver.is_empty() else ""]))
 		row.focus_entered.connect(_show_entry.bind(entry))
 		# マウスを乗せている間だけ、その行を見せる。離れたら、カーソルが合っている行に戻す。
 		row.mouse_entered.connect(_show_entry.bind(entry))
@@ -206,6 +208,12 @@ func _show_entry(entry: Dictionary) -> void:
 		_trainer_name.add_theme_color_override("font_color", Color(0.5, 1, 0.6) if Session.is_default_trainer(shown_gate, str(trainer.get("id", ""))) else Style.COLOR_TEXT)
 		_favorite.text = "得意脚質：" + str(STYLE_NAMES.get(str(trainer.get("favorite_running_style", "")), ""))
 		_introduction.text = str(trainer.get("introduction", ""))
+
+	# ラボから起動したときは、その枠を走らせるCPUの名前を、トレーナー名の下に出す。
+	var driver := Session.driver_label_for_slot(shown_gate)
+	if not driver.is_empty():
+		_trainer_name.text += "\n［%s］" % driver
+
 
 func _link_focus() -> void:
 	for index in _rows.size():

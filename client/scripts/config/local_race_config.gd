@@ -91,7 +91,6 @@ const NUMBER_RANGES := {
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],
-	"draft_assist_max_kmh": [0.0, 90.0],
 	"draft_forward_min_m": [0.001, 1000.0],
 	"draft_forward_max_m": [0.001, 1000.0],
 	"draft_lateral_range_m": [0.001, 1000.0],

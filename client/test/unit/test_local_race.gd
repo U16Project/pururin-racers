@@ -485,7 +485,6 @@ func test_draft_response_curve_saturates_toward_full_effect() -> void:
 	assert_lt(LocalRaceMath.draft_effective_ratio(above_reference), 1.0)
 	assert_gt(LocalRaceMath.draft_effective_ratio(above_reference), LocalRaceMath.draft_effective_ratio(reference))
 	assert_almost_eq(LocalRaceMath.draft_air_resistance_factor(half_received), LocalRaceMath.DRAFT_AIR_RESISTANCE_FACTOR * _expected_effective_ratio(0.5), 0.001)
-	assert_almost_eq(LocalRaceMath.draft_assist_speed_kmh(three_quarters_received), 4.0 * _expected_effective_ratio(0.75), 0.001)
 
 
 func test_draft_source_wake_grows_past_the_reference_speed_without_a_source_cap() -> void:
@@ -541,11 +540,8 @@ func test_draft_aggregation_uses_same_general_formula_for_one_two_and_three_sour
 	assert_gt(three, two)
 	assert_eq(LocalRaceMath.draft_aggregate_contributions_p([]), 0.0)
 	assert_almost_eq(LocalRaceMath.draft_aggregate_contributions_p([contribution * 10.0]), contribution * 10.0, 0.001)
-	assert_lt(LocalRaceMath.draft_assist_speed_kmh(contribution * 3.0), 4.0)
-	assert_gt(
-		LocalRaceMath.draft_assist_speed_kmh(contribution * 3.0),
-		LocalRaceMath.draft_assist_speed_kmh(contribution)
-	)
+	assert_lt(LocalRaceMath.draft_effective_ratio(contribution * 3.0), 1.0)
+	assert_gt(LocalRaceMath.draft_effective_ratio(contribution * 3.0), LocalRaceMath.draft_effective_ratio(contribution))
 
 
 func test_draft_response_curve_reduces_air_resistance_and_stays_below_full_cancel() -> void:
@@ -1328,7 +1324,6 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(lines.has("総合 100%"))
 	assert_true(lines.has("実効 %d%%" % int(roundf(_expected_effective_ratio(1.0) * 100.0))))
 	assert_true(lines.has("集団補正 x1.00"))
-	assert_false(_detail_text(race).contains("上限補正"))
 	assert_true(lines.has("対象1 CPU2 前4.0m 横1.0m"))
 	# 推進力は、いちばん低いノッチ（最小）でも出る。走者の診断の値から作る。
 	var drive := float(player.call("get_drive_diagnostics")["drive_contribution_kmh_per_s"])
@@ -1380,7 +1375,6 @@ func test_local_hud_shows_drafting_status_and_resistance_diagnostics() -> void:
 	assert_true(solo_lines.has("総合 0%"))
 	assert_true(solo_lines.has("実効 0%"))
 	assert_true(solo_lines.has("集団補正 x1.00"))
-	assert_false(_detail_text(race).contains("上限補正"))
 	assert_true(solo_lines.has("対象 なし"))
 	player.free()
 	race.free()
