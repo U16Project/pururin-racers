@@ -946,7 +946,7 @@ static func _entry(gate: int, pururin: Dictionary, peer_id: int, name_or_trainer
 	var trainer := CpuTrainers.by_id(trainer_id)
 	return {
 		"gate": gate, "id": str(pururin["id"]), "player": peer_id != 0, "peer_id": peer_id,
-		"trainer_id": trainer_id, "trainer_profile_id": str(trainer.get("profile_id", "")),
+		"trainer_id": trainer_id,
 		"trainer_name": name_or_trainer if peer_id != 0 else str(trainer.get("name", "")),
 	}
 

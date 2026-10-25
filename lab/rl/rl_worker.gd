@@ -18,7 +18,7 @@ extends SceneTree
 
 const RlLink := preload("rl_link.gd")
 const RlRace := preload("rl_race.gd")
-const RlObserve := preload("rl_observe.gd")
+const RlObserve := preload("res://scripts/cpu_brain/brain_observe.gd")
 const RlPicker := preload("rl_picker.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"

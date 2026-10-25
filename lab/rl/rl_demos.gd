@@ -1,6 +1,6 @@
 extends SceneTree
 ## 強化学習：あなたがオフラインで走った記録（ゲームの記録ファイル）を、お手本の束に直す。レースは走らせない。
-## 記録の0.5秒ごとの場面から「頭が見るもの（rl_observe と同じ並び）・選べる操作・あなたがした操作」の組を作る。
+## 記録の0.5秒ごとの場面から「頭が見るもの（ゲーム本体の brain_observe と同じ並び）・選べる操作・あなたがした操作」の組を作る。
 ## 記録1本ごとに、1つのファイルに書く（作ったものは作り直さない。新しい記録だけ足す）。
 ## 起動（client/ で）：godot --headless --path . -s ../lab/rl/rl_demos.gd -- out=<書く場所> since=<この日時より後の記録>
 ## 使う記録：since より後に保存され、あなたが操作して、ゴールまで走ったレース（ぷるりん・距離は問わない）。
@@ -8,8 +8,9 @@ extends SceneTree
 ## 育てるCPUの席は、記録の remote_controlled（通信ごしに操作）で見分けて外す。
 ## こわれた記録・古い形の記録・途中でやめたレースは外す。使った・外した記録の一覧を <書く場所>/_index.json に書く。
 
-const RlObserve := preload("rl_observe.gd")
-const LabSituation := preload("../lab_situation.gd")
+const RlObserve := preload("res://scripts/cpu_brain/brain_observe.gd")
+const BrainSituation := preload("res://scripts/cpu_brain/brain_situation.gd")
+const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const CourseBuilder := preload("res://scripts/course_builder.gd")
 
@@ -105,7 +106,7 @@ func _demo(data: Dictionary, settings: Dictionary, player_id: String) -> Diction
 	var path3d := Path3D.new()
 	LocalRaceMath.apply_course_to_path(path3d)
 	var route := CourseBuilder.route_for_distance(LocalRaceMath.course_layout(), distance)
-	var inside := LabSituation.inside_sign(path3d.curve)
+	var inside := BrainSituation.inside_sign(path3d.curve)
 	var threshold := float(settings["demo"]["line_threshold_m"])
 	var obs: Array = []
 	var masks: Array = []
@@ -121,7 +122,7 @@ func _demo(data: Dictionary, settings: Dictionary, player_id: String) -> Diction
 		var others: Array = (samples[i]["runners"] as Array).filter(func(r): return str(r["id"]) != player_id)
 		var ctx := {
 			"distance_m": distance, "elapsed_s": float(samples[i]["elapsed_s"]), "curve": path3d.curve, "route": route,
-			"inside": inside, "field": int(settings["field"]), "scales": settings["observe"],
+			"inside": inside, "field": int(CpuBrainConfig.values()["field"]),
 		}
 		# ブレーキ中の記録は、ノッチの段が0に見えるので、ノッチはどれでも選べたことにする。
 		var braking := bool(me["braking"]) or bool(next["braking"])

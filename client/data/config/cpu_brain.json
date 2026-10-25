@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "_note": "育てたCPU（強化学習の頭）の設定。brain＝使う頭のファイル（lab/rl/export_brain.py が書き出す）。decide_every_s＝何秒ごとに決めるか。field＝見るものの並びを何体ぶん作るか。observe＝頭が見るものの大きさをそろえる数（育てたときと同じでないと、頭が正しく動かない。変えたら育て直し）。操作が届くまでの遅れは local_race.json の cpu_reaction_delay_s。トレーナーの性格の数字は cpu_trainers.json の frame",
+  "brain": "res://data/cpu_brains/main.json",
+  "decide_every_s": 0.5,
+  "field": 8,
+  "observe": {
+    "_note": "前後の差（m）は gap_scale_m で割って -1〜1 に収める。集団は、前後の間が group_gap_m より開いたら別の組。typical_finish_s は、その距離のふつうのゴールのタイム（ゲームのCPUだけのレースの1位のタイムの平均。流れが速いか遅いかを見るため）",
+    "gap_scale_m": 100.0,
+    "speed_scale_kmh": 100.0,
+    "group_gap_m": 5.0,
+    "typical_finish_s": {
+      "2000": 141.0
+    }
+  }
+}

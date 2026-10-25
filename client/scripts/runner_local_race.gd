@@ -10,7 +10,6 @@ const TrackMath := preload("res://scripts/track_math.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const CourseBuilder := preload("res://scripts/course_builder.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
-const CpuTrainerMath := preload("res://scripts/cpu_trainer_math.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
@@ -54,7 +53,6 @@ var _effective_stats: Dictionary = {}
 var _natural_top_speed_kmh: float = 58.0
 var _distance: float = 0.0
 var _offset: float = 0.0
-var _target_offset: float = 0.0
 var _current_speed_kmh: float = 0.0
 ## 前の走者にふさがれた分を引いた、実際に進んでいる対地速度（表示用。走行計算には使わない）。
 var _actual_speed_kmh: float = 0.0
@@ -122,15 +120,9 @@ var _finish_order: int = -1
 var _finish_time: float = -1.0
 var _straight_len: float = 0.0
 var _turn_radius: float = 0.0
-var _cpu_steer_timer: float = 0.0
-var _cpu_trainer_timer: float = 0.0
-var _cpu_trainer_profile: Dictionary = {}
-var _cpu_trainer_drive_level: float = 0.0
-var _cpu_line_move_speed_m_per_s: float = 0.0
 var _drive_diagnostic_log_remaining: float = 0.0
 var _paused: bool = false
 var _race_active: bool = false
-var _cpu_start_drive_remaining: float = 0.0
 ## コントローラが毎フレーム渡す他頭情報。
 var _others_snapshot: Array = []
 ## このレースに出る人数（脚質の順位の判定に使う）。
@@ -162,7 +154,6 @@ func setup_for_race(
 	display_name = label
 	# スタートの枠の間は、出る人数が少なくても、満員のときと同じ。
 	_offset = LocalRaceMath.starting_offset_for_gate(gate)
-	_target_offset = _offset
 	_distance = LocalRaceMath.start_path_for_distance_m(_race_distance_m)
 	_race_progress = 0.0
 	_tick_start_progress = 0.0
@@ -177,20 +168,8 @@ func setup_for_race(
 	_braking = false
 	_drive_hold_direction = 0.0
 	_drive_repeat_remaining = 0.0
-	_cpu_steer_timer = 0.0
-	_cpu_trainer_timer = 0.0
-	if not is_player:
-		# roster 検証で全個体に定義済み trainer_profile_id があることを保証している。
-		_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(
-			str(_pururin.get("trainer_profile_id", ""))
-		)
-	else:
-		_cpu_trainer_profile = {}
-	_cpu_trainer_drive_level = 0.0
-	_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
 	_drive_diagnostic_log_remaining = 0.0
 	_race_active = false
-	_cpu_start_drive_remaining = 0.0
 	_drafting = false
 	_clear_draft_details()
 	_heart_rate_bpm = LocalRaceMath.Config.number("heart_rate_min_bpm")
@@ -223,8 +202,6 @@ func set_race_active(active: bool) -> void:
 	if _race_active == active:
 		return
 	_race_active = active
-	if _race_active and not player_controlled:
-		_cpu_start_drive_remaining = LocalRaceMath.Config.number("cpu_start_drive_duration_seconds")
 
 
 func is_race_active() -> bool:
@@ -559,15 +536,6 @@ func _advance_puppet(delta: float) -> void:
 	_apply_pose()
 
 
-## 通信ごしの人が抜けたあと、この走者を、その個体のCPUトレーナーに任せる（オンラインのサーバーだけ）。
-func hand_over_to_cpu() -> void:
-	remote_controlled = false
-	player_controlled = false
-	_remote_line = 0.0
-	_remote_notch = 0.0
-	_cpu_trainer_profile = LocalRaceMath.cpu_trainer_profile_by_id(str(_pururin.get("trainer_profile_id", "")))
-
-
 ## 通信ごしの人の、今の操作（ライン：-1＝左〜1＝右、ノッチ：-1＝下げる〜1＝上げる。押しているあいだの値）。
 func set_remote_input(line: float, notch: float) -> void:
 	_remote_line = clampf(line, -1.0, 1.0)
@@ -876,18 +844,8 @@ func get_telemetry_snapshot() -> Dictionary:
 
 
 func _active_drive_level() -> float:
-	if player_controlled or puppet:
-		# ブレーキは速さを落とすだけ。ノッチはそのままで、体力の減り方・心拍の上がり方も、今のノッチのとおり。
-		return _drive_level
-	if _cpu_start_drive_remaining > 0.0:
-		return LocalRaceMath.Config.number("cpu_start_drive_level")
-	return LocalRaceMath.cpu_heart_safe_drive_level(
-		_cpu_trainer_drive_level,
-		_heart_rate_bpm,
-		int(_effective_stats.get("cardio", 5)),
-		_heart_adaptation,
-		_cpu_extra_heart_load_bpm_per_s()
-	)
+	# ブレーキは速さを落とすだけ。ノッチはそのままで、体力の減り方・心拍の上がり方も、今のノッチのとおり。
+	return _drive_level
 
 
 func _ready() -> void:
@@ -926,7 +884,7 @@ func _process(delta: float) -> void:
 	)
 	var pose_distance := float(route_pose.get("mainline_distance", _distance))
 	var curvature := 0.0 if bool(route_pose.get("is_straight", false)) else TrackMath.curvature_at(_path.curve, pose_distance)
-	_update_inputs(delta, curvature)
+	_update_inputs(delta)
 	# 重なる位置へ動いたときは、動く前へ戻すのではなく、押し合いの勝負（コントローラ側）で解く。
 	_offset = LocalRaceMath.limit_offset_by_stronger_neighbors(
 		previous_offset, _offset, _race_progress, _contact_resistance_stat(), _others_snapshot
@@ -952,34 +910,6 @@ func _process(delta: float) -> void:
 		_dash_time_left = maxf(_dash_time_left - delta, 0.0)
 		_boost_time_left = maxf(_boost_time_left - delta, 0.0)
 		_update_drive_diagnostic_log(delta)
-	elif _cpu_start_drive_remaining > 0.0:
-		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
-			_current_speed_kmh,
-			LocalRaceMath.Config.number("cpu_start_drive_level"),
-			delta,
-			_draft_air_resistance_factor(),
-			get_top_speed_drive_adjustment(),
-			get_propulsion_efficiency(),
-			_aero_air_resistance_multiplier(),
-			get_acceleration_response_multiplier()
-		)
-		_cpu_start_drive_remaining = maxf(_cpu_start_drive_remaining - delta, 0.0)
-		_update_condition_for_drive_level(LocalRaceMath.Config.number("cpu_start_drive_level"), delta)
-	else:
-		var cpu_drive_level := _active_drive_level()
-		# 前走者に接触しても推進を0へ戻さない。進捗は allowed_race_progress が
-		# 前走者の手前で止めるため、現在位置を維持したままラインの空きを待つ。
-		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
-			_current_speed_kmh,
-			cpu_drive_level,
-			delta,
-			_draft_air_resistance_factor(),
-			get_top_speed_drive_adjustment(),
-			get_propulsion_efficiency(),
-			_aero_air_resistance_multiplier(),
-			get_acceleration_response_multiplier()
-		)
-		_update_condition_for_drive_level(cpu_drive_level, delta)
 	# カーブで、コースの中央から離れるほど少し遅くなる（操作性が高いほど小さい）。
 	var line_multiplier := LocalRaceMath.line_speed_multiplier(
 		_offset, curvature, _current_speed_kmh, int(_effective_stats.get("handling", 5))
@@ -1027,75 +957,13 @@ func _clear_draft_details() -> void:
 	_in_push_contest = false
 
 
-func _update_inputs(delta: float, curvature: float = 0.0) -> void:
+func _update_inputs(delta: float) -> void:
 	if player_controlled:
 		var steer := _read_steer_axis()
 		_offset = TrackMath.clamp_offset(_offset + steer * steer_speed * get_handling_steer_multiplier() * delta)
-	else:
-		_cpu_steer_timer -= delta
-		if _cpu_steer_timer <= 0.0:
-			_cpu_steer_timer = LocalRaceMath.cpu_steer_reselect_interval_s(randf())
-			var line_pref := clampf(float(_cpu_trainer_profile.get("line_pref", 0.5)), 0.0, 1.0)
-			var follow_candidate := LocalRaceMath.cpu_follow_candidate(
-				_race_progress, _offset, _others_snapshot
-			)
-			if bool(follow_candidate.get("found", false)):
-				var follow_slot := LocalRaceMath.cpu_follow_slot(
-					_race_progress, _offset, follow_candidate, _others_snapshot, 0.0, curvature, line_pref
-				)
-				if bool(follow_slot.get("hold_current", false)):
-					_target_offset = _offset
-					_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
-				else:
-					var escape_slot := bool(follow_slot.get("escape", false))
-					_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
-						_target_offset,
-						float(follow_slot["offset"]),
-						1.0 if escape_slot else -1.0
-					)
-					_cpu_line_move_speed_m_per_s = LocalRaceMath.cpu_line_move_speed_m_per_s(follow_slot)
-			else:
-				var open_line := LocalRaceMath.cpu_open_line_target_offset_m(
-					_race_progress,
-					_offset,
-					_others_snapshot,
-					line_pref,
-					0.0,
-					curvature
-				)
-				_target_offset = LocalRaceMath.cpu_follow_target_offset_m(
-					_target_offset,
-					float(open_line["offset"]),
-					1.0
-				)
-				_cpu_line_move_speed_m_per_s = LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
-			# ライン選択と速度方針は独立。速度はトレーナーが定期的に決める。
-		_offset = move_toward(_offset, _target_offset, _cpu_line_move_speed_m_per_s * get_handling_steer_multiplier() * delta)
-		_offset = TrackMath.clamp_offset(_offset)
-		_cpu_trainer_timer -= delta
-		if _cpu_trainer_timer <= 0.0:
-			_cpu_trainer_timer = LocalRaceMath.Config.number("cpu_trainer_reselect_seconds")
-			_update_cpu_drive_level()
 
 
-func _update_cpu_drive_level() -> void:
-	var settings := LocalRaceMath.cpu_trainer_settings()
-	var decision := CpuTrainerMath.decide({"heart_rate_bpm": _heart_rate_bpm}, settings)
-	_cpu_trainer_drive_level = LocalRaceMath.cpu_heart_safe_drive_level(
-		float(decision["drive_level"]),
-		_heart_rate_bpm,
-		int(_effective_stats.get("cardio", 5)),
-		_heart_adaptation,
-		_cpu_extra_heart_load_bpm_per_s()
-	)
-
-
-## CPUのノッチ判断に含める、ノッチ以外の心拍の負荷（接触・押し合いと、横移動。1秒あたり）。
-func _cpu_extra_heart_load_bpm_per_s() -> float:
-	return get_contact_heart_load_bpm_per_s() + get_lateral_move_heart_load_bpm_per_s()
-
-
-func _cpu_live_place() -> int:
+func _live_place() -> int:
 	var better := 0
 	for other_value in _others_snapshot:
 		if other_value is Dictionary and float(other_value.get("race_progress", 0.0)) > _race_progress + 0.001:
@@ -1110,7 +978,7 @@ func _apply_pururin_race_stats() -> void:
 		_natural_top_speed_kmh = _base_max_speed_kmh
 		return
 	# 有効ステータスは、個体・順位・区間・頭数が同じなら変わらない。変わったときだけ計算し直す（毎コマ計算すると重い）。
-	var live_place := _cpu_live_place()
+	var live_place := _live_place()
 	var progress_ratio := _race_progress / _race_distance_m
 	var stats_key := [_pururin, live_place, PururinStatsMath.phase_index(progress_ratio), _field_size]
 	if stats_key == _effective_stats_key and not _effective_stats.is_empty():

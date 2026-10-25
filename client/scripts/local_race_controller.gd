@@ -38,6 +38,7 @@ const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd"
 const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
+const BrainDriver := preload("res://scripts/cpu_brain/brain_driver.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TouchControls := preload("res://scripts/presentation/touch_controls.gd")
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
@@ -145,6 +146,8 @@ var _remote_runners := {}
 ## オンラインのサーバーの上のレースか（人が全員やめて、通信ごしの走者がいなくなっても、そのまま）。
 var _online_host := false
 var _remote_inputs := {}
+## CPUの席を動かす、育てたCPU（強化学習の頭）。オンラインのゲーム側（映すだけ）では使わない。
+var _brain: RefCounted
 var _heart_hud: Control
 ## 操作盤は、別の絵（SubViewport）に描いて、その絵を画面に貼る。毎コマ描き直すと重い（細かい部品が何百もある）ので、
 ## 絵の描き直しは、1秒に HEART_HUD_UPDATES_PER_S 回だけにする。
@@ -372,6 +375,8 @@ func _process(_delta: float) -> void:
 	_celebration.advance(_delta)
 	if _player_takes_input():
 		_player.call("set_braking", _race_started and not _paused and not _race_over and RaceControllerInput.brake_pressed())
+	if _brain != null and not _paused:
+		_brain.update(_delta, _runners, _race_elapsed, _race_started and not _race_over)
 	for peer_id: int in _remote_runners:
 		var remote_input: Dictionary = _remote_inputs[peer_id]
 		_remote_runners[peer_id].call("set_remote_input", float(remote_input["line"]), float(remote_input["notch"]))
@@ -551,6 +556,7 @@ func _spawn_field() -> void:
 	_remote_inputs.clear()
 	_runners_by_id.clear()
 	_online_view = RaceSession.is_online_view()
+	_brain = null if _online_view else BrainDriver.new(_track, _race_distance_m)
 	# 出るのは、キャラが入っている枠だけ。スタートの位置は、枠の番号どおり（未選択の枠は、空けたまま）。
 	var entries := RaceSession.field_entries()
 	var field_size := entries.size()
@@ -560,7 +566,6 @@ func _spawn_field() -> void:
 		# オンラインで同じプルが何体もいるときは、走者ごとの番号（runner_id）で見分ける。
 		var runner_id := str(entry.get("runner_id", entry["id"]))
 		pururin["id"] = runner_id
-		pururin["trainer_profile_id"] = entry["trainer_profile_id"]
 		pururin["trainer_name"] = str(entry["trainer_name"]) if entry.has("trainer_name") else RaceSession.trainer_name_for(str(entry["id"]), bool(entry["player"]))
 		var runner := Node3D.new()
 		runner.name = "Runner%d" % (i + 1)
@@ -573,12 +578,14 @@ func _spawn_field() -> void:
 		var is_player := bool(entry["player"])
 		var start_gate := int(entry["gate"])
 		var label: String = pururin["display_name"]
+		# CPUの席（人でも通信ごしの人でもない）は、育てたCPUが、人と同じ入口で動かす。
+		var brain_seat := not _online_view and not is_player and int(entry.get("peer_id", 0)) == 0
 		runner.call(
 			"setup_for_race",
 			_track,
 			start_gate,
 			LocalRaceMath.PLAYER_MAX_SPEED_KMH,
-			is_player,
+			is_player or brain_seat,
 			label,
 			pururin,
 			_race_distance_m,
@@ -592,8 +599,10 @@ func _spawn_field() -> void:
 			runner.set("puppet", true)
 			is_player = peer_id == RaceSession.online_view_peer_id()
 			peer_id = 0
+		if brain_seat:
+			_hand_to_brain(runner, str(entry.get("trainer_id", "")))
 		# 通信ごしの人（オンラインのサーバーだけ）：操作は通信で受け取る。この画面の「自分」にはしない。
-		if peer_id != 0:
+		elif peer_id != 0:
 			runner.set("remote_controlled", true)
 			runner.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
 			# サーバーの端末に、走者ごとの1秒おきの診断の文を流さない。
@@ -910,7 +919,7 @@ func is_start_held() -> bool:
 	return _start_hold
 
 
-## 通信ごしの人が抜けた：その走者を、その個体のCPUトレーナーに任せる（オンラインのサーバーだけ）。
+## 通信ごしの人が抜けた：その走者を、育てたCPUに任せる（オンラインのサーバーだけ）。性格は、その個体のトレーナー。
 func release_remote_runner(peer_id: int) -> void:
 	if not _remote_runners.has(peer_id):
 		return
@@ -918,7 +927,18 @@ func release_remote_runner(peer_id: int) -> void:
 	_remote_runners.erase(peer_id)
 	_remote_inputs.erase(peer_id)
 	runner.call("set_braking", false)
-	runner.call("hand_over_to_cpu")
+	var pururin: Dictionary = runner.get("_pururin")
+	_hand_to_brain(runner, str(PururinRosterConfig.pururin_by_id(str(pururin.get("id", "")).split("#")[0]).get("trainer_id", "")))
+
+
+## 走者を、育てたCPUで動かす。人と同じ入口（通信ごしの人と同じ扱い）で動かすので、走りの計算は人と同じ。
+func _hand_to_brain(runner: Node3D, trainer_id: String) -> void:
+	runner.set("remote_controlled", true)
+	# 走者ごとの1秒おきの診断の文を流さない。
+	runner.set("_drive_diagnostic_log_remaining", INF)
+	if not bool(runner.call("is_race_active")):
+		runner.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
+	_brain.add_seat(runner, trainer_id)
 
 
 ## オンラインで配る、レースの今の状態。

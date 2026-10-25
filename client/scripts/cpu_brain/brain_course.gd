@@ -1,5 +1,5 @@
 extends RefCounted
-## 強化学習：コースの形（走る道すじ全体を、決めた間隔で区切った表）。距離ごとに1回だけ作って取っておく。
+## 育てたCPU（強化学習の頭）：コースの形（走る道すじ全体を、決めた間隔で区切った表）。距離ごとに1回だけ作って取っておく。
 ## 「先のコーナーまでの距離・曲がり具合」「ゴールまでの直線の長さ」を見るために使う。
 
 const TrackMath := preload("res://scripts/track_math.gd")
@@ -8,7 +8,7 @@ const CourseBuilder := preload("res://scripts/course_builder.gd")
 
 ## 区切る間隔（m）。
 const STEP_M := 5.0
-## コーナーとみなす曲がり具合（lab_situation.gd と同じ値）。
+## コーナーとみなす曲がり具合（brain_situation.gd と同じ値）。
 const CORNER_CURVATURE := 0.0005
 
 static var _cache := {}

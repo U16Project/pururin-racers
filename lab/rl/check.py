@@ -12,7 +12,7 @@ import numpy as np
 
 from godot_env import GodotVecEnv, load_settings
 
-## 見るものの並びで、ブーストの残りがある場所（rl_observe.gd の順：レースと流れの24個のあと、自分の値の7番目）。
+## 見るものの並びで、ブーストの残りがある場所（client の brain_observe.gd の順：レースと流れの24個のあと、自分の値の7番目）。
 BOOST_LEFT = 24 + 6
 
 

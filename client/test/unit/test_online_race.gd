@@ -462,16 +462,14 @@ func test_a_runner_whose_player_leaves_is_handed_to_the_cpu() -> void:
 	var race: Node = _server.room_race(_room_ids["部屋"])
 	var runner_b: Node3D = race.call("remote_runner", b)
 	assert_true(bool(runner_b.get("remote_controlled")))
-	# b が抜ける。b の走者は、その個体のCPUトレーナーに任される。レースは、残った人のために続く。
+	# b が抜ける。b の走者は、育てたCPUに任される（性格は、その個体のトレーナー）。レースは、残った人のために続く。
 	_clients["b"].disconnect_from_server()
 	var waited := 0.0
 	while race.call("remote_runner", b) != null and waited < WAIT_S:
 		await wait_seconds(0.05)
 		waited += 0.05
 	assert_null(race.call("remote_runner", b))
-	assert_false(bool(runner_b.get("remote_controlled")))
-	assert_false(bool(runner_b.get("player_controlled")))
-	assert_eq(runner_b.get("_cpu_trainer_profile"), LocalRaceMath.cpu_trainer_profile_by_id(str(PururinRosterConfig.pururin_by_id(ids[1])["trainer_profile_id"])) if PururinRosterConfig.pururin_by_id(ids[1]).has("trainer_profile_id") else runner_b.get("_cpu_trainer_profile"))
+	assert_true((race.get("_brain") as RefCounted).has_seat(runner_b))
 	assert_not_null(_server.room_race(_room_ids["部屋"]))
 	assert_not_null(race.call("remote_runner", a))
 	# 抜けた人を待たずに、残った人の準備だけで始まる。
@@ -501,7 +499,7 @@ func test_a_racer_who_quits_mid_race_goes_to_the_waiting_room_and_the_cpu_runs_o
 		await wait_seconds(0.05)
 		waited += 0.05
 	assert_null(race.call("remote_runner", b))
-	assert_false(bool(runner_b.get("remote_controlled")))
+	assert_true((race.get("_brain") as RefCounted).has_seat(runner_b))
 	assert_false(_server.is_racer(room, b))
 	assert_true((_server.room_members(room) as Array).any(func(m: Dictionary) -> bool: return int(m["peer_id"]) == b))
 	assert_not_null(_server.room_race(room))

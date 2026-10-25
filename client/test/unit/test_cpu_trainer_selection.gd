@@ -18,7 +18,7 @@ func test_trainer_choices_and_new_pururins() -> void:
 	assert_eq(Session.roster_ids().size(), 10)
 	assert_false(Looks.look_for("cpu-8").is_empty())
 	assert_false(Looks.look_for("cpu-9").is_empty())
-	var invalid := {"schema_version": 1, "trainers": [{"id": "invalid", "name": "試験", "profile_id": "missing"}]}
+	var invalid := {"schema_version": 1, "trainers": [{"id": "invalid", "name": ""}]}
 	assert_false(Trainers.validate(invalid).is_empty())
 	for trainer: Dictionary in Trainers.values():
 		assert_true(ResourceLoader.exists(str(trainer["portrait_path"])))
@@ -33,10 +33,6 @@ func test_trainer_choices_and_new_pururins() -> void:
 			assert_false(str(trainer["introduction"]).contains(forbidden))
 	assert_eq(Trainers.by_id("ren")["favorite_running_style"], "pace")
 	assert_eq(Trainers.by_id("tsubaki")["favorite_running_style"], "stalk")
-	assert_eq(Trainers.by_id("ren")["profile_id"], "front")
-	assert_eq(Trainers.by_id("tsubaki")["profile_id"], "balanced")
-	assert_eq(Trainers.by_id("lotta")["profile_id"], "front")
-	assert_eq(Trainers.by_id("ordo")["profile_id"], "draft")
 	assert_true(Trainers.by_id("ordo")["introduction"].contains("？？？"))
 	assert_false(Trainers.by_id("ordo")["introduction"].contains("王様"))
 
@@ -133,18 +129,21 @@ func test_selection_survives_character_change_and_snapshot_and_moves() -> void:
 	assert_eq(Session.slot_trainer_id(2), "kaede")
 	Session.restore_slots(saved)
 	assert_eq(Session.slot_trainer_id(1), "kaede")
-	assert_eq(Session.field_entries()[1]["trainer_profile_id"], "draft")
+	assert_eq(Session.field_entries()[1]["trainer_id"], "kaede")
 	assert_false(Session.set_slot_trainer(0, "kaede"))
 	Session.toggle_lock(1)
 	assert_false(Session.set_slot_trainer(1, "ren"))
 
-func test_selected_profile_is_received_by_real_cpu_runner() -> void:
+func test_selected_trainer_is_received_by_the_cpu_seat() -> void:
 	Session.set_slot_trainer(1, "kaede")
 	var controller := Controller.instantiate()
 	add_child_autofree(controller)
 	var runners: Array = controller.get_runners_for_simulation()
 	assert_eq(runners.size(), 2)
-	assert_eq(runners[1].get("_cpu_trainer_profile")["id"], "draft")
+	# CPUの席は、育てたCPUが、選んだトレーナーの性格の数字で走らせる。
+	var brain: RefCounted = controller.get("_brain")
+	assert_true(brain.has_seat(runners[1]))
+	assert_eq(brain.get("_seats")[runners[1]]["trainer_id"], "kaede")
 
 func test_picker_selection_and_return_focus() -> void:
 	var screen: Node = load("res://scenes/race_select.tscn").instantiate()

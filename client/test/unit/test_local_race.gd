@@ -18,53 +18,6 @@ func before_each() -> void:
 	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
 
 
-func test_cpu_heart_safety_uses_the_highest_notch_that_lowers_an_overheated_heart() -> void:
-	var current_bpm := LocalRaceMath.Config.number("heart_rate_normal_max_bpm") + 10.0
-	var cardio_stat := 5
-	var selected := LocalRaceMath.cpu_heart_safe_drive_level(6.0, current_bpm, cardio_stat)
-	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(current_bpm, selected, cardio_stat), 0.0)
-	assert_eq(
-		selected,
-		LocalRaceMath.cpu_heart_safe_drive_level(0.0, current_bpm, cardio_stat),
-		"心拍が通常上限以上では既存の追走ノッチでなく、心拍を下げられる最大ノッチを選ぶ"
-	)
-	if selected < LocalRaceMath.DRIVE_LEVEL_MAX:
-		assert_gte(
-			LocalRaceMath.heart_rate_net_rate_bpm_per_s(current_bpm, selected + 1.0, cardio_stat),
-			0.0,
-			"次のノッチでは心拍を下げられないため選ばない"
-		)
-
-
-func test_cpu_heart_safety_keeps_the_trainer_notch_below_normal_max() -> void:
-	assert_eq(
-		LocalRaceMath.cpu_heart_safe_drive_level(5.0, LocalRaceMath.Config.number("cpu_heart_drop_threshold_bpm") - 0.1, 5),
-		5.0
-	)
-
-
-func test_cpu_heart_safety_starts_below_the_normal_max_and_counts_adaptation_and_extra_load() -> void:
-	var threshold := LocalRaceMath.Config.number("cpu_heart_drop_threshold_bpm")
-	assert_lt(threshold, LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
-	# 下げ始める心拍以上なら、基本ノッチより下げる。
-	assert_lt(LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold, 5), 6.0)
-	# 慣れがあると下げる力が強いので、より高いノッチを選べる。
-	var plain := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5)
-	var adapted := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5, 1.0)
-	assert_gte(adapted, plain)
-	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(threshold + 5.0, adapted, 5, 1.0), 0.0)
-	# 追加の負荷があると、より低いノッチを選ぶ。
-	var loaded := LocalRaceMath.cpu_heart_safe_drive_level(6.0, threshold + 5.0, 5, 0.0, 2.0)
-	assert_lte(loaded, plain)
-	assert_lt(LocalRaceMath.heart_rate_net_rate_bpm_per_s(threshold + 5.0, loaded, 5) + 2.0, 0.0)
-
-
-func test_cpu_trainer_settings_use_the_common_start_notch_and_heart_limit() -> void:
-	var settings := LocalRaceMath.cpu_trainer_settings()
-	assert_eq(float(settings["cpu_start_drive_level"]), LocalRaceMath.Config.number("cpu_start_drive_level"))
-	assert_eq(float(settings["heart_rate_normal_max_bpm"]), LocalRaceMath.Config.number("heart_rate_normal_max_bpm"))
-
-
 func test_local_course_uses_shared_m5_layout() -> void:
 	var expected := LocalRaceMath.expected_stadium_length_m()
 	assert_almost_eq(expected, LocalRaceMath.lap_length_m(), 0.2)
@@ -112,16 +65,6 @@ func test_local_race_scene_applies_shared_course_before_the_field_starts() -> vo
 	assert_almost_eq(goal.global_position.x, expected_goal.x, 0.5)
 	assert_almost_eq(goal.global_position.z, expected_goal.z, 0.5)
 	race.free()
-
-
-func test_start_countdown_config_uses_default_notch_four_and_faster_cpu_launch() -> void:
-	var config := LocalRaceMath.Config.values()
-	assert_eq(config["start_countdown_seconds"], 3.0)
-	assert_eq(config["race_entry_wait_seconds"], 5.0)
-	assert_eq(config["player_start_drive_level"], 4.0)
-	assert_eq(config["cpu_start_drive_level"], 5.0)
-	assert_eq(config["cpu_start_drive_duration_seconds"], 1.0)
-	assert_true(LocalRaceMath.Config.validate(config).is_empty())
 
 
 func test_countdown_keeps_runners_still_then_starts_everyone_together() -> void:
@@ -240,29 +183,6 @@ func test_local_player_uses_roster_effective_top_speed_and_acceleration() -> voi
 	race.free()
 
 
-func test_cpu_runner_uses_its_roster_trainer_profile_instead_of_gate_cycle() -> void:
-	var runner := Node3D.new()
-	runner.set_script(RunnerScript)
-	add_child(runner)
-	# モモ（gate 5）は旧ゲート循環なら front になるが、roster 指定は balanced。
-	var momo: Dictionary = PururinRosterConfig.pururin_by_id("cpu-5")
-	runner.call("setup_for_race", null, 5, 75.0, false, str(momo["display_name"]), momo)
-	var profile: Dictionary = runner.get("_cpu_trainer_profile")
-	assert_eq(profile["id"], "balanced")
-	runner.free()
-
-
-func test_hikari_uses_balanced_trainer_when_selected_as_a_cpu() -> void:
-	var runner := Node3D.new()
-	runner.set_script(RunnerScript)
-	add_child(runner)
-	var hikari: Dictionary = PururinRosterConfig.pururin_by_id("player-1")
-	runner.call("setup_for_race", null, 0, 75.0, false, str(hikari["display_name"]), hikari)
-	var profile: Dictionary = runner.get("_cpu_trainer_profile")
-	assert_eq(profile["id"], "balanced")
-	runner.free()
-
-
 func test_selected_roster_id_is_kept_in_runner_and_telemetry_snapshots() -> void:
 	var runner := Node3D.new()
 	runner.set_script(RunnerScript)
@@ -271,38 +191,6 @@ func test_selected_roster_id_is_kept_in_runner_and_telemetry_snapshots() -> void
 	runner.call("setup_for_race", null, 3, 75.0, true, str(sora["display_name"]), sora)
 	assert_eq(runner.call("get_snapshot")["id"], "cpu-4")
 	assert_eq(runner.call("get_telemetry_snapshot")["id"], "cpu-4")
-	runner.free()
-
-
-func test_cpu_telemetry_uses_trainer_drive_level_for_drive_diagnostics() -> void:
-	var runner := Node3D.new()
-	runner.set_script(RunnerScript)
-	add_child(runner)
-	var momo: Dictionary = PururinRosterConfig.pururin_by_id("cpu-5")
-	runner.call("setup_for_race", null, 5, 75.0, false, str(momo["display_name"]), momo)
-	runner.set("_current_speed_kmh", 60.0)
-	runner.set("_cpu_trainer_drive_level", 4.0)
-	var telemetry: Dictionary = runner.call("get_telemetry_snapshot")
-	var diagnostics: Dictionary = telemetry["drive_diagnostics"]
-	var effective_stats: Dictionary = runner.call("get_effective_stats")
-	var expected: Dictionary = LocalRaceMath.drive_diagnostics_kmh_per_s(
-		60.0,
-		4.0,
-		0.0,
-		LocalRaceMath.top_speed_drive_adjustment_kmh_per_s(
-			60.0,
-			4.0,
-			int(effective_stats["top_speed"]),
-			runner.call("_aero_air_resistance_multiplier")
-		),
-		1.0
-	)
-	assert_eq(telemetry["drive_level"], 4.0)
-	assert_almost_eq(
-		float(diagnostics["drive_contribution_kmh_per_s"]),
-		float(expected["drive_contribution_kmh_per_s"]),
-		0.001
-	)
 	runner.free()
 
 
@@ -349,15 +237,16 @@ func test_acceleration_response_does_not_change_coasting_braking_or_positive_not
 
 
 func test_runner_diagnostics_include_effective_acceleration_response() -> void:
-	for is_player: bool in [true, false]:
+	# 人も育てたCPUも、同じ入口で走る（どちらも操作で動く走者）。
+	for remote: bool in [false, true]:
 		var runner := Node3D.new()
 		runner.set_script(RunnerScript)
 		add_child(runner)
 		var akane := PururinRosterConfig.pururin_by_id("cpu-1")
-		runner.call("setup_for_race", null, 2, 75.0, is_player, "アカネ", akane)
+		runner.call("setup_for_race", null, 2, 75.0, true, "アカネ", akane)
+		runner.set("remote_controlled", remote)
 		runner.set("_current_speed_kmh", 40.0)
 		runner.call("set_drive_level", 6.0)
-		runner.set("_cpu_trainer_drive_level", 6.0)
 		var stats: Dictionary = runner.call("get_effective_stats")
 		var diagnostics: Dictionary = runner.call("get_drive_diagnostics")
 		assert_almost_eq(float(diagnostics["acceleration_response_multiplier"]), LocalRaceMath.stat_acceleration_response_multiplier(int(stats["acceleration"])), 0.00001)
@@ -440,16 +329,6 @@ func test_braking_only_slows_and_keeps_the_notch_for_fuel_and_heart() -> void:
 	runner.call("set_braking", false)
 	assert_false(runner.call("is_braking"))
 	assert_gt(float(runner.call("get_drive_diagnostics")["drive_contribution_kmh_per_s"]), 0.0)
-	runner.free()
-
-
-func test_cpu_cannot_brake() -> void:
-	var runner := Node3D.new()
-	runner.set_script(RunnerScript)
-	add_child(runner)
-	runner.call("setup_for_race", null, 1, 75.0, false, "CPU", PururinRosterConfig.pururin_by_id("cpu-1"))
-	runner.call("set_braking", true)
-	assert_false(runner.call("is_braking"))
 	runner.free()
 
 
@@ -567,237 +446,6 @@ func test_quadratic_air_resistance_grows_with_speed_and_draft_keeps_rolling_resi
 	assert_almost_eq(float(high["air_resistance_kmh_per_s"]), _air_resistance(75.0), 0.001)
 	assert_almost_eq(float(drafted["rolling_resistance_kmh_per_s"]), float(high["rolling_resistance_kmh_per_s"]), 0.001)
 	assert_lt(float(drafted["air_resistance_kmh_per_s"]) - float(drafted["draft_air_reduction_kmh_per_s"]), float(high["air_resistance_kmh_per_s"]))
-
-
-func test_cpu_lane_changes_stay_inside_configured_ranges() -> void:
-	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(0.0), 1.0, 0.001)
-	assert_almost_eq(LocalRaceMath.cpu_steer_reselect_interval_s(1.0), 2.0, 0.001)
-
-
-func test_cpu_follow_selection_uses_one_score_and_falls_back_when_no_runner_is_ahead() -> void:
-	var selected := LocalRaceMath.cpu_follow_candidate(100.0, 0.0, [
-		{"id": "far-line", "race_progress": 104.0, "offset": 3.5},
-		{"id": "near-gap", "race_progress": 103.5, "offset": 0.5},
-		{"id": "behind", "race_progress": 99.0, "offset": 0.0},
-	])
-	assert_true(selected["found"])
-	assert_eq(selected["id"], "near-gap")
-	assert_almost_eq(float(selected["forward_gap_m"]), 3.5, 0.001)
-	var none := LocalRaceMath.cpu_follow_candidate(100.0, 0.0, [
-		{"id": "behind", "race_progress": 99.0, "offset": 0.0},
-		{"id": "wide", "race_progress": 104.0, "offset": 4.1},
-	])
-	assert_false(none["found"])
-
-
-func test_cpu_open_line_high_line_pref_moves_inside_when_current_line_is_blocked() -> void:
-	var others := [
-		{"id": "left", "race_progress": 100.0, "offset": -0.2},
-		{"id": "right", "race_progress": 100.0, "offset": 0.2},
-	]
-	var neutral := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 0.0, others, 0.5)
-	var inside := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 0.0, others, 0.95)
-	assert_lt(float(inside["offset"]), float(neutral["offset"]))
-
-
-func test_cpu_open_line_moves_toward_inside_preference_when_nearby_space_is_open() -> void:
-	var line_pref := 0.8
-	var preferred := lerpf(TrackMath.MAX_ABS_OFFSET_M, -TrackMath.MAX_ABS_OFFSET_M, line_pref)
-	var selected := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 2.0, [
-		{"id": "behind", "race_progress": 98.0, "offset": -4.1},
-	], line_pref)
-	assert_true(selected["found"])
-	assert_eq(str(selected["name"]), "open_line")
-	assert_almost_eq(float(selected["offset"]), preferred, 0.001)
-	assert_lt(float(selected["offset"]), 2.0)
-
-
-func test_cpu_line_distance_advantage_is_zero_on_straight_and_favors_inner_on_curve() -> void:
-	assert_almost_eq(LocalRaceMath.cpu_line_distance_advantage_score(-2.0, 0.0), 0.0, 0.001)
-	assert_lt(
-		LocalRaceMath.cpu_line_distance_advantage_score(-2.0, 0.05),
-		LocalRaceMath.cpu_line_distance_advantage_score(2.0, 0.05)
-	)
-
-
-func test_cpu_open_line_target_uses_an_open_side_when_current_line_is_dense() -> void:
-	var selected := LocalRaceMath.cpu_open_line_target_offset_m(100.0, 0.0, [
-		{"id": "left", "race_progress": 100.0, "offset": -0.2},
-		{"id": "right", "race_progress": 100.0, "offset": 0.2},
-	], 0.5)
-	assert_true(selected["found"])
-	assert_ne(float(selected["offset"]), 0.0)
-
-
-func test_cpu_follow_offset_is_bounded() -> void:
-	assert_almost_eq(LocalRaceMath.cpu_follow_target_offset_m(-2.0, 2.0), 0.6, 0.001)
-	assert_almost_eq(
-		LocalRaceMath.cpu_follow_target_offset_m(TrackMath.MAX_ABS_OFFSET_M, 99.0),
-		TrackMath.MAX_ABS_OFFSET_M,
-		0.001
-	)
-
-
-func test_cpu_follow_slots_choose_open_diagonal_and_prefer_inner_on_a_tie() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var crowded_center := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
-		leader,
-		{"id": "center-occupant", "race_progress": 100.0, "offset": 0.0},
-	])
-	assert_true(crowded_center["found"])
-	assert_eq(crowded_center["name"], "inner")
-	assert_almost_eq(float(crowded_center["offset"]), -1.2, 0.001)
-	var open_slots := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader])
-	assert_eq(open_slots["name"], "inner")
-	var inner_crowded := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
-		leader,
-		{"id": "inner-occupant", "race_progress": 100.0, "offset": -1.2},
-	])
-	assert_eq(inner_crowded["name"], "outer")
-
-
-func test_cpu_follow_slot_is_bounded_and_no_candidate_keeps_fallback_path() -> void:
-	var no_candidate := LocalRaceMath.cpu_follow_slot(100.0, 0.0, {"found": false}, [])
-	assert_false(no_candidate["found"])
-	var edge_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": TrackMath.MAX_ABS_OFFSET_M,
-	}, [])
-	assert_true(edge_slot["found"])
-	assert_lte(absf(float(edge_slot["offset"])), TrackMath.MAX_ABS_OFFSET_M)
-
-
-func test_cpu_follow_slot_positive_bias_uses_clear_forward_diagonal() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], 1.0)
-	assert_true(selected["found"])
-	assert_true(str(selected["name"]).begins_with("overtake_"))
-	assert_gt(float(selected["progress"]), float(leader["race_progress"]))
-
-
-func test_cpu_follow_slot_probes_open_forward_lane_when_local_field_is_dense() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
-		leader,
-		{"id": "near-left", "race_progress": 100.0, "offset": -1.0},
-		{"id": "near-right", "race_progress": 100.0, "offset": 1.0},
-	], 0.0)
-	assert_true(selected["found"])
-	assert_true(str(selected["name"]).begins_with("overtake_"))
-	assert_gt(float(selected["progress"]), float(leader["race_progress"]))
-
-
-func test_cpu_follow_slot_field_density_penalizes_occupied_slot() -> void:
-	var density := LocalRaceMath._cpu_follow_slot_field_density(100.0, 0.0, "leader", [
-		{"id": "leader", "race_progress": 104.0, "offset": 0.0},
-		{"id": "occupant", "race_progress": 100.0, "offset": 0.0},
-	])
-	assert_gt(density, 0.0)
-
-
-func test_follow_slot_targets_profile_inside_line_until_overtake_intent_is_strong() -> void:
-	var leader := {
-		"found": true, "id": "neighbor", "race_progress": 8.0,
-		"forward_gap_m": 3.0, "offset": 4.8,
-	}
-	var field := [leader, {"id": "pack", "race_progress": 10.0, "offset": -1.0}]
-	var settling := LocalRaceMath.cpu_follow_slot(5.0, 6.75, leader, field, 0.0, 0.0, 0.90)
-	var passing := LocalRaceMath.cpu_follow_slot(5.0, 6.75, leader, field, 1.0, 0.0, 0.90)
-	var preferred := lerpf(TrackMath.MAX_ABS_OFFSET_M, -TrackMath.MAX_ABS_OFFSET_M, 0.90)
-	assert_eq(str(settling["name"]), "inside_line")
-	assert_almost_eq(float(settling["offset"]), preferred, 0.001)
-	assert_true(str(passing["name"]).begins_with("overtake_"))
-	assert_gt(float(passing["offset"]), preferred)
-
-
-func test_cpu_follow_slot_prefers_inner_line_when_slots_are_similarly_open() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var selected := LocalRaceMath.cpu_follow_slot(100.0, 6.0, leader, [leader])
-	assert_true(selected["found"])
-	assert_eq(str(selected["name"]), "inner")
-	assert_lt(float(selected["offset"]), 0.0)
-
-
-func test_cpu_follow_slot_zero_or_negative_bias_keeps_rear_slots() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var default_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader])
-	var patient_slot := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], -1.0)
-	assert_false(str(default_slot["name"]).begins_with("overtake_"))
-	assert_false(str(patient_slot["name"]).begins_with("overtake_"))
-	assert_lt(float(default_slot["progress"]), float(leader["race_progress"]))
-	assert_lt(float(patient_slot["progress"]), float(leader["race_progress"]))
-
-
-func test_cpu_follow_slot_forward_choice_stays_bounded_at_track_edge() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": TrackMath.MAX_ABS_OFFSET_M,
-	}
-	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [leader], 1.0)
-	assert_true(selected["found"])
-	assert_lte(absf(float(selected["offset"])), TrackMath.MAX_ABS_OFFSET_M)
-
-
-func test_cpu_follow_slot_holds_current_line_when_forward_slots_are_blocked() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var inner_blocker := {"id": "inner", "race_progress": 106.0, "offset": -2.0}
-	var outer_blocker := {"id": "outer", "race_progress": 106.0, "offset": 2.0}
-	var escape_blocker := {"id": "escape", "race_progress": 106.0, "offset": 4.5}
-	var selected := LocalRaceMath.cpu_follow_slot(
-		100.0, 0.5, leader, [leader, inner_blocker, outer_blocker, escape_blocker], 1.0
-	)
-	assert_true(selected["found"])
-	assert_true(selected["hold_current"])
-	assert_eq(str(selected["name"]), "hold_current")
-	assert_almost_eq(float(selected["offset"]), 0.5, 0.001)
-
-
-func test_cpu_follow_slot_uses_outer_escape_when_normal_forward_slots_are_crowded() -> void:
-	var leader := {
-		"found": true, "id": "leader", "race_progress": 104.0,
-		"forward_gap_m": 4.0, "offset": 0.0,
-	}
-	var selected := LocalRaceMath.cpu_follow_slot(100.0, 0.0, leader, [
-		leader,
-		{"id": "inner", "race_progress": 106.0, "offset": -2.0},
-		{"id": "outer", "race_progress": 106.0, "offset": 2.0},
-	], 1.0)
-	assert_true(selected["found"])
-	assert_eq(str(selected["name"]), "overtake_escape_outer")
-	assert_true(bool(selected["escape"]))
-	assert_gt(float(selected["offset"]), 4.0)
-
-
-func test_cpu_line_move_speed_only_increases_for_escape_slots() -> void:
-	assert_almost_eq(
-		LocalRaceMath.cpu_line_move_speed_m_per_s({"escape": false}),
-		LocalRaceMath.Config.number("cpu_steer_speed_m_per_s"),
-		0.001
-	)
-	assert_almost_eq(
-		LocalRaceMath.cpu_line_move_speed_m_per_s({"escape": true}, 0.5),
-		LocalRaceMath.Config.number("cpu_steer_speed_m_per_s")
-			* LocalRaceMath.Config.number("cpu_overtake_escape_steer_speed_multiplier") * 0.5,
-		0.001
-	)
 
 
 func test_drafting_reduces_resistance_and_can_exceed_natural_top_speed() -> void:
@@ -1033,7 +681,7 @@ func test_lateral_move_adds_heart_and_stamina_load_to_the_runner() -> void:
 		runner.set("_lateral_move_m", moved)
 		var heart_before := float(runner.call("get_heart_rate_bpm"))
 		var stamina_before := float(runner.call("get_stamina"))
-		# 出力0（ブレーキ中と同じ）で比べる：ノッチの分の消費が無く、横移動の分だけが差になる。
+		# 出力0で比べる：ノッチの分の消費が無く、横移動の分だけが差になる。
 		runner.call("_update_condition_for_drive_level", 0.0, 1.0)
 		results[moved] = {"heart": float(runner.call("get_heart_rate_bpm")) - heart_before, "stamina": stamina_before - float(runner.call("get_stamina"))}
 		runner.free()
@@ -1149,7 +797,7 @@ func test_stamina_capacity_is_fuel_tank_and_consumption_is_stat_independent() ->
 	assert_gt(LocalRaceMath.stamina_capacity_l(15), LocalRaceMath.stamina_capacity_l(1))
 	# ノッチは最小でも1なので、走っているあいだは、いちばん低いノッチでも少し減る（自動では回復しない）。
 	assert_lt(LocalRaceMath.stamina_delta_l_per_s(LocalRaceMath.DRIVE_LEVEL_MIN, 200.0), 0.0)
-	# ブレーキ中（出力0）は、使わない。
+	# 出力0（推進していない）では、使わない。
 	assert_eq(LocalRaceMath.stamina_delta_l_per_s(0.0, 200.0), 0.0)
 	assert_lt(LocalRaceMath.stamina_delta_l_per_s(6.0, 200.0), 0.0)
 	assert_almost_eq(
@@ -1906,26 +1554,6 @@ func test_handling_scales_line_movement_speed_around_the_reference_stat() -> voi
 		0.00001
 	)
 	assert_gt(LocalRaceMath.handling_steer_multiplier(1), 0.0)
-
-
-func test_cpu_with_higher_handling_moves_to_its_target_line_faster() -> void:
-	var moved := {}
-	for handling: int in [1, 15]:
-		var runner := Node3D.new()
-		runner.set_script(RunnerScript)
-		add_child(runner)
-		runner.call("setup_for_race", null, 1, 75.0, false, "CPU", PururinRosterConfig.pururin_by_id("cpu-1"))
-		runner.set("_effective_stats", {"handling": handling})
-		runner.set("_offset", 0.0)
-		runner.set("_target_offset", 5.0)
-		runner.set("_cpu_steer_timer", 100.0)
-		runner.set("_cpu_trainer_timer", 100.0)
-		runner.set("_cpu_line_move_speed_m_per_s", 1.0)
-		runner.call("_update_inputs", 1.0)
-		moved[handling] = float(runner.get("_offset"))
-		runner.free()
-	assert_gt(float(moved[15]), float(moved[1]))
-	assert_almost_eq(float(moved[15]), LocalRaceMath.handling_steer_multiplier(15), 0.0001)
 
 
 func _contact_snapshot(progress_gap: float, side_gap: float) -> Array:

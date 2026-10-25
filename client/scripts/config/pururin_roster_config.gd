@@ -3,7 +3,6 @@ extends RefCounted
 
 const PATH := "res://data/config/pururin_roster.json"
 const StatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
-const LocalRaceConfig := preload("res://scripts/config/local_race_config.gd")
 const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 
@@ -29,7 +28,6 @@ static func parse_text(content: String, source: String = PATH) -> Dictionary:
 			if pururin is Dictionary:
 				var trainer := CpuTrainers.by_id(str(pururin.get("trainer_id", "")))
 				pururin["trainer_name"] = trainer.get("name", "")
-				pururin["trainer_profile_id"] = trainer.get("profile_id", "")
 	var errors := validate(parser.data)
 	return {"data": parser.data} if errors.is_empty() else {"error": "%s: %s" % [source, "; ".join(errors)]}
 
@@ -49,7 +47,6 @@ static func validate(data: Variant) -> PackedStringArray:
 		return errors
 	var known_attributes: Dictionary = StatsConfig.values().get("attributes", {})
 	var known_styles: Dictionary = StatsConfig.values().get("running_styles", {})
-	var trainer_profile_ids := _trainer_profile_ids()
 	var ids := {}
 	var initial_player_count := 0
 	for index in roster.size():
@@ -57,7 +54,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		if not pururin is Dictionary:
 			errors.append("roster[%d]: オブジェクトが必要です" % index)
 			continue
-		_validate_pururin(pururin, index, known_attributes, known_styles, trainer_profile_ids, ids, errors)
+		_validate_pururin(pururin, index, known_attributes, known_styles, ids, errors)
 		if str(pururin.get("control_kind", "")) == "player":
 			initial_player_count += 1
 	if initial_player_count != 1:
@@ -65,9 +62,9 @@ static func validate(data: Variant) -> PackedStringArray:
 	return errors
 
 
-static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dictionary, styles: Dictionary, trainer_profile_ids: Dictionary, ids: Dictionary, errors: PackedStringArray) -> void:
+static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dictionary, styles: Dictionary, ids: Dictionary, errors: PackedStringArray) -> void:
 	for key in pururin:
-		if key not in ["id", "display_name", "trainer_name", "trainer_id", "control_kind", "trainer_profile_id", "attribute", "running_style", "allocation"]:
+		if key not in ["id", "display_name", "trainer_name", "trainer_id", "control_kind", "attribute", "running_style", "allocation"]:
 			errors.append("roster[%d].%s: 未知の項目です" % [index, key])
 	var identifier := str(pururin.get("id", ""))
 	if identifier.is_empty() or ids.has(identifier):
@@ -89,19 +86,9 @@ static func _validate_pururin(pururin: Dictionary, index: int, attributes: Dicti
 	var allocation_errors := StatsMath.validate_allocation(allocation)
 	for allocation_error in allocation_errors:
 		errors.append("roster[%d].allocation: %s" % [index, allocation_error])
-	var profile_id := str(pururin.get("trainer_profile_id", ""))
 	if CpuTrainers.by_id(str(pururin.get("trainer_id", ""))).is_empty():
 		errors.append("roster[%d].trainer_id: 定義済みトレーナーが必要です" % index)
-	if not trainer_profile_ids.has(profile_id):
-		errors.append("roster[%d].trainer_profile_id: 定義済みCPUプロフィールが必要です" % index)
 
-
-static func _trainer_profile_ids() -> Dictionary:
-	var result := {}
-	for profile: Variant in LocalRaceConfig.values().get("cpu_trainer_profiles", []):
-		if profile is Dictionary:
-			result[str(profile.get("id", ""))] = true
-	return result
 
 
 static func values() -> Dictionary:

@@ -12,26 +12,17 @@ func test_shipped_roster_has_eight_cpu_capable_entries_with_valid_allocations() 
 	assert_eq(roster.size(), 10)
 	for pururin in roster:
 		assert_true(StatsMath.validate_allocation(pururin["allocation"]).is_empty())
-		assert_ne(str(pururin.get("trainer_profile_id", "")), "")
 	var default_id := RosterConfig.default_player_pururin_id()
 	assert_eq(default_id, "player-1")
 	assert_eq(RosterConfig.pururin_by_id(default_id)["display_name"], "ヒカリ")
-	assert_eq(RosterConfig.pururin_by_id(default_id)["trainer_profile_id"], "balanced")
 
 
-func test_cpu_roster_entry_references_existing_trainer_profile() -> void:
-	var cpu := RosterConfig.pururin_by_id("cpu-1")
-	assert_eq(cpu["display_name"], "アカネ")
-	assert_eq(cpu["trainer_profile_id"], "front")
-	assert_eq(cpu["running_style"], "escape")
-
-
-func test_roster_rejects_invalid_cpu_profile_and_duplicate_id() -> void:
+func test_roster_rejects_unknown_trainer_and_duplicate_id() -> void:
 	var data: Dictionary = RosterConfig.load_file().data.duplicate(true)
-	data["roster"][1]["trainer_profile_id"] = "missing"
+	data["roster"][1]["trainer_id"] = "missing"
 	data["roster"][2]["id"] = "cpu-1"
 	var errors := ";".join(RosterConfig.validate(data))
-	assert_true(errors.contains("trainer_profile_id"))
+	assert_true(errors.contains("trainer_id"))
 	assert_true(errors.contains("空または重複"))
 
 

@@ -17,8 +17,9 @@ const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 const ONLINE_SERVER_SCRIPT := "res://scripts/online/online_server.gd"
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
-const LabSituation := preload("../lab_situation.gd")
-const RlObserve := preload("rl_observe.gd")
+const BrainSituation := preload("res://scripts/cpu_brain/brain_situation.gd")
+const RlObserve := preload("res://scripts/cpu_brain/brain_observe.gd")
+const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 
 const TRAINEE_NAME := "（訓練中CPU）"
@@ -93,7 +94,7 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 		_show_for_human()
 		_name_runners(spec.get("shorts", {}))
 	var track: Path3D = _race.get("_track")
-	_inside = LabSituation.inside_sign(track.curve)
+	_inside = BrainSituation.inside_sign(track.curve)
 
 
 ## 順位表で、どのCPUが走らせているか分かるように、名前の後ろにCPUの短い名前を付ける（例：「ミント［脚質1 20:27］」）。
@@ -176,7 +177,7 @@ func _process(delta: float) -> void:
 		return
 	_next_decide_s -= delta
 	if _next_decide_s <= 0.0:
-		_next_decide_s = float(_settings["decide_every_s"])
+		_next_decide_s = float(CpuBrainConfig.values()["decide_every_s"])
 		var reports: Array = []
 		for runner: Node3D in runners:
 			var gate := int(runner.get("gate_index"))
@@ -258,7 +259,7 @@ func _ctx(runner: Node3D, trainer_id: String) -> Dictionary:
 	var track: Path3D = _race.get("_track")
 	return {
 		"distance_m": float(_spec["distance_m"]), "elapsed_s": _elapsed, "curve": track.curve, "route": runner.get("_race_route"),
-		"inside": _inside, "field": int(_settings["field"]), "scales": _settings["observe"], "trainer_id": trainer_id,
+		"inside": _inside, "field": int(CpuBrainConfig.values()["field"]), "trainer_id": trainer_id,
 	}
 
 

@@ -13,8 +13,6 @@ const NUMBER_RANGES := {
 	"start_countdown_seconds": [0.0, 30.0],
 	"race_entry_wait_seconds": [0.0, 30.0],
 	"player_start_drive_level": [-100.0, 100.0],
-	"cpu_start_drive_level": [-100.0, 100.0],
-	"cpu_start_drive_duration_seconds": [0.0, 30.0],
 	# 育てたCPU（強化学習の頭）の操作が届くまでの遅れ（人の反応に合わせる）。ラボの育成でも、ゲームに入れたときも、これを使う。
 	"cpu_reaction_delay_s": [0.0, 2.0],
 	"min_speed_kmh": [0.0, 75.0],
@@ -101,35 +99,6 @@ const NUMBER_RANGES := {
 	"draft_wake_speed_gain_p": [0.0, 1.0],
 	"drive_repeat_initial_s": [0.001, 10.0],
 	"drive_repeat_interval_s": [0.001, 10.0],
-	"cpu_steer_reselect_min_s": [0.001, 60.0],
-	"cpu_steer_reselect_max_s": [0.001, 60.0],
-	"cpu_steer_speed_m_per_s": [0.001, 100.0],
-	"cpu_follow_forward_range_m": [0.001, 100.0],
-	"cpu_follow_lateral_range_m": [0.001, 15.0],
-	"cpu_follow_preferred_gap_m": [0.001, 100.0],
-	"cpu_follow_offset_blend": [0.0, 1.0],
-	"cpu_follow_slot_lateral_spacing_m": [0.001, 15.0],
-	"cpu_follow_slot_inner_midpoint_blend": [0.0, 1.0],
-	"cpu_follow_slot_crowding_forward_range_m": [0.001, 100.0],
-	"cpu_follow_slot_crowding_lateral_range_m": [0.001, 15.0],
-	"cpu_follow_slot_crowding_weight": [0.0, 100.0],
-	"cpu_follow_slot_field_density_forward_range_m": [0.001, 100.0],
-	"cpu_follow_slot_field_density_lateral_range_m": [0.001, 15.0],
-	"cpu_follow_slot_field_density_weight": [0.0, 100.0],
-	"cpu_follow_slot_open_forward_distance_m": [0.001, 15.0],
-	"cpu_follow_slot_open_forward_weight": [0.0, 100.0],
-	"cpu_follow_slot_open_forward_threshold": [0.0, 100.0],
-	"cpu_follow_slot_inner_bias": [0.0, 100.0],
-	"cpu_line_distance_advantage_weight": [0.0, 100.0],
-	"cpu_overtake_bias_threshold": [-1.0, 1.0],
-	"cpu_overtake_forward_distance_m": [0.001, 15.0],
-	"cpu_overtake_slot_lateral_spacing_m": [0.001, 15.0],
-	"cpu_overtake_slot_bias_weight": [0.0, 100.0],
-	"cpu_overtake_escape_lateral_spacing_m": [0.001, 15.0],
-	"cpu_overtake_escape_bias_weight": [0.0, 100.0],
-	"cpu_overtake_escape_steer_speed_multiplier": [1.0, 10.0],
-	"cpu_inward_target_offset_m": [-15.0, 15.0],
-	"cpu_trainer_reselect_seconds": [0.05, 60.0],
 	"top_speed_natural_min_kmh": [0.0, 300.0],
 	"top_speed_natural_max_kmh": [0.0, 300.0],
 	"acceleration_response_multiplier_per_stat": [0.0, 0.1],
@@ -142,7 +111,6 @@ const NUMBER_RANGES := {
 	"heart_rate_recovery_time_cardio_max_s": [0.1, 300.0],
 	"heart_rate_recovery_exponent": [0.1, 6.0],
 	"heart_adaptation_recovery_gain": [0.0, 10.0],
-	"cpu_heart_drop_threshold_bpm": [100.0, 230.0],
 	"heart_adaptation_time_s": [1.0, 600.0],
 	"heart_rate_recovery_rate_scale": [0.1, 10.0],
 	"heart_rate_drive_load_scale": [0.01, 10.0],
@@ -191,7 +159,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s", "cpu_trainer_profiles"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s"]:
 			errors.append("%s: 未知の設定項目です" % key)
 	if not errors.is_empty():
 		return errors
@@ -203,10 +171,10 @@ static func validate(data: Variant) -> PackedStringArray:
 	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat", "handling_steer_reference_stat", "contact_resistance_reference_stat"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
-	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
+	for key in ["player_start_drive_level"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
-	for key in ["player_start_drive_level", "cpu_start_drive_level"]:
+	for key in ["player_start_drive_level"]:
 		if float(data[key]) < 0.0 or float(data[key]) > float(data.drive_level_max):
 			errors.append("%s: 0〜drive_level_max の範囲にしてください" % key)
 	if data.draft_forward_min_m > data.draft_forward_max_m:
@@ -223,23 +191,8 @@ static func validate(data: Variant) -> PackedStringArray:
 		errors.append("stamina_consumption_min_l_per_s: stamina_consumption_max_l_per_s 以下にしてください")
 	if data.stamina_heart_rate_factor_min > data.stamina_heart_rate_factor_max:
 		errors.append("stamina_heart_rate_factor_min: stamina_heart_rate_factor_max 以下にしてください")
-	for pair in [
-		["cpu_steer_reselect_min_s", "cpu_steer_reselect_max_s"],
-	]:
-		if float(data[pair[0]]) > float(data[pair[1]]):
-			errors.append("%s: %s 以下にしてください" % [pair[0], pair[1]])
-	if float(data.cpu_follow_preferred_gap_m) > float(data.cpu_follow_forward_range_m):
-		errors.append("cpu_follow_preferred_gap_m: cpu_follow_forward_range_m 以下にしてください")
 	if float(data.top_speed_natural_min_kmh) > float(data.top_speed_natural_max_kmh):
 		errors.append("top_speed_natural_min_kmh: top_speed_natural_max_kmh 以下にしてください")
-	if absf(float(data.cpu_inward_target_offset_m)) > TrackMath.MAX_ABS_OFFSET_M:
-		errors.append("cpu_inward_target_offset_m: コースの可動範囲内にしてください")
-	if float(data.cpu_follow_slot_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
-		errors.append("cpu_follow_slot_lateral_spacing_m: コースの可動範囲内にしてください")
-	if float(data.cpu_overtake_slot_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
-		errors.append("cpu_overtake_slot_lateral_spacing_m: コースの可動範囲内にしてください")
-	if float(data.cpu_overtake_escape_lateral_spacing_m) > TrackMath.MAX_ABS_OFFSET_M:
-		errors.append("cpu_overtake_escape_lateral_spacing_m: コースの可動範囲内にしてください")
 	var forces: Variant = data.get("drive_force_by_level_kmh_per_s")
 	if not forces is Array:
 		errors.append("drive_force_by_level_kmh_per_s: 配列が必須です")
@@ -255,7 +208,6 @@ static func validate(data: Variant) -> PackedStringArray:
 				errors.append("drive_force_by_level_kmh_per_s[%d]: 0番は0、以降は単調増加で100以下にしてください" % i)
 			else:
 				previous = float(force)
-	var profiles: Variant = data.get("cpu_trainer_profiles")
 	var heart_rise_rates: Variant = data.get("heart_rate_rise_rate_by_drive_level_bpm_per_s")
 	if not heart_rise_rates is Array:
 		errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s: 配列が必須です")
@@ -271,24 +223,6 @@ static func validate(data: Variant) -> PackedStringArray:
 				errors.append("heart_rate_rise_rate_by_drive_level_bpm_per_s[%d]: 0番は0、以降は単調増加で100以下にしてください" % i)
 			else:
 				previous_rate = float(rate)
-	var profile_ids := {}
-	if not profiles is Array or profiles.is_empty():
-		errors.append("cpu_trainer_profiles: 1個以上の配列が必要です")
-	else:
-		for index in profiles.size():
-			var profile: Variant = profiles[index]
-			if not profile is Dictionary:
-				errors.append("cpu_trainer_profiles[%d]: オブジェクトが必要です" % index)
-				continue
-			var identifier := str(profile.get("id", ""))
-			if identifier.is_empty() or profile_ids.has(identifier):
-				errors.append("cpu_trainer_profiles[%d].id: 空または重複です" % index)
-				continue
-			profile_ids[identifier] = true
-			for key in ["line_pref"]:
-				var value: Variant = profile.get(key)
-				if not (value is float or value is int) or not is_finite(float(value)) or value < 0.0 or value > 1.0:
-					errors.append("cpu_trainer_profiles[%d].%s: 0〜1の数値が必要です" % [index, key])
 	return errors
 
 static func values() -> Dictionary:

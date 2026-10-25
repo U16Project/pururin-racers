@@ -52,13 +52,10 @@ func test_local_race_uses_the_selected_roster_entry_as_the_only_player() -> void
 			assert_eq(snapshot["id"], "cpu-1")
 		else:
 			var expected_id := expected_cpu_ids[gate - 1]
-			assert_false(snapshot["player"])
 			assert_eq(snapshot["id"], expected_id)
-			var expected_pururin := PururinRosterConfig.pururin_by_id(expected_id)
-			assert_eq(
-				runner.get("_cpu_trainer_profile")["id"],
-				expected_pururin["trainer_profile_id"]
-			)
+			# CPUの席は、育てたCPUが、人と同じ入口で走らせる。
+			assert_true(bool(runner.get("remote_controlled")))
+			assert_true((race.get("_brain") as RefCounted).has_seat(runner))
 	race.free()
 
 
@@ -279,7 +276,8 @@ func test_local_race_starts_each_pururin_from_its_gate_and_leaves_empty_gates_op
 		by_gate[int(snapshot["gate"])] = str(snapshot["id"])
 		# スタートの位置は、枠の番号どおり（空の枠は、詰めない）。
 		assert_almost_eq(float(snapshot["offset"]), LocalRaceMath.starting_offset_for_gate(int(snapshot["gate"])), 0.002)
-		assert_eq(bool(runner.get("player_controlled")), str(snapshot["id"]) == ids[4])
+		# 人の席だけが、この画面のキー・パッドで動く（CPUの席は、育てたCPUが通信ごしの人と同じ入口で動かす）。
+		assert_eq(not bool(runner.get("remote_controlled")), str(snapshot["id"]) == ids[4])
 	assert_eq(by_gate, {2: ids[4], 4: ids[3], 6: ids[1]})
 	race.free()
 

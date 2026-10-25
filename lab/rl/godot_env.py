@@ -23,8 +23,14 @@ GODOT = REPO / "tools" / "godot" / "Godot_v4.7-stable_linux.x86_64"
 
 
 def load_settings() -> dict:
+    """rl_settings.json に、ゲーム本体の育てたCPUの設定（cpu_brain.json）の field・decide_every_s を足したもの。"""
     with open(RL_DIR / "rl_settings.json", encoding="utf-8") as f:
-        return json.load(f)
+        settings = json.load(f)
+    with open(CLIENT / "data" / "config" / "cpu_brain.json", encoding="utf-8") as f:
+        brain = json.load(f)
+    settings["field"] = brain["field"]
+    settings["decide_every_s"] = brain["decide_every_s"]
+    return settings
 
 
 def roster_ids() -> list:

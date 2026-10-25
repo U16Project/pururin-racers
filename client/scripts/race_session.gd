@@ -182,7 +182,7 @@ static func field_entries() -> Array:
 	var entries: Array = []
 	for slot in SLOT_COUNT:
 		if _slots[slot] != EMPTY:
-			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot, "trainer_id": slot_trainer_id(slot), "trainer_profile_id": trainer_for_slot(slot).get("profile_id", "")})
+			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot, "trainer_id": slot_trainer_id(slot)})
 	return entries
 
 

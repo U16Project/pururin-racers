@@ -1,11 +1,14 @@
 extends RefCounted
-## 強化学習：頭が見るもの（数字の並び）と、選べる操作。
+## 育てたCPU（強化学習の頭）が見るもの（数字の並び）と、選べる操作。CPU育成ラボ（lab/rl/）とゲーム本体の両方が使う。
+## 育てたときと同じ並び・同じ大きさでないと、頭が正しく動かない。変えたら、育て直し。
 ## 走っているレースからも、ゲームの記録ファイルの1コマ（あなたの走り＝お手本）からも、同じ形で作る。
 ## 1体ぶんの値は、走者の get_telemetry_snapshot() と同じ形（記録ファイルの runners の1つも同じ形）。
 ## 並びの長さは、いつも同じ（size()）。値は、だいたい -1〜1 に収める。「いない」「とても遠い」は、決めた上限の数字に置きかえる。
 
-const LabSituation := preload("../lab_situation.gd")
-const RlCourse := preload("rl_course.gd")
+const BrainSituation := preload("res://scripts/cpu_brain/brain_situation.gd")
+const BrainCourse := preload("res://scripts/cpu_brain/brain_course.gd")
+const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
+const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 const StatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
@@ -22,7 +25,6 @@ const SECONDS_SCALE := 20.0
 ## トレーナーの性格の数字（trainer_styles.json の frame）。並べる順と、割る数。範囲の数字は [下, 上] の2つ。
 const FRAME_KEYS := [["place", 8.0], ["late_place", 8.0], ["retake", 1.0], ["hold", 1.0], ["save_after_s", SECONDS_SCALE],
 	["follow_m", SECONDS_SCALE], ["follow_only_within_place", 8.0], ["spurt_m_2000", 2000.0]]
-const TRAINER_STYLES_PATH := "../lab/trainer_styles.json"
 ## 集団の位置：前・中・後ろ・ひとり。
 const GROUP_SLOTS := 4
 
@@ -52,17 +54,17 @@ static func _frame_size() -> int:
 	return n
 
 
-## ctx：{distance_m, elapsed_s, curve, route, inside, field, scales（rl_settings の observe）, trainer_id（無くてよい）}
+## ctx：{distance_m, elapsed_s, curve, route, inside, field, trainer_id（無くてよい）}。大きさをそろえる数は cpu_brain.json の observe。
 ## me＝学ぶ席の1体ぶん、others＝ほかの全員の1体ぶん。
 static func from_records(me: Dictionary, others: Array, ctx: Dictionary) -> PackedFloat32Array:
-	var scales: Dictionary = ctx["scales"]
+	var scales: Dictionary = CpuBrainConfig.observe()
 	var gap_scale := float(scales["gap_scale_m"])
 	var speed_scale := float(scales["speed_scale_kmh"])
 	var field := int(ctx["field"])
 	var distance := maxf(float(ctx["distance_m"]), 1.0)
 	var elapsed := float(ctx["elapsed_s"])
 	var inside := float(ctx["inside"])
-	var s := LabSituation.from_records(_situation_record(me), others.map(_situation_record), distance, ctx["curve"], ctx["route"], inside, elapsed)
+	var s := BrainSituation.from_records(_situation_record(me), others.map(_situation_record), distance, ctx["curve"], ctx["route"], inside, elapsed)
 	var progress := float(s["progress_m"])
 	var typical_s := typical_finish_s(distance, scales)
 	var out := PackedFloat32Array()
@@ -80,8 +82,8 @@ static func from_records(me: Dictionary, others: Array, ctx: Dictionary) -> Pack
 	out.append(1.0 if bool(s["corner_now"]) else 0.0)
 	out.append(1.0 if bool(s["corner_ahead"]) else 0.0)
 	# コースの先の形
-	var profile := RlCourse.profile(ctx["curve"], ctx["route"], distance)
-	var ahead := RlCourse.ahead(profile, progress, COURSE_LOOK_M)
+	var profile := BrainCourse.profile(ctx["curve"], ctx["route"], distance)
+	var ahead := BrainCourse.ahead(profile, progress, COURSE_LOOK_M)
 	out.append(float(ahead["to_corner_m"]) / COURSE_LOOK_M)
 	out.append(float(ahead["corner_bend"]))
 	out.append(float(ahead["corner_left_m"]) / COURSE_LOOK_M)
@@ -180,7 +182,7 @@ static func mask_from(me: Dictionary, level: float, inside: float) -> PackedByte
 	return out
 
 
-## その距離の、ふつうのゴールのタイム（rl_settings の observe.typical_finish_s から、距離で直線に引いて出す）。
+## その距離の、ふつうのゴールのタイム（cpu_brain.json の observe.typical_finish_s から、距離で直線に引いて出す）。
 static func typical_finish_s(distance_m: float, scales: Dictionary) -> float:
 	var table: Dictionary = scales["typical_finish_s"]
 	var points: Array = []
@@ -278,13 +280,9 @@ static func default_trainer(runner_id: String) -> String:
 	return str(_info(runner_id)["trainer_id"])
 
 
-## トレーナーの性格の数字（lab/trainer_styles.json の frame）。無ければ空。
+## トレーナーの性格の数字（cpu_trainers.json の frame）。無ければ空。
 static func trainer_frame(trainer_id: String) -> Dictionary:
-	var text := FileAccess.get_file_as_string(ProjectSettings.globalize_path("res://").path_join(TRAINER_STYLES_PATH))
-	var data: Variant = JSON.parse_string(text) if not text.is_empty() else null
-	if data is Dictionary and (data["trainers"] as Dictionary).has(trainer_id):
-		return data["trainers"][trainer_id].get("frame", {})
-	return {}
+	return CpuTrainers.by_id(trainer_id).get("frame", {})
 
 
 ## トレーナーの性格の数字を、並びにしたもの。無ければ0を並べる。
