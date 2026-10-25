@@ -420,7 +420,7 @@ func test_drive_braking_slows_but_does_not_stop() -> void:
 	assert_eq(LocalRaceMath.advance_drive_speed_kmh(40.0, 0.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0, true), 40.0)
 
 
-func test_braking_overrides_the_notch_without_spending_fuel_or_raising_heart() -> void:
+func test_braking_only_slows_and_keeps_the_notch_for_fuel_and_heart() -> void:
 	var runner := Node3D.new()
 	runner.set_script(RunnerScript)
 	add_child(runner)
@@ -428,13 +428,15 @@ func test_braking_overrides_the_notch_without_spending_fuel_or_raising_heart() -
 	runner.call("set_drive_level", 6.0)
 	runner.call("set_braking", true)
 	assert_true(runner.call("is_braking"))
-	# ノッチ設定は保持され、有効な出力だけ0になる。
+	# ノッチはそのまま。推進力の代わりに制動の力が入るが、体力の減り方・心拍の上がり方は、今のノッチのとおり。
 	assert_eq(runner.call("get_drive_level"), 6.0)
 	var diagnostics: Dictionary = runner.call("get_drive_diagnostics")
 	assert_almost_eq(float(diagnostics["drive_contribution_kmh_per_s"]), -LocalRaceMath.BRAKE_DECELERATION_KMH_PER_S, 0.0001)
 	var stamina_before := float(runner.call("get_stamina"))
+	var heart_before := float(runner.call("get_heart_rate_bpm"))
 	runner.call("_update_condition", 1.0)
-	assert_eq(float(runner.call("get_stamina")), stamina_before)
+	assert_lt(float(runner.call("get_stamina")), stamina_before)
+	assert_gt(float(runner.call("get_heart_rate_bpm")), heart_before)
 	runner.call("set_braking", false)
 	assert_false(runner.call("is_braking"))
 	assert_gt(float(runner.call("get_drive_diagnostics")["drive_contribution_kmh_per_s"]), 0.0)

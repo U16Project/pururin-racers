@@ -878,8 +878,8 @@ func get_telemetry_snapshot() -> Dictionary:
 
 func _active_drive_level() -> float:
 	if player_controlled or puppet:
-		# ブレーキ中は出力0として扱う。燃料も心拍上昇も使わず、制動だけが働く。
-		return 0.0 if _braking else _drive_level
+		# ブレーキは速さを落とすだけ。ノッチはそのままで、体力の減り方・心拍の上がり方も、今のノッチのとおり。
+		return _drive_level
 	if _cpu_start_drive_remaining > 0.0:
 		return LocalRaceMath.Config.number("cpu_start_drive_level")
 	return LocalRaceMath.cpu_heart_safe_drive_level(

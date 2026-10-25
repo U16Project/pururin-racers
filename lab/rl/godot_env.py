@@ -180,7 +180,7 @@ class GodotVecEnv(VecEnv):
         out = {}
         for gate, (obs, mask) in self._pool_obs[w].items():
             name = self._pool_gates[w].get(gate)
-            model = self.pool.model(name) if name else self.main_model
+            model = (self.pool.model(name) if name else None) or self.main_model
             action, _ = model.predict(obs, action_masks=mask, deterministic=True)
             out[str(gate)] = [int(a) for a in action]
         return out

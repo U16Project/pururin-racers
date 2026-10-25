@@ -76,7 +76,7 @@ def main():
                 actions = {}
                 for seat in message["seats"]:
                     gate = int(seat["gate"])
-                    driver = pool.model(by_gate[gate]) if gate in by_gate else model
+                    driver = (pool.model(by_gate[gate]) if gate in by_gate else None) or model
                     action, _ = driver.predict(seat["obs"], action_masks=seat["mask"], deterministic=True)
                     actions[str(gate)] = [int(a) for a in action]
                 godot.send({"cmd": "step", "actions": actions})

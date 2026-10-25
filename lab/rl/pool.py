@@ -33,7 +33,9 @@ class Pool:
     def reload(self) -> None:
         """フォルダを見直す（手で足した・消したファイルを反映する）。"""
         self.names = sorted(p.stem for p in self.dir.glob("*.zip"))
-        self._models = {n: m for n, m in self._models.items() if n in self.names}
+        # 読み込み済みのCPUは、今のレースで使っているかもしれないので、外されたものも少しだけ残す（数が増えすぎたら捨てる）。
+        if len(self._models) > 2 * self.settings["max"]:
+            self._models = {n: m for n, m in self._models.items() if n in self.names}
 
     def add(self, model, name: str) -> None:
         """育成の版を入れる。上限を超えたら、自動で入れた古いものから外す（固定_は外さない）。"""
@@ -46,13 +48,25 @@ class Pool:
         self.reload()
 
     def pick(self, rng: random.Random):
-        """相手役を1体くじで選ぶ（控え室が空なら None）。"""
-        return rng.choice(self.names) if self.names else None
+        """相手役を1体くじで選び、その場で読み込んでおく（レースの途中でファイルが外されても困らないように）。
+        控え室が空、または読み込めなかったら None（その席は本命が走る）。"""
+        while self.names:
+            name = rng.choice(self.names)
+            if self.model(name) is not None:
+                return name
+            # ほかの育成が上限で外したなど、もうファイルがない。見直して、選び直す。
+            self.reload()
+        return None
 
     def model(self, name: str):
+        """相手役のCPU（読み込めなければ None）。一度読んだものは、ファイルが外されても使える。"""
         if name not in self._models:
             from sb3_contrib import MaskablePPO
-            self._models[name] = MaskablePPO.load(self.dir / f"{name}.zip", device="cpu")
+            path = self.dir / f"{name}.zip"
+            try:
+                self._models[name] = MaskablePPO.load(path, device="cpu")
+            except (FileNotFoundError, OSError, ValueError):
+                return None
         return self._models[name]
 
     # ------------------------------------------------------------ 成績

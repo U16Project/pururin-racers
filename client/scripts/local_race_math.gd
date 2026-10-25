@@ -1358,9 +1358,6 @@ static func stamina_consumption_l_per_s(
 	heart_rate_bpm: float = -1.0,
 	load_multiplier: float = -1.0
 ) -> float:
-	# ブレーキ中は、走者が出力0（drive_level 0）を渡す。ノッチの最小（1）に引き上げずに、消費0とする（ブレーキは体力を使わない）。
-	if drive_level <= 0.0:
-		return 0.0
 	var level := clamp_drive_level(drive_level)
 	var effort := level / float(DRIVE_LEVEL_MAX)
 	var safe_heart := Config.number("heart_rate_min_bpm") if heart_rate_bpm < 0.0 else heart_rate_bpm
