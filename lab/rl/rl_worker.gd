@@ -33,6 +33,8 @@ var _play_spec := {}
 ## 選べるCPUの一覧（play.py から）と、CPUを選ぶ画面で選んだ内容（{me, others}）。
 var _choices: Array = []
 var _selection := {}
+## 相手1〜7の、最初の選び方（play.py が送る CPU の id の並び）。
+var _defaults: Array = []
 var _picker: Node
 
 
@@ -52,6 +54,7 @@ func _initialize() -> void:
 	if args.get("select", "") == "1":
 		var choices: Dictionary = _link.receive()
 		_choices = choices.get("items", [])
+		_defaults = choices.get("defaults", [])
 		RaceSession.race_starter = _start_from_select
 		RaceSession.slot_driver_label = _driver_label_for_slot
 		# レース選択の「戻る」は、ゲームのメニューではなく、CPUを選ぶ画面へ。
@@ -68,7 +71,7 @@ func _show_picker() -> void:
 	_picker = RlPicker.new()
 	root.add_child(_picker)
 	current_scene = _picker
-	_picker.setup(_choices, _selection)
+	_picker.setup(_choices, _selection, _defaults)
 	_picker.decided.connect(func(selection: Dictionary):
 		_selection = selection
 		change_scene_to_file.call_deferred(RACE_SELECT_SCENE))

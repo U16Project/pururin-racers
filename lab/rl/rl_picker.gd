@@ -1,8 +1,8 @@
 extends Control
 ## 強化学習：人と走る前に、CPUを選ぶ画面（play.py から起動したときだけ）。
 ## いちばん上の行は「あなたの枠」（レース選択で自分にした枠）。最初は「あなた」。CPUにすると、CPUだけのレースを観戦する。
-## その下の7行は、相手の枠。レース選択で決まった相手の枠に、上から枠の順に当てはめる。最初は全部、本命。
-## 選べるCPUの一覧（choices）は、play.py が送る：[{id, label}]。最初の1つが本命。
+## その下の7行は、相手の枠。レース選択で決まった相手の枠に、上から枠の順に当てはめる。最初は play.py が送る並び（defaults）。
+## 選べるCPUの一覧（choices）は、play.py が送る：[{id, label}]。defaults に無い枠・まだ無いCPUの枠は、一覧の最初の1つ（本命）。
 ## ゲームパッド：上下で行を動かし、選ぶ欄では左右（または A）で切り替える。ボタンは A で押す（ゲームのメニューと同じしくみ）。
 
 signal decided(selection: Dictionary)
@@ -16,11 +16,13 @@ const OPPONENTS := 7
 var _choices: Array = []
 var _me: OptionButton
 var _others: Array = []
+var _defaults: Array = []
 
 
-## choices：選べるCPU。selection：前に選んだ内容（{me, others}。無ければ空）。
-func setup(choices: Array, selection: Dictionary) -> void:
+## choices：選べるCPU。selection：前に選んだ内容（{me, others}。無ければ空）。defaults：相手1〜7の最初の選び方。
+func setup(choices: Array, selection: Dictionary, defaults: Array = []) -> void:
 	_choices = choices
+	_defaults = defaults
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var back := ColorRect.new()
 	back.color = Color(0.03, 0.05, 0.1, 1.0)
@@ -54,7 +56,7 @@ func setup(choices: Array, selection: Dictionary) -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 16)
 	column.add_child(buttons)
-	var reset := Style.button("全部を本命に戻す", 20, Style.COLOR_BUTTON_QUIET)
+	var reset := Style.button("最初の選び方に戻す", 20, Style.COLOR_BUTTON_QUIET)
 	reset.pressed.connect(_reset)
 	buttons.add_child(reset)
 	var go := Style.button("決定（レース選択へ）", 20)
@@ -63,7 +65,7 @@ func setup(choices: Array, selection: Dictionary) -> void:
 	_select(_me, str(selection.get("me", HUMAN)))
 	var saved: Array = selection.get("others", [])
 	for i in OPPONENTS:
-		_select(_others[i], str(saved[i]) if i < saved.size() else _main_id())
+		_select(_others[i], str(saved[i]) if i < saved.size() else _default_id(i))
 	go.grab_focus.call_deferred()
 
 
@@ -80,7 +82,10 @@ func _option(with_human: bool) -> OptionButton:
 	return option
 
 
-func _main_id() -> String:
+## 相手 i の最初の選び方（無ければ本命）。
+func _default_id(i: int) -> String:
+	if i < _defaults.size():
+		return str(_defaults[i])
 	return str(_choices[0]["id"]) if not _choices.is_empty() else ""
 
 
@@ -102,8 +107,8 @@ func _select_first_cpu(option: OptionButton) -> void:
 
 func _reset() -> void:
 	_select(_me, HUMAN)
-	for option: OptionButton in _others:
-		_select(option, _main_id())
+	for i in _others.size():
+		_select(_others[i], _default_id(i))
 
 
 func _decide() -> void:

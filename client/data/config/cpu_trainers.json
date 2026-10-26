@@ -70,7 +70,8 @@
       "name": "ヒナタ",
       "portrait_path": "res://assets/ui/cpu_trainers/hinata_v03.png",
       "favorite_running_style": "pace",
-      "introduction": "城下町の宿屋で旅人を迎える女の子。担当するプルに、前の集団についていくよう声をかける。前が塞がっていれば空いている側へ導き、道が開けば前へ出るよう促す。"
+      "introduction": "城下町の宿屋で旅人を迎える女の子。担当するプルに、前の集団についていくよう声をかける。前が塞がっていれば空いている側へ導き、道が開けば前へ出るよう促す。",
+      "frame": {"place": [3, 5], "late_place": [2, 3], "retake": 0.3, "hold": 0.3, "save_after_s": [3, 10], "follow_m": [3, 12], "follow_only_within_place": 0, "spurt_m_2000": [300, 700], "line": "none"}
     },
     {
       "id": "kaede",
@@ -85,7 +86,8 @@
       "name": "レン",
       "portrait_path": "res://assets/ui/cpu_trainers/ren_v02.png",
       "favorite_running_style": "pace",
-      "introduction": "王城の警備を務める騎士。好機にはプルへ迷わず前進を命じるが、先頭争いを長引かせない。良い位置を取ればペースを整えるよう伝え、最後の勝負に備えさせる。"
+      "introduction": "王城の警備を務める騎士。好機にはプルへ迷わず前進を命じるが、先頭争いを長引かせない。良い位置を取ればペースを整えるよう伝え、最後の勝負に備えさせる。",
+      "frame": {"place": [2, 4], "retake": 0.4, "hold": 0.2, "save_after_s": [3, 8], "follow_m": [0, 10], "follow_only_within_place": 0, "spurt_m_2000": [200, 500], "line": "none"}
     },
     {
       "id": "ibuki",
@@ -100,21 +102,24 @@
       "name": "ツバキ",
       "portrait_path": "res://assets/ui/cpu_trainers/tsubaki_v03.png",
       "favorite_running_style": "stalk",
-      "introduction": "港や街道を巡回する騎士。周囲をよく見て、プルを無理なく集団へ導く。前方に道が開く瞬間を見逃さず、残していた力で抜け出すよう指示を送る。"
+      "introduction": "港や街道を巡回する騎士。周囲をよく見て、プルを無理なく集団へ導く。前方に道が開く瞬間を見逃さず、残していた力で抜け出すよう指示を送る。",
+      "frame": {"place": [4, 6], "late_place": [2, 4], "retake": 0.0, "hold": 0.0, "save_after_s": [1, 5], "follow_m": [3, 15], "follow_only_within_place": 0, "spurt_m_2000": [300, 700], "line": "none"}
     },
     {
       "id": "lotta",
       "name": "ロッタ",
       "portrait_path": "res://assets/ui/cpu_trainers/lotta_v02.png",
       "favorite_running_style": "escape",
-      "introduction": "港から市場へ魚を運ぶ、威勢のよい女性。レースではプルを早めに前へ送り、ほかのプルに追わせる展開を好む。近づく足音を聞けば、担当するプルの様子を確かめて、もうひと頑張りを促す。"
+      "introduction": "港から市場へ魚を運ぶ、威勢のよい女性。レースではプルを早めに前へ送り、ほかのプルに追わせる展開を好む。近づく足音を聞けば、担当するプルの様子を確かめて、もうひと頑張りを促す。",
+      "frame": {"place": [1, 2], "retake": 0.6, "hold": 0.8, "save_after_s": [5, 15], "follow_m": [0, 0], "follow_only_within_place": 0, "spurt_m_2000": [500, 1000], "line": "none"}
     },
     {
       "id": "ordo",
       "name": "オルド",
       "portrait_path": "res://assets/ui/cpu_trainers/ordo_v02.png",
       "favorite_running_style": "stalk",
-      "introduction": "城の庭師を名乗る年配の男性。その正体は？？？。担当するプルには集団について待つよう伝え、前に道が開くと、嬉しそうに追い上げの指示を送る。"
+      "introduction": "城の庭師を名乗る年配の男性。その正体は？？？。担当するプルには集団について待つよう伝え、前に道が開くと、嬉しそうに追い上げの指示を送る。",
+      "frame": {"place": [5, 7], "retake": 0.0, "hold": 0.0, "save_after_s": [1, 5], "follow_m": [3, 15], "follow_only_within_place": 0, "spurt_m_2000": [400, 900], "line": "none"}
     }
   ]
 }

@@ -59,12 +59,14 @@ class Progress(BaseCallback):
             lines = self.csv_path.read_text(encoding="utf-8").splitlines()
             if lines and "風よけをもらっていた割合" not in lines[0]:
                 lines[0] += ",ブーストの残り距離の平均,スパートの範囲で押したブースト,風よけをもらっていた割合"
+            if lines and "後方支援をもらっていた割合" not in lines[0]:
+                lines[0] += ",後方支援をもらっていた割合"
                 self.csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         if not self.csv_path.exists():
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
                                         "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
-                                        "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合"])
+                                        "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合"])
 
     def _on_rollout_end(self) -> None:
         """CPUを直す前に、お手本にも少し寄せる。決めた判断の数ごとに、新しい記録を読み直す。"""
@@ -110,12 +112,12 @@ class Progress(BaseCallback):
                 round(mean(seats, "place_fit"), 2), round(mean(seats, "draft_fit"), 2),
                 self.bank.races if self.bank else 0, round(self.bank.keep_weight(self.num_timesteps), 4) if self.bank else 0.0, round(self.imitation, 3),
                 round(sum(sum(r["boost_remaining_m"]) for r in seats) / max(sum(len(r["boost_remaining_m"]) for r in seats), 1)),
-                round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2)]
+                round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2)]
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
         print(" | ".join(f"{k} {v}" for k, v in zip(["", "判断", "レース", "分", "1位のタイム", "ゴールしない", "ダッシュ", "ブースト", "残り体力",
                                                       "性格の順位", "性格の風よけ", "お手本", "寄せる力", "合う見込み",
-                                                      "ブーストの残り距離", "スパートで押した", "風よけ割合"], line)), flush=True)
+                                                      "ブーストの残り距離", "スパートで押した", "風よけ割合", "後方支援割合"], line)), flush=True)
 
 
 def merge(base: dict, extra: dict) -> dict:

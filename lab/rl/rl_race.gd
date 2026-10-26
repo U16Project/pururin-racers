@@ -76,7 +76,7 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 			_seats[gate] = {
 				"peer": peer, "steer": 0.0, "brake": false, "last_progress": 0.0, "mid_place": 0, "dash": 0, "boost": 0,
 				"steps": 0, "paid": false, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
-				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "drafting": 0, "running": 0},
+				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "spurt_misses": 0, "stamina_at_last": null, "drafting": 0, "rearing": 0, "running": 0},
 				"boost_remaining": [],
 			}
 	entries = OnlineServerScript._with_runner_ids(entries)
@@ -278,6 +278,11 @@ func _place_of(runner: Node3D, runners: Array) -> int:
 ## 性格に合った走りを数える。中ほど（style.mid_from〜mid_to の割合）は「いたい順位」と風よけ、
 ## 終盤（mid_to より後）は、終盤にいたい順位（late_place）があるトレーナーだけ、その順位を数える。
 func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
+	# 残りの距離が reward.stamina.last_ratio（全体の割合）に入った瞬間の体力を、1回だけ覚える（体力温存の点に使う）。
+	if seat["fit"]["stamina_at_last"] == null:
+		var left := 1.0 - float(runner.call("get_race_progress")) / float(_spec["distance_m"])
+		if left <= float(_settings["reward"]["stamina"]["last_ratio"]):
+			seat["fit"]["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
 	var frame: Dictionary = seat["frame"]
 	if frame.is_empty():
 		return
@@ -286,8 +291,12 @@ func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 	var ratio := float(runner.call("get_race_progress")) / float(_spec["distance_m"])
 	# レース全体で、風よけをもらっていた割合（進み具合の記録用。点には使わない）。
 	fit["running"] = int(fit["running"]) + 1
-	if float(runner.call("get_telemetry_snapshot")["draft"]["received_draft_p"]) >= float(style["draft_at_least"]):
+	var draft: Dictionary = runner.call("get_telemetry_snapshot")["draft"]
+	if float(draft["received_draft_p"]) >= float(style["draft_at_least"]):
 		fit["drafting"] = int(fit["drafting"]) + 1
+	# 後ろの子からの後方支援（空力ステで強くなる）を受けていたか。
+	if float(draft.get("rear_assist_air_factor", 0.0)) > 0.0:
+		fit["rearing"] = int(fit["rearing"]) + 1
 	var place := _place_of(runner, runners)
 	var wanted: Array = []
 	if ratio >= float(style["mid_from"]) and ratio < float(style["mid_to"]):
@@ -305,7 +314,7 @@ func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 			fit["place_hit"] = int(fit["place_hit"]) + 1
 
 
-## ブーストを押した位置を数える。トレーナーの「スパートを始める残り距離」（spurt_m_2000。ほかの距離は長さに比例）の中で押したら、スパートの点の数に入れる。
+## ブーストを押した位置を数える。残りの距離が全体の reward.style.spurt_last_ratio に入ってから押したら、スパートの点の数に、それより前なら範囲の外の数に入れる。
 func _count_spurt(seat: Dictionary) -> void:
 	var runner: Node3D = _race.call("remote_runner", int(seat["peer"]))
 	if runner == null:
@@ -313,11 +322,10 @@ func _count_spurt(seat: Dictionary) -> void:
 	var distance := float(_spec["distance_m"])
 	var remaining := distance - float(runner.call("get_race_progress"))
 	(seat["boost_remaining"] as Array).append(roundf(remaining))
-	var spurt: Variant = (seat["frame"] as Dictionary).get("spurt_m_2000")
-	if spurt is Array and (spurt as Array).size() == 2:
-		var scale := distance / 2000.0
-		if remaining >= float(spurt[0]) * scale and remaining <= float(spurt[1]) * scale:
-			seat["fit"]["spurt_hits"] = int(seat["fit"]["spurt_hits"]) + 1
+	if remaining <= distance * float(_settings["reward"]["style"]["spurt_last_ratio"]):
+		seat["fit"]["spurt_hits"] = int(seat["fit"]["spurt_hits"]) + 1
+	else:
+		seat["fit"]["spurt_misses"] = int(seat["fit"]["spurt_misses"]) + 1
 
 
 ## 性格に合った走りの点。
@@ -330,10 +338,28 @@ func _style_reward(seat: Dictionary) -> float:
 	if int(fit["draft_n"]) > 0:
 		out += float(style["draft"]) * float(fit["draft_hit"]) / float(fit["draft_n"])
 	out += float(style["spurt_per_boost"]) * int(fit["spurt_hits"])
+	out += float(style.get("outside_per_boost", 0.0)) * int(fit["spurt_misses"])
 	return out
 
 
-## ゴール（または打ち切り）の点：着順の点＋1位とのタイム差の点＋性格に合った走りの点。
+## 集団の得の点（性格とは別。全部の子）：前からの風よけをもらっていた割合 × group.draft ＋ 後ろからの後方支援をもらっていた割合 × group.rear。
+func _group_reward(seat: Dictionary) -> float:
+	var group: Dictionary = _settings["reward"].get("group", {})
+	var fit: Dictionary = seat["fit"]
+	var running := maxf(float(fit["running"]), 1.0)
+	return float(group.get("draft", 0.0)) * float(fit["drafting"]) / running + float(group.get("rear", 0.0)) * float(fit["rearing"]) / running
+
+
+## 体力温存の点（減点だけ）：残り last_ratio に入ったときの体力が keep より少なければ、足りない分 × per_short を引く。
+## そこまで来ないうちに打ち切られた子は、打ち切りのときの体力で見る。
+func _stamina_reward(runner: Node3D, seat: Dictionary) -> float:
+	var stamina: Dictionary = _settings["reward"]["stamina"]
+	var at: Variant = seat["fit"]["stamina_at_last"]
+	var ratio := float(at) if at != null else float(runner.call("get_stamina_ratio"))
+	return -float(stamina["per_short"]) * maxf(float(stamina["keep"]) - ratio, 0.0)
+
+
+## ゴール（または打ち切り）の点：着順の点＋1位とのタイム差の点＋性格に合った走りの点＋集団の得の点。
 func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 	var place := _place_of(runner, runners)
 	var weights: Dictionary = _settings["reward"]
@@ -343,7 +369,7 @@ func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 	if place > 1 and bool(runner.call("is_finished")):
 		var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
 		reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / float(weights["gap_scale_s"]), 0.0, 1.0)
-	return reward + _style_reward(seat)
+	return reward + _style_reward(seat) + _group_reward(seat) + _stamina_reward(runner, seat)
 
 
 ## ゴールした中で、いちばん早いタイム（だれもゴールしていなければ -1）。
@@ -392,8 +418,9 @@ func _finish(runners: Array, cut: bool) -> void:
 				"style_reward": _style_reward(seat),
 				"place_fit": float(fit["place_hit"]) / maxf(float(fit["place_n"]), 1.0),
 				"draft_fit": float(fit["draft_hit"]) / maxf(float(fit["draft_n"]), 1.0),
-				"spurt_hits": int(fit["spurt_hits"]), "boost_remaining_m": seat["boost_remaining"],
+				"spurt_hits": int(fit["spurt_hits"]), "spurt_misses": int(fit["spurt_misses"]), "boost_remaining_m": seat["boost_remaining"],
 				"draft_share": float(fit["drafting"]) / maxf(float(fit["running"]), 1.0),
+				"rear_share": float(fit["rearing"]) / maxf(float(fit["running"]), 1.0),
 			})
 			var report := _report(runner, runners, seat)
 			report["reward"] = reward

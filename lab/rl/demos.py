@@ -59,6 +59,7 @@ class DemoBank:
             place = max(int(d.get("place", len(table))), 1)
             weights.append(np.full(len(d["action"]), table[min(place, len(table)) - 1], dtype=np.float64))
         self.races = len(files)
+        self.obs, self.masks, self.actions = np.zeros((0, 0), dtype=np.float32), np.zeros((0, 0), dtype=bool), np.zeros((0, 0), dtype=np.int64)
         if files:
             self.obs, self.masks, self.actions = np.concatenate(obs), np.concatenate(masks), np.concatenate(actions)
             w = np.concatenate(weights)

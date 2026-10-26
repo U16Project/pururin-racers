@@ -4,6 +4,7 @@
 - 育成中に1時間ごとに保存する版は、ここにも自動で入る（train.py）。
 - 置くのは pool.max 体まで。超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない。
 - 1レースのうち pool.seats 席を、ここからくじで選んだCPUが走らせる（走らせるだけで、学ばない）。
+- pool.from_runs（育成の名前の並び）があれば、その育成の版だけを相手にする（ほかの版は控え室に置いたまま、くじから外す）。
 - pool.always_run の育成のいちばん新しいCPU（latest.zip）は、控え室とは別に、どのレースにも1席必ず入る（その育成自身のレースでは入らない）。
   成績の表では「<育成の名前>_最新」として出す。
 - 相手役ごとに、本命（育てているCPU）と走ったときの着順を記録する。育成ごとに別のファイル（_成績_<育成の名前>.json）。
@@ -40,10 +41,15 @@ class Pool:
     # ------------------------------------------------------------ 置き場所
     def reload(self) -> None:
         """フォルダを見直す（手で足した・消したファイルを反映する）。"""
-        self.names = sorted(p.stem for p in self.dir.glob("*.zip"))
+        self.names = sorted(p.stem for p in self.dir.glob("*.zip") if self._wanted(p.stem))
         # 読み込み済みのCPUは、今のレースで使っているかもしれないので、外されたものも少しだけ残す（数が増えすぎたら捨てる）。
         if len(self._models) > 2 * self.settings["max"]:
             self._models = {n: m for n, m in self._models.items() if n in self.names}
+
+    def _wanted(self, name: str) -> bool:
+        """pool.from_runs があれば、その育成の版（名前の頭が「<育成の名前>_」）だけを相手にする。無ければ全部。"""
+        runs = self.settings.get("from_runs") or []
+        return not runs or any(name.startswith(f"{run}_") for run in runs)
 
     def add(self, model, name: str) -> None:
         """育成の版を入れる。上限を超えたら、自動で入れた古いものから外す（固定_は外さない）。"""

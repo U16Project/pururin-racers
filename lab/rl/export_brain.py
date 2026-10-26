@@ -5,6 +5,7 @@
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/export_brain.py --run 育成1
+  保存した版から：--file lab/rl/runs/保存/本番2_20261027_0215.zip（名前は「育成の名前_日付_時刻」）
 書き出し先：client/data/cpu_brains/main.json（ゲームが使う）、lab/rl/runs/brain_check.json（確かめ用）
 確かめ：client/ で godot --headless -s ../lab/rl/brain_check.gd
 """
@@ -14,6 +15,7 @@ import base64
 import glob
 import json
 import time
+from pathlib import Path
 
 import numpy as np
 from sb3_contrib import MaskablePPO
@@ -30,8 +32,10 @@ def main():
     parser.add_argument("--run", default="育成1")
     parser.add_argument("--out", default="main")
     parser.add_argument("--checks", type=int, default=200)
+    parser.add_argument("--file", default="", help="育成の最新ではなく、保存した版（.zip）から書き出す")
     args = parser.parse_args()
-    path = RL_DIR / "runs" / args.run / "latest.zip"
+    path = Path(args.file).resolve() if args.file else RL_DIR / "runs" / args.run / "latest.zip"
+    run = path.stem.split("_")[0] if args.file else args.run
     model = MaskablePPO.load(path, device="cpu")
     policy = model.policy
     linears = [m for m in policy.mlp_extractor.policy_net if hasattr(m, "weight")] + [policy.action_net]
@@ -42,7 +46,7 @@ def main():
                        "act": "tanh" if i < len(linears) - 1 else "none"})
     saved = time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime))
     brain = {
-        "format": 1, "label": f"{args.run}（{saved}）", "source": f"lab/rl/runs/{args.run}/latest.zip",
+        "format": 1, "label": f"{run}（{saved}）", "source": str(path.relative_to(RL_DIR.parent.parent)),
         "obs_size": int(layers[0]["in"]), "action_sizes": [int(n) for n in model.action_space.nvec], "layers": layers,
     }
     out_dir = CLIENT / "data" / "cpu_brains"

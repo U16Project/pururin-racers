@@ -2,7 +2,7 @@
 
 起動すると、まず「CPUを選ぶ画面」が出る。
   いちばん上の行は、あなたの枠（レース選択で自分にした枠）。最初は「あなた」。CPUにすると観戦。
-  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は全部、本命（--run の育成の最新）。
+  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は --seats の並び（書かなければ 本番1 の最新が3枠、本番2 の最新が4枠）。
   選べるCPU：育成の最新（育成1・脚質1・分身1 など、runs/ の中で latest.zip があるもの）と、控え室の版の全部。
 決定すると、ゲームのレース選択の画面（ふつうのオフラインと同じ）→ 出走表の「レース開始」でレース。
 レース中・結果の板のトレーナー欄には、その枠を走らせているCPUの名前が出る。
@@ -12,7 +12,7 @@
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/play.py
-  最初に選ばれている本命：--run 脚質1（書かなければ 育成1）
+  相手の最初の選び方：--seats 育成1:2,本番2:5（育成の名前:枠の数、を上から順に。合わせて7枠。足りない枠と、まだ最新が無い育成の枠は、最初の育成）
 """
 
 import argparse
@@ -72,12 +72,15 @@ class Drivers:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run", default="育成1")
+    parser.add_argument("--seats", default="本番1:3,本番2:4")
     parser.add_argument("--shot", default="", help="確かめ用：この秒数で画面を撮って閉じる（秒,ファイル）")
     args = parser.parse_args()
     settings = load_settings()
-    pool = Pool(settings, args.run)
-    items = choices(args.run, pool)
+    seats = [(run, int(count)) for run, count in (part.split(":") for part in args.seats.split(","))]
+    defaults = [f"run:{run}" for run, count in seats for _ in range(count)]
+    main_run = seats[0][0]
+    pool = Pool(settings, main_run)
+    items = choices(main_run, pool)
     if not items:
         raise SystemExit("育てたCPUがまだありません（train.py で育成を始めて、10分ほど待つ）")
     extra = []
@@ -85,7 +88,7 @@ def main():
         seconds, path = args.shot.split(",", 1)
         extra = [f"shot_after_s={seconds}", f"shot={path}"]
     godot = Godot(settings, 0, RL_DIR / "runs" / "play_logs", window=True, extra_args=["select=1", *extra])
-    godot.send({"cmd": "choices", "items": items})
+    godot.send({"cmd": "choices", "items": items, "defaults": defaults})
     names = display_names()
     drivers = Drivers(pool)
     race_no = 0

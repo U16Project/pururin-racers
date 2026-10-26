@@ -38,6 +38,11 @@ def roster_ids() -> list:
         return [p["id"] for p in json.load(f)["roster"]]
 
 
+def trainer_ids() -> list:
+    with open(CLIENT / "data" / "config" / "cpu_trainers.json", encoding="utf-8") as f:
+        return [t["id"] for t in json.load(f)["trainers"]]
+
+
 def make_spec(race_seed: int, settings: dict, roster: list) -> dict:
     """くじの番号から、1レース（距離・出る8体・枠順）を決める。同じ番号なら、いつも同じレース。8席全部が育てるCPU。
     出る子は、育てるCPU（brains の1つ目）が受け持つ子から選ぶ。"""
@@ -46,11 +51,20 @@ def make_spec(race_seed: int, settings: dict, roster: list) -> dict:
     lineup = list(roster) if members == "all" else list(members)
     rng.shuffle(lineup)
     lineup = lineup[: settings["field"]]
+    # 席ごとに、決めた割合で、トレーナーを15人からくじで選び直す（いつものトレーナーでない性格にも慣れるように）。
+    trainers = {}
+    swap = settings.get("trainer_swap", {})
+    if swap:
+        everyone = trainer_ids()
+        for gate in range(len(lineup)):
+            if rng.random() < float(swap["rate"]):
+                trainers[str(gate)] = rng.choice(everyone)
     return {
         "seed": race_seed,
         "distance_m": float(rng.choice(settings["distances_m"])),
         "lineup": lineup,
         "seats": list(range(len(lineup))),
+        "trainers": trainers,
     }
 
 
