@@ -2,8 +2,9 @@
 
 起動すると、まず「CPUを選ぶ画面」が出る。
   いちばん上の行は、あなたの枠（レース選択で自分にした枠）。最初は「あなた」。CPUにすると観戦。
-  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は --seats の並び（書かなければ 本番1 の最新が3枠、本番2 の最新が4枠）。
-  選べるCPU：育成の最新（育成1・脚質1・分身1 など、runs/ の中で latest.zip があるもの）と、控え室の版の全部。
+  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は --seats の並び（書かなければ 本番4 の最新が7枠）。
+  選べるCPU：--seats に書いた育成の最新と、その育成の過去の版（runs/<育成>/versions/。30分ごとに保存されたもの。新しい順）だけ。
+  --seats の育成にまだ最新が無いときは、一覧の最初のCPUが相手になる。
 決定すると、ゲームのレース選択の画面（ふつうのオフラインと同じ）→ 出走表の「レース開始」でレース。
 レース中・結果の板のトレーナー欄には、その枠を走らせているCPUの名前が出る。
 「最新」を選んだ枠は、レースを始めるたびに、その育成のいちばん新しいCPUを読み直す。
@@ -12,7 +13,7 @@
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/play.py
-  相手の最初の選び方：--seats 育成1:2,本番2:5（育成の名前:枠の数、を上から順に。合わせて7枠。足りない枠と、まだ最新が無い育成の枠は、最初の育成）
+  相手の最初の選び方：--seats 本番4:5,本番3:2（育成の名前:枠の数、を上から順に。合わせて7枠。足りない枠と、まだ最新が無い育成の枠は、一覧の最初のCPU）
 """
 
 import argparse
@@ -22,7 +23,8 @@ import time
 from sb3_contrib import MaskablePPO
 
 from godot_env import CLIENT, RL_DIR, Godot, load_settings
-from pool import Pool
+
+RUNS = RL_DIR / "runs"
 
 
 def display_names() -> dict:
@@ -31,27 +33,31 @@ def display_names() -> dict:
         return {p["id"]: p["display_name"] for p in json.load(f)["roster"]}
 
 
-def choices(main_run: str, pool: Pool) -> list:
-    """選べるCPUの一覧（最初の1つが本命）。id は「run:育成の名前」か「pool:控え室の版の名前」。"""
-    runs = sorted(p.parent.name for p in (RL_DIR / "runs").glob("*/latest.zip"))
-    runs.sort(key=lambda r: r != main_run)
-    items = [{"id": f"run:{r}", "label": f"{r}・最新" + ("（本命）" if r == main_run else "")} for r in runs]
-    items += [{"id": f"pool:{n}", "label": n} for n in pool.names]
+def choices(runs: list) -> list:
+    """選べるCPUの一覧：runs の育成の最新（latest.zip があるもの）と、その育成の過去の版（新しい順）。
+    id は「run:育成の名前」か「ver:育成の名前/版の名前（20261027_2240 など）」。"""
+    items = [{"id": f"run:{r}", "label": f"{r}・最新"} for r in runs if (RUNS / r / "latest.zip").exists()]
+    for r in runs:
+        for p in sorted((RUNS / r / "versions").glob("*.zip"), reverse=True):
+            items.append({"id": f"ver:{r}/{p.stem}", "label": f"{r} {p.stem[4:6]}/{p.stem[6:8]} {p.stem[9:11]}:{p.stem[11:13]}"})
     return items
 
 
 class Drivers:
     """CPUの id → 読み込んだCPU。育成の最新は、ファイルが新しくなっていたら読み直す。"""
 
-    def __init__(self, pool: Pool):
-        self.pool = pool
+    def __init__(self):
         self._latest = {}
+        self._versions = {}
 
     def get(self, driver_id: str):
         kind, _, name = driver_id.partition(":")
-        if kind == "pool":
-            return self.pool.model(name)
-        path = RL_DIR / "runs" / name / "latest.zip"
+        if kind == "ver":
+            if name not in self._versions:
+                run, _, stamp = name.partition("/")
+                self._versions[name] = MaskablePPO.load(RUNS / run / "versions" / f"{stamp}.zip", device="cpu")
+            return self._versions[name]
+        path = RUNS / name / "latest.zip"
         mtime = path.stat().st_mtime if path.exists() else 0.0
         cached = self._latest.get(name)
         if cached is None or cached[0] != mtime:
@@ -72,15 +78,13 @@ class Drivers:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--seats", default="本番1:3,本番2:4")
+    parser.add_argument("--seats", default="本番4:7")
     parser.add_argument("--shot", default="", help="確かめ用：この秒数で画面を撮って閉じる（秒,ファイル）")
     args = parser.parse_args()
     settings = load_settings()
     seats = [(run, int(count)) for run, count in (part.split(":") for part in args.seats.split(","))]
     defaults = [f"run:{run}" for run, count in seats for _ in range(count)]
-    main_run = seats[0][0]
-    pool = Pool(settings, main_run)
-    items = choices(main_run, pool)
+    items = choices(list(dict.fromkeys(run for run, _ in seats)))
     if not items:
         raise SystemExit("育てたCPUがまだありません（train.py で育成を始めて、10分ほど待つ）")
     extra = []
@@ -90,7 +94,7 @@ def main():
     godot = Godot(settings, 0, RL_DIR / "runs" / "play_logs", window=True, extra_args=["select=1", *extra])
     godot.send({"cmd": "choices", "items": items, "defaults": defaults})
     names = display_names()
-    drivers = Drivers(pool)
+    drivers = Drivers()
     race_no = 0
     by_gate = {}
     labels = {}

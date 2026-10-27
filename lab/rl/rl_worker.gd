@@ -137,12 +137,12 @@ func _driver_label_for_slot(slot: int) -> String:
 	return ""
 
 
-## 順位表に出す、短いCPUの名前（例：「育成1」「脚質1 20:27」）。
+## 順位表に出す、短いCPUの名前（例：最新は「本番4」、過去の版「ver:本番4/20261027_2240」は「本番4 22:40」）。
 static func _short_of(id: String) -> String:
 	var name := id.get_slice(":", 1)
-	var parts := name.split("_")
-	if id.begins_with("pool:") and parts.size() >= 3:
-		return "%s %s:%s" % [parts[0], parts[2].substr(0, 2), parts[2].substr(2, 2)]
+	if id.begins_with("ver:"):
+		var stamp := name.get_slice("/", 1)
+		return "%s %s:%s" % [name.get_slice("/", 0), stamp.substr(9, 2), stamp.substr(11, 2)]
 	return name
 
 

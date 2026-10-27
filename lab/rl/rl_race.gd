@@ -75,8 +75,8 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 		if peer != 0:
 			_seats[gate] = {
 				"peer": peer, "steer": 0.0, "brake": false, "last_progress": 0.0, "mid_place": 0, "dash": 0, "boost": 0,
-				"steps": 0, "paid": false, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
-				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "spurt_misses": 0, "stamina_at_last": null, "drafting": 0, "rearing": 0, "running": 0},
+				"steps": 0, "paid": false, "owed": 0.0, "paid_now": 0.0, "fit_progress": 0.0, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
+				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "spurt_misses": 0, "opening": 0, "stamina_at_last": null, "drafting": 0, "rearing": 0, "running": 0},
 				"boost_remaining": [],
 			}
 	entries = OnlineServerScript._with_runner_ids(entries)
@@ -216,7 +216,7 @@ func _report(runner: Node3D, runners: Array, seat: Dictionary) -> Dictionary:
 	var mask: Array = IDLE_MASK
 	if not finished:
 		_count_fit(runner, runners, seat)
-		reward = _progress_reward(runner, seat)
+		reward = _progress_reward(runner, seat) + _take_owed(seat)
 		mask = Array(RlObserve.mask_from(me, float(runner.call("get_drive_level")), _inside))
 	elif not bool(seat["paid"]):
 		# ゴールした直後の1回だけ、着順の点を渡す。
@@ -275,92 +275,134 @@ func _place_of(runner: Node3D, runners: Array) -> int:
 	return better + 1
 
 
-## 性格に合った走りを数える。中ほど（style.mid_from〜mid_to の割合）は「いたい順位」と風よけ、
-## 終盤（mid_to より後）は、終盤にいたい順位（late_place）があるトレーナーだけ、その順位を数える。
+## 性格に合った走り・集団の得・体力温存の点を、その場で渡す分として貯める（次に送るときに渡す。_take_owed）。
+## 点の合計の最大は、ゴールでまとめて渡していたときと同じ。続けている間ずっと関係する点は、その区間を進んだ距離の割合で少しずつ渡す。
+## - 脚質どおりの順位：中ほど（style.mid_from〜mid_to の割合）は「いたい順位」、終盤（mid_to より後）は、終盤にいたい順位（late_place）があるトレーナーだけ、その順位。
+##   いたい順位にいた間に進んだ距離 ÷ 数える区間の長さ × style.place。
+## - 風よけの使い方：中ほどで、後ろにつく性格は風よけをもらっていた間、つかない性格はもらっていなかった間に進んだ距離 ÷ 中ほどの長さ × style.draft。
+## - 集団の得：前からの風よけ・後ろからの後方支援をもらっていた間に進んだ距離 ÷ レースの距離 × group.draft・group.rear。
+## - 体力温存：残りの距離が reward.stamina.last_ratio に入ったその時に渡す（_stamina_penalty）。
+## 記録用の数え（place_hit など）は、0.5秒ごとの回数のまま。
 func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
-	# 残りの距離が reward.stamina.last_ratio（全体の割合）に入った瞬間の体力を、1回だけ覚える（体力温存の点に使う）。
-	if seat["fit"]["stamina_at_last"] == null:
-		var left := 1.0 - float(runner.call("get_race_progress")) / float(_spec["distance_m"])
-		if left <= float(_settings["reward"]["stamina"]["last_ratio"]):
-			seat["fit"]["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
+	var distance := float(_spec["distance_m"])
+	var progress := minf(float(runner.call("get_race_progress")), distance)
+	var from := float(seat["fit_progress"])
+	seat["fit_progress"] = progress
+	var fit: Dictionary = seat["fit"]
+	var reward: Dictionary = _settings["reward"]
+	if fit["stamina_at_last"] == null and 1.0 - progress / distance <= float(reward["stamina"]["last_ratio"]):
+		fit["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
+		_owe(seat, _stamina_penalty(float(fit["stamina_at_last"])))
+	var style: Dictionary = reward["style"]
+	var group: Dictionary = reward.get("group", {})
+	var draft: Dictionary = runner.call("get_telemetry_snapshot")["draft"]
+	var drafting := float(draft["received_draft_p"]) >= float(style["draft_at_least"])
+	var rearing := float(draft.get("rear_assist_air_factor", 0.0)) > 0.0
+	# 集団の得（性格とは別。全部の子）。
+	fit["running"] = int(fit["running"]) + 1
+	if drafting:
+		fit["drafting"] = int(fit["drafting"]) + 1
+		_owe(seat, float(group.get("draft", 0.0)) * (progress - from) / distance)
+	if rearing:
+		fit["rearing"] = int(fit["rearing"]) + 1
+		_owe(seat, float(group.get("rear", 0.0)) * (progress - from) / distance)
 	var frame: Dictionary = seat["frame"]
 	if frame.is_empty():
 		return
-	var fit: Dictionary = seat["fit"]
-	var style: Dictionary = _settings["reward"]["style"]
-	var ratio := float(runner.call("get_race_progress")) / float(_spec["distance_m"])
-	# レース全体で、風よけをもらっていた割合（進み具合の記録用。点には使わない）。
-	fit["running"] = int(fit["running"]) + 1
-	var draft: Dictionary = runner.call("get_telemetry_snapshot")["draft"]
-	if float(draft["received_draft_p"]) >= float(style["draft_at_least"]):
-		fit["drafting"] = int(fit["drafting"]) + 1
-	# 後ろの子からの後方支援（空力ステで強くなる）を受けていたか。
-	if float(draft.get("rear_assist_air_factor", 0.0)) > 0.0:
-		fit["rearing"] = int(fit["rearing"]) + 1
+	var mid_from := distance * float(style["mid_from"])
+	var mid_to := distance * float(style["mid_to"])
+	var mid_len := mid_to - mid_from
 	var place := _place_of(runner, runners)
-	var wanted: Array = []
+	var late: Array = frame.get("late_place", [])
+	# 脚質どおりの順位を数える区間の長さ（中ほど＋、終盤にいたい順位があれば終盤）。
+	var place_len := mid_len + (distance - mid_to if late.size() == 2 else 0.0)
+	var in_mid := _overlap(from, progress, mid_from, mid_to)
+	var in_late := _overlap(from, progress, mid_to, distance) if late.size() == 2 else 0.0
+	var follows := float((frame.get("follow_m", [0, 0]) as Array)[1]) > 0.0
+	var ratio := progress / distance
 	if ratio >= float(style["mid_from"]) and ratio < float(style["mid_to"]):
-		wanted = frame.get("place", [])
-		var follows := float((frame.get("follow_m", [0, 0]) as Array)[1]) > 0.0
-		var drafting := float(runner.call("get_telemetry_snapshot")["draft"]["received_draft_p"]) >= float(style["draft_at_least"])
 		fit["draft_n"] = int(fit["draft_n"]) + 1
 		if drafting == follows:
 			fit["draft_hit"] = int(fit["draft_hit"]) + 1
-	elif ratio >= float(style["mid_to"]) and frame.has("late_place"):
-		wanted = frame["late_place"]
-	if wanted.size() == 2:
-		fit["place_n"] = int(fit["place_n"]) + 1
-		if place >= int(wanted[0]) and place <= int(wanted[1]):
-			fit["place_hit"] = int(fit["place_hit"]) + 1
+		_count_place(fit, place, frame.get("place", []))
+	elif ratio >= float(style["mid_to"]) and late.size() == 2:
+		_count_place(fit, place, late)
+	if in_mid > 0.0:
+		if drafting == follows:
+			_owe(seat, float(style["draft"]) * in_mid / mid_len)
+		if _in_range(place, frame.get("place", [])):
+			_owe(seat, float(style["place"]) * in_mid / place_len)
+	if in_late > 0.0 and _in_range(place, late):
+		_owe(seat, float(style["place"]) * in_late / place_len)
 
 
-## ブーストを押した位置を数える。残りの距離が全体の reward.style.spurt_last_ratio に入ってから押したら、スパートの点の数に、それより前なら範囲の外の数に入れる。
+## 区間 [from, to] のうち、[a, b] に入っている長さ。
+static func _overlap(from: float, to: float, a: float, b: float) -> float:
+	return maxf(minf(to, b) - maxf(from, a), 0.0)
+
+
+static func _in_range(place: int, wanted: Array) -> bool:
+	return wanted.size() == 2 and place >= int(wanted[0]) and place <= int(wanted[1])
+
+
+## 記録用：いたい順位にいた回数を数える。
+static func _count_place(fit: Dictionary, place: int, wanted: Array) -> void:
+	if wanted.size() != 2:
+		return
+	fit["place_n"] = int(fit["place_n"]) + 1
+	if _in_range(place, wanted):
+		fit["place_hit"] = int(fit["place_hit"]) + 1
+
+
+## その場で渡す点を貯める（記録用に、渡した合計も覚える）。
+static func _owe(seat: Dictionary, points: float) -> void:
+	seat["owed"] = float(seat["owed"]) + points
+	seat["paid_now"] = float(seat["paid_now"]) + points
+
+
+## 貯めた点を渡して、0に戻す。
+static func _take_owed(seat: Dictionary) -> float:
+	var points := float(seat["owed"])
+	seat["owed"] = 0.0
+	return points
+
+
+## ブーストを押したその時に点を渡す。スタートから全体の reward.style.opening_ratio までに押したら opening_per_boost、
+## 残りの距離が全体の spurt_last_ratio に入ってから押したら spurt_per_boost、そのあいだは outside_per_boost。
 func _count_spurt(seat: Dictionary) -> void:
 	var runner: Node3D = _race.call("remote_runner", int(seat["peer"]))
 	if runner == null:
 		return
+	var style: Dictionary = _settings["reward"]["style"]
 	var distance := float(_spec["distance_m"])
-	var remaining := distance - float(runner.call("get_race_progress"))
+	var progress := float(runner.call("get_race_progress"))
+	var remaining := distance - progress
 	(seat["boost_remaining"] as Array).append(roundf(remaining))
-	if remaining <= distance * float(_settings["reward"]["style"]["spurt_last_ratio"]):
+	if progress < distance * float(style["opening_ratio"]):
+		seat["fit"]["opening"] = int(seat["fit"]["opening"]) + 1
+		_owe(seat, float(style["opening_per_boost"]))
+	elif remaining <= distance * float(style["spurt_last_ratio"]):
 		seat["fit"]["spurt_hits"] = int(seat["fit"]["spurt_hits"]) + 1
+		_owe(seat, float(style["spurt_per_boost"]))
 	else:
 		seat["fit"]["spurt_misses"] = int(seat["fit"]["spurt_misses"]) + 1
+		_owe(seat, float(style["outside_per_boost"]))
 
 
-## 性格に合った走りの点。
-func _style_reward(seat: Dictionary) -> float:
-	var fit: Dictionary = seat["fit"]
-	var style: Dictionary = _settings["reward"]["style"]
-	var out := 0.0
-	if int(fit["place_n"]) > 0:
-		out += float(style["place"]) * float(fit["place_hit"]) / float(fit["place_n"])
-	if int(fit["draft_n"]) > 0:
-		out += float(style["draft"]) * float(fit["draft_hit"]) / float(fit["draft_n"])
-	out += float(style["spurt_per_boost"]) * int(fit["spurt_hits"])
-	out += float(style.get("outside_per_boost", 0.0)) * int(fit["spurt_misses"])
-	return out
-
-
-## 集団の得の点（性格とは別。全部の子）：前からの風よけをもらっていた割合 × group.draft ＋ 後ろからの後方支援をもらっていた割合 × group.rear。
-func _group_reward(seat: Dictionary) -> float:
-	var group: Dictionary = _settings["reward"].get("group", {})
-	var fit: Dictionary = seat["fit"]
-	var running := maxf(float(fit["running"]), 1.0)
-	return float(group.get("draft", 0.0)) * float(fit["drafting"]) / running + float(group.get("rear", 0.0)) * float(fit["rearing"]) / running
-
-
-## 体力温存の点（減点だけ）：残り last_ratio に入ったときの体力が keep より少なければ、足りない分 × per_short を引く。
-## そこまで来ないうちに打ち切られた子は、打ち切りのときの体力で見る。
-func _stamina_reward(runner: Node3D, seat: Dictionary) -> float:
+## 体力温存の点（減点だけ）：体力（1＝満タン、0＝0%、−1＝−100%）が keep より少なければ、足りない分 × per_short を引く。
+func _stamina_penalty(ratio: float) -> float:
 	var stamina: Dictionary = _settings["reward"]["stamina"]
-	var at: Variant = seat["fit"]["stamina_at_last"]
-	var ratio := float(at) if at != null else float(runner.call("get_stamina_ratio"))
 	return -float(stamina["per_short"]) * maxf(float(stamina["keep"]) - ratio, 0.0)
 
 
-## ゴール（または打ち切り）の点：着順の点＋1位とのタイム差の点＋性格に合った走りの点＋集団の得の点。
+## ゴール（または打ち切り）の点：着順の点＋1位とのタイム差の点＋まだ渡していない、その場の点。
+## 最後の判断からゴールまでに進んだ分の、その場の点もここで数える。
+## 残りの距離が体力温存の線に来ないうちに打ち切られた子は、ここで、打ち切りのときの体力で体力温存の点を渡す。
 func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
+	_count_fit(runner, runners, seat)
+	if seat["fit"]["stamina_at_last"] == null:
+		seat["fit"]["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
+		_owe(seat, _stamina_penalty(float(seat["fit"]["stamina_at_last"])))
 	var place := _place_of(runner, runners)
 	var weights: Dictionary = _settings["reward"]
 	var table: Array = weights["place"]
@@ -369,7 +411,7 @@ func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 	if place > 1 and bool(runner.call("is_finished")):
 		var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
 		reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / float(weights["gap_scale_s"]), 0.0, 1.0)
-	return reward + _style_reward(seat) + _group_reward(seat) + _stamina_reward(runner, seat)
+	return reward + _take_owed(seat)
 
 
 ## ゴールした中で、いちばん早いタイム（だれもゴールしていなければ -1）。
@@ -415,7 +457,7 @@ func _finish(runners: Array, cut: bool) -> void:
 				"mid_place": int(seat["mid_place"]) if int(seat["mid_place"]) > 0 else int(result["place"]),
 				"dash_uses": seat["dash"], "boost_uses": seat["boost"], "steps": seat["steps"],
 				"dash_at_s": seat["dash_at"], "boost_at_s": seat["boost_at"],
-				"style_reward": _style_reward(seat),
+				"paid_now": float(seat["paid_now"]), "opening_boosts": int(fit["opening"]), "line_stamina": float(fit["stamina_at_last"]),
 				"place_fit": float(fit["place_hit"]) / maxf(float(fit["place_n"]), 1.0),
 				"draft_fit": float(fit["draft_hit"]) / maxf(float(fit["draft_n"]), 1.0),
 				"spurt_hits": int(fit["spurt_hits"]), "spurt_misses": int(fit["spurt_misses"]), "boost_remaining_m": seat["boost_remaining"],

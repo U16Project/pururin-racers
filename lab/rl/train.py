@@ -34,6 +34,13 @@ from godot_env import RL_DIR, GodotVecEnv, load_settings
 from pool import Pool
 
 
+## progress.csv の項目（増やすときは後ろに足す。前の形の見出しは、自動で今の形に書き直す）。
+COLUMNS = ["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
+           "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
+           "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合",
+           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が0%より少ない割合", "線で体力が底の割合", "その場でもらった点"]
+
+
 class Progress(BaseCallback):
     """レースが終わるたびに結果を集めて、決めた本数ごとに progress.csv へ書く。決めた時間ごとに版を保存する。"""
 
@@ -54,19 +61,15 @@ class Progress(BaseCallback):
         self.started = self.last_save = self.last_latest = time.time()
         (run_dir / "versions").mkdir(exist_ok=True)
         self.csv_path = run_dir / "progress.csv"
-        # 前の形の progress.csv（項目が少ない）なら、見出しの行だけ、今の形に書き直す。
+        # 前の形の progress.csv（項目が少ない）なら、見出しの行だけ、今の形に書き直す（項目は後ろに足していくので、前の行の値はそのまま）。
         if self.csv_path.exists():
             lines = self.csv_path.read_text(encoding="utf-8").splitlines()
-            if lines and "風よけをもらっていた割合" not in lines[0]:
-                lines[0] += ",ブーストの残り距離の平均,スパートの範囲で押したブースト,風よけをもらっていた割合"
-            if lines and "後方支援をもらっていた割合" not in lines[0]:
-                lines[0] += ",後方支援をもらっていた割合"
+            if lines and lines[0] != ",".join(COLUMNS) and ",".join(COLUMNS).startswith(lines[0]):
+                lines[0] = ",".join(COLUMNS)
                 self.csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         if not self.csv_path.exists():
             with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow(["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
-                                        "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
-                                        "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合"])
+                csv.writer(f).writerow(COLUMNS)
 
     def _on_rollout_end(self) -> None:
         """CPUを直す前に、お手本にも少し寄せる。決めた判断の数ごとに、新しい記録を読み直す。"""
@@ -106,18 +109,36 @@ class Progress(BaseCallback):
         seats = [r for race in races for r in race["results"] if r["seat"]]
         mean = lambda rows, key: sum(float(r[key]) for r in rows) / max(len(rows), 1)
         winners = [race["results"][0]["winner_time"] for race in races if race["results"][0]["winner_time"] > 0]
+        boosts = [b for r in seats for b in r["boost_remaining_m"]]
+        lines_st = [float(r["line_stamina"]) for r in seats]
+        share = lambda rows, test: sum(1 for x in rows if test(x)) / max(len(rows), 1)
         line = [datetime.now().strftime("%m/%d %H:%M"), self.num_timesteps, self.seen, round((time.time() - self.started) / 60, 1),
-                round(sum(winners) / max(len(winners), 1), 2), round(sum(1 for r in seats if r["time"] < 0) / max(len(seats), 1), 3),
+                round(sum(winners) / max(len(winners), 1), 2), round(share(seats, lambda r: r["time"] < 0), 3),
                 round(mean(seats, "dash_uses"), 1), round(mean(seats, "boost_uses"), 2), round(mean(seats, "stamina_left"), 2),
                 round(mean(seats, "place_fit"), 2), round(mean(seats, "draft_fit"), 2),
                 self.bank.races if self.bank else 0, round(self.bank.keep_weight(self.num_timesteps), 4) if self.bank else 0.0, round(self.imitation, 3),
-                round(sum(sum(r["boost_remaining_m"]) for r in seats) / max(sum(len(r["boost_remaining_m"]) for r in seats), 1)),
-                round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2)]
+                round(sum(boosts) / max(len(boosts), 1)),
+                round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2),
+                round(mean(seats, "opening_boosts"), 2), round(mean(seats, "spurt_misses"), 2),
+                round(sum(lines_st) / max(len(lines_st), 1), 2), round(share(lines_st, lambda x: x < 0.0), 2), round(share(lines_st, lambda x: x <= -0.95), 2),
+                round(mean(seats, "paid_now"), 2)]
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
-        print(" | ".join(f"{k} {v}" for k, v in zip(["", "判断", "レース", "分", "1位のタイム", "ゴールしない", "ダッシュ", "ブースト", "残り体力",
-                                                      "性格の順位", "性格の風よけ", "お手本", "寄せる力", "合う見込み",
-                                                      "ブーストの残り距離", "スパートで押した", "風よけ割合", "後方支援割合"], line)), flush=True)
+        v = dict(zip(COLUMNS, line))
+        pct = lambda x: f"{float(x) * 100:.0f}%"
+        print("\n".join([
+            f"■ {v['日時']}　ここまで {v['レース数']} レース（{v['分']}分）",
+            f"  1位のゴールタイム {v['1位のタイム']}秒　ゴールできなかった {pct(v['ゴールしなかった割合'])}",
+            f"  ブースト（1レース） {v['ブースト']}回：最序盤（10%まで） {v['最序盤のブースト']}回・中ほど {v['中ほどのブースト']}回・"
+            f"ラスト25% {v['スパートの範囲で押したブースト']}回（押した場所の平均：ゴールまで残り {v['ブーストの残り距離の平均']}m）",
+            f"  ダッシュ（1レース） {v['ダッシュ']}回",
+            f"  体力：残り25%の線で 平均 {pct(v['残り25%の線の体力'])}（0%より少ない子 {pct(v['線で体力が0%より少ない割合'])}・底の子 {pct(v['線で体力が底の割合'])}）"
+            f"　ゴールで 平均 {pct(v['残り体力'])}",
+            f"  脚質どおりの順位にいた {pct(v['性格の順位に合った割合'])}　風よけの使い方が脚質どおり {pct(v['風よけが性格に合った割合'])}",
+            f"  前から風よけをもらっていた {pct(v['風よけをもらっていた割合'])}　後ろから押してもらっていた {pct(v['後方支援をもらっていた割合'])}",
+            f"  その場でもらった点（1レース） {v['その場でもらった点']}",
+            f"  あなたのまね：記録 {v['お手本の本数']}本・寄せる強さ {v['お手本に寄せる力']}・あなたと同じ操作を選ぶ {pct(v['お手本と合う見込み'])}",
+        ]), flush=True)
 
 
 def merge(base: dict, extra: dict) -> dict:
@@ -169,7 +190,7 @@ def main():
     if not args.no_demos:
         print(demos.refresh(settings), flush=True)
         bank = demos.DemoBank(settings).load()
-        print(f"お手本：{bank.races}本（{len(bank.obs)}場面）、寄せる強さ {bank.strength():.2f}", flush=True)
+        print(f"あなたの走りの記録（お手本）：{bank.races}本（{len(bank.obs)}場面）、まねさせる強さ {bank.strength():.2f}", flush=True)
         if not args.resume:
             batches = int(settings["demo"]["pretrain_batches"] * bank.strength())
             match = bank.imitate(model.policy, batches, 1.0)

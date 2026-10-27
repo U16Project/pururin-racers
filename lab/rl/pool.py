@@ -5,6 +5,9 @@
 - 置くのは pool.max 体まで。超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない。
 - 1レースのうち pool.seats 席を、ここからくじで選んだCPUが走らせる（走らせるだけで、学ばない）。
 - pool.from_runs（育成の名前の並び）があれば、その育成の版だけを相手にする（ほかの版は控え室に置いたまま、くじから外す）。
+- pool.plan（席の並び）があれば、1レースごとに、その並びの1つにつき1席を走らせる（同じものを2回書けば2席）。
+  控え室の版の名前を書けば、その版。「run:<育成の名前>」と書けば、その育成の古い版（控え室の「<育成の名前>_」の版）からくじで選ぶ
+  （まだ1つも無ければ、その席は本命が走る）。そのときの控え室の席の数は、並びの数（pool.seats は使わない）。
 - pool.always_run の育成のいちばん新しいCPU（latest.zip）は、控え室とは別に、どのレースにも1席必ず入る（その育成自身のレースでは入らない）。
   成績の表では「<育成の名前>_最新」として出す。
 - 相手役ごとに、本命（育てているCPU）と走ったときの着順を記録する。育成ごとに別のファイル（_成績_<育成の名前>.json）。
@@ -19,6 +22,8 @@ from pathlib import Path
 from godot_env import RL_DIR, load_settings
 
 FIXED = "固定_"
+## pool.plan で「その育成の古い版からくじ」を表す頭。
+RUN = "run:"
 
 
 class Pool:
@@ -36,6 +41,7 @@ class Pool:
         self.always_name = f"{self.always_run}_最新" if self.always_run else ""
         self._always_model = None
         self._always_mtime = 0.0
+        self.plan = [str(n) for n in self.settings.get("plan") or []]
         self.reload()
 
     # ------------------------------------------------------------ 置き場所
@@ -70,6 +76,28 @@ class Pool:
                 return name
             # ほかの育成が上限で外したなど、もうファイルがない。見直して、選び直す。
             self.reload()
+        return None
+
+    def seat_count(self) -> int:
+        """1レースのうち、控え室のCPUが走らせる席の数。"""
+        return len(self.plan) if self.plan else int(self.settings["seats"])
+
+    def picks(self, rng: random.Random) -> list:
+        """1レースぶんの相手役の名前（席の数だけ。走らせる版が無い席は None で、本命が走る）。pool.plan があればその並び、無ければくじ。"""
+        if self.plan:
+            return [self._plan_pick(entry, rng) for entry in self.plan]
+        return [self.pick(rng) for _ in range(self.seat_count())]
+
+    def _plan_pick(self, entry: str, rng: random.Random):
+        """pool.plan の1つ：版の名前ならその版、「run:<育成の名前>」ならその育成の古い版からくじ（無ければ None）。"""
+        if not entry.startswith(RUN):
+            return entry
+        names = sorted(p.stem for p in self.dir.glob(f"{entry.removeprefix(RUN)}_*.zip"))
+        while names:
+            name = rng.choice(names)
+            if self.model(name) is not None:
+                return name
+            names.remove(name)
         return None
 
     def always(self):

@@ -68,7 +68,7 @@ func _initialize() -> void:
 	var index_file := FileAccess.open(out_dir.path_join("_index.json"), FileAccess.WRITE)
 	index_file.store_string(JSON.stringify(index, " "))
 	index_file.close()
-	print("お手本：新しく %d 本、前からの %d 本、外した %d 本" % [made, kept, index.size() - made - kept])
+	print("あなたの走りの記録（お手本）：使う %d 本（今回増えた %d 本）、使わない %d 本" % [made + kept, made, index.size() - made - kept])
 	quit()
 
 

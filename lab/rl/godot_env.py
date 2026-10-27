@@ -134,7 +134,7 @@ class GodotVecEnv(VecEnv):
         self.roster = roster_ids()
         self.field = settings["field"]
         self.pool = pool
-        self.pool_seats = int(settings["pool"]["seats"]) if pool is not None else 0
+        self.pool_seats = pool.seat_count() if pool is not None else 0
         # どのレースにも必ず入れる育成のいちばん新しいCPUの席（pool.always_run。その育成自身のレースでは無し）。
         self.always_seats = 1 if pool is not None and pool.always_run else 0
         self.learn = self.field - self.pool_seats - self.always_seats
@@ -171,7 +171,7 @@ class GodotVecEnv(VecEnv):
         g = self.godots[w]
         gates = list(range(self.field))
         self._rng.shuffle(gates)
-        self._pool_gates[w] = {gate: self.pool.pick(self._rng) for gate in gates[:self.pool_seats]}
+        self._pool_gates[w] = dict(zip(gates[:self.pool_seats], self.pool.picks(self._rng))) if self.pool is not None else {}
         for gate in gates[self.pool_seats:self.pool_seats + self.always_seats]:
             self._pool_gates[w][gate] = self.pool.always_name
         self._learn_gates[w] = sorted(gates[self.pool_seats + self.always_seats:])
