@@ -9,6 +9,7 @@ const BACKGROUND_IMAGE_PATH := "res://assets/ui/race_select_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
+const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
@@ -17,7 +18,9 @@ const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const TrainerPicker := preload("res://scripts/menu/cpu_trainer_picker.gd")
 var _trainer_picker: PanelContainer
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
-const PANEL_SIZE := Vector2(880.0, 616.0)
+const PANEL_WIDTH := 900.0
+## 上の帯・画面の下の端と、箱とのすき間。
+const PANEL_GAP := 8.0
 const SLOT_COLUMN_WIDTH := 436.0
 const GATE_BADGE_SIZE := 28.0
 const DISTANCE_STEP_BUTTON_WIDTH := 70.0
@@ -26,9 +29,9 @@ const NOTE_MARK_SIZE := 18.0
 const NOTE_ITEM_WIDTH := 190.0
 ## キャラの一覧の窓と、板の端との間。
 const PICKER_MARGIN := 12.0
-## 距離を動かすボタン（L1・R1）の色。茶色系。
-const COLOR_STEP_BUTTON := Color(0.36, 0.23, 0.13, 1.0)
-const COLOR_STEP_BUTTON_BORDER := Color(0.62, 0.43, 0.25, 1.0)
+## 距離を動かすボタン（L1・R1）の色。L1・R1 の印と同じ、暗い地に金色の縁。
+const COLOR_STEP_BUTTON := Color(0.09, 0.1, 0.13, 1.0)
+const COLOR_STEP_BUTTON_BORDER := Color(1.0, 0.82, 0.3, 0.7)
 ## レースを始められない理由の文。
 const START_PROBLEM_TEXT := {
 	"no_player": "ユーザーのぷるりんを選んでください",
@@ -58,32 +61,25 @@ var _picker_cover: Control
 
 
 func _ready() -> void:
-	var background := TextureRect.new()
-	background.texture = load(BACKGROUND_IMAGE_PATH)
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	# 背景は暗くして、選ぶ部分を読みやすくする。
-	background.modulate = Color(0.38, 0.38, 0.44, 1.0)
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	MenuStyle.background(self, BACKGROUND_IMAGE_PATH)
+	MenuStyle.top_bar(self, "オフラインフリー対戦", TrainerProfile.trainer_name())
+	# 選ぶ部分は、上の帯の下の箱（画面の名前は、上の帯に出す）。
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(Color(MenuStyle.COLOR_PANEL, 0.93), 16, 30.0, 6.0))
-	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -PANEL_SIZE.x * 0.5
-	panel.offset_right = PANEL_SIZE.x * 0.5
-	panel.offset_top = -PANEL_SIZE.y * 0.5
-	panel.offset_bottom = PANEL_SIZE.y * 0.5
+	panel.add_theme_stylebox_override("panel", MenuStyle.panel_box(26.0, 8.0))
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 1.0
+	panel.offset_left = -PANEL_WIDTH * 0.5
+	panel.offset_right = PANEL_WIDTH * 0.5
+	panel.offset_top = MenuStyle.BAR_HEIGHT + PANEL_GAP
+	panel.offset_bottom = -PANEL_GAP
 	add_child(panel)
 	_panel = panel
 	var content := VBoxContainer.new()
 	content.name = "Content"
 	content.add_theme_constant_override("separation", 4)
 	panel.add_child(content)
-	var heading := MenuStyle.label("オフラインフリー対戦", 24)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	content.add_child(heading)
 	content.add_child(_build_distance_row())
 	var middle := HBoxContainer.new()
 	middle.name = "Middle"
@@ -103,16 +99,16 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 20)
 	content.add_child(buttons)
-	_back_button = MenuStyle.button("戻る", 22, MenuStyle.COLOR_BUTTON_QUIET)
+	_back_button = MenuStyle.pill_button("戻る", "quiet", 20)
 	_back_button.name = "BackButton"
-	_back_button.custom_minimum_size = Vector2(260.0, 44.0)
+	_back_button.custom_minimum_size = Vector2(260.0, 40.0)
 	_back_button.pressed.connect(go_to_title)
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	buttons.add_child(_back_button)
-	_race_button = MenuStyle.button("出走表へ", 22)
+	_race_button = MenuStyle.pill_button("出走表へ", "primary", 22)
 	_race_button.name = "RaceButton"
-	_race_button.custom_minimum_size = Vector2(0.0, 44.0)
+	_race_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_race_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_race_button.pressed.connect(go_to_race)
 	UIAudio.bind_button_sound(_race_button, "confirmation")
@@ -122,8 +118,8 @@ func _ready() -> void:
 	for button: Button in [_back_button, _race_button]:
 		for state in ["normal", "hover", "pressed", "hover_pressed"]:
 			var compact: StyleBoxFlat = button.get_theme_stylebox(state).duplicate()
-			compact.content_margin_top = 5.0
-			compact.content_margin_bottom = 5.0
+			compact.content_margin_top = 2.0
+			compact.content_margin_bottom = 2.0
 			button.add_theme_stylebox_override(state, compact)
 	_detail.connect("force_requested", _on_force_requested)
 	_build_picker()
@@ -153,14 +149,14 @@ func _build_distance_row() -> HBoxContainer:
 	var group := ButtonGroup.new()
 	var selected := RaceSession.selected_distance_m()
 	for distance_m: float in RaceSession.supported_distances_m():
-		var button := MenuStyle.button("%d m" % int(distance_m), 21, MenuStyle.COLOR_BUTTON_QUIET)
+		var button := MenuStyle.pill_button("%d m" % int(distance_m), "tab", 19)
 		button.toggle_mode = true
 		button.button_group = group
-		button.custom_minimum_size = Vector2(0.0, 46.0)
+		button.custom_minimum_size = Vector2(0.0, 40.0)
 		for state in ["normal", "hover", "pressed", "hover_pressed"]:
 			var compact: StyleBoxFlat = button.get_theme_stylebox(state).duplicate()
-			compact.content_margin_top = 5.0
-			compact.content_margin_bottom = 5.0
+			compact.content_margin_top = 2.0
+			compact.content_margin_bottom = 2.0
 			button.add_theme_stylebox_override(state, compact)
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.button_pressed = is_equal_approx(distance_m, selected)
@@ -177,7 +173,7 @@ func _build_distance_row() -> HBoxContainer:
 
 
 ## 距離を1つ動かすボタン。左が「‹ L1」、右が「R1 ›」。ゲームパッドの L1・R1 で、どこを選んでいても動く。
-## 距離のボタン（灰色の四角）と見分けがつくように、茶色の丸い形にする。矢印とマークは金色。
+## 距離のボタン（丸い札）と見分けがつくように、暗い地に金色の縁にする。矢印とマークは金色。
 func _distance_step_button(direction: int) -> Button:
 	var button := Button.new()
 	button.text = "‹" if direction < 0 else "›"
@@ -326,7 +322,7 @@ func _note_row(row_name: String, items: Array) -> HBoxContainer:
 
 
 func _column_button(button_name: String, text: String, handler: Callable) -> Button:
-	var button := MenuStyle.button(text, 13, MenuStyle.COLOR_BUTTON_QUIET)
+	var button := MenuStyle.pill_button(text, "secondary", 13)
 	button.name = button_name
 	button.custom_minimum_size = Vector2(0.0, 25.0)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL

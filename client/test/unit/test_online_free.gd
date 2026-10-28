@@ -847,7 +847,7 @@ func test_the_mode_select_opens_the_free_lobby() -> void:
 	add_child_autofree(mode)
 	var button: Button = mode.find_child("OnlineFreeRaceButton", true, false)
 	assert_false(button.disabled)
-	assert_eq(button.text, "オンラインフリー対戦")
+	assert_eq((button.find_child("Title", true, false) as Label).text, "オンラインフリー対戦")
 
 
 func test_clicking_a_card_only_opens_the_room_and_the_entry_button_enters() -> void:
@@ -1046,7 +1046,11 @@ func test_the_lobby_tabs_switch_with_a() -> void:
 	var pad_a := InputEventJoypadButton.new()
 	pad_a.button_index = JOY_BUTTON_A
 	pad_a.pressed = true
+	var guide_accept: Label = screen.find_child("GuideAccept", true, false)
+	(screen.find_child("Card_%s" % ids[0], true, false) as Button).grab_focus()
+	assert_eq(guide_accept.text, "ルームを見る", "カードの上では、ルームを見る")
 	(screen.find_child("EntriesTab", true, false) as Button).grab_focus()
+	assert_eq(guide_accept.text, "決定", "タブの上では、決定")
 	get_viewport().push_input(pad_a)
 	assert_eq(screen.current_tab(), FreeLobby.TAB_ENTRIES)
 	(screen.find_child("ResultsTab", true, false) as Button).grab_focus()
@@ -1090,6 +1094,28 @@ func test_the_cursor_returns_when_an_entry_row_goes_away() -> void:
 	screen.set("_entries", [])
 	screen.call("_refresh_entries")
 	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("EntriesTab", true, false))
+
+
+func test_a_long_status_stays_on_one_line() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	await wait_seconds(0.2)
+	var status: Label = screen.find_child("Status", true, false)
+	var normal: int = screen.get("_status_font_size")
+	var font := status.get_theme_font("font")
+	assert_eq(status.autowrap_mode, TextServer.AUTOWRAP_OFF, "折り返さない")
+	# ふだんの大きさでは入らない長さの文：小さくして1行に入れる（いちばん小さくしても入らなければ、終わりを「…」）。
+	var long_text := "ロビーに入りました。ルームを選んで、くわしい条件を見てから、エントリーしてください。"
+	while font.get_string_size(long_text, HORIZONTAL_ALIGNMENT_LEFT, -1, normal).x <= status.size.x:
+		long_text += "くわしく。"
+	screen.call("_set_status", long_text)
+	var size := status.get_theme_font_size("font_size")
+	assert_lt(size, normal, "長い文は、小さくなる")
+	assert_true(size == FreeLobby.STATUS_MIN_FONT_SIZE or font.get_string_size(long_text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= status.size.x, "1行に収まる大きさ")
+	# 短い文は、ふだんの大きさに戻る。
+	screen.call("_set_status", "短い")
+	assert_eq(status.get_theme_font_size("font_size"), normal)
 
 
 func test_a_ticket_room_card_is_locked_until_a_pururin_has_the_ticket() -> void:

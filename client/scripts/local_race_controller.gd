@@ -236,6 +236,7 @@ func _ready() -> void:
 	_add_pause_guide_button()
 	_pause_return_button.pressed.connect(_on_pause_return_pressed)
 	_build_quit_confirm()
+	_style_boards()
 	_result_return_button.pressed.connect(_return_to_race_select)
 	MenuStyle.add_mark(_result_return_button, "B", 24.0)
 	_resume_button.pressed.connect(_set_paused.bind(false))
@@ -767,7 +768,7 @@ func _build_free_after_choice() -> void:
 	choice.add_child(_free_notice_label)
 	if not _free_final:
 		_build_free_entry_choice(choice, room_name)
-	_result_stay_button = MenuStyle.button("このルームに残る", 20, MenuStyle.COLOR_BUTTON)
+	_result_stay_button = MenuStyle.pill_button("このルームに残る", "secondary", 20)
 	_result_stay_button.name = "ResultStayButton"
 	_result_stay_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_stay_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -787,7 +788,7 @@ func _build_free_entry_choice(choice: VBoxContainer, room_name: String) -> void:
 	choice.add_child(row)
 	var group := ButtonGroup.new()
 	for option: Array in [[OnlineProtocol.FREE_AFTER_ON, "続けて呼ばれる"], [OnlineProtocol.FREE_AFTER_HOLD, "保留にする"], [OnlineProtocol.FREE_AFTER_OFF, "取り消す"]]:
-		var button := MenuStyle.button(option[1], 17, MenuStyle.COLOR_BUTTON_QUIET)
+		var button := MenuStyle.pill_button(option[1], "tab", 17)
 		button.toggle_mode = true
 		button.button_group = group
 		button.custom_minimum_size = Vector2(0.0, 44.0)
@@ -1590,7 +1591,7 @@ func _add_pause_marks() -> void:
 ## 一時停止の板から開く操作ガイド。閉じると板へ戻り、レースは一時停止のまま。
 func _add_pause_guide_button() -> void:
 	var box := _pause_panel.get_node("PauseBox") as VBoxContainer
-	_pause_guide_button = MenuStyle.button("操作ガイド", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	_pause_guide_button = MenuStyle.pill_button("操作ガイド", "secondary", 20)
 	_pause_guide_button.name = "PauseControlGuideButton"
 	_pause_guide_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_pause_guide_button.pressed.connect(_open_control_guide_from_pause)
@@ -1631,13 +1632,13 @@ func _build_quit_confirm() -> void:
 	note.add_theme_font_size_override("font_size", 16)
 	note.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
 	_quit_confirm_box.add_child(note)
-	_quit_confirm_button = MenuStyle.button("やめて%sへ" % online_return_place(), 20, MenuStyle.COLOR_BUTTON_QUIET)
+	_quit_confirm_button = MenuStyle.pill_button("やめて%sへ" % online_return_place(), "quiet", 20)
 	_quit_confirm_button.name = "QuitConfirmButton"
 	_quit_confirm_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_quit_confirm_button.pressed.connect(_return_to_race_select)
 	UIAudio.bind_button_sound(_quit_confirm_button, "back")
 	_quit_confirm_box.add_child(_quit_confirm_button)
-	_quit_cancel_button = MenuStyle.button("やめない", 20)
+	_quit_cancel_button = MenuStyle.pill_button("やめない", "primary", 20)
 	_quit_cancel_button.name = "QuitCancelButton"
 	_quit_cancel_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_quit_cancel_button.pressed.connect(_show_quit_confirm.bind(false))
@@ -1712,7 +1713,7 @@ func _build_result_board() -> void:
 	buttons.name = "ResultButtons"
 	buttons.add_theme_constant_override("separation", 12)
 	box.add_child(buttons)
-	_result_retry_button = MenuStyle.button("もう1回 同条件で", 20)
+	_result_retry_button = MenuStyle.pill_button("もう1回 同条件で", "primary", 20)
 	_result_retry_button.name = "ResultRetryButton"
 	_result_retry_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_retry_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1720,11 +1721,21 @@ func _build_result_board() -> void:
 	UIAudio.bind_button_sound(_result_retry_button, "confirmation")
 	buttons.add_child(_result_retry_button)
 	_result_return_button.reparent(buttons)
-	MenuStyle.style_button(_result_return_button, 20, MenuStyle.COLOR_BUTTON_QUIET)
+	MenuStyle.style_pill_button(_result_return_button, "quiet", 20)
 	_result_return_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_return_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_result_retry_button.focus_neighbor_right = _result_retry_button.get_path_to(_result_return_button)
 	_result_return_button.focus_neighbor_left = _result_return_button.get_path_to(_result_retry_button)
+
+
+## 一時停止・結果の板を、メニューの画面と同じ見た目（縁つきの箱・太字の見出し・丸いボタン）にする。
+func _style_boards() -> void:
+	for panel: Control in [_pause_panel, _result_panel]:
+		panel.add_theme_stylebox_override("panel", MenuStyle.panel_box(24.0, 20.0))
+	for title: Label in [_pause_panel.get_node("PauseBox/PauseTitle") as Label, _result_panel.get_node("ResultBox/ResultTitle") as Label]:
+		title.add_theme_font_override("font", MenuStyle.bold_font())
+	MenuStyle.style_pill_button(_resume_button, "primary", 20)
+	MenuStyle.style_pill_button(_pause_return_button, "quiet", 20)
 
 
 func _set_paused(paused: bool) -> void:

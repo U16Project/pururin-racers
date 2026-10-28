@@ -30,29 +30,23 @@ var _transitioning := false
 var shown_gate := -1
 
 func _ready() -> void:
-	var background := TextureRect.new()
-	background.texture = load("res://assets/ui/race_select_background.jpg")
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	background.modulate = Color(0.35, 0.35, 0.4)
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	Style.background(self, "res://assets/ui/race_select_background.jpg")
+	# 画面の名前（出走表と距離）は、上の帯に出す。
+	Style.top_bar(self, "出走表　%d m" % int(Session.selected_distance_m()), Profile.trainer_name())
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.add_theme_stylebox_override("panel", Style.box(Style.COLOR_PANEL, 16, 18, 14))
-	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.add_theme_stylebox_override("panel", Style.panel_box(18.0, 12.0))
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 1.0
 	panel.offset_left = -546
 	panel.offset_right = 546
-	panel.offset_top = -304
-	panel.offset_bottom = 304
+	panel.offset_top = Style.BAR_HEIGHT + 8.0
+	panel.offset_bottom = -8.0
 	add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
-	var heading := Style.label("出走表　%d m" % int(Session.selected_distance_m()), 26)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(heading)
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 16)
@@ -66,14 +60,10 @@ func _ready() -> void:
 		var gate := int(entry["gate"])
 		var pururin := Roster.pururin_by_id(str(entry["id"]))
 		var player := bool(entry["player"])
-		var row := Style.button("", 16, Style.COLOR_BUTTON_QUIET)
+		var row := Button.new()
 		row.name = "Gate%d" % (gate + 1)
 		row.custom_minimum_size = Vector2(286, 46)
-		for state in ["normal", "hover", "pressed", "hover_pressed"]:
-			var box: StyleBoxFlat = row.get_theme_stylebox(state).duplicate()
-			box.content_margin_top = 3
-			box.content_margin_bottom = 3
-			row.add_theme_stylebox_override(state, box)
+		Style.style_card_button(row)
 		var content := HBoxContainer.new()
 		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		content.offset_left = 8
@@ -137,7 +127,7 @@ func _ready() -> void:
 	trainer_panel.custom_minimum_size.x = 244
 	trainer_panel.add_theme_constant_override("separation", 12)
 	body.add_child(trainer_panel)
-	trainer_panel.add_child(Style.label("トレーナー", 20, Style.COLOR_DIM))
+	trainer_panel.add_child(Style.section_title("トレーナー"))
 	_trainer_image = TextureRect.new()
 	_trainer_image.custom_minimum_size = Vector2(220, 220)
 	_trainer_image.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -158,13 +148,13 @@ func _ready() -> void:
 	var buttons := HBoxContainer.new()
 	buttons.add_theme_constant_override("separation", 20)
 	column.add_child(buttons)
-	_back = Style.button("選択に戻る", 22, Style.COLOR_BUTTON_QUIET)
+	_back = Style.pill_button("選択に戻る", "quiet", 20)
 	_back.name = "BackButton"
 	_back.custom_minimum_size = Vector2(286, 48)
 	Style.add_mark(_back, "B")
 	_back.pressed.connect(back)
 	buttons.add_child(_back)
-	_start = Style.button("レース開始", 22)
+	_start = Style.pill_button("レース開始", "primary", 22)
 	_start.name = "StartButton"
 	_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	Style.add_mark(_start, "START")

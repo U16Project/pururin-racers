@@ -98,7 +98,10 @@ func test_profile_is_only_for_profile_editing_and_next_or_back() -> void:
 	var back: Button = menu.find_child("BackButton", true, false)
 	assert_eq(next.text, "次へ")
 	assert_eq(next.get_node("ButtonMark").get("kind"), "START")
-	assert_eq(next.find_valid_focus_neighbor(SIDE_BOTTOM), back)
+	# 「戻る」は、下の帯の案内（B）。マウスでも押せるが、カーソルは入らない。
+	assert_eq(back.get_node("ButtonMark").get("kind"), "B")
+	assert_eq(back.focus_mode, Control.FOCUS_NONE)
+	assert_eq(next.find_valid_focus_neighbor(SIDE_BOTTOM), next)
 	for name in ["CameraExplorationButton", "QuitButton", "ScreenModeSelector", "QualityButton", "PadDiagnosticsButton", "OfflineFreeRaceButton"]:
 		assert_null(menu.find_child(name, true, false), name)
 	assert_eq(menu.get("OPTIONS_SCENE_PATH"), "res://scenes/options.tscn")
@@ -107,14 +110,19 @@ func test_profile_is_only_for_profile_editing_and_next_or_back() -> void:
 func test_mode_select_offers_offline_play_and_friend_race() -> void:
 	var screen := ModeSelectScene.instantiate()
 	add_child(screen)
-	var offline := screen.get_node("Panel").find_child("OfflineFreeRaceButton", true, false) as Button
-	var online := screen.get_node("Panel").find_child("OnlineFreeRaceButton", true, false) as Button
-	assert_eq(offline.text, "オフラインフリー対戦")
-	var friend := screen.get_node("Panel").find_child("FriendRaceButton", true, false) as Button
-	assert_eq(online.text, "オンラインフリー対戦")
+	var offline := screen.find_child("OfflineFreeRaceButton", true, false) as Button
+	var online := screen.find_child("OnlineFreeRaceButton", true, false) as Button
+	var friend := screen.find_child("FriendRaceButton", true, false) as Button
+	# モードは、絵つきのカード。題はカードの中の文字。
+	assert_eq((offline.find_child("Title", true, false) as Label).text, "オフラインフリー対戦")
+	assert_eq((online.find_child("Title", true, false) as Label).text, "オンラインフリー対戦")
 	assert_false(online.disabled)
-	assert_eq(friend.text, "ともだち対戦")
+	assert_eq((friend.find_child("Title", true, false) as Label).text, "ともだち対戦")
 	assert_false(friend.disabled)
+	# 2列×2段：右でオンライン、下でともだち。下の段から下は「ゲームを終了」。
+	assert_eq(offline.get_node(offline.focus_neighbor_right), online)
+	assert_eq(offline.get_node(offline.focus_neighbor_bottom), friend)
+	assert_eq(friend.get_node(friend.focus_neighbor_bottom), screen.find_child("QuitButton", true, false))
 	assert_eq(screen.get("RACE_SELECT_SCENE_PATH"), "res://scenes/race_select.tscn")
 	assert_eq(screen.get("MENU_SCENE_PATH"), "res://scenes/options.tscn")
 	assert_eq(screen.get("ONLINE_LOBBY_SCENE_PATH"), "res://scenes/online_lobby.tscn")
@@ -341,7 +349,7 @@ func test_race_select_offers_every_supported_distance_and_remembers_the_choice()
 func test_title_button_can_be_pressed_with_the_gamepad_accept_button() -> void:
 	var title := MenuScene.instantiate()
 	add_child(title)
-	var button: Button = title.get_node("Columns/MenuColumn/FreeRaceButton")
+	var button: Button = title.find_child("FreeRaceButton", true, false)
 	assert_eq(get_viewport().gui_get_focus_owner(), button)
 	# 場面の切り替えは起こさず、ボタンが押されたことだけ確かめる。
 	button.pressed.disconnect(title.register)

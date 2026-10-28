@@ -6,14 +6,18 @@ extends Control
 const TITLE_SCENE_PATH := "res://scenes/title.tscn"
 const OPTIONS_SCENE_PATH := "res://scenes/options.tscn"
 const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
-const BUTTON_OPACITY := 0.92
 const MENU_BUTTON_HEIGHT := 54.0
+## 上下の帯と、中の箱とのすき間。
+const CONTENT_GAP := 20.0
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const PREVIEW_SIZE := 112.0
 const CHOICE_SIZE := 62.0
+## アイコンの一覧の、横に並べる数と、見せる段の数（それより多いと、下へスクロール）。
+const CHOICE_COLUMNS := 6
+const CHOICE_ROWS_SHOWN := 3
 const FILE_FILTERS := ["*.png, *.jpg, *.jpeg, *.webp ; 画像"]
 
 var _name_edit: LineEdit
@@ -36,40 +40,31 @@ var _pending := {"kind": "none", "id": "", "path": ""}
 
 
 func _ready() -> void:
-	var background := TextureRect.new()
-	background.texture = load(BACKGROUND_IMAGE_PATH)
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	background.modulate = Color(0.45, 0.45, 0.5, 1.0)
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	MenuStyle.background(self, BACKGROUND_IMAGE_PATH)
+	MenuStyle.top_bar(self, "プロフィール登録", TrainerProfile.trainer_name())
 	var columns := HBoxContainer.new()
 	columns.name = "Columns"
 	columns.set_anchors_preset(Control.PRESET_FULL_RECT)
-	columns.offset_left = 16.0
-	columns.offset_right = -16.0
-	columns.offset_top = 12.0
-	columns.offset_bottom = -12.0
-	columns.add_theme_constant_override("separation", 16)
-	columns.alignment = BoxContainer.ALIGNMENT_CENTER
+	columns.offset_left = MenuStyle.SCREEN_MARGIN
+	columns.offset_right = -MenuStyle.SCREEN_MARGIN
+	columns.offset_top = MenuStyle.BAR_HEIGHT + CONTENT_GAP
+	columns.offset_bottom = -MenuStyle.GUIDE_HEIGHT - CONTENT_GAP
+	columns.add_theme_constant_override("separation", 20)
 	add_child(columns)
+	# 左の箱：名前・ひとこと。
 	var panel := PanelContainer.new()
 	panel.name = "TrainerPanel"
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL, 18, 22.0, 14.0))
-	panel.custom_minimum_size = Vector2(720.0, 0.0)
-	panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	panel.add_theme_stylebox_override("panel", MenuStyle.panel_box())
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	columns.add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 10)
 	panel.add_child(column)
-	var heading := MenuStyle.label("プロフィール登録", 30)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(heading)
-	var note := MenuStyle.label("あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。", 14, MenuStyle.COLOR_DIM)
+	column.add_child(MenuStyle.section_title("あなたのプロフィール"))
+	var note := MenuStyle.label("あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。", 14, MenuStyle.COLOR_BAR_DIM)
 	note.name = "Note"
+	note.add_theme_constant_override("outline_size", 0)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(note)
 	# 上の段：左に今の画像、右に名前。
 	var top := HBoxContainer.new()
@@ -85,23 +80,23 @@ func _ready() -> void:
 	name_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(name_box)
 	var rules := TrainerProfile.config()
-	name_box.add_child(MenuStyle.label("名前（%d〜%d文字）" % [int(rules["name_min_length"]), int(rules["name_max_length"])], 18, MenuStyle.COLOR_DIM))
+	name_box.add_child(_caption("名前（%d〜%d文字）" % [int(rules["name_min_length"]), int(rules["name_max_length"])]))
 	_name_edit = LineEdit.new()
 	_name_edit.name = "NameEdit"
 	_name_edit.text = TrainerProfile.trainer_name()
 	_name_edit.max_length = int(rules["name_max_length"])
 	_name_edit.add_theme_font_size_override("font_size", 28)
 	_name_edit.custom_minimum_size = Vector2(0.0, 52.0)
+	_style_edit(_name_edit)
 	_name_edit.text_submitted.connect(func(_text: String) -> void: _game_start_button.grab_focus())
 	name_box.add_child(_name_edit)
 	_problem_label = MenuStyle.label("", 16, MenuStyle.COLOR_TAKEN)
 	_problem_label.name = "ProblemLabel"
 	name_box.add_child(_problem_label)
-	# 画像の選択：なし、ぷるりんの絵、画像ファイル。
 	# 紹介文（出走表の、トレーナーの所に出る）。
 	var introduction_head := HBoxContainer.new()
 	column.add_child(introduction_head)
-	var introduction_title := MenuStyle.label("ひとこと（%d文字まで）" % int(rules["introduction_max_length"]), 18, MenuStyle.COLOR_DIM)
+	var introduction_title := _caption("ひとこと（%d文字まで）" % int(rules["introduction_max_length"]))
 	introduction_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	introduction_head.add_child(introduction_title)
 	_introduction_count = MenuStyle.label("", 16, MenuStyle.COLOR_DIM)
@@ -113,18 +108,28 @@ func _ready() -> void:
 	_introduction_edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
 	_introduction_edit.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	_introduction_edit.add_theme_font_size_override("font_size", 18)
-	_introduction_edit.custom_minimum_size = Vector2(0.0, 60.0)
+	_introduction_edit.custom_minimum_size = Vector2(0.0, 84.0)
+	_style_edit(_introduction_edit)
 	_introduction_edit.text_changed.connect(_refresh_introduction_count)
 	column.add_child(_introduction_edit)
 	_refresh_introduction_count()
-	column.add_child(MenuStyle.label("アイコン", 18, MenuStyle.COLOR_DIM))
+	# 右の箱：アイコン、その下に「次へ」。
+	var icon_panel := PanelContainer.new()
+	icon_panel.name = "IconPanel"
+	icon_panel.add_theme_stylebox_override("panel", MenuStyle.panel_box())
+	icon_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	columns.add_child(icon_panel)
+	var icon_column := VBoxContainer.new()
+	icon_column.add_theme_constant_override("separation", 10)
+	icon_panel.add_child(icon_column)
+	icon_column.add_child(MenuStyle.section_title("アイコン"))
 	var choice_scroll := ScrollContainer.new()
-	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * 2 + 12
+	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * CHOICE_ROWS_SHOWN + 8 * (CHOICE_ROWS_SHOWN - 1)
 	choice_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	column.add_child(choice_scroll)
+	icon_column.add_child(choice_scroll)
 	_choices = GridContainer.new()
 	_choices.name = "IconChoices"
-	_choices.columns = 8
+	_choices.columns = CHOICE_COLUMNS
 	_choices.add_theme_constant_override("h_separation", 8)
 	_choices.add_theme_constant_override("v_separation", 8)
 	choice_scroll.add_child(_choices)
@@ -132,18 +137,23 @@ func _ready() -> void:
 	if migrated.has("error"):
 		_problem_label.text = str(migrated["error"])
 	_rebuild_choices()
-	_file_button = MenuStyle.button("画像ファイルを選ぶ…", 18, MenuStyle.COLOR_BUTTON_QUIET)
+	var file_row := HBoxContainer.new()
+	file_row.add_theme_constant_override("separation", 10)
+	icon_column.add_child(file_row)
+	_file_button = MenuStyle.pill_button("画像ファイルを選ぶ…", "secondary", 15)
 	_file_button.name = "FileButton"
+	_file_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_file_button.pressed.connect(_open_file_dialog)
 	UIAudio.bind_button_sound(_file_button, "confirmation")
-	column.add_child(_file_button)
-	_delete_button = MenuStyle.button("選択した追加画像を削除", 18, MenuStyle.COLOR_BUTTON_QUIET)
+	file_row.add_child(_file_button)
+	_delete_button = MenuStyle.pill_button("選んだ追加画像を削除", "quiet", 15)
 	_delete_button.name = "DeleteIconButton"
+	_delete_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_delete_button.pressed.connect(request_delete_icon)
-	column.add_child(_delete_button)
-	_file_button.focus_neighbor_bottom = _file_button.get_path_to(_delete_button)
-	_delete_button.focus_neighbor_top = _delete_button.get_path_to(_file_button)
-	_build_menu_column(columns)
+	file_row.add_child(_delete_button)
+	_file_button.focus_neighbor_right = _file_button.get_path_to(_delete_button)
+	_delete_button.focus_neighbor_left = _delete_button.get_path_to(_file_button)
+	_build_menu_column(icon_column)
 	_build_delete_dialog()
 	_rebuild_choices()
 	_file_dialog = FileDialog.new()
@@ -166,7 +176,7 @@ func _choice_button(kind: String, id: String) -> Button:
 	var button := Button.new()
 	button.name = "Choice_%s%s" % [kind, ("_" + id) if not id.is_empty() else ""]
 	button.custom_minimum_size = Vector2(CHOICE_SIZE, CHOICE_SIZE)
-	MenuStyle.style_button(button, 14, MenuStyle.COLOR_BUTTON_QUIET)
+	_style_choice(button, false)
 	button.set_meta("kind", kind)
 	button.set_meta("id", id)
 	var icon: Control = TrainerIcon.new()
@@ -207,13 +217,23 @@ func _open_file_dialog() -> void:
 	_file_dialog.popup_centered_ratio(0.7)
 
 
+## アイコンの選択肢の見た目。選んでいるものは、水色の縁と地。
+func _style_choice(button: Button, selected: bool) -> void:
+	MenuStyle.style_card_button(button)
+	if selected:
+		var on := MenuStyle.card_box(Color(MenuStyle.COLOR_ACCENT, 0.3), MenuStyle.COLOR_ACCENT, 12)
+		on.set_border_width_all(3)
+		for state in ["normal", "hover", "pressed", "hover_pressed"]:
+			button.add_theme_stylebox_override(state, on)
+
+
 ## 選びかけの画像を、上の絵と、選択肢の印に反映する。
 func _refresh_choices() -> void:
 	for button in _choice_buttons:
 		# 選んでいる画像のボタンは、緑にする（押しっぱなしの形にはしない。ゲームパッドのAでも、押した合図が出るように）。
 		var selected := str(button.get_meta("kind")) == str(_pending["kind"]) and str(button.get_meta("id")) == str(_pending["id"])
 		button.set_meta("selected", selected)
-		MenuStyle.style_button(button, 14, MenuStyle.COLOR_BUTTON_ON if selected else MenuStyle.COLOR_BUTTON_QUIET)
+		_style_choice(button, selected)
 	# 登録済みの画像ファイルを、そのまま使い続ける場合（選び直していない）は、登録してある絵を出す。
 	if str(_pending["kind"]) == "file":
 		var texture := TrainerProfile.custom_icon_texture(str(_pending["id"]))
@@ -289,30 +309,50 @@ func _refresh_introduction_count() -> void:
 	_introduction_count.add_theme_color_override("font_color", MenuStyle.COLOR_TAKEN if length > limit else MenuStyle.COLOR_DIM)
 
 
-func _build_menu_column(columns: HBoxContainer) -> void:
+## 右の箱のいちばん下に「次へ」（黄色）。「戻る」は、下の帯（B）。
+func _build_menu_column(icon_column: VBoxContainer) -> void:
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	icon_column.add_child(spacer)
 	var menu := VBoxContainer.new()
 	menu.name = "MenuColumn"
-	menu.custom_minimum_size = Vector2(364.0, 0.0)
-	menu.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	menu.add_theme_constant_override("separation", 8)
-	columns.add_child(menu)
-	_game_start_button = _menu_button("次へ", "FreeRaceButton", Color(MenuStyle.COLOR_BUTTON, BUTTON_OPACITY))
+	icon_column.add_child(menu)
+	_game_start_button = MenuStyle.pill_button("次へ", "primary", 22)
+	_game_start_button.name = "FreeRaceButton"
+	_game_start_button.custom_minimum_size = Vector2(0.0, MENU_BUTTON_HEIGHT)
 	_game_start_button.pressed.connect(register)
 	MenuStyle.add_mark(_game_start_button, "START")
 	menu.add_child(_game_start_button)
-	var back := _menu_button("戻る", "BackButton", MenuStyle.COLOR_BUTTON_QUIET)
+	for button: Button in [_file_button, _delete_button]:
+		button.focus_neighbor_bottom = button.get_path_to(_game_start_button)
+	_game_start_button.focus_neighbor_top = _game_start_button.get_path_to(_file_button)
+	_game_start_button.focus_neighbor_bottom = _game_start_button.get_path_to(_game_start_button)
+	var guide := MenuStyle.guide_bar(self)
+	MenuStyle.guide_item(guide, "A", "決定")
+	var back := MenuStyle.guide_button(guide, "B", "戻る")
+	back.name = "BackButton"
 	back.pressed.connect(go_to_title)
 	UIAudio.bind_button_sound(back, "back")
-	MenuStyle.add_mark(back, "B")
-	menu.add_child(back)
-	_game_start_button.focus_neighbor_bottom = _game_start_button.get_path_to(back)
-	back.focus_neighbor_top = back.get_path_to(_game_start_button)
+	MenuStyle.guide_item(guide, "START", "次へ")
 
-func _menu_button(text: String, node_name: String, color: Color) -> Button:
-	var button := MenuStyle.button(text, 22, color)
-	button.name = node_name
-	button.custom_minimum_size = Vector2(364.0, MENU_BUTTON_HEIGHT)
-	return button
+
+## 小さな見出し（「名前」など）。
+func _caption(text: String) -> Label:
+	var node := MenuStyle.label(text, 15, MenuStyle.COLOR_BAR_DIM)
+	node.add_theme_constant_override("outline_size", 0)
+	return node
+
+
+## 入力らんを、箱と同じ暗い地と水色の縁にする。
+func _style_edit(edit: Control) -> void:
+	var normal := MenuStyle.card_box(Color(0.03, 0.05, 0.1, 0.7), MenuStyle.COLOR_CARD_BORDER, 10)
+	normal.content_margin_left = 12.0
+	normal.content_margin_right = 12.0
+	edit.add_theme_stylebox_override("normal", normal)
+	var focus := normal.duplicate() as StyleBoxFlat
+	focus.border_color = MenuStyle.COLOR_FOCUS
+	focus.set_border_width_all(3)
+	edit.add_theme_stylebox_override("focus", focus)
 
 
 func _rebuild_choices() -> void:
@@ -356,17 +396,17 @@ func _build_delete_dialog() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shade.add_child(center)
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL))
+	panel.add_theme_stylebox_override("panel", MenuStyle.panel_box(26.0, 20.0))
 	center.add_child(panel)
 	var column := VBoxContainer.new()
 	column.add_theme_constant_override("separation", 16)
 	panel.add_child(column)
 	column.add_child(MenuStyle.label("この追加画像を一覧から削除しますか？\n元の画像ファイルは削除しません。", 20))
-	var confirm := MenuStyle.button("削除する", 20)
+	var confirm := MenuStyle.pill_button("削除する", "secondary", 20)
 	confirm.name = "ConfirmDeleteIconButton"
 	confirm.pressed.connect(_confirm_delete_icon)
 	column.add_child(confirm)
-	var cancel := MenuStyle.button("やめる", 20, MenuStyle.COLOR_BUTTON_QUIET)
+	var cancel := MenuStyle.pill_button("やめる", "quiet", 20)
 	cancel.name = "CancelDeleteIconButton"
 	cancel.pressed.connect(_close_delete_dialog)
 	MenuStyle.add_mark(cancel, "B")

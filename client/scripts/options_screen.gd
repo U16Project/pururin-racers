@@ -8,11 +8,12 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
-const BUTTON_OPACITY := 0.92
+const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
 const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
-const BUTTON_WIDTH := 460.0
-const BUTTON_HEIGHT := 58.0
+const PANEL_WIDTH := 620.0
+const PANEL_HEIGHT := 420.0
+const BUTTON_HEIGHT := 56.0
 
 var _guide_button: Button
 var _next_button: Button
@@ -28,65 +29,59 @@ var _quality_direction_down := {"ui_left": false, "ui_right": false}
 
 
 func _ready() -> void:
-	var background := TextureRect.new()
-	background.texture = load(BACKGROUND_IMAGE_PATH)
-	background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	background.modulate = Color(0.45, 0.45, 0.5, 1.0)
-	background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(background)
+	MenuStyle.background(self, BACKGROUND_IMAGE_PATH)
+	MenuStyle.top_bar(self, "オプション設定", TrainerProfile.trainer_name())
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.add_theme_stylebox_override("panel", MenuStyle.box(MenuStyle.COLOR_PANEL, 18, 28.0, 22.0))
+	panel.add_theme_stylebox_override("panel", MenuStyle.panel_box(28.0, 22.0))
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -280.0
-	panel.offset_right = 280.0
-	panel.offset_top = -230.0
-	panel.offset_bottom = 230.0
+	panel.offset_left = -PANEL_WIDTH * 0.5
+	panel.offset_right = PANEL_WIDTH * 0.5
+	panel.offset_top = -PANEL_HEIGHT * 0.5
+	panel.offset_bottom = PANEL_HEIGHT * 0.5
 	add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 8)
+	column.add_theme_constant_override("separation", 12)
 	panel.add_child(column)
-	var heading := MenuStyle.label("オプション設定", 30)
-	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	column.add_child(heading)
-	var note := MenuStyle.label("画質と画面の大きさを選べます。操作が分からないときは、操作ガイドを見てください。", 16, MenuStyle.COLOR_DIM)
+	column.add_child(MenuStyle.section_title("画面"))
+	var note := MenuStyle.label("画質と画面の大きさを選べます（←→で変える）。操作が分からないときは、操作ガイドを見てください。", 14, MenuStyle.COLOR_BAR_DIM)
+	note.add_theme_constant_override("outline_size", 0)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	column.add_child(note)
 	_build_quality_selector(column)
 	_build_screen_mode_selector(column)
-	_guide_button = _choice_button("操作ガイド", "ControlGuideButton", MenuStyle.COLOR_BUTTON_QUIET)
+	column.add_child(MenuStyle.section_title("操作"))
+	_guide_button = MenuStyle.pill_button("操作ガイドを見る", "secondary", 18)
+	_guide_button.name = "ControlGuideButton"
+	_guide_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_guide_button.pressed.connect(_open_control_guide)
 	UIAudio.bind_button_sound(_guide_button, "confirmation")
 	column.add_child(_guide_button)
-	_next_button = _choice_button("次へ（ゲームモード選択）", "NextButton")
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
+	_next_button = MenuStyle.pill_button("次へ（ゲームモード選択）", "primary", 22)
+	_next_button.name = "NextButton"
+	_next_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_next_button.pressed.connect(go_to_mode_select)
 	UIAudio.bind_button_sound(_next_button, "confirmation")
 	MenuStyle.add_mark(_next_button, "START")
 	column.add_child(_next_button)
-	_back_button = _choice_button("戻る", "BackButton", MenuStyle.COLOR_BUTTON_QUIET)
+	var guide := MenuStyle.guide_bar(self)
+	MenuStyle.guide_item(guide, "A", "決定")
+	_back_button = MenuStyle.guide_button(guide, "B", "戻る")
+	_back_button.name = "BackButton"
 	_back_button.pressed.connect(go_to_menu)
 	UIAudio.bind_button_sound(_back_button, "back")
-	MenuStyle.add_mark(_back_button, "B")
-	column.add_child(_back_button)
+	MenuStyle.guide_item(guide, "START", "次へ")
 	_quality_button.focus_neighbor_bottom = _quality_button.get_path_to(_screen_mode_row)
 	_screen_mode_row.focus_neighbor_top = _screen_mode_row.get_path_to(_quality_button)
 	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(_guide_button)
 	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_screen_mode_row)
 	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_next_button)
 	_next_button.focus_neighbor_top = _next_button.get_path_to(_guide_button)
-	_next_button.focus_neighbor_bottom = _next_button.get_path_to(_back_button)
-	_back_button.focus_neighbor_top = _back_button.get_path_to(_next_button)
+	_next_button.focus_neighbor_bottom = _next_button.get_path_to(_next_button)
 	_next_button.grab_focus()
-
-
-func _choice_button(text: String, node_name: String, color: Color = MenuStyle.COLOR_BUTTON) -> Button:
-	var button := MenuStyle.button(text, 22, color)
-	button.name = node_name
-	button.custom_minimum_size = Vector2(BUTTON_WIDTH, BUTTON_HEIGHT)
-	return button
 
 
 func step_quality() -> void:
@@ -116,7 +111,7 @@ func _build_quality_selector(column: VBoxContainer) -> void:
 	row.name = "QualityButton"
 	_quality_button = row
 	row.focus_mode = Control.FOCUS_ALL
-	row.custom_minimum_size = Vector2(364, 30)
+	row.custom_minimum_size = Vector2(364, 40)
 	row.add_theme_constant_override("separation", 4)
 	row.gui_input.connect(_quality_input)
 	row.focus_entered.connect(row.queue_redraw)
@@ -127,13 +122,13 @@ func _build_quality_selector(column: VBoxContainer) -> void:
 			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
 	)
 	column.add_child(row)
-	var caption := MenuStyle.label("画質", 14)
-	caption.custom_minimum_size.x = 128
+	var caption := MenuStyle.label("画質", 16, MenuStyle.COLOR_BAR_DIM)
+	caption.custom_minimum_size.x = 150
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousQualityButton", -1, true))
-	_quality_label = MenuStyle.label("", 14)
+	_quality_label = MenuStyle.bold_label("", 18)
 	_quality_label.name = "QualityLabel"
 	_quality_label.custom_minimum_size.x = 140
 	_quality_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -191,7 +186,7 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	row.name = "ScreenModeSelector"
 	_screen_mode_row = row
 	row.focus_mode = Control.FOCUS_ALL
-	row.custom_minimum_size = Vector2(364.0, 30.0)
+	row.custom_minimum_size = Vector2(364.0, 40.0)
 	row.gui_input.connect(_screen_mode_gui_input)
 	row.focus_entered.connect(row.queue_redraw)
 	row.focus_exited.connect(row.queue_redraw)
@@ -202,14 +197,14 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	)
 	row.add_theme_constant_override("separation", 4)
 	menu.add_child(row)
-	var caption := MenuStyle.label("ウィンドウサイズ", 14)
+	var caption := MenuStyle.label("ウィンドウサイズ", 16, MenuStyle.COLOR_BAR_DIM)
 	caption.name = "ModeCaption"
-	caption.custom_minimum_size.x = 128
+	caption.custom_minimum_size.x = 150
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousModeButton", -1))
-	_screen_mode_label = MenuStyle.label("通常ウィンドウ", 14)
+	_screen_mode_label = MenuStyle.bold_label("通常ウィンドウ", 18)
 	_screen_mode_label.name = "ModeLabel"
 	_screen_mode_label.custom_minimum_size.x = 140.0
 	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -222,10 +217,10 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 
 
 func _screen_mode_button(text: String, node_name: String, direction: int, quality: bool = false) -> Button:
-	var button := MenuStyle.button(text, 14, Color(MenuStyle.COLOR_BUTTON_QUIET, BUTTON_OPACITY))
+	var button := MenuStyle.pill_button(text, "secondary", 14)
 	button.name = node_name
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(36, 30)
+	button.custom_minimum_size = Vector2(44, 34)
 	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
 		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
 		style.content_margin_left = 8.0

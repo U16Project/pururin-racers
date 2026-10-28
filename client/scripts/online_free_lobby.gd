@@ -63,6 +63,8 @@ const LOCAL_SERVER_START_TIMEOUT_S := 12.0
 const LOCAL_SERVER_RETRY_S := 0.8
 ## しぼりこみの「すべて」。
 const FILTER_ALL := "すべて"
+## 下の帯のお知らせを、1行に収めるために小さくする、いちばん小さい文字。
+const STATUS_MIN_FONT_SIZE := 10
 ## プル選択の窓の横に出す、ステータスの欄の幅と、窓とのすき間。
 const PICKER_STATUS_WIDTH := 460.0
 const PICKER_STATUS_GAP := 12.0
@@ -185,6 +187,8 @@ var _confirm_yes_action := Callable()
 var _confirm_no_action := Callable()
 ## レースのあと、呼ばれない時刻（ミリ秒。休んでいなければ0）。
 var _rest_until_msec := 0
+## 下の帯のお知らせの、ふだんの文字の大きさ（場面ファイルの値）。
+var _status_font_size := 0
 ## 大きなチャット欄で出しているチャット（ルームのID。空なら全体のチャット）。
 var _overlay_room := ""
 ## レースのあと、ロビーのようすが届いたら開くルーム（ID）。
@@ -212,6 +216,9 @@ func _ready() -> void:
 	_confirm_dialog.visible = false
 	_chat_overlay.visible = false
 	_room_view.visible = false
+	_status_font_size = _status.get_theme_font_size("font_size")
+	_status.resized.connect(_fit_status)
+	get_viewport().gui_focus_changed.connect(func(_control: Control) -> void: _refresh_guide_accept())
 	_status.text = HINT_TEXT
 	_refresh_server_name()
 	_server_button.pressed.connect(open_server_dialog)
@@ -367,8 +374,24 @@ func connect_to_server() -> void:
 	_set_status("サーバーにつないでいます…")
 
 
+## 下の帯のお知らせ。1行に収まらないときは、文字を小さくする（それでも長ければ、終わりを「…」にする）。
 func _set_status(text: String) -> void:
 	_status.text = text
+	_fit_status()
+
+
+## 下の帯の「A」の案内：ロビーでルームのカードにいるときは「ルームを見る」、ほかは「決定」。
+func _refresh_guide_accept() -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	_guide_accept.text = "ルームを見る" if _lobby_view.visible and _cards.values().has(focused) else "決定"
+
+
+func _fit_status() -> void:
+	var font := _status.get_theme_font("font")
+	var size := _status_font_size
+	while size > STATUS_MIN_FONT_SIZE and font.get_string_size(_status.text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x > _status.size.x:
+		size -= 1
+	_status.add_theme_font_size_override("font_size", size)
 
 
 # ---------------------------------------------------------------- ルームの一覧
@@ -873,7 +896,6 @@ func open_room(room_id: String) -> void:
 	_lobby_view.visible = false
 	_room_view.visible = true
 	_guide_tabs.visible = false
-	_guide_accept.text = "決定"
 	_back_button.text = "ロビーへ戻る"
 	_refresh_room_view()
 	show_room_part(PART_CONDITIONS)
@@ -889,7 +911,6 @@ func close_room() -> void:
 	_room_view.visible = false
 	_lobby_view.visible = true
 	_guide_tabs.visible = true
-	_guide_accept.text = "ルームを見る"
 	_back_button.text = "戻る"
 	if _cards.has(room_id) and _rooms_page.visible and (_cards[room_id] as Control).visible:
 		(_cards[room_id] as Button).grab_focus()
