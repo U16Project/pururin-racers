@@ -230,7 +230,7 @@ func test_start_advances_from_visible_results_but_not_before_the_panel_appears()
 	var back: Button = race.find_child("ResultReturnButton", true, false)
 	back.pressed.disconnect(race._return_to_race_select)
 	watch_signals(back)
-	assert_null(back.get_node_or_null("ButtonMark"))
+	assert_not_null(back.get_node_or_null("ButtonMark"), "Bの印がある")
 	race.set("_race_over", true)
 	var event := InputEventJoypadButton.new()
 	event.button_index = JOY_BUTTON_START
@@ -243,6 +243,27 @@ func test_start_advances_from_visible_results_but_not_before_the_panel_appears()
 	event.pressed = false
 	race._unhandled_input(event)
 	assert_signal_emit_count(back, "pressed", 1)
+
+
+
+func test_b_and_esc_press_the_return_button_on_the_result_board() -> void:
+	var race := _race()
+	var back: Button = race.find_child("ResultReturnButton", true, false)
+	back.pressed.disconnect(race._return_to_race_select)
+	watch_signals(back)
+	race.set("_race_over", true)
+	(race.get("_result_panel") as Control).show()
+	var pad_b := InputEventJoypadButton.new()
+	pad_b.button_index = JOY_BUTTON_B
+	pad_b.pressed = true
+	race._unhandled_input(pad_b)
+	assert_signal_emit_count(back, "pressed", 1)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	race._unhandled_input(esc)
+	assert_signal_emit_count(back, "pressed", 2)
 
 
 func test_only_the_players_pururin_has_a_ground_marker_under_it() -> void:

@@ -169,14 +169,13 @@ static func activate_focused_control(viewport: Viewport) -> bool:
 
 
 ## ゲームパッドの決定（A）で、選んでいるボタンを押す。切り替え式のボタンは、入・切を切り替える
-## （どれか1つを選ぶ組のボタンは、入にするだけ）。
+## （どれか1つを選ぶ組のボタンは、入にするだけ）。マウスで押したときと同じく、どちらも「押した」の合図を出す。
 static func activate_control(control: Control) -> bool:
 	if not control is BaseButton or not control.is_visible_in_tree() or control.disabled:
 		return false
 	var button := control as BaseButton
 	if button.toggle_mode:
 		button.button_pressed = true if button.button_group != null else not button.button_pressed
-		return true
 	button.emit_signal("pressed")
 	return true
 

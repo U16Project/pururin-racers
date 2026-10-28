@@ -29,6 +29,8 @@ var _slot := -1
 var _custom := false
 var _custom_current := ""
 var _custom_taken := {}
+## マウスを乗せてカーソルを移している途中か（そのときは、一覧を動かさない）。
+var _hover_focus := false
 
 
 func _ready() -> void:
@@ -189,9 +191,18 @@ func _rebuild() -> void:
 		_grid.add_child(margin)
 		margin.add_child(tile)
 		tile.focus_entered.connect(func() -> void:
+			var from_mouse := _hover_focus
 			await get_tree().process_frame
-			if is_instance_valid(tile) and tile.has_focus():
+			if not from_mouse and is_instance_valid(tile) and tile.has_focus():
 				_scroll.ensure_control_visible(margin))
+		# マウスを乗せたタイルへ、カーソルを移す（横のステータスが、そのキャラになる）。
+		# マウスのときは、一覧を動かさない（動くと、次のタイルが下に来て、止まらなくなるため）。
+		tile.mouse_entered.connect(func() -> void:
+			if tile.has_focus():
+				return
+			_hover_focus = true
+			tile.grab_focus()
+			_hover_focus = false)
 		_tiles.append(tile)
 	_link_tiles()
 

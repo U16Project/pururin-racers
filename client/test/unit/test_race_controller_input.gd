@@ -50,6 +50,16 @@ func test_activating_a_toggle_button_switches_it_and_a_grouped_one_only_turns_on
 	assert_true(grouped.button_pressed)
 
 
+func test_activating_a_toggle_button_also_sends_pressed_like_a_mouse_click() -> void:
+	var tab := Button.new()
+	tab.toggle_mode = true
+	tab.button_group = ButtonGroup.new()
+	add_child_autofree(tab)
+	watch_signals(tab)
+	assert_true(RaceControllerInput.activate_control(tab))
+	assert_signal_emit_count(tab, "pressed", 1)
+
+
 func test_slot_clear_is_x_and_slot_force_is_y() -> void:
 	assert_true(RaceControllerInput.is_slot_clear_pressed(_button_event(JOY_BUTTON_X)))
 	assert_false(RaceControllerInput.is_slot_clear_pressed(_button_event(JOY_BUTTON_Y)))

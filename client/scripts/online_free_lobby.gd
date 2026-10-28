@@ -63,6 +63,9 @@ const LOCAL_SERVER_START_TIMEOUT_S := 12.0
 const LOCAL_SERVER_RETRY_S := 0.8
 ## しぼりこみの「すべて」。
 const FILTER_ALL := "すべて"
+## プル選択の窓の横に出す、ステータスの欄の幅と、窓とのすき間。
+const PICKER_STATUS_WIDTH := 460.0
+const PICKER_STATUS_GAP := 12.0
 
 @onready var _server_name: Label = %ServerName
 @onready var _clock: Label = %Clock
@@ -114,11 +117,9 @@ const FILTER_ALL := "すべて"
 @onready var _entry_button: Button = %EntryButton
 @onready var _hold_button: Button = %HoldButton
 @onready var _entry_note: Label = %EntryNote
-@onready var _pick_dialog: Control = %PickDialog
-@onready var _pick_dialog_title: Label = %PickDialogTitle
+@onready var _picker_status: Control = %PickerStatus
+@onready var _picker_status_window: Control = %PickerStatusWindow
 @onready var _pick_detail: Control = %PickDetail
-@onready var _pick_change_button: Button = %PickChangeButton
-@onready var _pick_dialog_back: Button = %PickDialogBack
 @onready var _picker: Control = %Picker
 @onready var _lobby_chat_log: RichTextLabel = %LobbyChatLog
 @onready var _lobby_chat_edit: LineEdit = %LobbyChatEdit
@@ -186,8 +187,6 @@ var _confirm_no_action := Callable()
 var _rest_until_msec := 0
 ## 大きなチャット欄で出しているチャット（ルームのID。空なら全体のチャット）。
 var _overlay_room := ""
-## プル選択の窓で押した、選びかけのぷるりん（ステータスの窓で「このプルにする」を押すと決まる。無ければ空）。
-var _pick_candidate := ""
 ## レースのあと、ロビーのようすが届いたら開くルーム（ID）。
 var _open_after_lobby := ""
 var _answer_wait_s := 0.0
@@ -209,7 +208,7 @@ func _ready() -> void:
 	_entry_row_template.visible = false
 	_entrant_template.visible = false
 	_offer_panel.visible = false
-	_pick_dialog.visible = false
+	_picker_status.visible = false
 	_confirm_dialog.visible = false
 	_chat_overlay.visible = false
 	_room_view.visible = false
@@ -228,6 +227,7 @@ func _ready() -> void:
 	for button: Button in [_server_button, _server_ok]:
 		UIAudio.bind_button_sound(button, "confirmation")
 	UIAudio.bind_button_sound(_server_back, "back")
+	_link_server_dialog_focus()
 	_server_dialog.visible = false
 	_trainer_name.text = TrainerProfile.trainer_name()
 	_update_clock()
@@ -242,10 +242,9 @@ func _ready() -> void:
 	_filter.item_selected.connect(func(_index: int) -> void: _refresh_cards())
 	_prev_button.pressed.connect(step_pick.bind(-1))
 	_next_button.pressed.connect(step_pick.bind(1))
-	_status_button.pressed.connect(open_pick_status)
-	_pick_change_button.pressed.connect(_on_pick_change_pressed)
-	_pick_dialog_back.pressed.connect(_on_pick_dialog_back)
+	_status_button.pressed.connect(open_picker)
 	_picker.connect("picked", _on_picker_picked)
+	_picker.connect("tile_focused", func(pururin_id: String) -> void: _pick_detail.call("show_pururin", pururin_id, "", false, false))
 	_picker.connect("closed", _on_picker_closed)
 	for pair: Array in [[_lobby_chat_edit, _lobby_chat_send, false], [_room_chat_edit, _room_chat_send, true]]:
 		var edit: LineEdit = pair[0]
@@ -274,13 +273,12 @@ func _ready() -> void:
 	_accept_button.pressed.connect(answer.bind(true))
 	_decline_button.pressed.connect(answer.bind(false))
 	_back_button.pressed.connect(press_back)
-	for button: BaseButton in [_rooms_tab, _entries_tab, _prev_button, _next_button, _hold_button, _status_button, _pick_change_button]:
+	for button: BaseButton in [_rooms_tab, _entries_tab, _prev_button, _next_button, _hold_button, _status_button]:
 		UIAudio.bind_button_sound(button, "confirmation")
 	UIAudio.bind_button_sound(_entry_button, "confirmation")
 	UIAudio.bind_button_sound(_accept_button, "confirmation")
 	UIAudio.bind_button_sound(_decline_button, "back")
 	UIAudio.bind_button_sound(_back_button, "back")
-	UIAudio.bind_button_sound(_pick_dialog_back, "back")
 	_add_marks()
 	_link_room_focus()
 	show_tab(TAB_ROOMS)
@@ -472,6 +470,8 @@ func _focus_lobby() -> void:
 			card.grab_focus()
 			return
 		_rooms_tab.grab_focus()
+	elif _results_page.visible:
+		_results_tab.grab_focus()
 	else:
 		if not _entries.is_empty():
 			(_entry_list.get_child(0).find_child("Open", true, false) as Button).grab_focus()
@@ -787,6 +787,9 @@ func _refresh_entries() -> void:
 		(row.find_child("Up", true, false) as Button).disabled = index == 0
 		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1
 		(row.find_child("Hold", true, false) as Button).text = "保留を外す" if bool(entry["hold"]) else "保留にする"
+	# 行が消えて、カーソルが行き場をなくしたら（取り消した・呼ばれて答えなかった）、残った行かタブへ戻す。
+	if _entries_page.visible and is_inside_tree() and get_viewport().gui_get_focus_owner() == null:
+		_focus_lobby()
 
 
 func _press_entry_row(row: Control, action: String) -> void:
@@ -1030,69 +1033,34 @@ func press_entry() -> void:
 		_set_status("「%s」に出るぷるりんを、%sに替えました。" % [room_name, pururin_name(selected_pururin_id())])
 
 
-## 出るぷるりんのステータスの窓（ともだち対戦と同じ）。「変更」でプル選択の窓、「もどる」で閉じる。
-func open_pick_status() -> void:
-	_pick_candidate = ""
-	_pick_dialog_title.text = "出るぷるりん"
-	_pick_detail.call("show_pururin", selected_pururin_id(), "", false, false)
-	_pick_change_button.text = "変更"
-	_pick_dialog.visible = true
-	_pick_change_button.grab_focus()
-
-
-## プル選択の窓を開く（ほかの人と重なってもよいので、選べないプルは無い）。
+## プル選択の窓を開く（ほかの人と重なってもよいので、選べないプルは無い）。横に、カーソル（マウス）のプルのステータスを出す。
+## プルを押すと、そのプルに決まる。
 func open_picker() -> void:
-	_pick_dialog.visible = false
 	_picker.size.x = PururinPicker.window_width()
-	_picker.call("open_choices", "出るぷるりんを選ぶ", selected_pururin_id() if _pick_candidate.is_empty() else _pick_candidate, {})
+	_picker_status_window.offset_left = _picker.offset_left + _picker.size.x + PICKER_STATUS_GAP
+	_picker_status_window.offset_right = _picker_status_window.offset_left + PICKER_STATUS_WIDTH
+	_pick_detail.call("show_pururin", selected_pururin_id(), "", false, false)
+	_picker_status.visible = true
+	# 一覧を開いているあいだの B は、一覧を閉じる。
+	_back_button.text = "閉じる"
+	_picker.call("open_choices", "出るぷるりんを選ぶ", selected_pururin_id(), {})
 
 
 func is_picker_open() -> bool:
 	return bool(_picker.call("is_open"))
 
 
-## プル選択の窓でプルを押した：そのプルのステータスを見せて、「このプルにする」か「もどる」（窓へ戻る）を選んでもらう。
 func _on_picker_picked(pururin_id: String) -> void:
-	_picker.call("close")
-	_pick_candidate = pururin_id
-	_pick_dialog_title.text = "このプルにしますか"
-	_pick_detail.call("show_pururin", pururin_id, "", false, false)
-	_pick_change_button.text = "このプルにする"
-	_pick_dialog.visible = true
-	_pick_change_button.grab_focus()
-
-
-## プル選択の窓を、選ばずに閉じた。続けてステータスの窓が開くとき（プルを押した）は、何もしない。
-func _on_picker_closed() -> void:
-	await get_tree().process_frame
-	if is_inside_tree() and not _pick_dialog.visible and not is_picker_open() and _room_view.visible:
-		_status_button.grab_focus()
-
-
-## ステータスの窓の左のボタン：見ているだけなら「変更」（プル選択の窓へ）、選びかけなら「このプルにする」（決める）。
-func _on_pick_change_pressed() -> void:
-	if _pick_candidate.is_empty():
-		open_picker()
-		return
-	_pick_index = maxi(_roster_ids().find(_pick_candidate), 0)
+	_pick_index = maxi(_roster_ids().find(pururin_id), 0)
 	OnlineSession.last_pick = selected_pururin_id()
-	_close_pick_dialog()
+	_picker.call("close")
 	_refresh_pick()
 
 
-## ステータスの窓の「もどる」：選びかけなら、プル選択の窓へ戻る（そのプルにカーソル）。見ているだけなら、窓を閉じる。
-func _on_pick_dialog_back() -> void:
-	if _pick_candidate.is_empty():
-		_close_pick_dialog()
-		return
-	open_picker()
-	_pick_candidate = ""
-
-
-func _close_pick_dialog() -> void:
-	_pick_candidate = ""
-	_pick_dialog.visible = false
-	if _room_view.visible:
+func _on_picker_closed() -> void:
+	_picker_status.visible = false
+	_back_button.text = "ロビーへ戻る" if _room_view.visible else "戻る"
+	if is_inside_tree() and _room_view.visible and _offer.is_empty():
 		_status_button.grab_focus()
 
 
@@ -1199,8 +1167,6 @@ func _show_offer(data: Dictionary) -> void:
 	# ぷるりんを選んでいる途中・大きなチャット欄を開いているときも、呼ばれたら閉じて、確かめを先にする。
 	_chat_overlay.visible = false
 	_picker.call("close")
-	_pick_candidate = ""
-	_pick_dialog.visible = false
 	_offer = data
 	_offer_total_s = maxf(float(data.get("wait_s", 0.0)), 0.1)
 	_offer_until_msec = Time.get_ticks_msec() + int(_offer_total_s * 1000.0)
@@ -1253,8 +1219,6 @@ func press_back() -> void:
 		answer(false)
 	elif is_picker_open():
 		_picker.call("close")
-	elif _pick_dialog.visible:
-		_on_pick_dialog_back()
 	elif _room_view.visible:
 		close_room()
 	else:
@@ -1285,6 +1249,33 @@ func open_server_dialog() -> void:
 	_refresh_server_dialog()
 	_server_dialog.visible = true
 	_server_ok.grab_focus()
+
+
+## サーバーの窓の、ゲームパッド・方向キーでの動き：上下は、選ぶもの → URL → つなぐ・もどる。窓の外へは出ない。
+func _link_server_dialog_focus() -> void:
+	var column: Array[Control] = [_server_official, _server_custom]
+	if _server_local.visible:
+		column.append(_server_local)
+	column.append(_server_url_edit)
+	for index in column.size():
+		var control := column[index]
+		control.focus_neighbor_top = control.get_path_to(column[maxi(index - 1, 0)])
+		control.focus_neighbor_bottom = control.get_path_to(column[index + 1] if index < column.size() - 1 else _server_ok)
+		control.focus_neighbor_left = control.get_path_to(control)
+		control.focus_neighbor_right = control.get_path_to(control)
+	for button: Button in [_server_ok, _server_back]:
+		button.focus_neighbor_top = button.get_path_to(_server_url_edit)
+		button.focus_neighbor_bottom = button.get_path_to(button)
+	_server_ok.focus_neighbor_left = _server_ok.get_path_to(_server_ok)
+	_server_ok.focus_neighbor_right = _server_ok.get_path_to(_server_back)
+	_server_back.focus_neighbor_left = _server_back.get_path_to(_server_ok)
+	_server_back.focus_neighbor_right = _server_back.get_path_to(_server_back)
+	# Tab でも、窓の中を順に回る。
+	var ring: Array[Control] = column.duplicate()
+	ring.append_array([_server_ok, _server_back])
+	for index in ring.size():
+		ring[index].focus_next = ring[index].get_path_to(ring[(index + 1) % ring.size()])
+		ring[index].focus_previous = ring[index].get_path_to(ring[posmod(index - 1, ring.size())])
 
 
 func close_server_dialog() -> void:
@@ -1405,7 +1396,6 @@ func _on_closed() -> void:
 	_close_offer()
 	_chat_overlay.visible = false
 	_picker.call("close")
-	_pick_dialog.visible = false
 	_set_status("サーバーにつながりません。" if was_waiting else "サーバーとのつながりが切れました。")
 	if _confirm_dialog.visible:
 		return
@@ -1510,10 +1500,20 @@ func _go_to_race(data: Dictionary) -> void:
 	get_tree().change_scene_to_file(LOCAL_RACE_SCENE_PATH)
 
 
+## 大きなチャット欄は、入力らんで書いている途中でも、Esc・B・SELECT の1回で閉じる（入力らんより先に受け取る）。
+## キーボードの C（Bに当たるキー）は、字として打てるように、ここでは受け取らない。
+func _input(event: InputEvent) -> void:
+	if not _chat_overlay.visible:
+		return
+	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_B) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK):
+		get_viewport().set_input_as_handled()
+		close_chat_overlay()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
 	var focused := viewport.gui_get_focus_owner()
-	# 大きなチャット欄：T（入力らんで書いているときは除く）・SELECT で開け閉め。開いているときの Esc・B は、閉じる。
+	# 大きなチャット欄：T（入力らんで書いているときは除く）・SELECT で開く。開いているときの C（Bに当たるキー）は、書いていなければ閉じる。
 	var toggle_key: bool = event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_T and not focused is LineEdit
 	if _offer.is_empty() and (toggle_key or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK)):
 		viewport.set_input_as_handled()
@@ -1543,7 +1543,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		viewport.set_input_as_handled()
-		if _offer.is_empty() and not _room_view.visible and not _pick_dialog.visible and not is_picker_open():
+		if _offer.is_empty() and not _room_view.visible and not is_picker_open():
 			UIAudio.play_back()
 		press_back()
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):

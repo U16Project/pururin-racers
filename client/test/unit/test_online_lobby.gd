@@ -543,41 +543,32 @@ func test_the_host_picks_a_pururin_and_the_room_settings_and_can_then_start() ->
 	var confirm := lobby.find_child("PickConfirmButton", true, false) as Button
 	var paddock := lobby.find_child("PickPaddockButton", true, false) as Button
 	assert_true((lobby.find_child("PickInfo", true, false) as Label).text.contains("%d体" % (Protocol.ROOM_CAPACITY - 1)))
-	# 入ると、いつものプルが入っている。自分の席を押すと、ステータスの窓（変更・もどる）。「変更」で、プル選択の窓。
+	# 入ると、いつものプルが入っている。自分の席を押すと、すぐプル選択の窓。横に、今のプルのステータス。
 	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
 	var dialog := lobby.find_child("PickDialog", true, false) as Control
+	var status := lobby.find_child("PickerStatus", true, false) as Control
+	var status_detail := lobby.find_child("PickerStatusDetail", true, false)
 	lobby.open_pick_dialog(_my_pick_row(lobby))
-	assert_true(dialog.visible)
-	assert_true((lobby.find_child("PickChangeButton", true, false) as Button).visible)
-	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
 	assert_false(dialog.visible)
 	assert_true(lobby.is_picker_open())
+	assert_true(status.visible)
+	assert_eq(str(status_detail.call("shown_pururin_id")), lobby.my_pururin_id())
 	# 選ばずに閉じても（B・Esc）、カーソルは自分の席へ戻る（ゲームパッドで動けなくならない）。
 	lobby.go_back()
 	assert_false(lobby.is_picker_open())
+	assert_false(status.visible)
 	var my_row_button := lobby.get("_pick_rows")[_my_pick_row(lobby)]["button"] as Button
 	await _wait_until(func() -> bool: return my_row_button.has_focus())
 	assert_true(my_row_button.has_focus())
 	lobby.open_pick_dialog(_my_pick_row(lobby))
-	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
-	assert_true(lobby.is_picker_open())
 	var second_id := str(PururinRosterConfig.values()["roster"][1]["id"])
-	# 窓でプルを押すと、すぐには決まらない。そのプルのステータスが出て、「このプルにする」で決まる。「もどる」なら、窓へ戻る。
-	lobby.call("_on_picker_picked", second_id)
-	assert_true(dialog.visible)
-	assert_eq((lobby.find_child("PickChangeButton", true, false) as Button).text, "このプルにする")
-	assert_eq(str(lobby.get("_pick_dialog_detail").call("shown_pururin_id")), second_id)
-	(lobby.find_child("PickDialogBackButton", true, false) as Button).pressed.emit()
-	assert_false(dialog.visible)
-	assert_true(lobby.is_picker_open())
-	# B（戻る）も、「もどる」と同じ。プル一覧へ戻る（全部を閉じない）。
-	lobby.call("_on_picker_picked", second_id)
-	lobby.go_back()
-	assert_false(dialog.visible)
-	assert_true(lobby.is_picker_open())
-	lobby.call("_on_picker_picked", second_id)
-	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
-	assert_false(dialog.visible)
+	# マウスを乗せたプルのステータスになる。押すと、そのプルに決まって、窓が閉じる。
+	var tile: Button = lobby.find_child("Picker", true, false).tile_for(second_id)
+	tile.mouse_entered.emit()
+	assert_eq(str(status_detail.call("shown_pururin_id")), second_id)
+	tile.pressed.emit()
+	assert_false(lobby.is_picker_open())
+	assert_false(status.visible)
 	await _wait_until(func() -> bool: return lobby.my_pururin_id() == second_id)
 	assert_eq(str((lobby.get("_pick_rows")[_my_pick_row(lobby)]["pururin"] as Label).text), lobby.pururin_name(second_id))
 	# パドックへは、全員が確定してから（ここでは自分だけ）。
@@ -626,7 +617,8 @@ func test_a_guest_cannot_change_the_room_and_may_pick_the_same_pururin() -> void
 	await _wait_until(func() -> bool: return lobby.my_pururin_id() == first_id)
 	assert_eq(lobby.my_pururin_id(), first_id)
 	lobby.open_pick_dialog(0)
-	assert_false((lobby.find_child("PickChangeButton", true, false) as Button).visible)
+	assert_true((lobby.find_child("PickDialog", true, false) as Control).visible)
+	assert_false(lobby.is_picker_open())
 	lobby.close_dialogs()
 	assert_true((lobby.find_child("PickPaddockButton", true, false) as Button).disabled)
 
@@ -841,14 +833,14 @@ func test_the_room_can_be_worked_without_a_mouse() -> void:
 	lobby.open_pick()
 	await _wait_until(func() -> bool: return (lobby.find_child("PickScreen", true, false) as Control).visible)
 	await wait_seconds(0.2)
-	# プル選択：自分の席から「下」で、CPUの席へ。決定で、ステータスの窓。いちばん下の席の「下」は、下のボタン。
+	# プル選択：自分の席から「下」で、CPUの席へ。自分の席で決定すると、プル選択の窓。いちばん下の席の「下」は、下のボタン。
 	(lobby.find_child("PickRow1", true, false) as Control).grab_focus()
 	await _press("ui_down")
 	assert_eq(_focused_name(), "PickRow2")
 	await _press("ui_up")
 	await _press("ui_accept")
-	assert_true((lobby.find_child("PickDialog", true, false) as Control).visible)
-	lobby.close_dialogs()
+	assert_true(lobby.is_picker_open())
+	lobby.go_back()
 	await _wait_until(func() -> bool: return not lobby.my_pururin_id().is_empty())
 	(lobby.find_child("PickRow%d" % Protocol.ROOM_CAPACITY, true, false) as Control).grab_focus()
 	await _press("ui_down")
@@ -883,13 +875,10 @@ func test_the_host_picks_cpu_pururins_and_cannot_change_trainers() -> void:
 	var room_id := _first_room_id()
 	await _to_pick(lobby)
 	var ids: Array = (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
-	# CPUの席（2つ目）を押すと、ステータスの窓。主には「変更」がある。自分と同じプルでも選べる。
+	# 主がCPUの席（2つ目）を押すと、プル選択の窓。押したプルに決まる。自分と同じプルでも選べる。
 	lobby.open_pick_dialog(1)
-	assert_true((lobby.find_child("PickChangeButton", true, false) as Button).visible)
-	lobby.open_pick_picker()
 	assert_true(lobby.is_picker_open())
-	lobby.call("_on_picker_picked", ids[0])
-	(lobby.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	lobby.find_child("Picker", true, false).tile_for(ids[0]).pressed.emit()
 	await _wait_until(func() -> bool: return str(_server.room_cpus(room_id)[0]["pururin_id"]) == ids[0])
 	assert_eq(str(_server.room_cpus(room_id)[0]["pururin_id"]), ids[0])
 	# トレーナーは、そのプルのデフォルト（変える所は無い）。
@@ -907,10 +896,10 @@ func test_a_guest_cannot_pick_cpu_pururins() -> void:
 	await _enter_listed_room(lobby, _first_room_id())
 	await _wait_until(func() -> bool: return (lobby.get("_members") as Array).size() >= 2)
 	await _guest_to_pick(lobby, owner)
-	# CPUの席を押しても、ステータスを見るだけ（「変更」は無い）。
+	# CPUの席を押しても、ステータスを見るだけ（プル選択の窓は出ない）。
 	lobby.open_pick_dialog(2)
 	assert_true((lobby.find_child("PickDialog", true, false) as Control).visible)
-	assert_false((lobby.find_child("PickChangeButton", true, false) as Button).visible)
+	assert_false(lobby.is_picker_open())
 
 
 func test_room_events_show_as_a_notice_and_in_the_chat() -> void:

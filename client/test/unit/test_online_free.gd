@@ -910,25 +910,42 @@ func test_the_state_texts() -> void:
 	assert_eq(FreeLobby.entry_state_text({"state": Protocol.FREE_ENTRY_CALLED, "hold": false, "place": 1}), "呼ばれています")
 
 
-func test_the_status_window_shows_the_pururin_and_changing_goes_through_the_pick_window() -> void:
+func test_choosing_a_pururin_opens_the_pick_window_with_the_status_beside_it() -> void:
 	var ids := _free_ids()
 	var screen := _screen()
 	var card: Button = await _wait_node(screen, "Card_%s" % ids[0])
 	card.pressed.emit()
 	await wait_seconds(0.2)
 	var first: String = screen.selected_pururin_id()
+	var status: Control = screen.find_child("PickerStatus", true, false)
+	var detail: Control = screen.find_child("PickDetail", true, false)
+	# 「ぷるりんを選ぶ」で、すぐプル選択の窓。横に、今のプルのステータス。
 	(screen.find_child("StatusButton", true, false) as Button).pressed.emit()
-	assert_true((screen.find_child("PickDialog", true, false) as Control).visible, "ステータスの窓が開く")
-	# 「変更」でプル選択の窓、プルを押すと「このプルにしますか」、「このプルにする」で決まる。
-	(screen.find_child("PickChangeButton", true, false) as Button).pressed.emit()
 	assert_true(screen.is_picker_open())
+	assert_true(status.visible)
+	assert_eq((screen.find_child("BackButton", true, false) as Button).text, "閉じる", "一覧のあいだの B は、閉じる")
+	assert_eq(str(detail.get("_preview")["display_name"]), PururinRosterConfig.pururin_by_id(first)["display_name"])
+	# マウスを乗せたプルのステータスになる。
+	var picker: Control = screen.find_child("Picker", true, false)
 	var other := str(PururinRosterConfig.values()["roster"][2]["id"])
-	screen.find_child("Picker", true, false).picked.emit(other)
-	assert_eq((screen.find_child("PickDialogTitle", true, false) as Label).text, "このプルにしますか")
-	assert_eq(screen.selected_pururin_id(), first, "決めるまでは替わらない")
-	(screen.find_child("PickChangeButton", true, false) as Button).pressed.emit()
+	var tile: Button = picker.tile_for(other)
+	tile.mouse_entered.emit()
+	assert_true(tile.has_focus())
+	assert_eq(str(detail.get("_preview")["display_name"]), PururinRosterConfig.pururin_by_id(other)["display_name"])
+	# 押すと、そのプルに決まって、窓が閉じる。
+	tile.pressed.emit()
 	assert_eq(screen.selected_pururin_id(), other)
-	assert_false((screen.find_child("PickDialog", true, false) as Control).visible)
+	assert_false(screen.is_picker_open())
+	assert_false(status.visible)
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("StatusButton", true, false))
+	assert_eq((screen.find_child("BackButton", true, false) as Button).text, "ロビーへ戻る")
+	# 見るだけなら、B（戻る）で閉じる。プルは替わらない。
+	(screen.find_child("StatusButton", true, false) as Button).pressed.emit()
+	screen.press_back()
+	assert_false(screen.is_picker_open())
+	assert_false(status.visible)
+	assert_eq(screen.selected_pururin_id(), other)
+	assert_true((screen.find_child("RoomView", true, false) as Control).visible, "ルームの画面のまま")
 
 
 func test_the_chat_boxes_send_and_show_the_lines() -> void:
@@ -985,6 +1002,94 @@ func test_the_big_chat_box_opens_with_t_and_writes_to_the_chosen_chat() -> void:
 	(screen.find_child("ChatOverlayLobbyTab", true, false) as Button).pressed.emit()
 	assert_true(log.get_parsed_text().contains("大きい欄から"))
 	assert_false(log.get_parsed_text().contains("ルームへ"))
+
+
+func test_the_big_chat_box_closes_with_one_esc_b_or_select_even_while_typing() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	await wait_seconds(0.2)
+	var overlay: Control = screen.find_child("ChatOverlay", true, false)
+	var edit: LineEdit = screen.find_child("ChatOverlayEdit", true, false)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	var pad_b := InputEventJoypadButton.new()
+	pad_b.button_index = JOY_BUTTON_B
+	pad_b.pressed = true
+	var select := InputEventJoypadButton.new()
+	select.button_index = JOY_BUTTON_BACK
+	select.pressed = true
+	for event: InputEvent in [esc, pad_b, select]:
+		screen.toggle_chat_overlay()
+		assert_true(edit.is_editing(), "開くと、すぐ書ける")
+		get_viewport().push_input(event)
+		assert_false(overlay.visible, "%s の1回で閉じる" % event.as_text())
+	# 書いている途中の C（Bに当たるキー）は、字として打てる（閉じない）。
+	screen.toggle_chat_overlay()
+	var key_c := InputEventKey.new()
+	key_c.keycode = KEY_C
+	key_c.physical_keycode = KEY_C
+	key_c.unicode = "c".unicode_at(0)
+	key_c.pressed = true
+	get_viewport().push_input(key_c)
+	assert_true(overlay.visible)
+	assert_eq(edit.text, "c")
+
+
+func test_the_lobby_tabs_switch_with_a() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	await wait_seconds(0.2)
+	var pad_a := InputEventJoypadButton.new()
+	pad_a.button_index = JOY_BUTTON_A
+	pad_a.pressed = true
+	(screen.find_child("EntriesTab", true, false) as Button).grab_focus()
+	get_viewport().push_input(pad_a)
+	assert_eq(screen.current_tab(), FreeLobby.TAB_ENTRIES)
+	(screen.find_child("ResultsTab", true, false) as Button).grab_focus()
+	get_viewport().push_input(pad_a)
+	assert_eq(screen.current_tab(), FreeLobby.TAB_RESULTS)
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("ResultsTab", true, false), "カーソルは結果のタブのまま")
+	(screen.find_child("RoomsTab", true, false) as Button).grab_focus()
+	get_viewport().push_input(pad_a)
+	assert_eq(screen.current_tab(), FreeLobby.TAB_ROOMS)
+
+
+func test_the_server_window_keeps_the_cursor_inside() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	await wait_seconds(0.2)
+	screen.open_server_dialog()
+	var dialog: Control = screen.find_child("ServerDialog", true, false)
+	var focused := get_viewport().gui_get_focus_owner()
+	for side: Side in [SIDE_TOP, SIDE_TOP, SIDE_TOP, SIDE_TOP, SIDE_TOP, SIDE_LEFT, SIDE_BOTTOM, SIDE_BOTTOM, SIDE_BOTTOM, SIDE_BOTTOM, SIDE_BOTTOM, SIDE_RIGHT, SIDE_RIGHT]:
+		focused = focused.get_node(focused.get("focus_neighbor_" + ["left", "top", "right", "bottom"][side]))
+		assert_true(dialog.is_ancestor_of(focused), "窓の外へ出ない（%s）" % focused.name)
+	# いちばん上は「公式サーバー」。
+	focused = get_viewport().gui_get_focus_owner()
+	for i in 5:
+		focused = focused.get_node(focused.focus_neighbor_top)
+	assert_eq(focused, screen.find_child("ServerOfficial", true, false))
+
+
+func test_the_cursor_returns_when_an_entry_row_goes_away() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	await wait_seconds(0.2)
+	screen.set("_entries", [{"room_id": ids[0], "pururin_id": _first_pururin(), "hold": false, "place": 1, "state": Protocol.FREE_ENTRY_WAIT}])
+	screen.call("_refresh_entries")
+	screen.show_tab(FreeLobby.TAB_ENTRIES)
+	var open: Button = screen.find_child("EntryList", true, false).get_child(0).find_child("Open", true, false)
+	assert_true(open.has_focus())
+	# 取り消されて行が消えると、カーソルはタブへ戻る（行方不明にならない）。
+	screen.set("_entries", [])
+	screen.call("_refresh_entries")
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("EntriesTab", true, false))
 
 
 func test_a_ticket_room_card_is_locked_until_a_pururin_has_the_ticket() -> void:

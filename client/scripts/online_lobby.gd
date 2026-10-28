@@ -128,6 +128,8 @@ const PADDOCK_DIALOG_WIDTH := 900.0
 ## 窓の中のプルの詳細の高さ（オフラインのレース選択の詳細に近い高さにして、バーを読みやすくする）と、プル選択の窓の幅。
 const DETAIL_DIALOG_HEIGHT := 440.0
 const PICK_DIALOG_WIDTH := 600.0
+## プル選択の窓の横に出す、ステータスの欄の幅。
+const PICKER_STATUS_WIDTH := 460.0
 const PADDOCK_PERSON_WIDTH := 240.0
 ## 部屋の紹介の入力欄の高さ（3行ぶん）。
 const DESCRIPTION_EDIT_HEIGHT := 112.0
@@ -317,11 +319,11 @@ var _leave_dialog: Control
 var _pick_dialog_title: Label
 var _pick_dialog_detail: Control
 var _pick_dialog_empty: Label
-var _pick_change_button: Button
+## プル選択の窓の横に出す、ステータスの欄（覆いごと）と、その中身。
+var _picker_status: Control
+var _picker_status_detail: Control
 ## いまステータスの窓・プル選択の窓で見ている席（{"kind": "self"・"cpu"・"player", "cpu_index", "row", "pururin_id"}）。
 var _pick_target := {}
-## プル選択の窓で押した、選びかけのプル（ステータスの窓で確かめてから決める）。空なら、今の席のプルを見ているだけ。
-var _pick_candidate := ""
 ## プル選択に入ったとき、いつものプルを1回だけ送ったか。
 var _auto_pick_sent := false
 var _settings_count: Label
@@ -897,7 +899,6 @@ func close_dialogs() -> void:
 	_pick_dialog.visible = false
 	_paddock_dialog.visible = false
 	_leave_dialog.visible = false
-	_pick_candidate = ""
 	_kick_target = 0
 	_joining_room_id = 0
 	_join_password_edit.text = ""
@@ -1090,17 +1091,18 @@ func is_picker_open() -> bool:
 	return bool(_picker.call("is_open"))
 
 
+## プル選択の窓でプルを押した：その席のプルに決まる。
 func _on_picker_picked(pururin_id: String) -> void:
+	var target := _pick_target.duplicate()
 	_picker.call("close")
-	if not _pick_target.is_empty():
-		_open_pick_candidate(pururin_id)
+	_pick_target = target
+	_send_pick_target(pururin_id)
 
 
-## プル選択の窓を、選ばずに閉じた（B・Esc・閉じるボタン）。カーソルを、選んでいた席へ戻す（ゲームパッドで動けなくならないように）。
-## プルを押して閉じたときは、続けてステータスの窓が開くので、何もしない。
+## プル選択の窓を閉じた（B・Esc・閉じるボタン、またはプルを押した）。カーソルを、選んでいた席へ戻す（ゲームパッドで動けなくならないように）。
 func _on_picker_closed() -> void:
-	await get_tree().process_frame
-	if not is_inside_tree() or is_dialog_open() or is_picker_open():
+	_picker_status.visible = false
+	if not is_inside_tree() or is_dialog_open() or is_picker_open() or _pick_target.is_empty():
 		return
 	var row := int(_pick_target.get("row", -1))
 	_pick_target = {}
@@ -2387,8 +2389,25 @@ func _build_pick(column: VBoxContainer) -> void:
 	_picker.name = "Picker"
 	add_child(_picker)
 	_picker.connect("picked", _on_picker_picked)
+	_picker.connect("tile_focused", func(pururin_id: String) -> void: _picker_status_detail.call("show_pururin", pururin_id, "", false, false))
 	_picker.connect("closed", _on_picker_closed)
-	# プルのステータスの窓（変更・もどる）。
+	# プル選択の窓の横の、ステータスの欄。後ろの画面は暗くして、押せなくする（窓より下に置く）。
+	_picker_status = ColorRect.new()
+	_picker_status.name = "PickerStatus"
+	(_picker_status as ColorRect).color = COLOR_DIALOG_SHADE
+	_picker_status.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_picker_status.mouse_filter = Control.MOUSE_FILTER_STOP
+	_picker_status.visible = false
+	add_child(_picker_status)
+	move_child(_picker_status, _picker.get_index())
+	var status_panel := PanelContainer.new()
+	status_panel.name = "PickerStatusWindow"
+	status_panel.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_DIALOG, 16, 14.0, 14.0))
+	_picker_status.add_child(status_panel)
+	_picker_status_detail = PururinDetail.new()
+	_picker_status_detail.name = "PickerStatusDetail"
+	status_panel.add_child(_picker_status_detail)
+	# ほかの人の席のプルを見る窓（もどるだけ）。
 	var parts := _dialog("PickDialog", "")
 	_pick_dialog = parts[0]
 	var dialog_column: VBoxContainer = parts[1]
@@ -2406,23 +2425,12 @@ func _build_pick(column: VBoxContainer) -> void:
 	_pick_dialog_empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_pick_dialog_empty.custom_minimum_size = Vector2(0.0, DETAIL_DIALOG_HEIGHT)
 	dialog_column.add_child(_pick_dialog_empty)
-	var dialog_row := HBoxContainer.new()
-	dialog_row.add_theme_constant_override("separation", 12)
-	dialog_column.add_child(dialog_row)
-	_pick_change_button = MenuStyle.button("変更", 20, MenuStyle.COLOR_BUTTON_ON)
-	_pick_change_button.name = "PickChangeButton"
-	_pick_change_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	_pick_change_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pick_change_button.pressed.connect(_on_pick_change_pressed)
-	UIAudio.bind_button_sound(_pick_change_button, "confirmation")
-	dialog_row.add_child(_pick_change_button)
 	var dialog_back := MenuStyle.button("もどる", 20, MenuStyle.COLOR_BUTTON_QUIET)
 	dialog_back.name = "PickDialogBackButton"
 	dialog_back.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
-	dialog_back.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	dialog_back.pressed.connect(_on_pick_dialog_back)
+	dialog_back.pressed.connect(close_dialogs)
 	UIAudio.bind_button_sound(dialog_back, "back")
-	dialog_row.add_child(dialog_back)
+	dialog_column.add_child(dialog_back)
 
 
 ## 横長の席を1つ作る。1席ぶんは {button, frame, icon, portrait, who, pururin, mark, note, kind（"self"・"player"・"cpu"・""）, peer, cpu_index, pururin_id}。
@@ -2621,77 +2629,42 @@ func _link_pick_focus() -> void:
 	_link_chat(_pick_chat_edit, buttons[0] if not buttons.is_empty() else first_action)
 
 
-## 席を押した：そのプルのステータスの窓を出す。自分の席、部屋主のCPUの席では「変更」も出す。
+## 席を押した：自分の席・部屋主のCPUの席なら、プル選択の窓（横にステータス）を出す。ほかの人の席なら、そのプルのステータスの窓を出す。
 func open_pick_dialog(index: int) -> void:
 	var row: Dictionary = _pick_rows[index]
 	var kind := str(row["kind"])
 	if kind.is_empty():
 		return
 	close_dialogs()
-	var can_change := kind == "self" or (kind == "cpu" and is_host())
-	_pick_candidate = ""
-	_pick_change_button.text = "変更"
 	_pick_target = {"kind": kind, "cpu_index": int(row["cpu_index"]), "row": index, "pururin_id": str(row["pururin_id"])}
+	if kind == "self" or (kind == "cpu" and is_host()):
+		open_pick_picker()
+		return
 	_pick_dialog_title.text = str((row["who"] as Label).text)
 	var pururin_id := str(row["pururin_id"])
 	_pick_dialog_detail.visible = not pururin_id.is_empty()
 	_pick_dialog_empty.visible = pururin_id.is_empty()
 	if not pururin_id.is_empty():
 		_pick_dialog_detail.call("show_pururin", pururin_id, "", false, false)
-	_pick_change_button.visible = can_change
 	_pick_dialog.visible = true
-	(_pick_change_button if can_change else _pick_dialog.find_child("PickDialogBackButton", true, false) as Button).grab_focus()
+	(_pick_dialog.find_child("PickDialogBackButton", true, false) as Button).grab_focus()
 
 
-## ステータスの窓の「変更」：プル選択の窓を出す（ほかと重なってもよいので、選べないプルは無い）。
+## プル選択の窓を出す（ほかと重なってもよいので、選べないプルは無い）。横に、カーソル（マウス）のプルのステータスを出す。
 func open_pick_picker() -> void:
-	var target := _pick_target.duplicate()
-	close_dialogs()
-	_pick_target = target
 	var area := _pick_box.get_global_rect()
 	_picker.global_position = area.position + Vector2(0.0, PICKER_MARGIN)
 	_picker.size = Vector2(minf(float(PururinPicker.window_width()), area.size.x), area.size.y - PICKER_MARGIN * 2.0)
-	_picker.call("open_choices", "CPUのプルを選ぶ" if str(target.get("kind", "")) == "cpu" else "プルを選ぶ", str(target.get("pururin_id", "")), {})
+	var status_window := _picker_status.get_node("PickerStatusWindow") as Control
+	status_window.position = _picker.position + Vector2(_picker.size.x + PICKER_MARGIN, 0.0)
+	status_window.size = Vector2(PICKER_STATUS_WIDTH, _picker.size.y)
+	var current := str(_pick_target.get("pururin_id", ""))
+	_picker_status_detail.call("show_pururin", current, "", false, false)
+	_picker_status.visible = true
+	_picker.call("open_choices", "CPUのプルを選ぶ" if str(_pick_target.get("kind", "")) == "cpu" else "プルを選ぶ", current, {})
 
 
-## プル選択の窓でプルを押した：そのプルのステータスを見せて、「このプルにする」か「もどる」（窓へ戻る）を選んでもらう。
-func _open_pick_candidate(pururin_id: String) -> void:
-	var target := _pick_target.duplicate()
-	close_dialogs()
-	_pick_target = target
-	_pick_candidate = pururin_id
-	_pick_dialog_title.text = "このプルにしますか"
-	_pick_dialog_detail.visible = true
-	_pick_dialog_empty.visible = false
-	_pick_dialog_detail.call("show_pururin", pururin_id, "", false, false)
-	_pick_change_button.text = "このプルにする"
-	_pick_change_button.visible = true
-	_pick_dialog.visible = true
-	_pick_change_button.grab_focus()
-
-
-## ステータスの窓の左のボタン：見ているだけなら「変更」（プル選択の窓へ）、選びかけなら「このプルにする」（決める）。
-func _on_pick_change_pressed() -> void:
-	if _pick_candidate.is_empty():
-		open_pick_picker()
-		return
-	var pururin_id := _pick_candidate
-	_pick_candidate = ""
-	_pick_dialog.visible = false
-	_send_pick_target(pururin_id)
-
-
-## ステータスの窓の「もどる」：選びかけなら、プル選択の窓へ戻る（そのプルにカーソル）。見ているだけなら、窓を閉じる。
-func _on_pick_dialog_back() -> void:
-	if _pick_candidate.is_empty():
-		close_dialogs()
-		return
-	_pick_target["pururin_id"] = _pick_candidate
-	_pick_candidate = ""
-	open_pick_picker()
-
-
-## プルを決めた（ステータスの窓の「このプルにする」）。自分なら pick、CPUなら cpu_pick。
+## プルを決めた（プル選択の窓でプルを押した）。自分なら pick、CPUなら cpu_pick。
 func _send_pick_target(pururin_id: String) -> void:
 	if str(_pick_target.get("kind", "")) == "cpu":
 		_client.send(Protocol.CPU_PICK, {"index": int(_pick_target["cpu_index"]), "pururin_id": pururin_id})
@@ -3129,10 +3102,6 @@ func prepare_race(data: Dictionary) -> void:
 func go_back() -> void:
 	if is_picker_open():
 		_picker.call("close")
-		return
-	# 「このプルにしますか」の窓では、「もどる」と同じ（プル一覧へ戻る）。
-	if _pick_dialog.visible and not _pick_candidate.is_empty():
-		_on_pick_dialog_back()
 		return
 	if is_dialog_open():
 		close_dialogs()

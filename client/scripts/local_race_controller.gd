@@ -237,6 +237,7 @@ func _ready() -> void:
 	_pause_return_button.pressed.connect(_on_pause_return_pressed)
 	_build_quit_confirm()
 	_result_return_button.pressed.connect(_return_to_race_select)
+	MenuStyle.add_mark(_result_return_button, "B", 24.0)
 	_resume_button.pressed.connect(_set_paused.bind(false))
 	UIAudio.bind_button_sound(_pause_return_button, "back")
 	# 着順の板のボタンは、どちらも決定の音。
@@ -318,7 +319,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if is_instance_valid(_control_guide):
 		return
 	if _race_over:
-		if RaceControllerInput.is_menu_pressed(event) and _result_panel.visible:
+		# 結果の板では、Start と、B・Esc（印のとおり）で「戻る」ボタンを押す。
+		var back_pressed := event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)
+		if (RaceControllerInput.is_menu_pressed(event) or back_pressed) and _result_panel.visible:
 			viewport.set_input_as_handled()
 			RaceControllerInput.activate_control(_result_return_button)
 		return

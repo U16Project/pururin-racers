@@ -29,14 +29,14 @@ func _ready() -> void:
 	SunShadow.apply($Sun as DirectionalLight3D)
 	var result := CourseBuilder.load_layout_result()
 	if result.has("error"):
-		_guide_label.text = "コース設定を確認してください：%s\nEsc／B　タイトルへ戻る" % str(result["error"])
+		_guide_label.text = "コース設定を確認してください：%s\nEsc／B　ゲームモード選択へ戻る" % str(result["error"])
 		set_process(false)
 		return
 	LocalRaceMath.apply_course_to_path(_track)
 	var layout: Dictionary = result["layout"]
 	var route := CourseBuilder.route_for_distance(layout, EXPLORATION_DISTANCE_M)
 	if route.is_empty():
-		_guide_label.text = "1600mルートが見つかりません。\nEsc／B　タイトルへ戻る"
+		_guide_label.text = "1600mルートが見つかりません。\nEsc／B　ゲームモード選択へ戻る"
 		set_process(false)
 		return
 	_place_launch_straight(route, float(layout["track_length_m"]))
@@ -58,7 +58,7 @@ func _ready() -> void:
 		"マウス／右スティック　見回す",
 		"Space／R2　上昇　　Ctrl／L2　下降",
 		"Shift　高速移動　　ホイール　移動速度",
-		"Esc／B　タイトルへ戻る",
+		"Esc／B　ゲームモード選択へ戻る",
 	]))
 	_camera.move_speed_changed.connect(_update_speed_label)
 	_update_speed_label(float(_camera.get("move_speed_mps")))

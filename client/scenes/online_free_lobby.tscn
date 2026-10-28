@@ -2468,198 +2468,6 @@ corner_radius_top_right = 18
 corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ewhot"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.2, 0.62, 0.42, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.18)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5s7yw"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.176, 0.5456, 0.3696, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ttg4e"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.296, 0.6656, 0.4896, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_4ri1v"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.19, 0.589, 0.399, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_5jcgu"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.2, 0.62, 0.42, 0.35)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.08)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_e0h4p"]
-content_margin_left = 0.0
-content_margin_top = 0.0
-content_margin_right = 0.0
-content_margin_bottom = 0.0
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(1, 0.8, 0.28, 1)
-corner_radius_top_left = 22
-corner_radius_top_right = 22
-corner_radius_bottom_right = 22
-corner_radius_bottom_left = 22
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mojts"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.13, 0.18, 0.27, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.18)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6cqyq"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.11439999, 0.1584, 0.23760001, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_71h7x"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.2344, 0.2784, 0.3576, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bqxhe"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.1235, 0.171, 0.2565, 0.92)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_w0q2e"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.13, 0.18, 0.27, 0.35)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.08)
-corner_radius_top_left = 20
-corner_radius_top_right = 20
-corner_radius_bottom_right = 20
-corner_radius_bottom_left = 20
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3vfc0"]
-content_margin_left = 0.0
-content_margin_top = 0.0
-content_margin_right = 0.0
-content_margin_bottom = 0.0
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 3
-border_width_top = 3
-border_width_right = 3
-border_width_bottom = 3
-border_color = Color(1, 0.8, 0.28, 1)
-corner_radius_top_left = 22
-corner_radius_top_right = 22
-corner_radius_bottom_right = 22
-corner_radius_bottom_left = 22
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_d0tai"]
 content_margin_left = 0.0
 content_margin_top = 0.0
@@ -4838,7 +4646,7 @@ theme_override_colors/font_hover_pressed_color = Color(0.35, 0.86, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.35, 0.86, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
-text = "ステータス・変更"
+text = "ぷるりんを選ぶ"
 
 [node name="PrevButton" type="Button" parent="RoomView/Side" unique_id=100723915]
 unique_name_in_owner = true
@@ -5443,96 +5251,33 @@ text = "ナギ"
 vertical_alignment = 1
 clip_text = true
 
-[node name="PickDialog" type="Control" parent="." unique_id=1417518840]
+[node name="PickerStatus" type="Control" parent="." unique_id=1417518840]
 unique_name_in_owner = true
 visible = false
 anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 
-[node name="Dim" type="ColorRect" parent="PickDialog" unique_id=1832619035]
+[node name="Dim" type="ColorRect" parent="PickerStatus" unique_id=1832619035]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0, 0, 0, 0.55)
 
-[node name="Window" type="PanelContainer" parent="PickDialog" unique_id=63510875]
+[node name="PickerStatusWindow" type="PanelContainer" parent="PickerStatus" unique_id=63510875]
+unique_name_in_owner = true
 layout_mode = 0
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -300.0
-offset_top = -280.0
-offset_right = 300.0
-offset_bottom = 280.0
+anchor_bottom = 1.0
+offset_left = 442.0
+offset_top = 78.0
+offset_right = 902.0
+offset_bottom = -48.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_w8nts")
 
-[node name="Column" type="VBoxContainer" parent="PickDialog/Window" unique_id=403856747]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="PickDialogTitle" type="Label" parent="PickDialog/Window/Column" unique_id=1166670829]
+[node name="PickDetail" type="Control" parent="PickerStatus/PickerStatusWindow" unique_id=213643186]
 unique_name_in_owner = true
 layout_mode = 2
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 22
-theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-text = "出るぷるりん"
-horizontal_alignment = 1
-
-[node name="PickDetail" type="Control" parent="PickDialog/Window/Column" unique_id=213643186]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 440)
-layout_mode = 2
-size_flags_vertical = 3
 script = ExtResource("6_32imb")
-
-[node name="Buttons" type="HBoxContainer" parent="PickDialog/Window/Column" unique_id=1402117708]
-layout_mode = 2
-theme_override_constants/separation = 12
-
-[node name="PickChangeButton" type="Button" parent="PickDialog/Window/Column/Buttons" unique_id=623820831]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_styles/normal = SubResource("StyleBoxFlat_ewhot")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_5s7yw")
-theme_override_styles/hover = SubResource("StyleBoxFlat_ttg4e")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_4ri1v")
-theme_override_styles/disabled = SubResource("StyleBoxFlat_5jcgu")
-theme_override_styles/focus = SubResource("StyleBoxFlat_e0h4p")
-theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_focus_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 20
-text = "変更"
-
-[node name="PickDialogBack" type="Button" parent="PickDialog/Window/Column/Buttons" unique_id=1801098484]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(0, 44)
-layout_mode = 2
-size_flags_horizontal = 3
-theme_override_styles/normal = SubResource("StyleBoxFlat_mojts")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_6cqyq")
-theme_override_styles/hover = SubResource("StyleBoxFlat_71h7x")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_bqxhe")
-theme_override_styles/disabled = SubResource("StyleBoxFlat_w0q2e")
-theme_override_styles/focus = SubResource("StyleBoxFlat_3vfc0")
-theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_focus_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 20
-text = "もどる"
 
 [node name="Picker" type="Control" parent="." unique_id=777667499]
 unique_name_in_owner = true
@@ -5718,14 +5463,14 @@ text = "このルーム"
 layout_mode = 0
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -90.0
+offset_left = -150.0
 offset_top = 16.0
 offset_right = -14.0
 offset_bottom = 36.0
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 12
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "閉じる：T"
+text = "閉じる：B／Esc"
 horizontal_alignment = 2
 
 [node name="Line" type="Panel" parent="ChatOverlay/Window" unique_id=32980991]
