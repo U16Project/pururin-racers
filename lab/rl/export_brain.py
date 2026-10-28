@@ -5,7 +5,7 @@
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/export_brain.py --run 育成1
-  保存した版から：--file lab/rl/runs/保存/本番2_20261027_0215.zip（名前は「育成の名前_日付_時刻」）
+  保存した版から：--file lab/rl/runs/保存/本採用_末脚.zip（名前は「本採用_名前」「控え_名前」）
 書き出し先：client/data/cpu_brains/main.json（ゲームが使う）、lab/rl/runs/brain_check.json（確かめ用）
 確かめ：client/ で godot --headless -s ../lab/rl/brain_check.gd
 """
@@ -35,7 +35,7 @@ def main():
     parser.add_argument("--file", default="", help="育成の最新ではなく、保存した版（.zip）から書き出す")
     args = parser.parse_args()
     path = Path(args.file).resolve() if args.file else RL_DIR / "runs" / args.run / "latest.zip"
-    run = path.stem.split("_")[0] if args.file else args.run
+    run = path.stem if args.file else args.run
     model = MaskablePPO.load(path, device="cpu")
     policy = model.policy
     linears = [m for m in policy.mlp_extractor.policy_net if hasattr(m, "weight")] + [policy.action_net]
