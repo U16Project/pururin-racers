@@ -7,7 +7,7 @@
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/train.py --name 育成1
   止めるときは Ctrl+C（それまでのCPUは保存される）。続きから：--resume lab/rl/runs/育成1/latest.zip
   あなたの記録（お手本）を使わずに育てる：--no-demos
-  育成ごとに設定の一部を変える：--override lab/rl/override_脚質.json（初回だけ書けばよい。runs/<名前>/override.json に写し、次からは自動で使う）
+  育成ごとに設定の一部を変える：--override lab/rl/override_本番6.json（初回だけ書けばよい。runs/<名前>/override.json に写し、次からは自動で使う）
   ほかの育成のCPUから始める：--resume lab/rl/runs/育成1/latest.zip --name 脚質1
   同時に動かすゲームの数：--games 4（書かなければ rl_settings.json の workers。少ないほどPCは軽く、育つのは遅い）
 
@@ -38,7 +38,7 @@ from pool import Pool
 COLUMNS = ["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
            "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
            "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合",
-           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が0%より少ない割合", "線で体力が底の割合", "その場でもらった点"]
+           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が目安より少ない割合", "線で体力が底の割合", "その場でもらった点"]
 
 
 class Progress(BaseCallback):
@@ -111,6 +111,7 @@ class Progress(BaseCallback):
         winners = [race["results"][0]["winner_time"] for race in races if race["results"][0]["winner_time"] > 0]
         boosts = [b for r in seats for b in r["boost_remaining_m"]]
         lines_st = [float(r["line_stamina"]) for r in seats]
+        keep = float(self.settings["reward"]["stamina"]["keep"])
         share = lambda rows, test: sum(1 for x in rows if test(x)) / max(len(rows), 1)
         line = [datetime.now().strftime("%m/%d %H:%M"), self.num_timesteps, self.seen, round((time.time() - self.started) / 60, 1),
                 round(sum(winners) / max(len(winners), 1), 2), round(share(seats, lambda r: r["time"] < 0), 3),
@@ -120,7 +121,7 @@ class Progress(BaseCallback):
                 round(sum(boosts) / max(len(boosts), 1)),
                 round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2),
                 round(mean(seats, "opening_boosts"), 2), round(mean(seats, "spurt_misses"), 2),
-                round(sum(lines_st) / max(len(lines_st), 1), 2), round(share(lines_st, lambda x: x < 0.0), 2), round(share(lines_st, lambda x: x <= -0.95), 2),
+                round(sum(lines_st) / max(len(lines_st), 1), 2), round(share(lines_st, lambda x: x < keep), 2), round(share(lines_st, lambda x: x <= -0.95), 2),
                 round(mean(seats, "paid_now"), 2)]
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
@@ -132,7 +133,7 @@ class Progress(BaseCallback):
             f"  ブースト（1レース） {v['ブースト']}回：最序盤（10%まで） {v['最序盤のブースト']}回・中ほど {v['中ほどのブースト']}回・"
             f"ラスト25% {v['スパートの範囲で押したブースト']}回（押した場所の平均：ゴールまで残り {v['ブーストの残り距離の平均']}m）",
             f"  ダッシュ（1レース） {v['ダッシュ']}回",
-            f"  体力：残り25%の線で 平均 {pct(v['残り25%の線の体力'])}（0%より少ない子 {pct(v['線で体力が0%より少ない割合'])}・底の子 {pct(v['線で体力が底の割合'])}）"
+            f"  体力：残り25%の線で 平均 {pct(v['残り25%の線の体力'])}（目安 {pct(self.settings['reward']['stamina']['keep'])} より少ない子 {pct(v['線で体力が目安より少ない割合'])}・底の子 {pct(v['線で体力が底の割合'])}）"
             f"　ゴールで 平均 {pct(v['残り体力'])}",
             f"  脚質どおりの順位にいた {pct(v['性格の順位に合った割合'])}　風よけの使い方が脚質どおり {pct(v['風よけが性格に合った割合'])}",
             f"  前から風よけをもらっていた {pct(v['風よけをもらっていた割合'])}　後ろから押してもらっていた {pct(v['後方支援をもらっていた割合'])}",
@@ -174,7 +175,8 @@ def main():
     with open(run_dir / "settings.json", "w", encoding="utf-8") as f:
         json.dump(settings, f, ensure_ascii=False, indent=2)
     pool = Pool(settings, args.name)
-    env = GodotVecEnv(settings, workers=args.games or settings["workers"], log_dir=run_dir / "logs", pool=pool)
+    env = GodotVecEnv(settings, workers=args.games or settings["workers"], log_dir=run_dir / "logs", pool=pool,
+                      race_log_dir=run_dir / "race_logs")
     ppo = settings["ppo"]
     if args.resume:
         model = MaskablePPO.load(args.resume, env=env, device="cuda")

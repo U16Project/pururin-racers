@@ -5,7 +5,7 @@
 
 使い方（リポジトリのいちばん上で）：
   /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/export_brain.py --run 育成1
-  保存した版から：--file lab/rl/runs/保存/本採用_末脚.zip（名前は「本採用_名前」「控え_名前」）
+  保存した版から：--file lab/rl/runs/保存/本採用_安定版.zip（名前は「本採用_名前」「控え_名前」）
 書き出し先：client/data/cpu_brains/main.json（ゲームが使う）、lab/rl/runs/brain_check.json（確かめ用）
 確かめ：client/ で godot --headless -s ../lab/rl/brain_check.gd
 """

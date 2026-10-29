@@ -10,6 +10,7 @@ import os
 import random
 import socket
 import subprocess
+import time
 from pathlib import Path
 
 import gymnasium as gym
@@ -127,9 +128,11 @@ class GodotVecEnv(VecEnv):
     控え室が空のときは、その席も本命（main_model）が走らせる（学ばない）。
     seeds を渡すと、その番号のレースを順に走らせる。渡さなければ、学ぶ用の番号からくじで選ぶ。
     レースが1本終わるたびに、その結果を self.races に足す（"pool"：枠 → 相手役の名前）。
+    race_log_dir を渡すと、train.race_log_every 本に1本、そのレースの記録（あなたのレースの記録と同じ形）をそこに書き、
+    新しい train.race_log_keep 本だけ残す（古いものは消す）。
     """
 
-    def __init__(self, settings: dict, workers: int, log_dir=None, seeds=None, rng_seed=0, pool=None):
+    def __init__(self, settings: dict, workers: int, log_dir=None, seeds=None, rng_seed=0, pool=None, race_log_dir=None):
         self.settings = settings
         self.roster = roster_ids()
         self.field = settings["field"]
@@ -141,6 +144,8 @@ class GodotVecEnv(VecEnv):
         self.main_model = None
         self.seeds = list(seeds) if seeds is not None else None
         self._cursor = 0
+        self.race_log_dir = Path(race_log_dir) if race_log_dir else None
+        self._started = 0
         self._rng = random.Random(settings["seeds"]["train_from"] + rng_seed)
         log_dir = log_dir or RL_DIR / "runs" / "logs"
         self.godots = [Godot(settings, i, log_dir) for i in range(workers)]
@@ -175,11 +180,25 @@ class GodotVecEnv(VecEnv):
         for gate in gates[self.pool_seats:self.pool_seats + self.always_seats]:
             self._pool_gates[w][gate] = self.pool.always_name
         self._learn_gates[w] = sorted(gates[self.pool_seats + self.always_seats:])
-        g.send({"cmd": "reset", "spec": make_spec(self._next_seed(), self.settings, self.roster), "settings": self.settings})
+        spec = make_spec(self._next_seed(), self.settings, self.roster)
+        self._started += 1
+        if self.race_log_dir and self._started % int(self.settings["train"]["race_log_every"]) == 0:
+            self._add_race_log(spec, w)
+        g.send({"cmd": "reset", "spec": spec, "settings": self.settings})
         message = g.read()
         if message["over"]:
             raise RuntimeError("レースが、最初の判断の前に終わりました")
         self._take(w, message)
+
+    def _add_race_log(self, spec: dict, w: int) -> None:
+        """このレースの記録の書き先（spec.log_path）と、順位表に出す席ごとの名前（spec.shorts：相手役の版、育てる席は「育成」）を足す。
+        書く前に、古い記録を消して、新しい race_log_keep - 1 本だけ残す。"""
+        self.race_log_dir.mkdir(parents=True, exist_ok=True)
+        old = sorted(self.race_log_dir.glob("*.json"))
+        for path in old[:max(len(old) - int(self.settings["train"]["race_log_keep"]) + 1, 0)]:
+            path.unlink()
+        spec["log_path"] = str(self.race_log_dir / f"{time.strftime('%Y%m%d_%H%M%S')}_{w}_{int(spec['distance_m'])}m.json")
+        spec["shorts"] = {str(g): self._pool_gates[w].get(g) or "育成" for g in range(self.field)}
 
     def _slot(self, w: int, gate: int) -> int:
         """学ぶ席の枠 → 学習の場の番号（学ぶ席でなければ -1）。"""

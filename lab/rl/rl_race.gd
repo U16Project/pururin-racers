@@ -21,6 +21,7 @@ const BrainSituation := preload("res://scripts/cpu_brain/brain_situation.gd")
 const RlObserve := preload("res://scripts/cpu_brain/brain_observe.gd")
 const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
+const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd")
 
 const TRAINEE_NAME := "（訓練中CPU）"
 ## 席の、通信の番号（1枠目が 1001）。
@@ -43,6 +44,8 @@ var _seats := {}
 var _human_gate := -1
 ## 観戦するとき、画面で追う枠（あなたの枠をCPUにしたとき。観戦でなければ -1）。
 var _watch_gate := -1
+## 育成のレースの記録（spec.log_path があるレースだけ。あなたのレースの記録と同じ形で、そのファイルに書く）。
+var _recorder: RaceTelemetryRecorder = null
 
 
 func start(link, spec: Dictionary, settings: Dictionary) -> void:
@@ -92,6 +95,9 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 	RaceSession.set_online_entries([])
 	if _on_screen():
 		_show_for_human()
+		_name_runners(spec.get("shorts", {}))
+	elif spec.has("log_path"):
+		_recorder = RaceTelemetryRecorder.new()
 		_name_runners(spec.get("shorts", {}))
 	var track: Path3D = _race.get("_track")
 	_inside = BrainSituation.inside_sign(track.curve)
@@ -162,6 +168,10 @@ func _process(delta: float) -> void:
 		return
 	_elapsed += delta
 	var runners: Array = _race.call("get_runners_for_simulation")
+	if _recorder != null:
+		if not _recorder.is_recording():
+			_recorder.start(float(_spec["distance_m"]))
+		_recorder.record_sample(_elapsed, runners)
 	for runner: Node3D in runners:
 		var gate := int(runner.get("gate_index"))
 		if _seats.has(gate) and int(_seats[gate]["mid_place"]) == 0 and float(runner.call("get_race_progress")) >= float(_spec["distance_m"]) * 0.5:
@@ -408,10 +418,32 @@ func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 	var table: Array = weights["place"]
 	var reward := float(table[mini(place, table.size()) - 1])
 	# 1位でなかったときは、1位とのタイム差が小さいほど少し足す（2位の点＋この点が、1位の点を越えないようにしておく）。
-	if place > 1 and bool(runner.call("is_finished")):
-		var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
-		reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / float(weights["gap_scale_s"]), 0.0, 1.0)
+	# gap_scale_s より離されたら、離れた1秒ごとに gap_penalty_per_s を引く（gap_penalty_max まで。ゴールできなかった子は最大）。
+	if place > 1:
+		if bool(runner.call("is_finished")):
+			var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
+			var scale_s := float(weights["gap_scale_s"])
+			reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / scale_s, 0.0, 1.0)
+			reward -= minf(float(weights["gap_penalty_per_s"]) * maxf(gap_s - scale_s, 0.0), float(weights["gap_penalty_max"]))
+		else:
+			reward -= float(weights["gap_penalty_max"])
 	return reward + _take_owed(seat)
+
+
+## 育成のレースの記録を、spec.log_path に書く（ゲームの記録と同じ中身。ゲームの記録の置き場所には書かない：お手本に混ざらないように）。
+func _write_log(runners: Array) -> void:
+	_recorder.record_sample(_elapsed, runners, true)
+	var payload := _recorder.build_payload()
+	payload["finished_at"] = Time.get_datetime_string_from_system(true)
+	payload["final_results"] = _recorder.call("_final_results", runners)
+	var path := str(_spec["log_path"])
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var file := FileAccess.open(path, FileAccess.WRITE)
+	if file == null:
+		push_error("育成のレースの記録を書けません: " + path)
+		return
+	file.store_string(JSON.stringify(payload))
+	file.close()
 
 
 ## ゴールした中で、いちばん早いタイム（だれもゴールしていなければ -1）。
@@ -468,6 +500,8 @@ func _finish(runners: Array, cut: bool) -> void:
 			report["reward"] = reward
 			reports.append(report)
 		results.append(result)
+	if _recorder != null:
+		_write_log(runners)
 	_link.send({
 		"seats": reports, "over": true,
 		"race": {"seed": int(_spec["seed"]), "distance_m": float(_spec["distance_m"]), "race_s": _elapsed, "cut": cut, "results": results},

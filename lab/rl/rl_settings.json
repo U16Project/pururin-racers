@@ -20,24 +20,28 @@
     "rate": 0.3
   },
   "train": {
-    "_note": "report_every_races：この本数ごとに progress.csv に1行書く。save_version_every_min：この分ごとに、その時点のCPUを版として保存する（新旧を比べる用）。save_latest_every_min：この分ごとに latest.zip を上書きする（人と走るときの相手）",
+    "_note": "report_every_races：この本数ごとに progress.csv に1行書く。save_version_every_min：この分ごとに、その時点のCPUを版として保存する（新旧を比べる用）。save_latest_every_min：この分ごとに latest.zip を上書きする（人と走るときの相手）。race_log_every：この本数に1本、そのレースの記録（あなたのレースの記録と同じ形。0.5秒ごとの全員の状態）を runs/<名前>/race_logs/ に書く。race_log_keep：その記録を新しい順にこの本数だけ残し、古いものは消す",
     "report_every_races": 100,
     "save_version_every_min": 30,
-    "save_latest_every_min": 10
+    "save_latest_every_min": 10,
+    "race_log_every": 100,
+    "race_log_keep": 30
   },
+  "_note_play_run": "play.py（ラボのレース）で、相手7枠に最初から入れるCPU：この育成の最新の版（runs/<名前>/versions/ のいちばん新しい版）。まだ版が無ければ本採用",
+  "play_run": "本番6",
   "pool": {
     "_note": "相手の控え室（lab/rl/runs/<dir>/）。1レースのうち seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。置くのは max 体まで（超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない）。育成の1時間ごとの版は自動で入る。always_run：どのレースにも1席、この育成のいちばん新しいCPU（runs/<always_run>/latest.zip）を必ず入れる（その育成自身のレースでは入れない。空にすると、この枠は無し）",
     "dir": "控え室",
     "seats": 2,
     "max": 20,
     "always_run": "分身1",
-    "_note_from_runs": "from_runs：相手にする控え室の版を、この育成の版だけにする（空なら全部）。本番1は override_本番.json で [\"本番1\"]",
+    "_note_from_runs": "from_runs：相手にする控え室の版を、この育成の版だけにする（空なら全部）。本番6は override_本番6.json で [\"固定\", \"本番6\"]（固定_ の版と、本番6の版）",
     "from_runs": [],
-    "_note_plan": "plan：席の並び。あれば、1レースごとに、並びの1つにつき1席を走らせる（同じものを2回で2席。席の数は並びの数で、seats は使わない）。控え室の版の名前ならその版、「run:<育成の名前>」ならその育成の古い版からくじ（まだ無ければ本命が走る）。空ならくじ。本番4は override_本番4.json で、固定_本番2_0215 が2席・本番4の古い版が2席",
+    "_note_plan": "plan：席の並び。あれば、1レースごとに、並びの1つにつき1席を走らせる（同じものを2回で2席。席の数は並びの数で、seats は使わない）。控え室の版の名前ならその版、「run:<育成の名前>」ならその育成の古い版からくじ（まだ無ければ本命が走る）。空ならくじ。本番6は override_本番6.json で、固定_末脚 が2席・本番6の古い版が2席",
     "plan": []
   },
   "reward": {
-    "_note": "ゴールの着順の点（1位から順）。1位でなかったときは、1位とのタイム差が小さいほど gap_bonus まで足す（gap_scale_s 秒差で0）。前へ進んだ分の点（レース全体を進むと、この値）。2位の点＋gap_bonus が1位の点より小さいこと",
+    "_note": "ゴールの着順の点（1位から順）。1位でなかったときは、1位とのタイム差が小さいほど gap_bonus まで足す（gap_scale_s 秒差で0）。それより離されたら、離れた1秒ごとに gap_penalty_per_s を引く（gap_penalty_max まで。ゴールできなかった子は gap_penalty_max を引く。ここでは0＝引かない）。前へ進んだ分の点（レース全体を進むと、この値）。2位の点＋gap_bonus が1位の点より小さいこと",
     "place": [
       1.0,
       0.4,
@@ -50,6 +54,8 @@
     ],
     "gap_bonus": 0.3,
     "gap_scale_s": 5.0,
+    "gap_penalty_per_s": 0.0,
+    "gap_penalty_max": 0.0,
     "progress_total": 0.2,
     "style": {
       "_note": "性格に合った走りの点（2026-10-24・10-25 ユーザー確認済み）。点は、その場で渡す（2026-10-27。合計の最大はゴールでまとめて渡していたときと同じ）。中ほど（mid_from〜mid_to の割合）で性格の「いたい順位」にいた間に進んだ距離の割合 × place（終盤にいたい順位があるトレーナーは、終盤も数える）。後ろにつく性格は、中ほどで風よけ（received_draft_p が draft_at_least 以上）をもらっていた間、つかない性格はもらっていなかった間に進んだ距離の割合 × draft。ブーストは押したその時：スタートから全体の opening_ratio までに押したら opening_per_boost、残りの距離が全体の spurt_last_ratio（0.25＝ラスト25%）に入ってから押したら spurt_per_boost、そのあいだは outside_per_boost（ふつうは0。本番1・本番2は override で −0.1）。opening_per_boost：最序盤のブースト1回ごとの点（ふつうは0。本番4は override で −1.0。2026-10-27 ユーザー確認済み）",

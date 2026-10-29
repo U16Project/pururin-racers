@@ -2,8 +2,9 @@
 
 起動すると、まず「CPUを選ぶ画面」が出る。
   いちばん上の行は、あなたの枠（レース選択で自分にした枠）。最初は「あなた」。CPUにすると観戦。
-  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は7枠とも本採用。
-  選べるCPU：runs/保存/ の本採用（本採用_名前.zip。ゲームのCPUと同じ）と、控え（控え_名前.zip）だけ。
+  その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は7枠とも、rl_settings.json の play_run の育成の最新（まだ版が無ければ本採用）。
+  選べるCPU：runs/保存/ の本採用（本採用_名前.zip。ゲームのCPUと同じ）と、控え（控え_名前.zip）と、
+  育成中の最新（runs/育成の名前/versions/ のいちばん新しい版。レースを始めるたびに読み直す）。
 決定すると、ゲームのレース選択の画面（ふつうのオフラインと同じ）→ 出走表の「レース開始」でレース。
 レース中・結果の板のトレーナー欄には、その枠を走らせているCPUの名前が出る。
 結果の板の「もう1回」で同じ内容の次のレース、「戻る」でCPUを選ぶ画面へ。画面を閉じると終わる。
@@ -15,6 +16,7 @@
 
 import argparse
 import json
+from pathlib import Path
 
 from sb3_contrib import MaskablePPO
 
@@ -34,26 +36,44 @@ OPPONENTS = 7
 
 
 def choices() -> list:
-    """選べるCPUの一覧：本採用（いちばん上）と、控え（名前の順）。id は「saved:名前」、ファイルは runs/保存/本採用_名前.zip・控え_名前.zip。"""
+    """選べるCPUの一覧：本採用（いちばん上）と、控え（名前の順）と、育成中の最新（育成の名前の順）。
+    id は「saved:名前」「latest:育成の名前」。path は、保存の版ならそのファイル、育成中なら versions/ の場所。"""
     items = []
     for kind in ("本採用", "控え"):
         for p in sorted(SAVED.glob(f"{kind}_*.zip")):
             name = p.stem.split("_", 1)[1]
             items.append({"id": f"saved:{name}", "label": f"{name}（{kind}）", "path": str(p)})
+    for versions in sorted(RUNS.glob("*/versions")):
+        if any(versions.glob("*.zip")):
+            run = versions.parent.name
+            items.append({"id": f"latest:{run}", "label": f"{run}（育成中・最新）", "path": str(versions)})
     return items
 
 
 class Drivers:
-    """CPUの id → 読み込んだCPU（1度読んだら使い回す）。"""
+    """CPUの id → 読み込んだCPU（同じファイルなら使い回す。育成中の最新は、新しい版が出たら読み直す）。"""
 
     def __init__(self, items: list):
         self._paths = {item["id"]: item["path"] for item in items}
         self._loaded = {}
 
+    def _file(self, driver_id: str) -> str:
+        path = self._paths[driver_id]
+        if driver_id.startswith("latest:"):
+            return str(max(Path(path).glob("*.zip")))
+        return path
+
+    def refresh(self, driver_id: str) -> str:
+        """レースを始めるときに呼ぶ。今使うファイルを決めて読み込み、そのファイルを返す。"""
+        file = self._file(driver_id)
+        if self._loaded.get(driver_id, ("", None))[0] != file:
+            self._loaded[driver_id] = (file, MaskablePPO.load(file, device="cpu"))
+        return file
+
     def get(self, driver_id: str):
         if driver_id not in self._loaded:
-            self._loaded[driver_id] = MaskablePPO.load(self._paths[driver_id], device="cpu")
-        return self._loaded[driver_id]
+            self.refresh(driver_id)
+        return self._loaded[driver_id][1]
 
 
 def main():
@@ -64,7 +84,9 @@ def main():
     items = choices()
     if not items:
         raise SystemExit("runs/保存/ に、本採用・控えのCPUがありません")
-    defaults = [items[0]["id"]] * OPPONENTS
+    ids = [i["id"] for i in items]
+    first = f"latest:{settings['play_run']}"
+    defaults = [first if first in ids else ids[0]] * OPPONENTS
     extra = []
     if args.shot:
         seconds, path = args.shot.split(",", 1)
@@ -83,8 +105,10 @@ def main():
                 spec = message["start"]
                 by_gate = {int(g): d for g, d in spec.get("drivers", {}).items()}
                 labels = {int(g): l for g, l in spec.get("labels", {}).items()}
-                for d in set(by_gate.values()):
-                    drivers.get(d)
+                for d in sorted(set(by_gate.values())):
+                    file = drivers.refresh(d)
+                    if d.startswith("latest:"):
+                        print(f"  {d.split(':', 1)[1]}（育成中・最新）は {Path(file).name} の版", flush=True)
                 race_no += 1
                 who = "あなたは %d 枠" % (spec["human_gate"] + 1) if spec["human_gate"] >= 0 else "観戦（%d 枠を追う）" % (spec["watch_gate"] + 1)
                 print(f"レース {race_no}：{int(spec['distance_m'])}m、{who}", flush=True)
