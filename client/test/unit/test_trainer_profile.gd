@@ -228,7 +228,7 @@ func test_game_start_goes_to_the_profile_screen_then_options_then_mode_select() 
 	assert_eq((screen.find_child("FreeRaceButton", true, false) as Button).text, "次へ")
 	assert_eq(screen.get("OPTIONS_SCENE_PATH"), "res://scenes/options.tscn")
 	assert_true(ResourceLoader.exists(screen.get("OPTIONS_SCENE_PATH")))
-	assert_eq((screen.find_child("Note", true, false) as Label).text, "あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。")
+	assert_eq((screen.find_child("Note", true, false) as Label).text, "あなたの名前・ひとこと・アイコンを登録します。部屋やパドックで、ほかのプレイヤーにも表示されます。")
 
 
 func test_a_saved_avatar_that_no_longer_exists_is_reported() -> void:

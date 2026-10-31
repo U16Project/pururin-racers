@@ -153,7 +153,7 @@ func _arrow(text: String, direction: int) -> Button:
 
 ## オンラインの部屋などで使う行にする。tag＝左の札の文（人の名前・「CPU」など）、tag_color＝その色、
 ## empty_text＝個体が決まっていないときの文、can_choose＝この行で個体を選べるか（自分の行だけ true）、
-## can_focus＝カーソルを置けるか（出走表で、能力を見るため）、tag_width＝札の幅（長い名前のため）。
+## can_focus＝カーソルを置けるか（パドックで、能力を見るため）、tag_width＝札の幅（長い名前のため）。
 ## 選べない行は、◀▶と南京錠を出さない。CPUトレーナーの変更も、できない。
 func set_view(tag: String, tag_color: Color, empty_text: String, can_choose: bool, can_focus: bool = false, tag_width: float = TAG_WIDTH) -> void:
 	_view_only = true

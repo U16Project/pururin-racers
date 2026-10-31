@@ -4366,7 +4366,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_nxfyi")
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/DistanceRow/Row" unique_id=1821453756]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
@@ -4388,7 +4388,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_7yco1")
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/FieldRow/Row" unique_id=908715947]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
@@ -4410,7 +4410,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_6wvkx")
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/RuleRow/Row" unique_id=796164354]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
@@ -4432,12 +4432,12 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_khqb0")
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/TicketRow/Row" unique_id=1585108020]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "チケット"
+text = "必要なチケット"
 
 [node name="TicketValue" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/TicketRow/Row" unique_id=1524830412]
 unique_name_in_owner = true
@@ -4446,15 +4446,37 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
 
-[node name="OpenRow" type="PanelContainer" parent="RoomView/Main/ConditionsPage/Conditions" unique_id=1755725235]
+[node name="RewardRow" type="PanelContainer" parent="RoomView/Main/ConditionsPage/Conditions" unique_id=605949908]
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_3ougr")
+
+[node name="Row" type="HBoxContainer" parent="RoomView/Main/ConditionsPage/Conditions/RewardRow" unique_id=389228737]
+layout_mode = 2
+
+[node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/RewardRow/Row" unique_id=1844288968]
+custom_minimum_size = Vector2(112, 0)
+layout_mode = 2
+theme_override_fonts/font = ExtResource("3_pj84j")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
+text = "1位の報酬"
+
+[node name="RewardValue" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/RewardRow/Row" unique_id=278982271]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_fonts/font = SubResource("FontVariation_7qbkn")
+theme_override_font_sizes/font_size = 15
+theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
+
+[node name="OpenRow" type="PanelContainer" parent="RoomView/Main/ConditionsPage/Conditions" unique_id=1755725235]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_khqb0")
 
 [node name="Row" type="HBoxContainer" parent="RoomView/Main/ConditionsPage/Conditions/OpenRow" unique_id=367367076]
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/OpenRow/Row" unique_id=1733174776]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
@@ -4476,7 +4498,7 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_raghk")
 layout_mode = 2
 
 [node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/WaitRow/Row" unique_id=1376970983]
-custom_minimum_size = Vector2(86, 0)
+custom_minimum_size = Vector2(112, 0)
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15

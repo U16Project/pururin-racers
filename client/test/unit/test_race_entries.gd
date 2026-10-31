@@ -2,6 +2,7 @@ extends GutTest
 const Session := preload("res://scripts/race_session.gd")
 const EntriesScene := preload("res://scenes/race_entries.tscn")
 const Select := preload("res://scripts/race_select.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 class WithoutNavigation extends "res://scripts/race_entries.gd":
 	var paths: Array[String] = []
 	func _navigate(path: String) -> void:
@@ -31,6 +32,9 @@ func test_entries_preserve_gate_and_show_selected_trainer_and_player() -> void:
 	assert_eq(screen.get("_detail").call("shown_pururin_id"), "cpu-1")
 	assert_eq(Session.slots_snapshot(), before)
 	assert_eq(Select.RACE_SCENE_PATH, "res://scenes/race_entries.tscn")
+	# パドックにいる間に、レースの画面を裏で読み込み始めている。
+	assert_true(RaceScenePreload.is_started())
+	assert_eq(screen.get_node("TopBar/Title").text, "パドック　%d m" % int(Session.selected_distance_m()))
 
 func test_start_and_back_are_guarded_and_never_change_selection() -> void:
 	var screen := WithoutNavigation.new()
@@ -54,6 +58,17 @@ func test_start_and_back_are_guarded_and_never_change_selection() -> void:
 	add_child_autofree(invalid)
 	invalid.start()
 	assert_true(invalid.paths.is_empty())
+
+func test_the_preloaded_race_scene_is_the_one_used() -> void:
+	RaceScenePreload.start()
+	var scene: PackedScene = ResourceLoader.load_threaded_get(RaceScenePreload.SCENE_PATH)
+	assert_not_null(scene)
+	assert_eq(scene.resource_path, RaceScenePreload.SCENE_PATH)
+	# 受け取ったあとは、もう一度始められる（次のレースのパドックで、また裏で読む）。
+	assert_false(RaceScenePreload.is_started())
+	RaceScenePreload.start()
+	assert_true(RaceScenePreload.is_started())
+	ResourceLoader.load_threaded_get(RaceScenePreload.SCENE_PATH)
 
 func test_full_field_fits_viewport_with_readable_details() -> void:
 	Session.select_full_field("player-1")

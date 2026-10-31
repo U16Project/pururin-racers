@@ -36,6 +36,7 @@ const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd")
 const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
+const PreRaceShow := preload("res://scripts/presentation/pre_race_show.gd")
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const BrainDriver := preload("res://scripts/cpu_brain/brain_driver.gd")
@@ -116,6 +117,10 @@ var _final_stretch_ambience_started := false
 ## これから先に作っておく、表情の部品（[体, 表情の名前] の並び）。
 var _faces_to_prepare: Array = []
 var _online_ready_sent := false
+## スタート前の見せ方（画面のある所だけ。終わったら null）。
+var _pre_race_show: Node
+## オンライン：サーバーが、全員の準備を待つのをやめて、入場の待ちへ進んだか。
+var _online_hold_released := false
 ## カウントダウンを始めたか（入場の待ちと、スタート前の準備が、両方終わってから true）。
 var _countdown_begun := false
 var _final_stretch_ambience_fading := false
@@ -292,7 +297,10 @@ func _ready() -> void:
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
 	RaceAudio.play_race_entry()
-	if _entry_wait_remaining <= 0.0:
+	# 画面のある所では、スタート前の見せ方から（画面の無いサーバー・ラボで走らせるときは、出さない）。
+	if not _is_online_host():
+		_start_pre_race_show()
+	if _entry_wait_remaining <= 0.0 and not _is_showing_pre_race():
 		_begin_start_countdown()
 	if _player != null:
 		_player.call("set_drive_level", LocalRaceMath.Config.number("player_start_drive_level"))
@@ -314,6 +322,11 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 	var viewport := get_viewport()
+	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
+	if _is_showing_pre_race() and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
+		viewport.set_input_as_handled()
+		_pre_race_show.call("skip")
+		return
 	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
 		return
@@ -455,8 +468,27 @@ func _start_final_stretch_fade_out() -> void:
 	RaceAudio.fade_out_final_stretch_ambience(FINAL_STRETCH_FADE_OUT_S)
 
 
-## 入場の待ちが終わってから、カウントダウンを進める。
+## スタート前の見せ方を始める。オフラインは準備が終わったら、オンラインはサーバーが待つのをやめたら、④ から先へ進む。
+func _start_pre_race_show() -> void:
+	var show := PreRaceShow.new()
+	show.name = "PreRaceShow"
+	add_child(show)
+	show.may_finish = func() -> bool: return _online_hold_released if _online_view else not _is_preparing()
+	show.is_paused = func() -> bool: return _paused
+	show.begin(_track, _race_route, _runners, $UI, _camera, "%d m のレース" % int(_race_distance_m))
+	show.finished.connect(func() -> void: _pre_race_show = null)
+	_pre_race_show = show
+
+
+## スタート前の見せ方の途中か。
+func _is_showing_pre_race() -> bool:
+	return _pre_race_show != null and is_instance_valid(_pre_race_show) and bool(_pre_race_show.call("is_running"))
+
+
+## 入場の待ちが終わってから、カウントダウンを進める。見せ方の途中は、待つ。
 func _update_before_start(delta: float) -> void:
+	if _is_showing_pre_race():
+		return
 	if not _countdown_begun:
 		_entry_wait_remaining -= delta
 		# 入場の待ちが過ぎ、スタート前の準備も終わってから、カウントダウンへ進む
@@ -685,6 +717,12 @@ func _apply_online_state(data: Dictionary) -> void:
 	_race_elapsed = float(data["elapsed"])
 	if _race_started:
 		return
+	# サーバーが待つのをやめたら、見せ方は ④ から先へ（もう始まっていれば、すぐ終える）。
+	_online_hold_released = not bool(data["hold"])
+	if _is_showing_pre_race():
+		_pre_race_show.set("show_waiting", _online_ready_sent and bool(data["hold"]))
+		if bool(data["started"]) or float(data["countdown"]) > 0.0:
+			_pre_race_show.call("finish_now")
 	if bool(data["started"]):
 		_race_started = true
 		_start_gate.clear_after_start()
@@ -695,7 +733,8 @@ func _apply_online_state(data: Dictionary) -> void:
 		for runner in _runners:
 			runner.call("set_race_active", true)
 	elif bool(data["hold"]):
-		_countdown_label.visible = true
+		# 見せ方の途中は、見せ方の文で知らせる（下の文は出さない）。
+		_countdown_label.visible = not _is_showing_pre_race()
 		_countdown_label.text = "みんなの準備を待っています…"
 		_online_countdown_shown = false
 	elif float(data["countdown"]) > 0.0:
@@ -1059,7 +1098,8 @@ func _is_preparing() -> bool:
 ## オンライン：準備が終わったら、画面ができたことを、サーバーに1回だけ知らせる
 ## （全員ぶんそろうと、スタートへ向かう時計が動き出す。準備の途中で知らせると、止まっているあいだにレースが始まる）。
 func _send_online_ready_when_prepared() -> void:
-	if _online_ready_sent or _is_preparing():
+	# 見せ方が ④（ゲートに並ぶ）まで進んでから知らせる（①〜③ を、全員が見終わるように）。
+	if _online_ready_sent or _is_preparing() or (_is_showing_pre_race() and not bool(_pre_race_show.call("is_at_lineup"))):
 		return
 	_online_ready_sent = true
 	_online_client.send(OnlineProtocol.READY)

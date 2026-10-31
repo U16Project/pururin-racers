@@ -49,11 +49,11 @@ static var _course_only := OS.has_feature("web")
 static var _online_entries: Array = []
 ## オンラインのゲーム側で、サーバーのレースを映すとき、自分の番号（0なら、映す側ではない）。
 static var _online_view_peer_id := 0
-## ラボ（lab/rl/play.py）から起動したときだけ使う：出走表の「スタート」で、ふつうのレースの代わりにこれを呼ぶ。
+## ラボ（lab/rl/play.py）から起動したときだけ使う：パドックの「レース開始」で、ふつうのレースの代わりにこれを呼ぶ。
 ## ふつうに遊ぶときは空（何もしない）。
 static var race_starter := Callable()
 ## ラボ（lab/rl/play.py）から起動したときだけ使う：枠の番号 → その枠を走らせるCPUの名前（無ければ空）。
-## レース選択と出走表のトレーナー欄に、トレーナー名に添えて出す。ふつうに遊ぶときは空（何もしない）。
+## レース選択とパドックのトレーナー欄に、トレーナー名に添えて出す。ふつうに遊ぶときは空（何もしない）。
 static var slot_driver_label := Callable()
 ## ラボ（lab/rl/play.py）から起動したときだけ使う：レース選択の「戻る」で、ゲームのメニューの代わりにこれを呼ぶ。
 ## ふつうに遊ぶときは空（何もしない）。

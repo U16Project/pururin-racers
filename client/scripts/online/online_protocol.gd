@@ -273,7 +273,7 @@ const ACTION_BOOST := "boost"
 ## レースの状態を配る回数（1秒あたり）。
 const STATE_RATE_HZ := 20.0
 ## 全員のレースの画面ができるのを待つ秒数の上限。過ぎたら、できていない人を待たずに始める。
-const READY_TIMEOUT_S := 20.0
+const READY_TIMEOUT_S := 40.0
 
 
 ## 送る文を作る。

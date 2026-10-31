@@ -1118,6 +1118,33 @@ func test_a_long_status_stays_on_one_line() -> void:
 	assert_eq(status.get_theme_font_size("font_size"), normal)
 
 
+func test_a_ticket_room_shows_the_ticket_as_its_rule_and_in_its_own_color() -> void:
+	var plain := {"rule": "縛りなし", "tag_color": "#52db80", "needs_ticket": "", "gives_ticket": ""}
+	var gives := {"rule": "縛りなし", "tag_color": "#ffcc47", "needs_ticket": "", "gives_ticket": "t2", "gives_ticket_name": "2回戦のチケット"}
+	var needs := {"rule": "縛りなし", "tag_color": "#ffcc47", "needs_ticket": "t2", "needs_ticket_name": "2回戦のチケット", "gives_ticket": ""}
+	# 縛り：チケットが要るルームだけ「チケットが必要」。ほかは設定の文のまま。
+	assert_eq(FreeLobby.rule_text(plain), "縛りなし")
+	assert_eq(FreeLobby.rule_text(gives), "縛りなし")
+	assert_eq(FreeLobby.rule_text(needs), FreeLobby.RULE_TICKET_TEXT)
+	# 必要なチケットと、1位の報酬は、別々の行。
+	assert_eq(FreeLobby.needed_ticket_text(needs), "2回戦のチケット")
+	assert_eq(FreeLobby.reward_ticket_text(needs), "なし")
+	assert_eq(FreeLobby.needed_ticket_text(gives), "なし")
+	assert_eq(FreeLobby.reward_ticket_text(gives), "2回戦のチケット")
+	# 札の色：チケットが要るルームは、チケットの色。
+	var screen := _screen()
+	await wait_frames(2)
+	var tag := PanelContainer.new()
+	tag.add_theme_stylebox_override("panel", StyleBoxFlat.new())
+	var text := Label.new()
+	add_child_autofree(tag)
+	add_child_autofree(text)
+	screen.call("_set_tag", tag, text, needs.merged({"tag": "公式戦"}))
+	assert_eq((tag.get_theme_stylebox("panel") as StyleBoxFlat).bg_color, FreeLobby.COLOR_TICKET_TAG)
+	screen.call("_set_tag", tag, text, gives.merged({"tag": "公式戦"}))
+	assert_eq((tag.get_theme_stylebox("panel") as StyleBoxFlat).bg_color, Color.html("#ffcc47"))
+
+
 func test_a_ticket_room_card_is_locked_until_a_pururin_has_the_ticket() -> void:
 	var ticket_room := _room_spec("needs_ticket", str(OnlineConfig.values()["free_tickets"][0]["id"]))
 	var screen := _screen()

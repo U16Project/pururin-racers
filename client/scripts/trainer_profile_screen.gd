@@ -61,7 +61,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 10)
 	panel.add_child(column)
 	column.add_child(MenuStyle.section_title("あなたのプロフィール"))
-	var note := MenuStyle.label("あなたの名前・ひとこと・アイコンを登録します。部屋や出走表で、ほかのプレイヤーにも表示されます。", 14, MenuStyle.COLOR_BAR_DIM)
+	var note := MenuStyle.label("あなたの名前・ひとこと・アイコンを登録します。部屋やパドックで、ほかのプレイヤーにも表示されます。", 14, MenuStyle.COLOR_BAR_DIM)
 	note.name = "Note"
 	note.add_theme_constant_override("outline_size", 0)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -93,7 +93,7 @@ func _ready() -> void:
 	_problem_label = MenuStyle.label("", 16, MenuStyle.COLOR_TAKEN)
 	_problem_label.name = "ProblemLabel"
 	name_box.add_child(_problem_label)
-	# 紹介文（出走表の、トレーナーの所に出る）。
+	# 紹介文（パドックの、トレーナーの所に出る）。
 	var introduction_head := HBoxContainer.new()
 	column.add_child(introduction_head)
 	var introduction_title := _caption("ひとこと（%d文字まで）" % int(rules["introduction_max_length"]))

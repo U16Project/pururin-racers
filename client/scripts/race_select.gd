@@ -106,7 +106,7 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	buttons.add_child(_back_button)
-	_race_button = MenuStyle.pill_button("出走表へ", "primary", 22)
+	_race_button = MenuStyle.pill_button("パドックへ", "primary", 22)
 	_race_button.name = "RaceButton"
 	_race_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_race_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL

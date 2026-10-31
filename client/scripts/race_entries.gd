@@ -8,12 +8,13 @@ const Detail := preload("res://scripts/menu/pururin_detail.gd")
 const Portrait := preload("res://scripts/menu/pururin_portrait.gd")
 const TrainerIcon := preload("res://scripts/menu/trainer_icon.gd")
 const InputHelper := preload("res://scripts/input/race_controller_input.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const STYLE_NAMES := {"escape": "逃げ", "pace": "先行", "stalk": "差し", "closer": "追い込み"}
 const ATTRIBUTE_NAMES := {"fire": "火", "water": "水", "earth": "地", "wind": "風"}
 const Stats := preload("res://scripts/config/pururin_stats_config.gd")
 const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 const Hud := preload("res://scripts/presentation/race_hud.gd")
-## 出走表の行の、属性と脚質の印の大きさ。
+## パドックの行の、属性と脚質の印の大きさ。
 const MARK_SIZE := 15.0
 const CHEVRON_SCALE := 0.62
 var _entries: Array = []
@@ -30,9 +31,12 @@ var _transitioning := false
 var shown_gate := -1
 
 func _ready() -> void:
+	# パドックにいる間に、レースの画面を裏で読み込んでおく（ラボから起動したときは、ラボが自分で始めるので読まない）。
+	if not Session.race_starter.is_valid():
+		RaceScenePreload.start()
 	Style.background(self, "res://assets/ui/race_select_background.jpg")
-	# 画面の名前（出走表と距離）は、上の帯に出す。
-	Style.top_bar(self, "出走表　%d m" % int(Session.selected_distance_m()), Profile.trainer_name())
+	# 画面の名前（パドックと距離）は、上の帯に出す。
+	Style.top_bar(self, "パドック　%d m" % int(Session.selected_distance_m()), Profile.trainer_name())
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
 	panel.add_theme_stylebox_override("panel", Style.panel_box(18.0, 12.0))
@@ -218,8 +222,12 @@ func _link_focus() -> void:
 		button.focus_neighbor_left = button.get_path_to(_back)
 		button.focus_neighbor_right = button.get_path_to(_start)
 
+## 画面を切り替える。レースへは、裏で読み込んでおいた画面を使う。
 func _navigate(path: String) -> void:
-	get_tree().change_scene_to_file(path)
+	if path == RaceScenePreload.SCENE_PATH:
+		RaceScenePreload.go(get_tree())
+	else:
+		get_tree().change_scene_to_file(path)
 
 func start() -> void:
 	if _transitioning or not Session.race_start_problem().is_empty():
@@ -229,7 +237,7 @@ func start() -> void:
 	if Session.race_starter.is_valid():
 		Session.race_starter.call()
 	else:
-		_navigate("res://scenes/local_race.tscn")
+		_navigate(RaceScenePreload.SCENE_PATH)
 
 func back() -> void:
 	if _transitioning:

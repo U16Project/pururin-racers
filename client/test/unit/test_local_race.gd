@@ -108,6 +108,8 @@ func test_race_entry_waits_five_seconds_before_the_countdown() -> void:
 		race.call("_prepare_next_face")
 	race.get_node("FirstDrawWarmup").free()
 	assert_false(race.call("_is_preparing"))
+	# スタート前の見せ方が終わってから、入場の待ちを数える（見せ方は test_pre_race_show で確かめる）。
+	race.get("_pre_race_show").call("finish_now")
 	race.set("_entry_wait_remaining", wait)
 	race.call("_update_before_start", wait - 0.1)
 	assert_false(race.get("_race_started"))

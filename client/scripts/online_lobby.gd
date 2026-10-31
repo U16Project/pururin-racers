@@ -11,6 +11,7 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const LockMark := preload("res://scripts/menu/lock_mark.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinPortrait := preload("res://scripts/menu/pururin_portrait.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
@@ -30,7 +31,6 @@ const LOCAL_SERVER_RETRY_S := 0.8
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
-const LOCAL_RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 const Protocol := preload("res://scripts/online/online_protocol.gd")
 const PANEL_WIDTH := 1040.0
 ## 板と、画面の上下の端のあいだ。
@@ -1508,6 +1508,9 @@ func _refresh() -> void:
 	var waiting := view == "waiting"
 	var settings := view == "settings"
 	var picking := view == "pick"
+	# プル選択・パドックにいる間に、レースの画面を裏で読み込んでおく（切り替えで止まらないように）。
+	if picking or view == "paddock":
+		RaceScenePreload.start()
 	if not picking:
 		_auto_pick_sent = false
 		_pick_dialog.visible = false
@@ -3086,7 +3089,7 @@ func _show_chat() -> void:
 ## レースが始まった：届いた出走と距離で、レースの画面へ進む（レースは、サーバーから届く状態を映す）。
 func _go_to_race(data: Dictionary) -> void:
 	prepare_race(data)
-	get_tree().change_scene_to_file(LOCAL_RACE_SCENE_PATH)
+	RaceScenePreload.go(get_tree())
 
 
 ## レースの画面が読むもの（距離・出走・自分の番号・景色の軽さ）を、決めておく。

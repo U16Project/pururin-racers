@@ -17,11 +17,11 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
 const LocalServer := preload("res://scripts/online/local_server.gd")
 
 const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
-const LOCAL_RACE_SCENE_PATH := "res://scenes/local_race.tscn"
 ## ルームの今のようすの色（カードの下の帯・ルームの画面の帯）。空き＝緑、呼び出し中＝黄、レース中＝橙。
 const STATE_COLORS := {
 	Protocol.FREE_STATE_IDLE: Color(0.32, 0.86, 0.5),
@@ -30,6 +30,9 @@ const STATE_COLORS := {
 }
 ## 受付の外のルームの帯の色。
 const COLOR_CLOSED := Color(0.62, 0.68, 0.78)
+## チケットが要るルームの札の色（紫）と、縛りの文。
+const COLOR_TICKET_TAG := Color(0.74, 0.56, 1.0)
+const RULE_TICKET_TEXT := "チケットが必要"
 ## 帯の地の濃さ（色の不透明度）。
 const STRIP_FILL_ALPHA := 0.18
 const ERROR_TEXTS := {
@@ -103,6 +106,7 @@ const PICKER_STATUS_GAP := 12.0
 @onready var _open_value: Label = %OpenValue
 @onready var _wait_value: Label = %WaitValue
 @onready var _ticket_value: Label = %TicketValue
+@onready var _reward_value: Label = %RewardValue
 @onready var _pick_tickets: Label = %PickTickets
 @onready var _intro: Label = %Intro
 @onready var _room_strip: Control = %RoomStrip
@@ -588,7 +592,7 @@ func fill_card(card: Control, room: Dictionary, entry: Dictionary) -> void:
 	_set_tag(card.get_node("Tag"), card.get_node("Tag/Text"), room)
 	(card.get_node("Distance") as Label).text = distance_text(float(room["distance_m"]))
 	(card.get_node("Name") as Label).text = str(room["name"])
-	(card.get_node("Rule") as Label).text = "本戦 開始 " + schedule_text(int(room["start_unix"])) if is_final(room) else "受付 " + schedule_range_text(int(room["open_unix"]), int(room["close_unix"])) if int(room.get("close_unix", 0)) > 0 else str(room["rule"])
+	(card.get_node("Rule") as Label).text = "本戦 開始 " + schedule_text(int(room["start_unix"])) if is_final(room) else "受付 " + schedule_range_text(int(room["open_unix"]), int(room["close_unix"])) if int(room.get("close_unix", 0)) > 0 else rule_text(room)
 	var priority := _entries.find(entry) + 1 if not entry.is_empty() else 0
 	(card.get_node("Priority") as Control).visible = priority > 0 and not bool(entry["hold"])
 	(card.get_node("Priority/Number") as Label).text = str(priority)
@@ -739,7 +743,8 @@ func _set_strip(strip: Control, dot: Control, label: Label, room: Dictionary) ->
 
 func _set_tag(tag: Control, label: Label, room: Dictionary) -> void:
 	var box := (tag.get_theme_stylebox("panel") as StyleBoxFlat).duplicate() as StyleBoxFlat
-	box.bg_color = Color.html(str(room["tag_color"]))
+	# チケットが要るルームは、札をチケットの色にして、ほかのルームと見分けられるようにする。
+	box.bg_color = COLOR_TICKET_TAG if needs_ticket(room) else Color.html(str(room["tag_color"]))
 	tag.add_theme_stylebox_override("panel", box)
 	label.text = str(room["tag"])
 
@@ -947,8 +952,9 @@ func _refresh_room_view() -> void:
 	_distance_value.text = distance_text(float(room["distance_m"]))
 	var capacity := int(_detail.get("capacity", Protocol.ROOM_CAPACITY))
 	_field_value.text = "%d人（足りない枠はCPU）" % capacity if not is_final(room) else "最大%d人。%d人ずつ準決勝、各1位で決勝" % [int(room["max_players"]), capacity]
-	_rule_value.text = str(room["rule"])
-	_ticket_value.text = ticket_text(room)
+	_rule_value.text = rule_text(room)
+	_ticket_value.text = needed_ticket_text(room)
+	_reward_value.text = reward_ticket_text(room)
 	if is_final(room):
 		_open_value.text = "開始 %s まで（開始の時刻に呼び出し）" % schedule_text(int(room["start_unix"]))
 	else:
@@ -973,13 +979,24 @@ func _refresh_room_strip(room: Dictionary) -> void:
 	_room_strip_text.text = state_text(room) + ("　" + schedule if not schedule.is_empty() else "　同時に走るレースは %d まで" % int(room.get("max_races", 1)))
 
 
-## 条件の「チケット」の行。
-static func ticket_text(room: Dictionary) -> String:
-	if not str(room.get("needs_ticket", "")).is_empty():
-		return "要る：%s" % str(room["needs_ticket_name"])
-	if not str(room.get("gives_ticket", "")).is_empty():
-		return "1位でもらえる：%s" % str(room["gives_ticket_name"])
-	return "なし"
+## 縛りの文。チケットが要るルームは、出られる人がしぼられるので「チケットが必要」（ルームの設定の文より先）。
+static func rule_text(room: Dictionary) -> String:
+	return RULE_TICKET_TEXT if needs_ticket(room) else str(room["rule"])
+
+
+## チケットが要るルームか。
+static func needs_ticket(room: Dictionary) -> bool:
+	return not str(room.get("needs_ticket", "")).is_empty()
+
+
+## 条件の「必要なチケット」の行。
+static func needed_ticket_text(room: Dictionary) -> String:
+	return str(room["needs_ticket_name"]) if needs_ticket(room) else "なし"
+
+
+## 条件の「1位の報酬」の行。
+static func reward_ticket_text(room: Dictionary) -> String:
+	return str(room["gives_ticket_name"]) if not str(room.get("gives_ticket", "")).is_empty() else "なし"
 
 
 ## エントリーしている人（待っている列の順）。
@@ -1188,6 +1205,8 @@ func _show_offer(data: Dictionary) -> void:
 	# ぷるりんを選んでいる途中・大きなチャット欄を開いているときも、呼ばれたら閉じて、確かめを先にする。
 	_chat_overlay.visible = false
 	_picker.call("close")
+	# 呼ばれたら、レースの画面を裏で読み込み始める（入ると答えてからレースまでの間に、読み終わるように）。
+	RaceScenePreload.start()
 	_offer = data
 	_offer_total_s = maxf(float(data.get("wait_s", 0.0)), 0.1)
 	_offer_until_msec = Time.get_ticks_msec() + int(_offer_total_s * 1000.0)
@@ -1518,7 +1537,7 @@ func _go_to_race(data: Dictionary) -> void:
 	RaceSession.select_distance(float(data["distance_m"]))
 	RaceSession.set_online_entries(data["entries"])
 	RaceSession.set_online_view(OnlineSession.peer_id)
-	get_tree().change_scene_to_file(LOCAL_RACE_SCENE_PATH)
+	RaceScenePreload.go(get_tree())
 
 
 ## 大きなチャット欄は、入力らんで書いている途中でも、Esc・B・SELECT の1回で閉じる（入力らんより先に受け取る）。
