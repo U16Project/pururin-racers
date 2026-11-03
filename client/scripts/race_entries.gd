@@ -35,6 +35,8 @@ var _back: Button
 var _transitioning := false
 var shown_gate := -1
 ## 枠番の抽選で、数字を回す間（秒）。
+## 一覧の行の、誰が動かすかの札の字の大きさ。
+const LIST_TAG_FONT_SIZE := 10
 const DRAW_TICK_S := 0.08
 var _list: VBoxContainer
 ## 行ごとの、名前の文字（枠番の抽選で、枠番の所を書き換える）。
@@ -149,7 +151,7 @@ func _ready() -> void:
 			name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			names.add_child(name_row)
 			name_row.add_child(name)
-			name_row.add_child(_control_tag(kind, 11))
+			name_row.add_child(_control_tag(kind, LIST_TAG_FONT_SIZE, true))
 		# 自分は登録した名前、オンラインのほかの人はその人の名前、CPUはトレーナーの名前。
 		var trainer_name := Profile.trainer_name() if player else (str(entry["trainer_name"]) if int(entry.get("peer_id", 0)) != 0 else str(_trainer_of(entry).get("name", "CPU")))
 		# 属性と脚質は、名前の前に、印も付ける（属性＝詳細パネルと同じ印、脚質＝操作盤と同じ「〈」）。
@@ -342,10 +344,12 @@ func _control_kind(entry: Dictionary) -> String:
 	return Hud.KIND_PLAYER if int(entry["peer_id"]) != 0 else Hud.KIND_CPU
 
 
-## 誰が動かすかの札。
-func _control_tag(kind: String, font_size: int) -> Control:
+## 誰が動かすかの札。small＝一覧の行の中に入れる、小さい札（行の高さを変えない）。
+func _control_tag(kind: String, font_size: int, small: bool = false) -> Control:
 	var tag: Array = Hud.CONTROL_TAGS[kind]
 	var node := Style.tag(str(tag[0]), tag[1], font_size)
+	if small:
+		node.add_theme_stylebox_override("panel", Style.box(tag[1], 4, 4.0, 0.0))
 	node.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	return node
 
