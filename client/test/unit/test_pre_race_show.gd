@@ -100,6 +100,9 @@ func test_skipping_goes_to_the_lineup_and_waits_for_the_preparation() -> void:
 func test_a_server_or_lab_race_has_no_show() -> void:
 	var race := _race(true)
 	assert_null(race.get("_pre_race_show"))
+	# サーバーが配る状態：人が動かしていない走者は cpu（ここでは、通信ごしの人がいないので全員）。
+	for state: Dictionary in (race.call("online_state") as Dictionary)["runners"]:
+		assert_true(bool(state["cpu"]))
 
 
 func test_a_free_race_waits_in_the_paddock_with_only_my_pururin_then_joins_everyone() -> void:
@@ -128,6 +131,22 @@ func test_a_free_race_waits_in_the_paddock_with_only_my_pururin_then_joins_every
 	assert_eq((race.get("_runners") as Array).size(), 8)
 	assert_eq(int((race.get("_player") as Node3D).get("gate_index")), 5, "自分は、決まった枠")
 	assert_eq(race.get("_pre_race_show"), show, "見せ方は、そのまま続く")
+	# 誰が動かすか：自分（人）はプレイヤー、ほかはCPU。人の走者を、サーバーがCPUに任せたら「CPU（代わり）」。
+	var Hud := preload("res://scripts/presentation/race_hud.gd")
+	var runners: Array = race.get("_runners")
+	var mine: Node3D = race.get("_player")
+	var other: Node3D = runners[0] if runners[0] != mine else runners[1]
+	assert_eq(race.call("control_kind", mine), Hud.KIND_PLAYER)
+	assert_eq(race.call("control_kind", other), Hud.KIND_CPU)
+	var states := []
+	for runner: Node3D in runners:
+		var state: Dictionary = runner.call("get_online_state")
+		state["cpu"] = true
+		states.append(state)
+	race.set("_free_waiting", false)
+	race.call("_apply_online_state", {"runners": states, "elapsed": 0.0, "hold": true, "started": false, "countdown": 0.0})
+	assert_eq(race.call("control_kind", mine), Hud.KIND_CPU_SUB)
+	assert_eq(race.call("control_kind", other), Hud.KIND_CPU)
 	# 呼び出しが取りやめになったら、ロビーへ戻る（レースには出ていないので、結果の選びは送らない）。
 	race.set("_free_waiting", true)
 	race.set("_online_left", false)
@@ -175,6 +194,13 @@ func test_a_free_race_that_fills_before_the_paddock_shows_one_list_only() -> voi
 	show.call("release_paddock")
 	show._process(0.1)
 	assert_eq(_overlay_count(race), 0, "レースまで残らない")
+	# パドックの途中で、サーバーがスタートした（見せ方を途中で終える）ときも、出走表は残らない。
+	var race2 := _race()
+	race2.call("_open_online_paddock")
+	var show2: Node = race2.get("_pre_race_show")
+	show2.call("_enter", PreRaceShow.STAGE_PADDOCK)
+	show2.call("finish_now")
+	assert_eq(_overlay_count(race2), 0, "途中で終わっても残らない")
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
 	OnlineSession.peer_id = 0

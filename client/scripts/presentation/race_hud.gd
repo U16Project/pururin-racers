@@ -38,6 +38,18 @@ const COLOR_STYLE_CHEVRON_OFF := Color(0.04, 0.06, 0.14, 0.55)
 ## 順位表（左上の操作盤の下に、台なしで出す）。行の高さは、確定した行も、まだの行も同じ。
 ## 置き場所（表の左上）は、standings_origin。local_race_controller が、操作盤の下に合わせて入れる。
 ## 自分の行の色の帯が、表の左はしから左へはみ出す幅。表の全体の幅は、STANDINGS_ROW_PAD + STANDINGS_WIDTH。
+## オンラインで、走者を誰が動かしているかの札（KIND_PLAYER＝人、KIND_CPU＝CPU、KIND_CPU_SUB＝人が抜けて、CPUが代わりに走っている）。
+## [札の文字, 色]。順位表は小さいので、短い文字（3つ目）を使う。
+const KIND_PLAYER := "player"
+const KIND_CPU := "cpu"
+const KIND_CPU_SUB := "cpu_sub"
+const CONTROL_TAGS := {
+	KIND_PLAYER: ["プレイヤー", Color(0.24, 0.66, 0.4), ""],
+	KIND_CPU: ["CPU", Color(0.42, 0.47, 0.56), "CPU"],
+	KIND_CPU_SUB: ["CPU（代わり）", Color(0.9, 0.52, 0.18), "CPU"],
+}
+const STANDINGS_TAG_FONT_SIZE := 11
+const STANDINGS_TAG_GAP := 4.0
 const STANDINGS_ROW_PAD := 8.0
 const STANDINGS_ROW_HEIGHT := 26.0
 ## 順位表の幅。体力の％の右はしまで（ゴールタイムの欄は置かない）。
@@ -468,7 +480,16 @@ func _draw_standings(font: Font) -> void:
 		_painter.draw_circle(Vector2(x + 36.0, center_y), 6.5, COLOR_OUTLINE)
 		_painter.draw_circle(Vector2(x + 36.0, center_y), 5.0, row["color"])
 		# 長い名前は、欄の幅に収める（少し小さく・少し細く。それでも入らなければ末尾を「…」に）。
-		var fitted := FitText.fit(row_font, str(row["name"]), STANDINGS_NAME_WIDTH, text_size)
+		# オンラインのCPUの行は、名前の欄の右端に、小さく「CPU」の札（代わりに走っているときは、だいだい色）。
+		var name_width := STANDINGS_NAME_WIDTH
+		var tag: Array = CONTROL_TAGS.get(str(row.get("kind", "")), [])
+		if not tag.is_empty() and not str(tag[2]).is_empty():
+			var tag_size := Vector2(font.get_string_size(str(tag[2]), HORIZONTAL_ALIGNMENT_LEFT, -1, STANDINGS_TAG_FONT_SIZE).x + 8.0, STANDINGS_TAG_FONT_SIZE + 4.0)
+			var tag_rect := Rect2(Vector2(x + STANDINGS_NAME_X + STANDINGS_NAME_WIDTH - tag_size.x, center_y - tag_size.y * 0.5), tag_size)
+			_draw_rounded_rect(tag_rect, tag[1], 4.0)
+			_painter.glyphs.add(_bold_font, str(tag[2]), STANDINGS_TAG_FONT_SIZE, Vector2(tag_rect.position.x + 4.0, center_y + STANDINGS_TAG_FONT_SIZE * 0.36), Color.WHITE, 0, Color.TRANSPARENT)
+			name_width -= tag_size.x + STANDINGS_TAG_GAP
+		var fitted := FitText.fit(row_font, str(row["name"]), name_width, text_size)
 		_painter.glyphs.add(row_font, str(fitted["text"]), int(fitted["font_size"]), Vector2.ZERO, text_color, 6, COLOR_OUTLINE, Transform2D(0.0, Vector2(float(fitted["x_scale"]), 1.0), 0.0, Vector2(x + STANDINGS_NAME_X, baseline)))
 		_draw_style_chevrons(Vector2(x + STANDINGS_STYLE_X, center_y), style_state_color(int(row["style_rank_bonus"])), int(row["style_group_count"]), int(row["style_group_index"]), 0.85)
 		var value_baseline := center_y + STANDINGS_VALUE_FONT_SIZE * 0.36

@@ -26,6 +26,9 @@ var _trainer_image: TextureRect
 var _player_image: Control
 var _trainer_name: Label
 var _favorite: Label
+## トレーナー名と、その横の、誰が動かすかの札（オンラインだけ）。
+var _trainer_line: HBoxContainer
+var _kind_tag: Control
 var _introduction: Label
 var _start: Button
 var _back: Button
@@ -136,7 +139,17 @@ func _ready() -> void:
 		name.set_meta("rest", " %s%s" % [str(pururin["display_name"]), "（自分）" if player else ""])
 		_names.append(name)
 		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		names.add_child(name)
+		# オンラインでは、名前の横に、誰が動かすかの札（プレイヤー・CPU）。
+		var kind := _control_kind(entry)
+		if kind.is_empty():
+			names.add_child(name)
+		else:
+			var name_row := HBoxContainer.new()
+			name_row.add_theme_constant_override("separation", 6)
+			name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			names.add_child(name_row)
+			name_row.add_child(name)
+			name_row.add_child(_control_tag(kind, 11))
 		# 自分は登録した名前、オンラインのほかの人はその人の名前、CPUはトレーナーの名前。
 		var trainer_name := Profile.trainer_name() if player else (str(entry["trainer_name"]) if int(entry.get("peer_id", 0)) != 0 else str(_trainer_of(entry).get("name", "CPU")))
 		# 属性と脚質は、名前の前に、印も付ける（属性＝詳細パネルと同じ印、脚質＝操作盤と同じ「〈」）。
@@ -190,6 +203,9 @@ func _ready() -> void:
 	_player_image = TrainerIcon.new()
 	_player_image.custom_minimum_size = Vector2(trainer_image_size, trainer_image_size)
 	_trainer_name = Style.label("", 23)
+	_trainer_line = HBoxContainer.new()
+	_trainer_line.add_theme_constant_override("separation", 8)
+	_trainer_line.add_child(_trainer_name)
 	_favorite = Style.label("", 17, Style.COLOR_DIM)
 	# 紹介文は、長めの文が入るように、小さめの字で、行を折り返して出す。
 	_introduction = Style.label("", 13, Style.COLOR_DIM)
@@ -216,7 +232,7 @@ func _ready() -> void:
 		var trainer_texts := VBoxContainer.new()
 		trainer_texts.alignment = BoxContainer.ALIGNMENT_CENTER
 		trainer_row.add_child(trainer_texts)
-		trainer_texts.add_child(_trainer_name)
+		trainer_texts.add_child(_trainer_line)
 		trainer_texts.add_child(_favorite)
 		_detail.custom_minimum_size.y = DETAIL_HEIGHT_OVERLAY
 		right.add_child(_detail)
@@ -227,7 +243,7 @@ func _ready() -> void:
 		trainer_panel.add_child(Style.section_title("トレーナー"))
 		trainer_panel.add_child(_trainer_image)
 		trainer_panel.add_child(_player_image)
-		trainer_panel.add_child(_trainer_name)
+		trainer_panel.add_child(_trainer_line)
 		trainer_panel.add_child(_favorite)
 		_introduction.custom_minimum_size = Vector2(244, 96)
 		trainer_panel.add_child(_introduction)
@@ -283,6 +299,13 @@ func _show_entry(entry: Dictionary) -> void:
 	entry_shown.emit(shown_gate)
 	_detail.call("show_pururin", str(entry["id"]))
 	var player := _is_me(entry)
+	if _kind_tag != null:
+		_kind_tag.queue_free()
+		_kind_tag = null
+	var kind := _control_kind(entry)
+	if not kind.is_empty():
+		_kind_tag = _control_tag(kind, 14)
+		_trainer_line.add_child(_kind_tag)
 	_trainer_image.visible = not player
 	_player_image.visible = player
 	if player:
@@ -296,7 +319,7 @@ func _show_entry(entry: Dictionary) -> void:
 		_trainer_image.visible = false
 		_trainer_name.text = str(entry.get("trainer_name", ""))
 		_trainer_name.add_theme_color_override("font_color", Style.COLOR_TEXT)
-		_favorite.text = "プレイヤー"
+		_favorite.text = "オンラインのプレイヤー"
 		_introduction.text = ""
 	else:
 		var trainer := _trainer_of(entry)
@@ -310,6 +333,21 @@ func _show_entry(entry: Dictionary) -> void:
 	var driver := Session.driver_label_for_slot(shown_gate)
 	if not driver.is_empty():
 		_trainer_name.text += "\n［%s］" % driver
+
+
+## オンラインで、その走者を誰が動かすか（Hud の KIND_PLAYER・KIND_CPU）。オフラインは空（札を出さない）。
+func _control_kind(entry: Dictionary) -> String:
+	if not Session.is_online_view() or not entry.has("peer_id"):
+		return ""
+	return Hud.KIND_PLAYER if int(entry["peer_id"]) != 0 else Hud.KIND_CPU
+
+
+## 誰が動かすかの札。
+func _control_tag(kind: String, font_size: int) -> Control:
+	var tag: Array = Hud.CONTROL_TAGS[kind]
+	var node := Style.tag(str(tag[0]), tag[1], font_size)
+	node.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	return node
 
 
 ## 自分の走者か。オンラインでは、自分の番号の人だけ（ほかの人も player が真なので、番号で見分ける）。

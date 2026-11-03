@@ -401,6 +401,9 @@ func _enter(stage: int) -> void:
 
 
 func _finish() -> void:
+	# パドックの途中で終わる（サーバーがスタートした）ときも、パドックを出た知らせを出す（重ねた出走表を片づけるため）。
+	if _stage == STAGE_PADDOCK:
+		paddock_left.emit()
 	_end_warmup()
 	_end_entry()
 	_stage = STAGE_DONE

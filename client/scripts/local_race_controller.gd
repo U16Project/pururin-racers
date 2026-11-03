@@ -135,6 +135,9 @@ var _paddock_mode := ""
 var _paddock_overlay: Control
 ## フリー対戦で、会場で出走者を待っている間か（自分のぷるりんだけ。レースはまだ無い）と、待ち始めた時刻（ミリ秒）。
 var _free_waiting := false
+## オンラインのゲーム側：人（通信ごしの人と自分）が動かす走者と、そのうち、抜けてCPUが代わりに走っている走者（走者 → true）。
+var _human_runners := {}
+var _cpu_sub_runners := {}
 var _free_wait_started_msec := 0
 var _free_joining := false
 ## オンライン：サーバーが、全員の準備を待つのをやめて、入場の待ちへ進んだか。
@@ -796,6 +799,8 @@ func _spawn_field() -> void:
 	_remote_runners.clear()
 	_remote_inputs.clear()
 	_runners_by_id.clear()
+	_human_runners.clear()
+	_cpu_sub_runners.clear()
 	_online_view = RaceSession.is_online_view()
 	_brain = null if _online_view else BrainDriver.new(_track, _race_distance_m)
 	# 出るのは、キャラが入っている枠だけ。スタートの位置は、枠の番号どおり（未選択の枠は、空けたまま）。
@@ -838,6 +843,8 @@ func _spawn_field() -> void:
 		# オンラインのゲーム側：全員、サーバーから届いた状態を映すだけ。自分の番号の走者が、この画面の「自分」。
 		if _online_view:
 			runner.set("puppet", true)
+			if peer_id != 0:
+				_human_runners[runner] = true
 			is_player = peer_id == RaceSession.online_view_peer_id()
 			peer_id = 0
 		if brain_seat:
@@ -917,6 +924,9 @@ func _apply_online_state(data: Dictionary) -> void:
 		if runner == null:
 			continue
 		runner.call("apply_online_state", state)
+		# 人が抜けて、サーバーのCPUが代わりに走りだした：その時点から「CPU（代わり）」の札にする。
+		if bool(state.get("cpu", false)) and _human_runners.has(runner):
+			_cpu_sub_runners[runner] = true
 		if runner == _player and not _race_over:
 			_play_online_own_sounds(state)
 	# 結果の板を出したあとも、走者の位置は映し続ける（ゴール後に流して走るのが見える）。時計と表示は、止めたまま。
@@ -1198,8 +1208,12 @@ func _hand_to_brain(runner: Node3D, trainer_id: String) -> void:
 ## オンラインで配る、レースの今の状態。
 func online_state() -> Dictionary:
 	var runners: Array = []
+	var humans: Array = _remote_runners.values()
 	for runner in _runners:
-		runners.append(runner.call("get_online_state"))
+		var state: Dictionary = runner.call("get_online_state")
+		# 人が動かしていない（はじめからCPU・抜けてCPUに任せた）走者か。
+		state["cpu"] = not humans.has(runner)
+		runners.append(state)
 	return {
 		"elapsed": _race_elapsed,
 		"started": _race_started,
@@ -1736,6 +1750,7 @@ func _hud_standings() -> Array:
 			"name": str(runner.get("display_name")),
 			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
 			"player": runner == _player,
+			"kind": control_kind(runner),
 			"finished": finished,
 			"finish_time": float(runner.call("get_finish_time")),
 			"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
@@ -1806,6 +1821,15 @@ func _show_results() -> void:
 	RaceAudio.play_result_applause()
 
 
+## オンラインで、その走者を誰が動かしているか（RaceHud の KIND_*）。オフラインは空（札を出さない）。
+func control_kind(runner: Node3D) -> String:
+	if not _online_view:
+		return ""
+	if _cpu_sub_runners.has(runner):
+		return RaceHud.KIND_CPU_SUB
+	return RaceHud.KIND_PLAYER if _human_runners.has(runner) else RaceHud.KIND_CPU
+
+
 ## 着順の表の中身。着順の順に、着順・名前・色・ユーザーかどうか・タイム。
 func _result_rows() -> Array:
 	var ordered: Array = _runners.duplicate()
@@ -1816,6 +1840,7 @@ func _result_rows() -> Array:
 			"place": int(r.call("get_finish_order")),
 			"name": str(r.get("display_name")),
 			"trainer": str((r.get("_pururin") as Dictionary)["trainer_name"]),
+			"kind": control_kind(r),
 			"color": PururinVisualStyle.color_for_racer_id(str(r.call("get_snapshot")["id"])),
 			"player": r == _player,
 			"time_text": LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),

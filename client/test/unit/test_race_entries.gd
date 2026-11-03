@@ -35,6 +35,8 @@ func test_entries_preserve_gate_and_show_selected_trainer_and_player() -> void:
 	# パドックにいる間に、レースの画面を裏で読み込み始めている。
 	assert_true(RaceScenePreload.is_started())
 	assert_eq(screen.get_node("TopBar/Title").text, "パドック　%d m" % int(Session.selected_distance_m()))
+	# オフラインでは、誰が動かすかの札は出さない。
+	assert_null(screen.get("_rows")[1].find_child("Text", true, false))
 
 func test_start_and_back_are_guarded_and_never_change_selection() -> void:
 	var screen := WithoutNavigation.new()
@@ -124,6 +126,13 @@ func test_online_paddock_overlay_only_shows_and_marks_only_me() -> void:
 	assert_eq(screen.get("_trainer_name").text, "ほかの人")
 	rows[1].grab_focus()
 	assert_eq(screen.get("_trainer_name").text, "カエデ")
+	# オンラインでは、人の行に「プレイヤー」、CPUの行に「CPU」の札（行にも、右の欄にも）。
+	var Hud := preload("res://scripts/presentation/race_hud.gd")
+	var tag_text := func(node: Node) -> String: return (node.find_child("Text", true, false) as Label).text
+	assert_eq(tag_text.call(rows[0]), Hud.CONTROL_TAGS[Hud.KIND_PLAYER][0])
+	assert_eq(tag_text.call(rows[1]), Hud.CONTROL_TAGS[Hud.KIND_CPU][0])
+	assert_eq(tag_text.call(rows[2]), Hud.CONTROL_TAGS[Hud.KIND_PLAYER][0])
+	assert_eq(tag_text.call(screen.get("_kind_tag")), Hud.CONTROL_TAGS[Hud.KIND_CPU][0])
 	# レース開始・戻るは出さない（進めるのはサーバー）。START・B でも進まない。
 	assert_false((screen.find_child("StartButton", true, false) as Control).is_visible_in_tree())
 	assert_not_null(screen.find_child("SoonLabel", true, false))

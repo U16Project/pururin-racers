@@ -15,6 +15,8 @@ const NAME_TIME_GAP := 12.0
 const TRAINER_GAP := 10.0
 const TRAINER_FONT_SIZE := 15
 const TRAINER_MIN_WIDTH := 44.0
+const TAG_FONT_SIZE := 13
+const TAG_GAP := 6.0
 const FONT_SIZE := 24
 const MARK_SCALE := 1.35
 const COLOR_TEXT := Color(0.97, 0.98, 1.0, 1.0)
@@ -74,6 +76,15 @@ func _draw() -> void:
 		# 名前の右の、タイムまでの空きに、トレーナー名を小さく出す（長いときは縮める）。
 		var trainer_x := NAME_X + float(FitText.fit(name_font, str(row["name"]), name_width, FONT_SIZE)["width"]) + TRAINER_GAP
 		var trainer_width := NAME_X + name_width - trainer_x
+		# オンラインでは、トレーナー名の前に、誰が動かしたかの札（プレイヤー・CPU・CPU（代わり））。
+		var tag: Array = RaceHud.CONTROL_TAGS.get(str(row.get("kind", "")), [])
+		if not tag.is_empty():
+			var tag_size := Vector2(font.get_string_size(str(tag[0]), HORIZONTAL_ALIGNMENT_LEFT, -1, TAG_FONT_SIZE).x + 10.0, TAG_FONT_SIZE + 6.0)
+			if trainer_width >= tag_size.x:
+				draw_style_box(_band_box(tag[1]), Rect2(Vector2(trainer_x, center_y - tag_size.y * 0.5), tag_size))
+				draw_string(_bold_font, Vector2(trainer_x + 5.0, center_y + TAG_FONT_SIZE * 0.36), str(tag[0]), HORIZONTAL_ALIGNMENT_LEFT, -1.0, TAG_FONT_SIZE, Color.WHITE)
+				trainer_x += tag_size.x + TAG_GAP
+				trainer_width -= tag_size.x + TAG_GAP
 		if trainer_width >= TRAINER_MIN_WIDTH:
 			FitText.draw(self, font, Vector2(trainer_x, baseline), str(row["trainer"]), trainer_width, TRAINER_FONT_SIZE, COLOR_PLAYER if is_player else COLOR_DIM)
 		draw_string(font, Vector2(size.x - TIME_RIGHT_MARGIN - time_width, baseline), time_text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, FONT_SIZE, RaceHud.COLOR_GOLD if place == 1 else COLOR_TEXT)
