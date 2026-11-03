@@ -1,0 +1,363 @@
+{
+  "schema_version": 1,
+  "save_folder": "user://my_pururins",
+  "parts_folder": "user://parts",
+  "id_prefix": "my-",
+  "base_pururin": "player-1",
+  "name_max_length": 10,
+  "placements": {
+    "sides": {
+      "yaw_deg": 84.0,
+      "height_ratio": 0.34
+    },
+    "tail": {
+      "height_ratio": 0.28
+    }
+  },
+  "mark_spots": [
+    {
+      "label": "おなかのマーク",
+      "yaw_deg": 0.0,
+      "height_ratio": 0.66,
+      "size": 0.17
+    },
+    {
+      "label": "せなかのマーク",
+      "yaw_deg": 180.0,
+      "height_ratio": 0.58,
+      "size": 0.22
+    }
+  ],
+  "mark_colors": [
+    "#FFE14D",
+    "#FFFFFF",
+    "#FF8FB8",
+    "#9FE3FF",
+    "#B6F28A",
+    "#C9A3FF",
+    "#2B2B3A"
+  ],
+  "user_parts": {
+    "mesh": {
+      "scale": 1.0,
+      "material": "body",
+      "extensions": [
+        "glb",
+        "gltf"
+      ]
+    },
+    "image_extensions": [
+      "png",
+      "jpg",
+      "webp"
+    ],
+    "image_sizes": {
+      "eyes": [
+        0.4,
+        0.19
+      ],
+      "brows": [
+        0.3,
+        0.08
+      ],
+      "mouth": [
+        0.16,
+        0.1
+      ],
+      "cheeks": [
+        0.42,
+        0.08
+      ],
+      "effect": [
+        0.34,
+        0.24
+      ]
+    },
+    "mark_size": 0.17,
+    "face_base": "player-1"
+  },
+  "face_sets": {
+    "star": {
+      "label": "星の目",
+      "base": "player-1",
+      "expressions": {
+        "normal": {
+          "eyes": "eyes_star",
+          "mouth": "mouth_smile",
+          "cheeks": "cheek_blush"
+        },
+        "joy": {
+          "eyes": "eyes_joy",
+          "mouth": "mouth_open"
+        },
+        "anger": {
+          "eyes": "eyes_anger",
+          "mouth": "mouth_frown"
+        },
+        "sorrow": {
+          "eyes": "eyes_sorrow",
+          "mouth": "mouth_wavy"
+        },
+        "relax": {
+          "eyes": "eyes_relax",
+          "mouth": "mouth_omega"
+        },
+        "first_place": {
+          "eyes": "eyes_star",
+          "mouth": "mouth_open",
+          "effect": "effect_sparkle"
+        },
+        "push_win": {
+          "eyes": "eyes_effort",
+          "brows": "brow_angry",
+          "mouth": "mouth_grit"
+        },
+        "push_lose": {
+          "eyes": "eyes_squeeze",
+          "mouth": "mouth_wavy",
+          "effect": "effect_sweat"
+        }
+      }
+    },
+    "heart": {
+      "label": "ハートの目",
+      "base": "player-1",
+      "expressions": {
+        "normal": {
+          "eyes": "eyes_heart",
+          "mouth": "mouth_omega",
+          "cheeks": "cheek_blush"
+        },
+        "joy": {
+          "eyes": "eyes_joy",
+          "mouth": "mouth_open"
+        },
+        "anger": {
+          "eyes": "eyes_anger",
+          "mouth": "mouth_frown"
+        },
+        "sorrow": {
+          "eyes": "eyes_sorrow",
+          "mouth": "mouth_wavy"
+        },
+        "relax": {
+          "eyes": "eyes_relax",
+          "mouth": "mouth_omega"
+        },
+        "first_place": {
+          "eyes": "eyes_heart",
+          "mouth": "mouth_open",
+          "effect": "effect_sparkle"
+        },
+        "push_win": {
+          "eyes": "eyes_effort",
+          "brows": "brow_angry",
+          "mouth": "mouth_grit"
+        },
+        "push_lose": {
+          "eyes": "eyes_squeeze",
+          "mouth": "mouth_wavy",
+          "effect": "effect_sweat"
+        }
+      }
+    },
+    "droopy": {
+      "label": "たれ目",
+      "base": "cpu-2",
+      "expressions": {
+        "normal": {
+          "eyes": "eyes_droopy",
+          "mouth": "mouth_tongue",
+          "cheeks": "cheek_blush"
+        },
+        "joy": {
+          "eyes": "eyes_joy",
+          "mouth": "mouth_tongue"
+        },
+        "anger": {
+          "eyes": "eyes_anger",
+          "mouth": "mouth_frown"
+        },
+        "sorrow": {
+          "eyes": "eyes_sorrow",
+          "mouth": "mouth_wavy"
+        },
+        "relax": {
+          "eyes": "eyes_relax",
+          "mouth": "mouth_omega"
+        },
+        "first_place": {
+          "eyes": "eyes_droopy",
+          "mouth": "mouth_open",
+          "effect": "effect_sparkle"
+        },
+        "push_win": {
+          "eyes": "eyes_effort",
+          "brows": "brow_angry",
+          "mouth": "mouth_grit"
+        },
+        "push_lose": {
+          "eyes": "eyes_squeeze",
+          "mouth": "mouth_wavy",
+          "effect": "effect_sweat"
+        }
+      }
+    },
+    "sharp": {
+      "label": "つり目",
+      "base": "cpu-1",
+      "expressions": {
+        "normal": {
+          "eyes": "eyes_sharp",
+          "mouth": "mouth_grin",
+          "cheeks": "cheek_blush"
+        },
+        "joy": {
+          "eyes": "eyes_joy",
+          "mouth": "mouth_grin"
+        },
+        "anger": {
+          "eyes": "eyes_anger",
+          "mouth": "mouth_frown"
+        },
+        "sorrow": {
+          "eyes": "eyes_sorrow",
+          "mouth": "mouth_wavy"
+        },
+        "relax": {
+          "eyes": "eyes_relax",
+          "mouth": "mouth_omega"
+        },
+        "first_place": {
+          "eyes": "eyes_sharp",
+          "mouth": "mouth_open",
+          "effect": "effect_sparkle"
+        },
+        "push_win": {
+          "eyes": "eyes_effort",
+          "brows": "brow_angry",
+          "mouth": "mouth_grit"
+        },
+        "push_lose": {
+          "eyes": "eyes_squeeze",
+          "mouth": "mouth_wavy",
+          "effect": "effect_sweat"
+        }
+      }
+    }
+  },
+  "labels": {
+    "parts": {
+      "nub_drop": "しずくの突起",
+      "fin_flipper": "ヒレ",
+      "tail_flipper": "ヒレしっぽ",
+      "rock_crown": "岩のかんむり",
+      "rock_side": "岩",
+      "rock_tail": "岩しっぽ",
+      "flame_crest": "炎のとさか",
+      "flame_fin": "炎",
+      "flame_tail": "炎しっぽ",
+      "leaf_sprout": "ふたば",
+      "leaf_wing": "葉の羽",
+      "leaf_tail": "葉しっぽ",
+      "bubble_crown": "泡のかんむり",
+      "bubble_side": "泡",
+      "bubble_tail": "泡しっぽ",
+      "crystal_crown": "結晶のかんむり",
+      "crystal_side": "結晶",
+      "crystal_tail": "結晶しっぽ",
+      "horn_pair": "つの",
+      "halo_ring": "天使の輪",
+      "cat_ears": "ねこ耳",
+      "bunny_ears": "うさ耳",
+      "antenna": "アンテナ",
+      "bow_top": "リボン",
+      "crown": "王冠",
+      "angel_wing": "天使の羽",
+      "bat_wing": "こうもりの羽",
+      "round_hand": "まるい手",
+      "bow_tail": "リボンしっぽ",
+      "curl_tail": "くるりんしっぽ",
+      "tuft_tail": "ふさふさしっぽ",
+      "mark_star": "星",
+      "mark_heart": "ハート",
+      "mark_drop": "しずく",
+      "mark_bolt": "いなずま",
+      "mark_flower": "花",
+      "mark_diamond": "ダイヤ",
+      "mark_moon": "三日月",
+      "mark_swirl": "うずまき",
+      "mark_note": "音符",
+      "mark_paw": "肉球",
+      "mark_snow": "雪の結晶",
+      "mark_clover": "四つ葉"
+    },
+    "finishes": {
+      "gloss": "つやつや",
+      "matte": "さらさら",
+      "ember": "ほのお",
+      "sheer": "すけすけ"
+    },
+    "expressions": {
+      "normal": "ノーマル",
+      "joy": "喜",
+      "anger": "怒",
+      "sorrow": "哀",
+      "relax": "楽",
+      "first_place": "1位",
+      "push_win": "押し合い・勝ち",
+      "push_lose": "押し合い・負け"
+    },
+    "stat_descriptions": {
+      "top_speed": "全力で走ったときに、自然に届く速さの目安。直線で前に出やすくなります。",
+      "acceleration": "速さが乗るまでの素早さ。スタートや、仕掛けたあとに伸びやすくなります。",
+      "stamina": "体力の量。長い距離でも、速さを保ちやすくなります。",
+      "cardio": "心拍の上がりにくさと、下がりやすさ。無理をしても、息切れしにくくなります。",
+      "aero": "風を受けたときの強さ。ひとりで先頭を走るときに、落ちにくくなります。",
+      "pack": "ほかのぷるりんの後ろにつく上手さ。集団の中で、力を温存しやすくなります。",
+      "contact_resistance": "ぶつかったときの強さ。押し合いで負けにくくなります。",
+      "handling": "左右に動く素早さと、走りの安定。ぶつかったときや急な仕掛けでも、乱れにくくなります。"
+    }
+  },
+  "parts_readme": {
+    "file_name": "使い方.txt",
+    "lines": [
+      "ぷるりんの部品の置き場所",
+      "========================",
+      "",
+      "このフォルダに部品を入れて、作成コーナーの「部品を読み直す」を押すと、選べるようになります。",
+      "自分で用意した部品は、名前の後ろに ＊ が付きます。",
+      "",
+      "■ 頭・横・しっぽ（立体）",
+      "  top/ ……… 頭の上",
+      "  side/ …… 横（右に付ける形を作ると、左は自動で鏡写しになります）",
+      "  tail/ …… しっぽ",
+      "  形式：.glb か .gltf。ファイル名が部品の名前になります。",
+      "  向き：上が +Y、前が −Z。頭の上の部品は、原点が頭のてっぺん。横・しっぽは、原点が体の表面で、+X が体の外向きです。",
+      "  色：はじめは体と同じ色で塗ります。立体の色のまま使いたいときは、下の .json で \"material\": \"own\" にします。",
+      "",
+      "■ マーク（画像）",
+      "  mark/ …… .png（.jpg・.webp も可）。背景を透明にした、正方形の画像がおすすめです。",
+      "",
+      "■ 顔（画像）",
+      "  face/<セットの名前>/ に、「表情_場所.png」の名前で置きます。",
+      "    表情：normal（ノーマル）、joy（喜）、anger（怒）、sorrow（哀）、relax（楽）、",
+      "          first_place（1位）、push_win（押し合い・勝ち）、push_lose（押し合い・負け）",
+      "    場所：eyes（目）、brows（まゆ）、mouth（口）、cheeks（ほっぺ）、effect（汗やキラキラ）",
+      "  例：normal_eyes.png、normal_mouth.png、joy_eyes.png",
+      "  normal_eyes.png は必ず要ります。ほかの表情で絵が無い場所は、ノーマルの絵を出します。",
+      "  目の画像は、両目を1枚に描きます（顔のまん中に貼ります）。",
+      "",
+      "■ 名前や大きさを変えたいとき（なくてもよい）",
+      "  部品と同じ名前の .json を横に置きます。例：top/hat.glb の横に top/hat.json",
+      "    {\"label\": \"とんがり帽子\", \"source\": {\"scale\": 1.2, \"material\": \"own\"}}",
+      "  画像のマークは、大きさを作成コーナーの決まりで合わせます。",
+      "  顔のセットは、フォルダの中に face.json を置きます。",
+      "    {\"label\": \"しかく目\", \"image_sizes\": {\"eyes\": [0.4, 0.19], \"mouth\": [0.16, 0.1]}}",
+      "  （大きさの単位はメートル。体の横幅は 1.5 です）",
+      "",
+      "■ 読めない部品",
+      "  作成コーナーの左に、理由が赤い字で出ます。直してから「部品を読み直す」を押してください。"
+    ]
+  }
+}

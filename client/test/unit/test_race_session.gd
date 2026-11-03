@@ -5,7 +5,18 @@ const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
+const MyPururins := preload("res://scripts/config/my_pururins.gd")
+const EMPTY_MY_PURURINS_FOLDER := "user://test_my_pururins_empty"
 
+
+
+## 作成コーナーで作ったぷるりん（この機械の保存）が、選べる個体に混ざらないように、空の場所を使う。
+func before_all() -> void:
+	MyPururins.use_folder(EMPTY_MY_PURURINS_FOLDER)
+
+
+func after_all() -> void:
+	MyPururins.use_folder("")
 
 func before_each() -> void:
 	RaceSession.select_distance(RaceSession.DEFAULT_DISTANCE_M)

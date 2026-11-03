@@ -29,6 +29,8 @@ var _remote_notch := 0.0
 var presentation_enabled := true
 ## オンラインのゲーム側で、サーバーから届いた状態を映すだけの走者か。true のとき、自分では走りを計算しない。
 var puppet := false
+## スタート前に、出力（ノッチ）を選べるか。スタート前の見せ方の間は、コントローラが偽にする（パドックの出走表の上下が、ノッチに届かないように）。
+var pre_start_input := true
 ## 届いた状態（進んだ距離・ライン・速さ m/s）と、届いてからの秒数。届く間は、速さのぶんだけ先へ進めて、なめらかに追う。
 var _net_progress := 0.0
 var _net_offset := 0.0
@@ -871,8 +873,8 @@ func _process(delta: float) -> void:
 		_advance_puppet(delta)
 		return
 	if not _race_active:
-		# 開始前も出力だけは選べる。位置・速度・状態値は動かさない。
-		if player_controlled:
+		# 開始前も出力だけは選べる（スタート前の見せ方の間は、選べない）。位置・速度・状態値は動かさない。
+		if player_controlled and pre_start_input:
 			_update_drive_level_input(delta)
 		return
 	_apply_pururin_race_stats()

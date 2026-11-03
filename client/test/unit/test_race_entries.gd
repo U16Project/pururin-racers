@@ -100,3 +100,38 @@ func test_hovering_shows_that_row_and_leaving_returns_to_the_cursor_row() -> voi
 	rows[1].mouse_exited.emit()
 	assert_eq(screen.get("shown_gate"), 0, "離れたら、カーソルが合っている行に戻る")
 	assert_eq(screen.get("_detail").call("shown_pururin_id"), "player-1")
+
+
+func test_online_paddock_overlay_only_shows_and_marks_only_me() -> void:
+	var entries := [
+		{"gate": 0, "id": "player-1", "player": true, "peer_id": 5, "trainer_id": "kaede", "trainer_name": "ほかの人"},
+		{"gate": 1, "id": "cpu-1", "player": false, "peer_id": 0, "trainer_id": "kaede", "trainer_name": "カエデ"},
+		{"gate": 2, "id": "cpu-2", "player": true, "peer_id": 9, "trainer_id": "kaede", "trainer_name": "自分"},
+	]
+	Session.set_online_entries(entries)
+	Session.set_online_view(9)
+	var screen: Control = EntriesScene.instantiate()
+	screen.set("overlay_mode", true)
+	screen.set("read_only", true)
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	# 「自分」は、自分の番号の人だけ。はじめのカーソルも、自分の行。
+	var rows: Array = screen.get("_rows")
+	assert_eq(screen.get("shown_gate"), 2)
+	assert_true(rows[2].has_focus())
+	# ほかの人の行を見ると、トレーナーの所は、その人の名前。CPUは、出走に書いてあるトレーナー。
+	rows[0].grab_focus()
+	assert_eq(screen.get("_trainer_name").text, "ほかの人")
+	rows[1].grab_focus()
+	assert_eq(screen.get("_trainer_name").text, "カエデ")
+	# レース開始・戻るは出さない（進めるのはサーバー）。START・B でも進まない。
+	assert_false((screen.find_child("StartButton", true, false) as Control).is_visible_in_tree())
+	assert_not_null(screen.find_child("SoonLabel", true, false))
+	watch_signals(screen)
+	var start := InputEventJoypadButton.new()
+	start.button_index = JOY_BUTTON_START
+	start.pressed = true
+	screen._unhandled_input(start)
+	assert_signal_not_emitted(screen, "start_requested")
+	Session.set_online_entries([])
+	Session.set_online_view(0)

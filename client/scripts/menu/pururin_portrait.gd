@@ -17,6 +17,8 @@ const SHOWCASE_ONE_SHOT := "pick"
 
 ## 体を回して、表情を替えるか。set_pururin より前に決める。
 var live := false
+## 回る絵で、出し続ける表情（空なら、順に替える）。
+var fixed_expression := ""
 
 var _pururin: Dictionary = {}
 var _viewport: SubViewport
@@ -29,7 +31,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
-## 表示する個体。空なら、何も描かない。
+## 表示する個体。空なら、何も描かない。個体に "look" があれば、設定の代わりにその見た目で組み立てる（作成コーナーの下見）。
 func set_pururin(pururin: Dictionary) -> void:
 	_pururin = pururin
 	if live:
@@ -51,9 +53,10 @@ func _show_live_body() -> void:
 	table.rotation.y = 0.0
 	if _pururin.is_empty():
 		return
-	_body = PururinBodyBuilder.build(PururinLookConfig.look_for(str(_pururin["id"])), PururinLookConfig.values())
+	var look: Dictionary = _pururin["look"] if _pururin.has("look") else PururinLookConfig.look_for(str(_pururin["id"]))
+	_body = PururinBodyBuilder.build(look, PururinLookConfig.values())
 	table.add_child(_body)
-	_body.call("set_expression", showcase_expressions()[0])
+	_body.call("set_expression", fixed_expression if not fixed_expression.is_empty() else showcase_expressions()[0])
 	# ヒレや突起は、待っているときの動き。
 	_body.call("set_action", SHOWCASE_ACTION)
 	# 出てきたときに、1回ぽよんと跳ねる。
@@ -75,10 +78,17 @@ func advance(delta: float) -> void:
 	var before := _angle
 	_angle = fmod(_angle + TAU * delta / float(PururinLookConfig.showcase()["turn_seconds"]), TAU)
 	Stage.turntable(_viewport).rotation.y = _angle
-	if before < PI and _angle >= PI:
+	if before < PI and _angle >= PI and fixed_expression.is_empty():
 		var expressions := showcase_expressions()
 		_expression_index = (_expression_index + 1) % expressions.size()
 		_body.call("set_expression", expressions[_expression_index])
+
+
+## 出し続ける表情を替える（空なら、順に替える）。
+func set_fixed_expression(expression: String) -> void:
+	fixed_expression = expression
+	if _body != null and not expression.is_empty():
+		_body.call("set_expression", expression)
 
 
 ## 回る絵で、順に出す表情の名前。

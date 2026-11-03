@@ -26,9 +26,11 @@ const COLOR_CARD := Color(0.08, 0.12, 0.2, 0.86)
 const COLOR_CARD_BORDER := Color(0.45, 0.78, 1.0, 0.55)
 ## 背景の絵の暗さ（上に乗せる文字や箱が読めるように）。
 const COLOR_BACKGROUND_DIM := Color(0.42, 0.45, 0.55, 1.0)
-## いちばんの操作のボタン（黄色）と、その文字。
-const COLOR_PRIMARY := Color(1.0, 0.8, 0.28, 1.0)
-const COLOR_PRIMARY_TEXT := Color(0.12, 0.07, 0.0, 1.0)
+## いちばんの操作のボタン（緑。カーソルの黄色い枠と見分けがつくように、黄色にはしない）と、その文字。
+const COLOR_PRIMARY := Color(0.24, 0.66, 0.4, 1.0)
+const COLOR_PRIMARY_TEXT := Color(0.97, 0.98, 1.0, 1.0)
+## カーソルの枠の太さ。
+const FOCUS_WIDTH := 4
 const BAR_HEIGHT := 64.0
 const GUIDE_HEIGHT := 40.0
 const SCREEN_MARGIN := 28.0
@@ -47,14 +49,14 @@ static func box(color: Color, radius: int = 10, margin_x: float = 22.0, margin_y
 	return style
 
 
-## 選んでいる部品が分かるように、黄色い枠を付ける（ゲームパッドとキーボードの操作用）。
-static func focus_box(radius: int = 10) -> StyleBoxFlat:
+## 選んでいる部品が分かるように、太い黄色の枠を付ける（ゲームパッドとキーボードの操作用）。
+static func focus_box(radius: int = 10, expand: float = 3.0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
 	style.border_color = COLOR_FOCUS
-	style.set_border_width_all(3)
+	style.set_border_width_all(FOCUS_WIDTH)
 	style.set_corner_radius_all(radius)
-	style.set_expand_margin_all(3.0)
+	style.set_expand_margin_all(expand)
 	return style
 
 
@@ -139,10 +141,7 @@ static func style_card_button(button: BaseButton) -> void:
 	button.add_theme_stylebox_override("hover", card_box(COLOR_CARD.lightened(0.08), COLOR_ACCENT))
 	button.add_theme_stylebox_override("pressed", card_box(COLOR_CARD.darkened(0.1), COLOR_ACCENT))
 	button.add_theme_stylebox_override("hover_pressed", card_box(COLOR_CARD.darkened(0.1), COLOR_ACCENT))
-	var focus := box(Color(0.0, 0.0, 0.0, 0.0), 15, 0.0, 0.0)
-	focus.border_color = COLOR_FOCUS
-	focus.set_border_width_all(3)
-	button.add_theme_stylebox_override("focus", focus)
+	button.add_theme_stylebox_override("focus", focus_box(15, 0.0))
 
 
 ## 丸い札（「いつもの」など）。地の色に、暗い文字。
@@ -285,7 +284,7 @@ static func background(parent: Control, path: String) -> TextureRect:
 
 
 ## フリー対戦の画面と同じ、丸いボタン。kind：
-## "primary"（黄色の地に暗い文字。いちばんの操作）、"secondary"（暗い地に水色の文字）、"quiet"（暗い地に白い文字）、
+## "primary"（緑の地に白い文字。いちばんの操作）、"secondary"（暗い地に水色の文字）、"quiet"（暗い地に白い文字）、
 ## "tab"（暗い地に白い文字。選んでいる＝押してある間は、水色の地に暗い文字）。
 static func style_pill_button(button: BaseButton, kind: String, font_size: int, radius: int = 22) -> void:
 	var base := Color(0.13, 0.18, 0.27, 0.92)
@@ -318,11 +317,7 @@ static func style_pill_button(button: BaseButton, kind: String, font_size: int, 
 	button.add_theme_stylebox_override("pressed", _pill(down, Color(1, 1, 1, 0.35), radius))
 	button.add_theme_stylebox_override("hover_pressed", _pill(down.lightened(0.08), Color(1, 1, 1, 0.45), radius))
 	button.add_theme_stylebox_override("disabled", _pill(Color(normal, normal.a * 0.35), Color(1, 1, 1, 0.08), radius))
-	var focus := box(Color(0.0, 0.0, 0.0, 0.0), radius + 2, 0.0, 0.0)
-	focus.border_color = COLOR_FOCUS
-	focus.set_border_width_all(3)
-	focus.set_expand_margin_all(2.0)
-	button.add_theme_stylebox_override("focus", focus)
+	button.add_theme_stylebox_override("focus", focus_box(radius + 2, 2.0))
 
 
 static func pill_button(text: String, kind: String, font_size: int = 20) -> Button:

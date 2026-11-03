@@ -159,8 +159,16 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif not is_finite(float(value)) or value < limits[0] or value > limits[1]:
 			errors.append("%s: 範囲 %s〜%s 外です" % [key, limits[0], limits[1]])
 	for key in data:
-		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s"]:
+		if not NUMBER_RANGES.has(key) and key not in ["drive_force_by_level_kmh_per_s", "heart_rate_rise_rate_by_drive_level_bpm_per_s", "distance_names"]:
 			errors.append("%s: 未知の設定項目です" % key)
+	# 距離の区分の名前（スタート前の見せ方の上の帯に出す）。距離（m、整数の文字）→ 名前。
+	var names: Variant = data.get("distance_names")
+	if not names is Dictionary or (names as Dictionary).is_empty():
+		errors.append("distance_names: 距離 → 区分の名前の一覧が必要です")
+	else:
+		for distance: Variant in names:
+			if not str(distance).is_valid_int() or not names[distance] is String or str(names[distance]).is_empty():
+				errors.append("distance_names.%s: 距離は整数の文字、名前は空でない文字が必要です" % distance)
 	if not errors.is_empty():
 		return errors
 	for key in ["drive_level_max", "drive_level_min", "drive_level_step"]:
@@ -238,6 +246,11 @@ static func values() -> Dictionary:
 			_cached.heart_rate_rise_rate_by_drive_level_bpm_per_s.make_read_only()
 			_cached.make_read_only()
 	return _cached
+
+## 距離の区分の名前（例：2000 → 中距離）。一覧に無い距離は空。
+static func distance_name(distance_m: float) -> String:
+	return str((values().get("distance_names", {}) as Dictionary).get(str(int(round(distance_m))), ""))
+
 
 static func number(key: String) -> float:
 	var data := values()

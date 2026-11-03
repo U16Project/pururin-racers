@@ -295,10 +295,23 @@ func _unhandled_input(event: InputEvent) -> void:
 		register()
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
+	elif RaceControllerInput.is_accept_pressed(event) and _start_editing(viewport.gui_get_focus_owner()):
+		viewport.set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event) or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE):
 		UIAudio.play_back()
 		viewport.set_input_as_handled()
 		go_to_title()
+
+
+## カーソルが名前・ひとことの欄にあるとき、A（決定）で、文字を打てる状態にする（抜けるのは B・Esc）。
+func _start_editing(focused: Control) -> bool:
+	if focused == _name_edit and not _name_edit.is_editing():
+		_name_edit.edit()
+		return true
+	if focused == _introduction_edit and not _introduction_edit.is_editing():
+		_introduction_edit.edit()
+		return true
+	return false
 
 
 ## 紹介文の、今の文字数を出す。決まりより長いときは、色を変える。
@@ -326,6 +339,17 @@ func _build_menu_column(icon_column: VBoxContainer) -> void:
 	for button: Button in [_file_button, _delete_button]:
 		button.focus_neighbor_bottom = button.get_path_to(_game_start_button)
 	_game_start_button.focus_neighbor_top = _game_start_button.get_path_to(_file_button)
+	_game_start_button.focus_neighbor_left = _game_start_button.get_path_to(_introduction_edit)
+	# 左の箱：名前 ↓ ひとこと。→ で右の箱（アイコン・「次へ」）へ。
+	_name_edit.focus_neighbor_bottom = _name_edit.get_path_to(_introduction_edit)
+	_name_edit.focus_neighbor_right = _name_edit.get_path_to(_choice_buttons[0])
+	_name_edit.focus_neighbor_top = _name_edit.get_path_to(_name_edit)
+	_name_edit.focus_neighbor_left = _name_edit.get_path_to(_name_edit)
+	_introduction_edit.focus_neighbor_top = _introduction_edit.get_path_to(_name_edit)
+	_introduction_edit.focus_neighbor_right = _introduction_edit.get_path_to(_file_button)
+	_introduction_edit.focus_neighbor_bottom = _introduction_edit.get_path_to(_game_start_button)
+	_introduction_edit.focus_neighbor_left = _introduction_edit.get_path_to(_introduction_edit)
+	_file_button.focus_neighbor_left = _file_button.get_path_to(_introduction_edit)
 	_game_start_button.focus_neighbor_bottom = _game_start_button.get_path_to(_game_start_button)
 	var guide := MenuStyle.guide_bar(self)
 	MenuStyle.guide_item(guide, "A", "決定")
@@ -366,7 +390,9 @@ func _rebuild_choices() -> void:
 		_choices.add_child(_choice_button("file", str(entry["id"])))
 	for index in _choice_buttons.size():
 		var button := _choice_buttons[index]
-		button.focus_neighbor_left = button.get_path_to(_choice_buttons[maxi(index - 1, 0)])
+		# 左端の列から左は、左の箱の名前の欄へ（ゲームパッドでも、名前・ひとことの欄へ行けるように）。
+		var left_end := index % _choices.columns == 0
+		button.focus_neighbor_left = button.get_path_to(_name_edit if left_end else _choice_buttons[index - 1])
 		button.focus_neighbor_right = button.get_path_to(_choice_buttons[mini(index + 1, _choice_buttons.size() - 1)])
 		if index >= _choices.columns:
 			button.focus_neighbor_top = button.get_path_to(_choice_buttons[index - _choices.columns])

@@ -114,5 +114,12 @@
   "draft_chain_attenuation": 0.5,
   "draft_wake_base_p": 0.06,
   "draft_wake_speed_reference_kmh": 75.0,
-  "draft_wake_speed_gain_p": 0.12
+  "draft_wake_speed_gain_p": 0.12,
+  "distance_names": {
+    "1200": "短距離",
+    "1600": "マイル",
+    "2000": "中距離",
+    "2400": "中長距離",
+    "3000": "長距離"
+  }
 }

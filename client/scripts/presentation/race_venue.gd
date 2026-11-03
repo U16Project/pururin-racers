@@ -24,6 +24,12 @@ const STAND_BEFORE_GOAL_M := 250.0
 const STAND_STRAIGHT_END_MARGIN_M := 20.0
 const STAND_BLOCK_LENGTH_M := 34.0
 const STAND_BLOCK_GAP_M := 6.0
+## パドック（スタート前に、ぷるりんが周回する楕円）。ゴールの所から、コースの内側へこれだけ入った所が真ん中。
+## 長い辺はコースの進む向き。パドックのまわり（とスタンドとの間）には、テントを置かない（見る邪魔にならないように）。
+const PADDOCK_INSIDE_M := 55.0
+const PADDOCK_HALF_LENGTH_M := 20.0
+const PADDOCK_HALF_WIDTH_M := 10.0
+const PADDOCK_CLEAR_M := 14.0
 ## 観客席の前の壁。コースの中心線からの距離と、高さ。
 const STAND_FRONT_OFFSET_M := 12.5
 const STAND_BASE_HEIGHT_M := 1.3
@@ -587,6 +593,11 @@ void fragment() {
 	var index := 0
 	var z := -range_m.y + 20.0
 	while z < range_m.x:
+		# パドックの前後（進む向き）の範囲には、テントを置かない。
+		if absf(z) < PADDOCK_HALF_LENGTH_M + PADDOCK_CLEAR_M:
+			index += 1
+			z += 31.0
+			continue
 		var color: Color = tent_colors[index % tent_colors.size()]
 		var at := Vector3(-22.0 - float(index % 3) * 7.0, 0.0, z + _rng.randf_range(-4.0, 4.0)) + ground
 		var roof := ShaderMaterial.new()

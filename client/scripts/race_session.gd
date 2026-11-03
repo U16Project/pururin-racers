@@ -6,6 +6,7 @@ const DEFAULT_DISTANCE_M := 2000.0
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
+const MyPururins := preload("res://scripts/config/my_pururins.gd")
 static var _trainer_ids: Array[String] = _empty_slots()
 
 static func slot_trainer_id(slot: int) -> String:
@@ -219,7 +220,7 @@ static func set_slot(slot: int, identifier: String) -> bool:
 ## 他のスロットで使っている個体も、飛ばさずに返す（入れられるかどうかは、set_slot と slot_holding で決める）。
 static func cycle_candidate(current: String, direction: int) -> String:
 	var choices: Array[String] = [EMPTY]
-	for identifier in roster_ids():
+	for identifier in choice_ids():
 		choices.append(identifier)
 	var index := choices.find(current)
 	assert(index >= 0, "一覧に無い個体です: %s" % current)
@@ -379,6 +380,13 @@ static func roster_ids() -> Array[String]:
 	for pururin: Variant in PururinRosterConfig.values().get("roster", []):
 		if pururin is Dictionary:
 			ids.append(str(pururin.get("id", "")))
+	return ids
+
+
+## レース選択で選べる個体：一覧の順のあとに、作成コーナーで作ったぷるりん（作った順）。
+static func choice_ids() -> Array[String]:
+	var ids := roster_ids()
+	ids.append_array(MyPururins.ids())
 	return ids
 
 

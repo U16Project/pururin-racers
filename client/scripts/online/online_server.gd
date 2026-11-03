@@ -1262,6 +1262,11 @@ func free_room_detail(free_id: String) -> Dictionary:
 func _free_enter(peer_id: int) -> void:
 	if int(_peers[peer_id]["room"]) != 0:
 		_leave_room(peer_id)
+	# 結果を見終わってすぐ戻ってきて、サーバーがレースを片づけるより先に着いた：ここで戻ったことにする
+	# （あとの片づけで「戻る途中」にされると、もう戻ってくる知らせが無く、ずっと呼ばれなくなるため）。
+	var raced := int(_peers[peer_id]["free_room"])
+	if raced != 0 and _rooms.has(raced) and (_rooms[raced]["done"] as Dictionary).has(peer_id):
+		_free_back_from_race(peer_id, str(_rooms[raced]["free_id"]))
 	# レースから戻ってきたら、決めた秒数は呼ばない（一息つけるように）。
 	if bool(_peers[peer_id]["returning"]):
 		_peers[peer_id]["rest_until_msec"] = Time.get_ticks_msec() + int(_rest_after_race_s() * 1000.0)

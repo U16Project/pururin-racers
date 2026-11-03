@@ -215,12 +215,12 @@ func test_the_result_board_offers_retry_and_return_and_both_sound_like_a_decisio
 	assert_lt(retry.get_index(), back.get_index())
 	assert_eq(retry.get_node(retry.focus_neighbor_right), back)
 	assert_eq(back.get_node(back.focus_neighbor_left), retry)
-	# もう1回は、同じレースの場面を開き直す（レース選択で決めた内容は変えない）。
-	assert_eq(LocalRaceController.LOCAL_RACE_SCENE, "res://scenes/local_race.tscn")
+	# もう1回は、同じレースの場面を、1回目と同じ会場のパドックから開き直す（レース選択で決めた内容は変えない）。
+	var source := FileAccess.get_file_as_string("res://scripts/local_race_controller.gd")
+	assert_true(source.contains("RaceScenePreload.go(get_tree(), RaceScenePreload.PADDOCK_OFFLINE)"))
 	var before := RaceSession.slots_snapshot()
 	assert_eq(RaceSession.slots_snapshot(), before)
 	# どちらのボタンも、決定の音（戻るの音ではない）。
-	var source := FileAccess.get_file_as_string("res://scripts/local_race_controller.gd")
 	assert_true(source.contains('bind_button_sound(_result_return_button, "confirmation")'))
 	assert_true(source.contains('bind_button_sound(_result_retry_button, "confirmation")'))
 

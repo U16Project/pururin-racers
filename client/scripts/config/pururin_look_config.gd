@@ -14,6 +14,8 @@ const PururinBody := preload("res://scripts/presentation/pururin_body.gd")
 const Builder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
+const UserParts := preload("res://scripts/config/user_parts.gd")
+const MY_PURURINS_PATH := "res://scripts/config/my_pururins.gd"
 ## 部品の種類と、その種類が使えるスロット。
 const SLOTS_BY_KIND := {"body_part": ["top", "side", "tail"], "face": ["eyes", "brows", "mouth", "cheeks", "effect"], "decoration": ["mark"]}
 ## 個体の設定の、体の一部の項目と、そこに入れられる部品のスロット。
@@ -71,6 +73,7 @@ static func values() -> Dictionary:
 				for pururin: Dictionary in roster:
 					var id := str(pururin["id"])
 					result["looks"][id] = resolved_look(result["looks"][id], attributes[str(pururin["attribute"])]["primary_colors"])
+				_add_user_parts(result)
 			else:
 				result = {"error": "; ".join(errors)}
 		if result.has("error"):
@@ -79,6 +82,41 @@ static func values() -> Dictionary:
 		else:
 			_cached = result
 	return _cached
+
+
+## 設定を読み直す（ユーザーが部品を置いたあと、作成コーナーから呼ぶ）。
+static func reload() -> void:
+	_attempted = false
+	_cached = {}
+	last_error = ""
+
+
+## ユーザーが用意した部品を、組み込みの部品と同じ検査にかけて、通ったものだけ足す。
+## 通らなかった部品は、理由を user_part_errors に入れる（作成コーナーに出す。黙って別の部品にはしない）。
+## 顔のセットは、中の部品が1つでも通らなければ、セットごと使わない。
+static func _add_user_parts(result: Dictionary) -> void:
+	var scan := UserParts.scan(result["expression_names"])
+	var errors: Array = scan["errors"]
+	var rejected := {}
+	for part_id: String in scan["parts"]:
+		var part_errors := PackedStringArray()
+		_validate_part(part_id, scan["parts"][part_id], result["action_names"], part_errors)
+		if part_errors.is_empty():
+			result["parts"][part_id] = scan["parts"][part_id]
+		else:
+			rejected[part_id] = true
+			errors.append_array(part_errors)
+	var face_sets := {}
+	for set_id: String in scan["face_sets"]:
+		var usable := true
+		for slots: Dictionary in scan["face_sets"][set_id]["expressions"].values():
+			for part_id: String in slots.values():
+				usable = usable and not rejected.has(part_id)
+		if usable:
+			face_sets[set_id] = scan["face_sets"][set_id]
+	result["user_labels"] = scan["labels"]
+	result["user_face_sets"] = face_sets
+	result["user_part_errors"] = errors
 
 
 static func parts() -> Dictionary:
@@ -96,8 +134,12 @@ static func showcase() -> Dictionary:
 
 
 ## 個体の見た目（第一カラーの番号を、色に直したもの）。設定に無い個体なら、空。
+## 作成コーナーで作ったぷるりん（一覧に無い個体）は、その保存から探す。
 static func look_for(pururin_id: String) -> Dictionary:
-	return values().get("looks", {}).get(pururin_id, {})
+	var looks: Dictionary = values().get("looks", {})
+	if looks.has(pururin_id):
+		return looks[pururin_id]
+	return load(MY_PURURINS_PATH).look_for(pururin_id)
 
 
 ## 個体の色（第一カラー）。操作盤・順位表などの丸にも、この色を使う。
@@ -137,6 +179,19 @@ static func validate_for_roster(looks: Dictionary, roster: Array, attributes: Di
 	for id: String in looks:
 		if not ids.has(id):
 			errors.append("looks.%s: 個体一覧に無い個体です" % id)
+	return errors
+
+
+## 作成コーナーで作った見た目を1つ、読み込んだ部品・質感の一覧で検査する。primary_colors は、その個体の属性の選択肢。
+static func validate_single_look(look: Variant, primary_colors: Array) -> PackedStringArray:
+	var errors := PackedStringArray()
+	var config := values()
+	if config.is_empty():
+		errors.append("見た目の設定が読めません: %s" % last_error)
+		return errors
+	_validate_look("look", look, config["parts"], config["finishes"], config["body_motions"], config["expression_names"], errors)
+	if errors.is_empty() and int(look["primary_color_index"]) >= primary_colors.size():
+		errors.append("look.primary_color_index: この属性の第一カラーは %d 色です" % primary_colors.size())
 	return errors
 
 

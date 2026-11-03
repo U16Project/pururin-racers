@@ -12,13 +12,21 @@ const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
 const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
 const PANEL_WIDTH := 620.0
-const PANEL_HEIGHT := 420.0
-const BUTTON_HEIGHT := 56.0
+const PANEL_HEIGHT := 430.0
+## 「次へ」の下の余白と、オプションの行・操作ガイドのボタンの高さ（そろえる）。
+const NEXT_GAP := 40.0
+const ROW_HEIGHT := 46.0
+## 操作ガイドのボタンに出す、ゲームパッドの絵（Phosphor Icons。白い絵を、ボタンの字と同じ色にして出す）。
+const PAD_ICON_PATH := "res://assets/ui/icon_gamepad.svg"
+const PAD_ICON_SIZE := 30.0
+const BUTTON_HEIGHT := 68.0
 
 var _guide_button: Button
 var _next_button: Button
 var _back_button: Button
 var _guide_overlay: Control
+## 下の帯の「←→ 変える」（オプションの行にいるときだけ出す）。
+var _change_hint: Label
 var _screen_mode_label: Label
 var _screen_mode_index := -1
 var _screen_mode_row: HBoxContainer
@@ -41,32 +49,47 @@ func _ready() -> void:
 	panel.offset_bottom = PANEL_HEIGHT * 0.5
 	add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 12)
+	column.add_theme_constant_override("separation", 14)
 	panel.add_child(column)
-	column.add_child(MenuStyle.section_title("画面"))
-	var note := MenuStyle.label("画質と画面の大きさを選べます（←→で変える）。操作が分からないときは、操作ガイドを見てください。", 14, MenuStyle.COLOR_BAR_DIM)
-	note.add_theme_constant_override("outline_size", 0)
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(note)
-	_build_quality_selector(column)
-	_build_screen_mode_selector(column)
-	column.add_child(MenuStyle.section_title("操作"))
-	_guide_button = MenuStyle.pill_button("操作ガイドを見る", "secondary", 18)
-	_guide_button.name = "ControlGuideButton"
-	_guide_button.custom_minimum_size = Vector2(0.0, 44.0)
-	_guide_button.pressed.connect(_open_control_guide)
-	UIAudio.bind_button_sound(_guide_button, "confirmation")
-	column.add_child(_guide_button)
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	column.add_child(spacer)
-	_next_button = MenuStyle.pill_button("次へ（ゲームモード選択）", "primary", 22)
+	# 1. いちばんよく押す「次へ」を、いちばん上に。
+	_next_button = MenuStyle.pill_button("次へ（ゲームモード選択）", "primary", 26)
 	_next_button.name = "NextButton"
 	_next_button.custom_minimum_size = Vector2(0.0, BUTTON_HEIGHT)
 	_next_button.pressed.connect(go_to_mode_select)
 	UIAudio.bind_button_sound(_next_button, "confirmation")
 	MenuStyle.add_mark(_next_button, "START")
 	column.add_child(_next_button)
+	# 2. この画面の主役：オプション（画質・ウィンドウサイズ）。
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0.0, NEXT_GAP)
+	column.add_child(gap)
+	column.add_child(MenuStyle.section_title("オプション", 17))
+	_build_quality_selector(column)
+	_build_screen_mode_selector(column)
+	# 3. 操作ガイドは、いちばん下に、小さな入口だけ。
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(spacer)
+	# 画質・ウィンドウサイズの行と同じ幅・高さで、左にゲームパッドの絵。
+	_guide_button = MenuStyle.pill_button("操作ガイドを見る", "secondary", 17)
+	_guide_button.name = "ControlGuideButton"
+	_guide_button.custom_minimum_size = Vector2(0.0, ROW_HEIGHT)
+	var pad_icon := TextureRect.new()
+	pad_icon.name = "PadIcon"
+	pad_icon.texture = load(PAD_ICON_PATH)
+	pad_icon.modulate = MenuStyle.COLOR_ACCENT
+	pad_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pad_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pad_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pad_icon.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	pad_icon.offset_left = 22.0
+	pad_icon.offset_right = 22.0 + PAD_ICON_SIZE
+	pad_icon.offset_top = (ROW_HEIGHT - PAD_ICON_SIZE) * 0.5
+	pad_icon.offset_bottom = -(ROW_HEIGHT - PAD_ICON_SIZE) * 0.5
+	_guide_button.add_child(pad_icon)
+	_guide_button.pressed.connect(_open_control_guide)
+	UIAudio.bind_button_sound(_guide_button, "confirmation")
+	column.add_child(_guide_button)
 	var guide := MenuStyle.guide_bar(self)
 	MenuStyle.guide_item(guide, "A", "決定")
 	_back_button = MenuStyle.guide_button(guide, "B", "戻る")
@@ -74,13 +97,22 @@ func _ready() -> void:
 	_back_button.pressed.connect(go_to_menu)
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.guide_item(guide, "START", "次へ")
+	_change_hint = MenuStyle.label("←→　変える", 16, MenuStyle.COLOR_BAR_DIM)
+	_change_hint.add_theme_constant_override("outline_size", 0)
+	_change_hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_change_hint.visible = false
+	guide.add_child(_change_hint)
+	_next_button.focus_neighbor_top = _next_button.get_path_to(_next_button)
+	_next_button.focus_neighbor_bottom = _next_button.get_path_to(_quality_button)
+	_quality_button.focus_neighbor_top = _quality_button.get_path_to(_next_button)
 	_quality_button.focus_neighbor_bottom = _quality_button.get_path_to(_screen_mode_row)
 	_screen_mode_row.focus_neighbor_top = _screen_mode_row.get_path_to(_quality_button)
 	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(_guide_button)
 	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_screen_mode_row)
-	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_next_button)
-	_next_button.focus_neighbor_top = _next_button.get_path_to(_guide_button)
-	_next_button.focus_neighbor_bottom = _next_button.get_path_to(_next_button)
+	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_guide_button)
+	# オプションの行にいるときだけ、下の帯に「←→ 変える」を出す。
+	get_viewport().gui_focus_changed.connect(func(control: Control) -> void:
+		_change_hint.visible = control == _quality_button or control == _screen_mode_row)
 	_next_button.grab_focus()
 
 
@@ -111,7 +143,7 @@ func _build_quality_selector(column: VBoxContainer) -> void:
 	row.name = "QualityButton"
 	_quality_button = row
 	row.focus_mode = Control.FOCUS_ALL
-	row.custom_minimum_size = Vector2(364, 40)
+	row.custom_minimum_size = Vector2(364, ROW_HEIGHT)
 	row.add_theme_constant_override("separation", 4)
 	row.gui_input.connect(_quality_input)
 	row.focus_entered.connect(row.queue_redraw)
@@ -122,13 +154,13 @@ func _build_quality_selector(column: VBoxContainer) -> void:
 			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
 	)
 	column.add_child(row)
-	var caption := MenuStyle.label("画質", 16, MenuStyle.COLOR_BAR_DIM)
+	var caption := MenuStyle.label("画質", 17, MenuStyle.COLOR_TEXT)
 	caption.custom_minimum_size.x = 150
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousQualityButton", -1, true))
-	_quality_label = MenuStyle.bold_label("", 18)
+	_quality_label = MenuStyle.bold_label("", 19)
 	_quality_label.name = "QualityLabel"
 	_quality_label.custom_minimum_size.x = 140
 	_quality_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -186,7 +218,7 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	row.name = "ScreenModeSelector"
 	_screen_mode_row = row
 	row.focus_mode = Control.FOCUS_ALL
-	row.custom_minimum_size = Vector2(364.0, 40.0)
+	row.custom_minimum_size = Vector2(364.0, ROW_HEIGHT)
 	row.gui_input.connect(_screen_mode_gui_input)
 	row.focus_entered.connect(row.queue_redraw)
 	row.focus_exited.connect(row.queue_redraw)
@@ -197,14 +229,14 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	)
 	row.add_theme_constant_override("separation", 4)
 	menu.add_child(row)
-	var caption := MenuStyle.label("ウィンドウサイズ", 16, MenuStyle.COLOR_BAR_DIM)
+	var caption := MenuStyle.label("ウィンドウサイズ", 17, MenuStyle.COLOR_TEXT)
 	caption.name = "ModeCaption"
 	caption.custom_minimum_size.x = 150
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousModeButton", -1))
-	_screen_mode_label = MenuStyle.bold_label("通常ウィンドウ", 18)
+	_screen_mode_label = MenuStyle.bold_label("通常ウィンドウ", 19)
 	_screen_mode_label.name = "ModeLabel"
 	_screen_mode_label.custom_minimum_size.x = 140.0
 	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL

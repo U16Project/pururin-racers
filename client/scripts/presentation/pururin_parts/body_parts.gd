@@ -8,9 +8,9 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring"],
-	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal"],
-	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal"],
+	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown"],
+	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bat_wing", "hand"],
+	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft"],
 }
 ## 形ごとに、必ず要る数字。
 const REQUIRED_PARAMS := {
@@ -28,6 +28,14 @@ const REQUIRED_PARAMS := {
 	"crystal": ["length", "width", "tilt_deg", "seed"],
 	"horns": ["length", "width", "spread_deg", "curve"],
 	"ring": ["radius", "thickness", "height", "tilt_deg"],
+	"ears": ["length", "width", "spread", "tilt_deg", "point"],
+	"antenna": ["length", "thickness", "ball", "curve"],
+	"bow": ["size"],
+	"crown": ["radius", "height", "points"],
+	"bat_wing": ["length", "width", "count", "fan_deg", "tilt_deg", "roll_deg"],
+	"hand": ["size", "tilt_deg"],
+	"curl": ["length", "thickness", "turns"],
+	"tuft": ["size", "count", "seed"],
 }
 ## 形ごとに、必ず要る色。
 const REQUIRED_COLORS := {
@@ -43,6 +51,12 @@ const REQUIRED_COLORS := {
 	"crystal": ["color"],
 	"horns": ["color"],
 	"ring": ["color"],
+	"ears": ["color"],
+	"antenna": ["color"],
+	"bow": ["color"],
+	"crown": ["color", "gem_color"],
+	"bat_wing": ["color"],
+	"tuft": ["color"],
 }
 ## メッシュの部品に、必ず要る項目。material は "body"（体と同じ素材で塗る）か "own"（メッシュの素材のまま）。
 const REQUIRED_MESH_PARAMS := ["path", "scale", "material"]
@@ -76,6 +90,10 @@ static func build_top(shape: Dictionary, source: Dictionary, body_material: Mate
 			"crystals": _add_crystals(bits, shape, source)
 			"horns": _add_horns(bits, source)
 			"ring": _add_ring(bits, source)
+			"ears": _add_ears(bits, shape, source)
+			"antenna": _add_antenna(bits, source)
+			"bow": _add_bow(bits, source, false)
+			"crown": _add_crown(bits, shape, source)
 		node = _builtin_node(bits, body_material, str(source["shape"]) in ["rocks", "crystals"])
 	node.position = Vector3(0.0, float(shape["height"]), 0.0)
 	node.name = "Top"
@@ -120,6 +138,11 @@ static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_mat
 		"leaf": _add_leaves(bits, source)
 		"bubble": _add_side_bubbles(bits, source)
 		"crystal": _add_side_crystal(bits, source)
+		"bat_wing": _add_bat_wing(bits, source)
+		"hand": _add_hand(bits, source)
+		"bow": _add_bow(bits, source, true)
+		"curl": _add_curl(bits, source)
+		"tuft": _add_tuft(bits, source)
 	node = _builtin_node(bits, body_material, str(source["shape"]) in ["rock", "crystal"])
 	node.transform = Transform3D(basis, point)
 	return node
@@ -515,3 +538,161 @@ static func _add_ring(bits: Bits, source: Dictionary) -> void:
 	var lay := Basis(Vector3.RIGHT, deg_to_rad(90.0))
 	var tilt := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
 	_add_tube(bits, centers, radii, 1.0, colors, Transform3D(tilt * lay, Vector3(0.0, float(source["height"]), 0.0)))
+
+
+## 耳（頭の上）：左右に1枚ずつ。平たく、前に内側の色。point が 1 なら先がとがる（ねこ）、0 なら先が丸い（うさぎ）。
+static func _add_ears(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var spread := float(source["spread"])
+	var point := float(source["point"])
+	var inner := _tint(Color(str(source["color"])), 1.0)
+	var drop := Surface.height_at_radius(shape, spread) - float(shape["height"])
+	var steps := 18
+	for side: float in [1.0, -1.0]:
+		var centers: Array[Vector3] = []
+		var inner_centers: Array[Vector3] = []
+		var radii: Array[float] = []
+		var inner_radii: Array[float] = []
+		var colors: Array[Color] = []
+		var inner_colors: Array[Color] = []
+		for index in steps + 1:
+			var t := float(index) / float(steps)
+			centers.append(Vector3(0.0, -0.08 + (length + 0.08) * t, 0.0))
+			inner_centers.append(Vector3(0.0, length * (0.12 + 0.8 * t), -width * 0.3))
+			var rounded := sqrt(maxf(1.0 - pow(t, 2.5), 0.0))
+			radii.append(width * lerpf(rounded, 1.0 - t, point))
+			var inner_t := 0.12 + 0.8 * t
+			inner_radii.append(width * 0.55 * lerpf(sqrt(maxf(1.0 - pow(inner_t, 2.5), 0.0)), 1.0 - inner_t, point))
+			colors.append(_plain())
+			inner_colors.append(inner)
+		var xform := Transform3D(Basis(Vector3.BACK, deg_to_rad(-float(source["tilt_deg"]) * side)), Vector3(spread * side, drop, 0.0))
+		_add_tube(bits, centers, radii, 0.35, colors, xform)
+		_add_tube(bits, inner_centers, inner_radii, 0.25, inner_colors, xform)
+
+
+## アンテナ（頭の上）：細い茎が曲がって、先に玉。
+static func _add_antenna(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var curve := float(source["curve"])
+	var steps := 14
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(curve * t * t, -0.08 + (length + 0.08) * t, 0.0))
+		radii.append(thickness * lerpf(1.6, 1.0, smoothstep(0.0, 0.3, t)))
+		colors.append(_plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
+	var ball := float(source["ball"])
+	_add_ellipsoid(bits, centers[steps] + Vector3(0.0, ball * 0.6, 0.0), Vector3.ONE * ball, _tint(Color(str(source["color"])), 1.0), Transform3D.IDENTITY)
+
+
+## リボン：左右の輪と、まん中の結び目。attached なら、体の表面（尾）に付ける向き（輪が、外を向く面に並ぶ）。
+static func _add_bow(bits: Bits, source: Dictionary, attached: bool) -> void:
+	var size := float(source["size"])
+	var tint := _tint(Color(str(source["color"])), 1.0)
+	var knot := _tint(Color(str(source["color"])).darkened(0.15), 1.0)
+	# 頭の上は、正面を向いた面（XY）に並べる。尾は、外（+X）を向いた面（ZY）に並べる。
+	var lay := Basis(Vector3.UP, PI * 0.5) if attached else Basis.IDENTITY
+	var lift := Vector3(size * 0.3, 0.0, 0.0) if attached else Vector3(0.0, size * 0.25, 0.0)
+	for side: float in [1.0, -1.0]:
+		var tilt := Basis(Vector3.BACK, deg_to_rad(18.0 * side))
+		_add_ellipsoid(bits, Vector3.ZERO, Vector3(size * 0.55, size * 0.36, size * 0.16), tint, Transform3D(lay * tilt, lay * Vector3(size * 0.5 * side, 0.0, 0.0) + lift))
+	_add_ellipsoid(bits, Vector3.ZERO, Vector3(size * 0.2, size * 0.22, size * 0.2), knot, Transform3D(lay, lift))
+
+
+## 王冠（頭の上）：輪と、上へとがった柱。柱の先に、宝石の玉。
+static func _add_crown(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var height := float(source["height"])
+	var color := Color(str(source["color"]))
+	var gem := _tint(Color(str(source["gem_color"])), 1.0)
+	var drop := Surface.height_at_radius(shape, radius) - float(shape["height"])
+	var steps := 28
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var angle := TAU * float(index) / float(steps)
+		centers.append(Vector3(cos(angle) * radius, sin(angle) * radius, 0.0))
+		radii.append(height * 0.22)
+		colors.append(_tint(color, 1.0))
+	_add_tube(bits, centers, radii, 1.4, colors, Transform3D(Basis(Vector3.RIGHT, deg_to_rad(90.0)), Vector3(0.0, drop + height * 0.15, 0.0)))
+	var points := int(source["points"])
+	for index in points:
+		var angle := TAU * float(index) / float(points)
+		var base := Vector3(cos(angle) * radius, drop + height * 0.1, sin(angle) * radius)
+		_add_shard(bits, base, Vector3.UP, height, height * 0.3, color)
+		_add_ellipsoid(bits, base + Vector3(0.0, height, 0.0), Vector3.ONE * height * 0.16, gem, Transform3D.IDENTITY)
+
+
+## こうもりの羽（左右・尾）：細くとがった膜を、扇のように何枚か重ねる。平たい面は、roll_deg で後ろへ向ける。
+static func _add_bat_wing(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var color := Color(str(source["color"]))
+	var roll := Basis(Vector3.RIGHT, deg_to_rad(float(source["roll_deg"])))
+	var count := int(source["count"])
+	for index in count:
+		var shrink := 1.0 - 0.18 * float(index)
+		# 上の羽ほど、先を上げる。
+		var fan := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"]) + float(source["fan_deg"]) * (float(index) - float(count - 1) * 0.5)))
+		_add_wing_blade(bits, length * shrink, width * shrink, color, Transform3D(fan * roll * ALONG_X, Vector3(0.0, 0.0, -0.01 * float(index))))
+
+
+## 膜1枚。根元が広く、先が細くとがる。薄い。
+static func _add_wing_blade(bits: Bits, length: float, width: float, color: Color, xform: Transform3D) -> void:
+	var steps := 14
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(length * 0.1 * t * t, length * t, 0.0))
+		radii.append(width * pow(1.0 - t, 0.7) * lerpf(0.7, 1.0, smoothstep(0.0, 0.2, t)))
+		colors.append(_tint(color.darkened(0.1).lerp(color.lightened(0.1), t), 1.0))
+	_add_tube(bits, centers, radii, 0.15, colors, xform)
+
+
+## まるい手（左右）：体から少し出た、丸いふくらみ。体と同じ色。
+static func _add_hand(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var tilt := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
+	_add_ellipsoid(bits, Vector3(size * 0.55, 0.0, 0.0), Vector3(size, size * 0.8, size * 0.85), _plain(), Transform3D(tilt, Vector3.ZERO))
+
+
+## くるりんしっぽ：外へ出てから、上へ巻く。先ほど細い。体と同じ色。
+static func _add_curl(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var turn := float(source["turns"]) * TAU
+	var steps := 36
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		var swing := length * 0.35 * (1.0 - 0.7 * t)
+		var angle := turn * t
+		centers.append(Vector3(-0.03 + swing * sin(angle) + length * 0.25 * t, length * 0.35 - swing * cos(angle), 0.0))
+		radii.append(thickness * lerpf(1.0, 0.45, t) * (sqrt(maxf(1.0 - pow(maxf(t - 0.92, 0.0) / 0.08, 2.0), 0.0)) if t > 0.92 else 1.0))
+		colors.append(_plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
+
+
+## ふさふさしっぽ：玉を何個か、かたまりにする。
+static func _add_tuft(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var tint := _tint(Color(str(source["color"])), 1.0)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	_add_ellipsoid(bits, Vector3(size * 0.6, 0.0, 0.0), Vector3.ONE * size, tint, Transform3D.IDENTITY)
+	var count := int(source["count"])
+	for index in count - 1:
+		var angle := TAU * float(index) / float(maxi(count - 1, 1)) + rng.randf_range(-0.3, 0.3)
+		var small := size * rng.randf_range(0.55, 0.75)
+		var at := Vector3(size * rng.randf_range(0.6, 1.0), sin(angle) * size * 0.7, cos(angle) * size * 0.7)
+		_add_ellipsoid(bits, at, Vector3.ONE * small, tint, Transform3D.IDENTITY)

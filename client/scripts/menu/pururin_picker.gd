@@ -169,7 +169,7 @@ func _rebuild() -> void:
 	var ids: Array[String] = []
 	if not _custom:
 		ids.append(RaceSession.EMPTY)
-	ids.append_array(RaceSession.roster_ids())
+	ids.append_array(RaceSession.choice_ids())
 	for identifier in ids:
 		var tile: Button = Tile.new()
 		tile.call("setup", identifier)

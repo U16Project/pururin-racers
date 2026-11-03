@@ -40,14 +40,17 @@ static func pre_race_stats(attribute_id: String, allocation: Dictionary) -> Dict
 	assert(errors.is_empty(), "; ".join(errors))
 	var attributes: Dictionary = Config.values()["attributes"]
 	assert(attributes.has(attribute_id), "未知の属性です: %s" % attribute_id)
-	var bonus_stats: Array = attributes[attribute_id]["bonus_stats"]
 	var result := {}
 	for stat_id in Config.values()["stat_ids"]:
-		var value := int(allocation[stat_id])
-		if stat_id in bonus_stats:
-			value = min(value + int(Config.values()["attribute_bonus_per_stat"]), int(Config.values()["attribute_stat_max"]))
-		result[stat_id] = value
+		result[stat_id] = with_attribute_bonus(attribute_id, stat_id, int(allocation[stat_id]))
 	return result
+
+
+## 配った点に、属性のおまけを足した値（上限 attribute_stat_max）。配分の合計を問わない（作成コーナーで、配っている途中にも使う）。
+static func with_attribute_bonus(attribute_id: String, stat_id: String, value: int) -> int:
+	if stat_id in Config.values()["attributes"][attribute_id]["bonus_stats"]:
+		return mini(value + int(Config.values()["attribute_bonus_per_stat"]), int(Config.values()["attribute_stat_max"]))
+	return value
 
 
 ## レースの進み具合（0〜1）が、何番目の区間か（0から）。

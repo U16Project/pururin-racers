@@ -33,6 +33,10 @@ static var free_lobby := {}
 static var free_images := {}
 ## 今走っている（走った）オンラインフリー対戦のルームのID。
 static var free_race_room := ""
+## フリー対戦のレースの段階（"semi"＝準決勝・"final"＝決勝。ふつうのレースは空）。スタート前の見せ方の上の帯に出す。
+static var free_race_stage := ""
+## フリー対戦で「入る」と答えて、会場で出走者を待っている間に届いた、レースを始める知らせ（場面を切り替える間に届いても、なくさないように）。
+static var pending_race_start := {}
 ## レースの結果の画面で選んだこと（room_id、entry＝"on"・"hold"・"off"、top＝優先をいちばん前に、stay＝そのルームの画面に残る）。
 ## ロビーに戻ったときに、サーバーへ送って消す。
 static var free_after := {}
@@ -240,3 +244,9 @@ static func _forget() -> void:
 	chat_log = []
 	profiles = {}
 	_asked = {}
+
+
+## 届いた知らせが、レースを始める知らせなら、覚えておく（会場で出走者を待つ画面が、あとで受け取る）。
+static func catch_race_start(data: Dictionary) -> void:
+	if str(data.get("t", "")) == Protocol.RACE_START:
+		pending_race_start = data

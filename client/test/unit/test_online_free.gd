@@ -348,6 +348,26 @@ func test_after_the_race_the_entry_stays_and_is_not_called_until_back_in_the_lob
 	assert_true((await _wait_for("a", Protocol.FREE_OFFER, 0.5)).is_empty())
 
 
+func test_coming_back_before_the_server_clears_the_race_still_counts_as_back() -> void:
+	var ids := _free_ids()
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	await _accept_and_start("a")
+	var room: int = (_server.get("_free_rooms")[ids[0]]["races"] as Array)[0]
+	var peers: Dictionary = _server.get("_peers")
+	var peer_id := _peer_id("a")
+	# 結果を見終わった知らせと、ロビーに入る知らせが、片づけより先に届く。
+	(_server.get("_rooms")[room]["done"] as Dictionary)[peer_id] = true
+	_server.call("_free_enter", peer_id)
+	assert_eq(int(peers[peer_id]["free_room"]), 0)
+	assert_false(bool(peers[peer_id]["returning"]))
+	# あとから片づけても、「戻る途中」に戻されない（呼ばれ続ける）。
+	_server.call("_end_race", room)
+	_server.call("_free_race_over", room)
+	assert_false(bool(peers[peer_id]["returning"]), "あとの片づけで、戻る途中にされない")
+	assert_gt(int(peers[peer_id]["rest_until_msec"]), 0, "一息つく時間はある")
+
+
 func test_the_after_race_choice_can_cancel_or_move_the_entry_to_the_top() -> void:
 	var ids := _free_ids()
 	await _enter_free("a")
@@ -869,6 +889,15 @@ func test_clicking_a_card_only_opens_the_room_and_the_entry_button_enters() -> v
 	entry_button.pressed.emit()
 	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).size() == 1))
 	assert_eq(entry_button.text, "取り消す")
+	# エントリーしたあとで、ぷるりんを選び直すと、ボタンを押さなくても、すぐエントリーのぷるりんが替わる
+	# （呼ばれる前に確かめるため、いったん保留にしておく）。
+	screen.press_hold()
+	assert_true(await _wait_until(func() -> bool: return bool((screen.get("_entries") as Array)[0]["hold"])))
+	var other := str(PururinRosterConfig.values()["roster"][2]["id"])
+	screen.find_child("Picker", true, false).picked.emit(other)
+	assert_true(await _wait_until(func() -> bool: return str((screen.get("_entries") as Array)[0]["pururin_id"]) == other), "エントリーのぷるりんが替わる")
+	assert_eq(entry_button.text, "取り消す")
+	screen.press_hold()
 	# 呼ばれると、どのルームかを出した確かめの窓が出る。
 	var panel: Control = screen.find_child("OfferPanel", true, false)
 	assert_true(await _wait_until(func() -> bool: return panel.visible))

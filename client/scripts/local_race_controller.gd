@@ -37,6 +37,18 @@ const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd")
 const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PreRaceShow := preload("res://scripts/presentation/pre_race_show.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
+const RaceEntriesScene := preload("res://scenes/race_entries.tscn")
+const OnlineConfig := preload("res://scripts/config/online_config.gd")
+## 何のレースかの札の色（ゲームモード選択のカードと同じ）。
+const OnlineFreeLobby := preload("res://scripts/online_free_lobby.gd")
+const COLOR_KIND_OFFLINE := Color(0.32, 0.86, 0.5)
+const COLOR_KIND_ONLINE := Color(1.0, 0.8, 0.28)
+const COLOR_KIND_FRIEND := Color(0.35, 0.86, 1.0)
+## 枠順の抽選：枠番を回しておく秒数、1行ずつ決まる間（秒）、「枠順決定！」を出しておく秒数。
+const FREE_DRAW_SPIN_S := 1.5
+const FREE_DRAW_EACH_S := 0.5
+const FREE_DRAWN_S := 2.0
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const BrainDriver := preload("res://scripts/cpu_brain/brain_driver.gd")
@@ -53,7 +65,6 @@ const OnlineProtocol := preload("res://scripts/online/online_protocol.gd")
 const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
 ## オンラインで、今の操作を、変わっていなくても送り直す間（秒）。
 const ONLINE_INPUT_RESEND_S := 0.25
-const LOCAL_RACE_SCENE := "res://scenes/local_race.tscn"
 ## 結果の板を出すまでの待ち。最後の走者がゴールしてからの秒数と、ユーザーがゴールしてからの秒数（長いほうを待つ）。
 const RESULT_WAIT_AFTER_LAST_S := 2.0
 const RESULT_WAIT_AFTER_PLAYER_S := 5.0
@@ -119,6 +130,13 @@ var _faces_to_prepare: Array = []
 var _online_ready_sent := false
 ## スタート前の見せ方（画面のある所だけ。終わったら null）。
 var _pre_race_show: Node
+## 会場のパドックから始めるときの種類（RaceScenePreload.PADDOCK_*。空ならふつう）と、パドックに重ねる画面。
+var _paddock_mode := ""
+var _paddock_overlay: Control
+## フリー対戦で、会場で出走者を待っている間か（自分のぷるりんだけ。レースはまだ無い）と、待ち始めた時刻（ミリ秒）。
+var _free_waiting := false
+var _free_wait_started_msec := 0
+var _free_joining := false
 ## オンライン：サーバーが、全員の準備を待つのをやめて、入場の待ちへ進んだか。
 var _online_hold_released := false
 ## カウントダウンを始めたか（入場の待ちと、スタート前の準備が、両方終わってから true）。
@@ -299,6 +317,7 @@ func _ready() -> void:
 	RaceAudio.play_race_entry()
 	# 画面のある所では、スタート前の見せ方から（画面の無いサーバー・ラボで走らせるときは、出さない）。
 	if not _is_online_host():
+		_paddock_mode = RaceScenePreload.take_paddock_mode()
 		_start_pre_race_show()
 	if _entry_wait_remaining <= 0.0 and not _is_showing_pre_race():
 		_begin_start_countdown()
@@ -322,8 +341,11 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 	var viewport := get_viewport()
+	# パドックで出走表などを重ねている間・会場で出走者を待っている間は、操作は受けない（一時停止もしない）。
+	if _is_in_paddock_overlay() or _free_waiting:
+		return
 	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
-	if _is_showing_pre_race() and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
+	if _is_showing_pre_race() and not bool(_pre_race_show.get("hold_paddock")) and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
 		viewport.set_input_as_handled()
 		_pre_race_show.call("skip")
 		return
@@ -384,6 +406,9 @@ func _process(_delta: float) -> void:
 	if _runners.is_empty():
 		return
 	_prepare_next_face()
+	if _free_waiting:
+		_update_free_waiting()
+		return
 	if _online_view:
 		_send_online_ready_when_prepared()
 		_process_online_view(_delta)
@@ -475,9 +500,189 @@ func _start_pre_race_show() -> void:
 	add_child(show)
 	show.may_finish = func() -> bool: return _online_hold_released if _online_view else not _is_preparing()
 	show.is_paused = func() -> bool: return _paused
-	show.begin(_track, _race_route, _runners, $UI, _camera, "%d m のレース" % int(_race_distance_m))
-	show.finished.connect(func() -> void: _pre_race_show = null)
+	show.player_runner = _player
+	show.online = _online_view
+	var goal := _track.get_node_or_null(GoalVisual.ROOT_NAME) as Node3D
+	show.begin(_track, _race_route, _runners, $UI, _camera, race_label(), goal.global_position if goal != null else _track.global_position)
+	# 見せ方の間は、ノッチを動かせない（パドックの出走表の上下などが、レースに届かないように）。
+	if _player != null:
+		_player.set("pre_start_input", false)
+	show.finished.connect(func() -> void:
+		_pre_race_show = null
+		if _player != null:
+			_player.set("pre_start_input", true))
 	_pre_race_show = show
+	show.hold_paddock = _paddock_mode in [RaceScenePreload.PADDOCK_OFFLINE, RaceScenePreload.PADDOCK_FREE_WAIT]
+	_free_waiting = _paddock_mode == RaceScenePreload.PADDOCK_FREE_WAIT
+	if _free_waiting:
+		# 出走者が決まるまで、自分のぷるりんだけでパドックを歩いて待つ。
+		show.paddock_cards = false
+		_free_wait_started_msec = Time.get_ticks_msec()
+	if _paddock_mode == RaceScenePreload.PADDOCK_OFFLINE:
+		show.paddock_entered.connect(_open_offline_paddock)
+	elif _free_waiting:
+		# 待っている間も、オフラインと同じパドックの画面（自分の行と「待受中…」の行。枠順は未定）。
+		show.paddock_entered.connect(_open_free_waiting_paddock)
+	elif _online_view:
+		# オンライン：同じパドックの出走表とステータスを、見るだけで重ねる（進めるのはサーバー。決まった秒数で先へ進む）。
+		show.paddock_cards = false
+		show.paddock_entered.connect(_open_online_paddock)
+	show.paddock_left.connect(_close_paddock_overlay)
+
+
+## オフラインのパドック：会場のパドックの上に、出走表（左）とステータス（右）を重ねる。
+## 「レース開始」で紹介 → ゲートインへ、「選択に戻る」でレース選択へ。
+func _open_offline_paddock() -> void:
+	var overlay: Control = RaceEntriesScene.instantiate()
+	overlay.set("overlay_mode", true)
+	overlay.name = "PaddockOverlay"
+	$UI.add_child(overlay)
+	overlay.connect("entry_shown", func(gate: int) -> void: _pre_race_show.call("focus_gate", gate))
+	overlay.connect("start_requested", func() -> void:
+		overlay.queue_free()
+		_paddock_overlay = null
+		_pre_race_show.call("release_paddock"))
+	overlay.connect("back_requested", func() -> void: get_tree().change_scene_to_file(RACE_SELECT_SCENE))
+	_paddock_overlay = overlay
+	_pre_race_show.call("focus_gate", int(overlay.get("shown_gate")))
+
+
+## 会場で出走者を待つ間：上に、待っていることと残りの秒数を出す。レースを始める知らせが来ていたら、全員で入り直す。
+func _update_free_waiting() -> void:
+	if _free_joining:
+		return
+	if not OnlineSession.pending_race_start.is_empty():
+		_start_free_race(OnlineSession.pending_race_start)
+		return
+	if _is_showing_pre_race():
+		var left := maxf(OnlineConfig.free_fill_wait_s() - float(Time.get_ticks_msec() - _free_wait_started_msec) / 1000.0, 0.0)
+		_pre_race_show.call("set_notice", "出走者を集めています　最大あと %d 秒（足りない枠はCPU）" % ceili(left) if left > 0.0 else "まもなく出走者が決まります")
+
+
+## 待っている間に届いた知らせ：レースを始める知らせなら全員で入り直す。呼び出しが終わった（取りやめ）なら、ロビーへ戻る。
+func _on_free_waiting_message(data: Dictionary) -> void:
+	match str(data["t"]):
+		OnlineProtocol.RACE_START:
+			_start_free_race(data)
+		OnlineProtocol.FREE_OFFER_END:
+			_leave_free_waiting()
+
+
+## 待っている間のパドックの画面：自分の行と、空いている枠の数だけ「待受中…」の行。枠番は「枠未定」。
+func _open_free_waiting_paddock() -> void:
+	# パドックに着く前に出走者がそろっていたら、そろったあとの流れ（_start_free_race）が出走表を出す。
+	if not _free_waiting:
+		return
+	_open_online_paddock({"gates_unknown": true, "waiting_rows": OnlineProtocol.ROOM_CAPACITY - RaceSession.field_entries().size()})
+
+
+## 出走者がそろった（レースを始める知らせ）：画面はそのまま、届いた出走で走者を並べ直し、パドックに全員を加える。
+## 出走表を作り直して、枠順の抽選を見せてから、本馬場入場へ。
+func _start_free_race(data: Dictionary) -> void:
+	if _free_joining:
+		return
+	_free_joining = true
+	OnlineSession.pending_race_start = {}
+	OnlineSession.free_race_room = str(data.get("free_room_id", OnlineSession.free_race_room))
+	OnlineSession.free_race_stage = str(data.get("stage", OnlineSession.free_race_stage))
+	RaceSession.set_online_entries(data["entries"])
+	RaceSession.set_online_view(OnlineSession.peer_id)
+	_spawn_field()
+	_queue_face_preparation()
+	if _player != null:
+		_player.set("pre_start_input", false)
+	_free_waiting = false
+	if not _is_showing_pre_race():
+		return
+	_pre_race_show.set("player_runner", _player)
+	_pre_race_show.call("set_runners", _runners)
+	_pre_race_show.call("set_notice", "")
+	# まだ会場を写している（パドックに着く前に、そろった）：パドックに着いてから、抽選を見せる。
+	if not bool(_pre_race_show.call("is_in_paddock")):
+		await _pre_race_show.paddock_entered
+		if not _is_showing_pre_race():
+			return
+	_open_online_paddock({"gates_unknown": true})
+	# 1. そろった知らせ → 2. 枠順抽選の見出し → 3. 抽選（1枠から順に決まる）→ 4. 枠順決定 → 本馬場入場の見出しへ。
+	_pre_race_show.call("show_title_card", "出走者がそろいました", "このあと、枠順を抽選します")
+	await _pre_race_show.title_card_done
+	if not _is_showing_pre_race():
+		return
+	_pre_race_show.call("show_title_card", "枠順抽選", "1枠から順に決まります")
+	await _pre_race_show.title_card_done
+	var overlay := _paddock_overlay
+	if not is_instance_valid(overlay) or not _is_showing_pre_race():
+		return
+	overlay.call("play_draw", FREE_DRAW_SPIN_S, FREE_DRAW_EACH_S)
+	await overlay.draw_finished
+	if not _is_showing_pre_race():
+		return
+	_pre_race_show.call("show_title_card", "枠順決定！", "あなたは %d枠です" % (int(_player.get("gate_index")) + 1) if _player != null else "", FREE_DRAWN_S)
+	await _pre_race_show.title_card_done
+	if _is_showing_pre_race():
+		_pre_race_show.call("release_paddock")
+
+
+## 待っていたレースが取りやめになった・つながりが切れた：ロビーへ戻る（レースには出ていないので、結果の選びは送らない）。
+func _leave_free_waiting() -> void:
+	if _online_left:
+		return
+	_online_left = true
+	OnlineSession.pending_race_start = {}
+	RaceSession.set_online_entries([])
+	RaceSession.set_online_view(0)
+	get_tree().change_scene_to_file(ONLINE_FREE_LOBBY_SCENE)
+
+
+## オンラインのパドック：出走表（左）とステータス（右）を、見るだけで重ねる。カーソルで見たぷるりんに、カメラが寄る。
+func _open_online_paddock(options: Dictionary = {}) -> void:
+	# 前の出走表が残っていたら、片づけてから出す（2枚重なって、片方がレース中まで残らないように）。
+	_close_paddock_overlay()
+	var overlay: Control = RaceEntriesScene.instantiate()
+	overlay.set("overlay_mode", true)
+	overlay.set("read_only", true)
+	for key: String in options:
+		overlay.set(key, options[key])
+	overlay.name = "PaddockOverlay"
+	$UI.add_child(overlay)
+	overlay.connect("entry_shown", func(gate: int) -> void: _pre_race_show.call("focus_gate", gate))
+	_paddock_overlay = overlay
+	_pre_race_show.call("focus_gate", int(overlay.get("shown_gate")))
+
+
+## パドックの場面が終わったら、重ねていた出走表を片づける。
+func _close_paddock_overlay() -> void:
+	if _is_in_paddock_overlay():
+		_paddock_overlay.queue_free()
+	_paddock_overlay = null
+
+
+## 会場のパドックで、出走表などを重ねて出している間か（その間の操作は、重ねた画面が受ける）。
+func _is_in_paddock_overlay() -> bool:
+	return _paddock_overlay != null and is_instance_valid(_paddock_overlay)
+
+
+## 何のレースか（スタート前の見せ方の上の帯に出す）。kind＝遊び方の札、tags＝ルームの種類・本戦の段階の札（[文字, 色]）、
+## title＝ルーム名・部屋名（オフラインは区分）と距離。
+func race_label() -> Dictionary:
+	var distance := "%dm" % int(_race_distance_m)
+	var category := LocalRaceMath.Config.distance_name(_race_distance_m)
+	if not _online_view:
+		return {"kind": ["オフラインフリー対戦", COLOR_KIND_OFFLINE], "tags": [], "title": ("%s　%s" % [category, distance]).strip_edges()}
+	if not OnlineSession.free_mode:
+		return {"kind": ["ともだち対戦", COLOR_KIND_FRIEND], "tags": [], "title": "%s　%s" % [str(OnlineSession.room.get("room", category)), distance]}
+	var tags: Array = []
+	var room_name := category
+	for room: Dictionary in OnlineSession.free_lobby.get("rooms", []):
+		if str(room.get("room_id", "")) == OnlineSession.free_race_room:
+			room_name = str(room.get("name", category))
+			# 札の色は、ロビーのカードと同じ（チケットが要るルームは、チケットの色）。
+			var ticket := not str(room.get("needs_ticket", "")).is_empty()
+			tags.append([str(room.get("tag", "")), OnlineFreeLobby.COLOR_TICKET_TAG if ticket else Color.html(str(room.get("tag_color", "#ffffff")))])
+	var stage: String = {OnlineProtocol.STAGE_SEMI: "準決勝", OnlineProtocol.STAGE_FINAL: "決勝"}.get(OnlineSession.free_race_stage, "")
+	if not stage.is_empty():
+		tags.append([stage, COLOR_KIND_ONLINE])
+	return {"kind": ["オンラインフリー対戦", COLOR_KIND_ONLINE], "tags": tags, "title": "%s　%s" % [room_name, distance]}
 
 
 ## スタート前の見せ方の途中か。
@@ -691,6 +896,9 @@ func _send_online_input(delta: float) -> void:
 
 
 func _on_online_message(data: Dictionary) -> void:
+	if _free_waiting:
+		_on_free_waiting_message(data)
+		return
 	match str(data["t"]):
 		OnlineProtocol.RACE_STATE: _apply_online_state(data)
 		OnlineProtocol.RACE_RESULT: _apply_online_result(data)
@@ -884,6 +1092,9 @@ func free_after_choice(stay: bool) -> Dictionary:
 func _leave_online_race() -> void:
 	# 出ると決めたあとに届いた知らせ（レースの片づけなど）では、もう何もしない。
 	if _online_left:
+		return
+	if _free_waiting:
+		_leave_free_waiting()
 		return
 	_online_left = true
 	# フリー対戦で、結果の板で選ぶ前に出た（サーバーが片づけた・ロビーへ戻るを押した）ら、そのとき選んでいたことを使う。
@@ -1802,9 +2013,10 @@ func _exit_tree() -> void:
 
 
 ## 同じ距離・同じ枠順・同じ顔ぶれで、もう1回走る（レース選択で決めた内容は、そのまま）。
+## もう1回 同条件で：1回目と同じく、会場のパドック（出走表・ステータス・レース開始）から始め直す。
 func _retry_same_race() -> void:
 	_celebration.stop()
-	get_tree().change_scene_to_file(LOCAL_RACE_SCENE)
+	RaceScenePreload.go(get_tree(), RaceScenePreload.PADDOCK_OFFLINE)
 
 
 func _return_to_race_select() -> void:

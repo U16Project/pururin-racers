@@ -329,16 +329,14 @@ func _link_room_focus() -> void:
 	_hold_button.focus_neighbor_bottom = _hold_button.get_path_to(_hold_button)
 
 
-## ゲームパッドのボタンのマーク（そのボタンを押すと、この動きになる、の印）。
+## ゲームパッドのボタンのマーク（カーソルがどこにあっても、そのボタンを押すと、この動きになる、の印）。
+## A は、カーソルの乗っているボタンを押すだけなので、ボタンには付けない（下の帯の「A 決定」で知らせる）。
 func _add_marks() -> void:
-	MenuStyle.add_mark(_entry_button, "A")
-	MenuStyle.add_mark(_accept_button, "A")
 	MenuStyle.add_mark(_decline_button, "B")
 	MenuStyle.add_mark(_back_button, "B", 24.0)
-	MenuStyle.add_mark(_confirm_yes, "A")
 	MenuStyle.add_mark(_confirm_no, "B")
 	# 印の右から文字が始まるように、左の余白を広げる。
-	for button: Button in [_confirm_yes, _confirm_no]:
+	for button: Button in [_confirm_no]:
 		for state: String in ["normal", "hover", "pressed", "focus"]:
 			var box := button.get_theme_stylebox(state)
 			if box is StyleBoxFlat:
@@ -937,6 +935,7 @@ func step_pick(step: int) -> void:
 	var count := _roster_ids().size()
 	_pick_index = posmod(_pick_index + step, count)
 	OnlineSession.last_pick = selected_pururin_id()
+	_apply_pick_to_entry()
 	_refresh_pick()
 
 
@@ -1020,7 +1019,7 @@ func _refresh_entrants() -> void:
 		(row.get_node("Pururin") as Label).text = str(preview.get("display_name", "")) + ("（保留中）" if bool(entrant["hold"]) else "")
 
 
-## 右の欄：出るぷるりんの絵と名前、エントリーのボタン（まだ・ぷるりんを替える・取り消す）、保留のボタン。
+## 右の欄：出るぷるりんの絵と名前、エントリーのボタン（まだ・取り消す）、保留のボタン。
 func _refresh_pick() -> void:
 	var pururin_id := selected_pururin_id()
 	var preview := PururinDetail.preview_for(pururin_id)
@@ -1033,36 +1032,48 @@ func _refresh_pick() -> void:
 	var needs := str(room_by_id(_open_room).get("needs_ticket", ""))
 	var missing := not needs.is_empty() and not owned_tickets.has(needs)
 	var closed := not is_open(room_by_id(_open_room))
-	_entry_button.disabled = (missing or closed) and (entry.is_empty() or str(entry["pururin_id"]) != pururin_id)
+	# もうエントリーしていれば、いつでも取り消せる。まだなら、チケットが無い・受付の外のときは押せない。
+	_entry_button.disabled = (missing or closed) and entry.is_empty()
 	# 本戦は、保留できない（開始の時刻に、エントリーした全員を呼ぶ）。
 	_hold_button.visible = not entry.is_empty() and not is_final(room_by_id(_open_room))
 	if closed and _entry_button.disabled:
-		_entry_button.text = "エントリーする" if entry.is_empty() else "ぷるりんを替える"
+		_entry_button.text = "エントリーする"
 		_entry_note.text = "本戦は、開始の時刻までにエントリーした人だけが出られます。" if is_final(room_by_id(_open_room)) else schedule_state_text(room_by_id(_open_room), server_now()) + "。受付のあいだだけエントリーできます。"
 	elif missing and _entry_button.disabled:
-		_entry_button.text = "エントリーする" if entry.is_empty() else "ぷるりんを替える"
+		_entry_button.text = "エントリーする"
 		_entry_note.text = "このぷるりんは「%s」を持っていません。" % str(room_by_id(_open_room)["needs_ticket_name"])
 	elif entry.is_empty():
 		_entry_button.text = "エントリーする"
 		_entry_note.text = "エントリーすると、番が来たときに呼ばれます。呼ばれたら、入るか答えます。"
+	elif str(entry["pururin_id"]) != pururin_id and (missing or closed):
+		# チケットが無い・受付の外なので、替えなかった。
+		_entry_button.text = "取り消す"
+		_entry_note.text = "%sでエントリーしています（%sには替えられません：%s）。" % [pururin_name(str(entry["pururin_id"])), pururin_name(pururin_id), "チケットがありません" if missing else "受付の外です"]
 	elif str(entry["pururin_id"]) != pururin_id:
-		_entry_button.text = "ぷるりんを替える"
-		_entry_note.text = "%sでエントリーしています（%s）。" % [pururin_name(str(entry["pururin_id"])), entry_state_text(entry)]
+		# 選び直したぷるりんへの替えを、サーバーに送ったところ（返事が届くと、下の「エントリーしています」になる）。
+		_entry_button.text = "取り消す"
+		_entry_note.text = "%sに替えています…" % pururin_name(pururin_id)
 	else:
 		_entry_button.text = "取り消す"
-		_entry_note.text = "エントリーしています（%s）。" % entry_state_text(entry)
+		_entry_note.text = "%sでエントリーしています（%s）。" % [pururin_name(pururin_id), entry_state_text(entry)]
 	_hold_button.text = "保留を外す" if not entry.is_empty() and bool(entry["hold"]) else "保留にする"
 
 
-## エントリーのボタン：まだならエントリー、ぷるりんが違えば替える、同じなら取り消す。
+## エントリーのボタン：まだならエントリー、もうしていれば取り消す（ぷるりんの替えは、選び直したときに、すぐ送る）。
 func press_entry() -> void:
 	if _open_room.is_empty():
 		return
 	var entry := entry_for(_open_room)
-	var room_name := str(room_by_id(_open_room).get("name", _open_room))
-	if not entry.is_empty() and str(entry["pururin_id"]) == selected_pururin_id():
+	if not entry.is_empty():
 		cancel_entry(_open_room)
 		return
+	_send_entry()
+
+
+## 選んでいるぷるりんで、エントリーする（もうしていれば、ぷるりんを替える）。
+func _send_entry() -> void:
+	var entry := entry_for(_open_room)
+	var room_name := str(room_by_id(_open_room).get("name", _open_room))
 	OnlineSession.last_pick = selected_pururin_id()
 	_client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id())})
 	if entry.is_empty():
@@ -1092,7 +1103,27 @@ func _on_picker_picked(pururin_id: String) -> void:
 	_pick_index = maxi(_roster_ids().find(pururin_id), 0)
 	OnlineSession.last_pick = selected_pururin_id()
 	_picker.call("close")
+	_apply_pick_to_entry()
 	_refresh_pick()
+
+
+## もうエントリーしているルームで、ぷるりんを選び直したら、すぐエントリーのぷるりんも替える（ボタンを押さなくてよい）。
+## 呼ばれている途中・入ると答えたあと・走っている間は替えられないので、選びを元に戻して、そう知らせる。
+## チケットが無い・受付の外のときは、替えない（下の文で、理由を知らせる）。
+func _apply_pick_to_entry() -> void:
+	var entry := entry_for(_open_room)
+	if entry.is_empty() or str(entry["pururin_id"]) == selected_pururin_id():
+		return
+	if str(entry.get("state", Protocol.FREE_ENTRY_WAIT)) != Protocol.FREE_ENTRY_WAIT:
+		_pick_index = maxi(_roster_ids().find(str(entry["pururin_id"])), 0)
+		OnlineSession.last_pick = selected_pururin_id()
+		_set_status("呼ばれている間・レースの間は、出るぷるりんを替えられません。")
+		UIAudio.play_error()
+		return
+	var needs := str(room_by_id(_open_room).get("needs_ticket", ""))
+	var missing := not needs.is_empty() and not OwnedPururins.tickets(selected_pururin_id(), server_now()).has(needs)
+	if not missing and is_open(room_by_id(_open_room)):
+		_send_entry()
 
 
 func _on_picker_closed() -> void:
@@ -1229,7 +1260,27 @@ func answer(accept: bool) -> void:
 		return
 	_client.send(Protocol.FREE_ANSWER, {"room_id": str(_offer["room_id"]), "accept": accept})
 	_set_status("入ると答えました。レースが始まるのを待っています…" if accept else "「%s」のエントリーを取り消しました。" % str(_offer["name"]))
+	if accept:
+		_go_to_waiting_venue(_offer)
 	_close_offer()
+
+
+## 「入る」と答えたら、すぐ会場へ移って、自分のぷるりんだけでパドックを歩きながら、出走者が集まるのを待つ。
+## 出走者が決まったら（レースを始める知らせ）、会場の画面が、全員で入り直す。取りやめになったら、ロビーへ戻ってくる。
+func _go_to_waiting_venue(offer: Dictionary) -> void:
+	OnlineSession.pending_race_start = {}
+	if not _client.message_received.is_connected(OnlineSession.catch_race_start):
+		_client.message_received.connect(OnlineSession.catch_race_start)
+	var pururin_id := str(offer["pururin_id"])
+	OnlineSession.free_race_room = str(offer["room_id"])
+	OnlineSession.free_race_stage = str(offer.get("stage", ""))
+	RaceSession.select_distance(float(offer["distance_m"]))
+	RaceSession.set_online_entries([{
+		"gate": 0, "id": pururin_id, "runner_id": pururin_id, "player": true, "peer_id": OnlineSession.peer_id,
+		"trainer_id": str(PururinRosterConfig.pururin_by_id(pururin_id).get("trainer_id", "")), "trainer_name": TrainerProfile.trainer_name(),
+	}])
+	RaceSession.set_online_view(OnlineSession.peer_id)
+	RaceScenePreload.go(get_tree(), RaceScenePreload.PADDOCK_FREE_WAIT)
 
 
 ## 呼び出しの窓を閉じる。カーソルは、続けてAを押しても何も取り消さない所へ戻す
@@ -1534,6 +1585,7 @@ func _update_clock() -> void:
 ## レースの画面が読むもの（距離・出走・自分の番号・どのルームか）を決めて、レースの画面へ。
 func _go_to_race(data: Dictionary) -> void:
 	OnlineSession.free_race_room = str(data.get("free_room_id", ""))
+	OnlineSession.free_race_stage = str(data.get("stage", ""))
 	RaceSession.select_distance(float(data["distance_m"]))
 	RaceSession.set_online_entries(data["entries"])
 	RaceSession.set_online_view(OnlineSession.peer_id)

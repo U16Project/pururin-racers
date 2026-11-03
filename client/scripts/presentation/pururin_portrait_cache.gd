@@ -41,6 +41,15 @@ static func texture_for(pururin_id: String, tree: SceneTree) -> Texture2D:
 	return (_viewports[pururin_id] as SubViewport).get_texture()
 
 
+## 個体の絵を捨てる（作成コーナーで見た目を直したとき。次に呼ばれたときに写し直す）。
+static func forget(pururin_id: String) -> void:
+	if _viewports.has(pururin_id):
+		var viewport: SubViewport = _viewports[pururin_id]
+		_viewports.erase(pururin_id)
+		if is_instance_valid(viewport):
+			viewport.queue_free()
+
+
 ## 絵を写す。最初の数フレームは、体の描き方の準備が終わっていないことがあるので、
 ## 少しのあいだ写し続けてから、止める。
 static func _take_picture(viewport: SubViewport, tree: SceneTree) -> void:

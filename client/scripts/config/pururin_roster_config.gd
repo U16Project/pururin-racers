@@ -5,6 +5,8 @@ const PATH := "res://data/config/pururin_roster.json"
 const StatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
 const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
+## 作成コーナーで作ったぷるりん（こちらを読み込むと、互いに読み合うので、使うときに読む）。
+const MY_PURURINS_PATH := "res://scripts/config/my_pururins.gd"
 
 static var _cached: Dictionary = {}
 static var _attempted := false
@@ -104,11 +106,12 @@ static func values() -> Dictionary:
 	return _cached
 
 
+## 一覧に無いIDは、作成コーナーで作ったぷるりんから探す。
 static func pururin_by_id(identifier: String) -> Dictionary:
 	for pururin: Variant in values().get("roster", []):
 		if pururin is Dictionary and pururin.get("id") == identifier:
 			return pururin
-	return {}
+	return load(MY_PURURINS_PATH).pururin_by_id(identifier)
 
 
 static func default_player_pururin_id() -> String:

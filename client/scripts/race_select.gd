@@ -10,6 +10,7 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
+const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
@@ -121,6 +122,9 @@ func _ready() -> void:
 			compact.content_margin_top = 2.0
 			compact.content_margin_bottom = 2.0
 			button.add_theme_stylebox_override(state, compact)
+	# レース選択にいる間に、会場（レースの画面）を裏で読み込んでおく（パドックへ進んだとき、止まらないように）。
+	if not RaceSession.race_starter.is_valid():
+		RaceScenePreload.start()
 	_detail.connect("force_requested", _on_force_requested)
 	_build_picker()
 	_viewed_slot = RaceSession.user_slot()
@@ -460,9 +464,14 @@ func go_to_title() -> void:
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
 
 
+## パドックへ。ふつうは、レース会場のパドック（レースの画面）へ。ラボから起動したときは、今までのパドックの画面へ
+## （ラボは、そこの「レース開始」から自分のレースを始めるため）。
 func go_to_race() -> void:
 	if RaceSession.race_start_problem().is_empty():
-		get_tree().change_scene_to_file(RACE_SCENE_PATH)
+		if RaceSession.race_starter.is_valid():
+			get_tree().change_scene_to_file(RACE_SCENE_PATH)
+		else:
+			RaceScenePreload.go(get_tree(), RaceScenePreload.PADDOCK_OFFLINE)
 	else:
 		UIAudio.play_error()
 
