@@ -616,7 +616,9 @@ func _make_final(free_id: String, start_unix: int, max_players: int, answer_wait
 	room["phase"] = Protocol.FINAL_PHASE_ENTRY
 	room["accepted"] = []
 	room["advancers"] = []
-	room["wait_until_msec"] = 0
+	room["call_until_msec"] = 0
+	room["deferred"] = []
+	room["call_stage"] = ""
 
 
 func test_final_groups_are_even_and_at_most_eight() -> void:
@@ -819,11 +821,20 @@ const ModeSelectScene := preload("res://scenes/mode_select.tscn")
 const CHOICE_FILE := "user://test_online_free_server.json"
 
 
-func _screen() -> Control:
+## 会場へ移ったことだけを記録し、テストの画面は切り替えない。
+class LobbyProbe extends FreeLobby:
+	var waiting_offers: Array = []
+	func _go_to_waiting_venue(offer: Dictionary) -> void:
+		waiting_offers.append(offer)
+
+
+func _screen(probe: bool = false) -> Control:
 	DirAccess.remove_absolute(CHOICE_FILE)
 	ServerChoice.use_path(CHOICE_FILE)
 	ServerChoice.save(ServerChoice.CHOICE_CUSTOM, "ws://127.0.0.1:%d" % TEST_PORT)
 	var screen: Control = FreeLobbyScene.instantiate()
+	if probe:
+		screen.set_script(LobbyProbe)
 	add_child_autofree(screen)
 	return screen
 
@@ -949,6 +960,7 @@ func test_choosing_a_pururin_opens_the_pick_window_with_the_status_beside_it() -
 	var status: Control = screen.find_child("PickerStatus", true, false)
 	var detail: Control = screen.find_child("PickDetail", true, false)
 	# 「ぷるりんを選ぶ」で、すぐプル選択の窓。横に、今のプルのステータス。
+	(screen.find_child("StatusButton", true, false) as Button).grab_focus()
 	(screen.find_child("StatusButton", true, false) as Button).pressed.emit()
 	assert_true(screen.is_picker_open())
 	assert_true(status.visible)
@@ -1253,18 +1265,26 @@ func test_pad_moves_reach_the_room_tabs_and_skip_the_chat_boxes() -> void:
 	assert_eq(entry.get_node(entry.focus_neighbor_left), screen.find_child("RoomResultsTab", true, false), "左で、下のタブへ")
 
 
-func test_after_accepting_a_call_the_cursor_is_not_on_cancel() -> void:
+func test_an_answer_waits_for_the_server_and_is_processed_once() -> void:
 	var ids := _free_ids()
-	_server.set("fill_wait_s", 60.0)
-	_server.set("answer_wait_s", 60.0)
-	var screen := _screen()
+	_server.set("fill_wait_s", WAIT_S * 10.0)
+	_server.set("answer_wait_s", WAIT_S * 10.0)
+	var screen := _screen(true)
 	await _wait_node(screen, "Card_%s" % ids[0])
 	screen.open_room(ids[0])
 	(screen.find_child("EntryButton", true, false) as Button).pressed.emit()
 	var panel: Control = screen.find_child("OfferPanel", true, false)
 	assert_true(await _wait_until(func() -> bool: return panel.visible))
 	screen.answer(true)
-	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("StatusButton", true, false))
+	screen.answer(false)
+	assert_true(panel.visible, "回答結果が来るまでは呼び出しの窓にいる")
+	assert_true((screen.find_child("AcceptButton", true, false) as Button).disabled)
+	assert_true((screen.get("waiting_offers") as Array).is_empty())
+	assert_true(await _wait_until(func() -> bool: return (screen.get("waiting_offers") as Array).size() == 1))
+	screen.call("_on_message", {"t": Protocol.FREE_ANSWER_RESULT, "room_id": ids[0], "accepted": true})
+	assert_eq((screen.get("waiting_offers") as Array).size(), 1)
+	assert_false(panel.visible)
+	assert_ne(get_viewport().gui_get_focus_owner(), screen.find_child("EntryButton", true, false))
 
 
 
@@ -1300,3 +1320,199 @@ func test_the_server_button_opens_the_choice_and_switches_the_server() -> void:
 	assert_false((screen.find_child("ServerDialog", true, false) as Control).visible)
 	assert_false((screen.find_child("ConfirmDialog", true, false) as Control).visible, "自分で替えたときは、切れたことを聞かない")
 	assert_true(await _wait_until(func() -> bool: return not (screen.get("_rooms") as Array).is_empty()), "つなぎ直して、ロビーに入り直す")
+
+
+func test_an_expired_answer_is_refused_by_its_own_result() -> void:
+	var ids := _free_ids()
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	await _wait_for("a", Protocol.FREE_OFFER)
+	await _wait_for("a", Protocol.FREE_OFFER_END)
+	_clients["a"].send(Protocol.FREE_ANSWER, {"room_id": ids[0], "accept": true})
+	var result := await _wait_for("a", Protocol.FREE_ANSWER_RESULT)
+	assert_eq(str(result["room_id"]), ids[0])
+	assert_false(bool(result["accepted"]))
+
+
+func test_cancel_removes_an_accepted_finalist_before_launch() -> void:
+	var ids := _free_ids()
+	_server.set("clock_unix", 1000)
+	_make_final(ids[0], 2000, Protocol.ROOM_CAPACITY, WAIT_S)
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	await _latest_lobby("a")
+	_server.set("clock_unix", 2000)
+	await _wait_for("a", Protocol.FREE_OFFER)
+	var peer := _peer_id("a")
+	# 同じサーバーの処理の中で、回答→取消の順を確かめる。
+	_server.call("_free_answer", peer, ids[0], true)
+	assert_eq(str(_server.free_entry_list(peer)[0]["state"]), Protocol.FREE_ENTRY_ACCEPTED)
+	_server.call("_free_cancel", peer, ids[0])
+	var data: Dictionary = _server.get("_free_rooms")[ids[0]]
+	assert_false((data["accepted"] as Array).has(peer))
+	assert_eq(str(_server.get("_peers")[peer]["final_room"]), "")
+	_server.call("_update_final", ids[0])
+	assert_eq(str(data["phase"]), Protocol.FINAL_PHASE_DONE)
+	assert_true((data["races"] as Array).is_empty())
+
+
+func test_cancel_after_start_then_enter_releases_the_runner() -> void:
+	var ids := _free_ids()
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	await _accept_and_start("a")
+	var peer := _peer_id("a")
+	var room := int(_server.get("_peers")[peer]["free_room"])
+	_server.call("_free_cancel", peer, ids[0])
+	_server.call("_free_enter", peer)
+	assert_false((_server.get("_rooms")[room]["order"] as Array).has(peer))
+	assert_eq(int(_server.get("_peers")[peer]["free_room"]), 0)
+	assert_false(bool(_server.get("_peers")[peer]["returning"]))
+
+
+func test_finalists_in_another_race_wait_until_return_or_the_common_deadline() -> void:
+	var ids := _free_ids()
+	_server.set("clock_unix", 1000)
+	_make_final(ids[1], 2000, Protocol.ROOM_CAPACITY, WAIT_S)
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0], ids[1]])
+	await _accept_and_start("a")
+	var peer := _peer_id("a")
+	_server.set("clock_unix", 2000)
+	_server.call("_update_final", ids[1])
+	var data: Dictionary = _server.get("_free_rooms")[ids[1]]
+	assert_true((data["deferred"] as Array).has(peer))
+	assert_eq(_server.call("_final_pending", ids[1]), 1)
+	assert_eq(str(_server.get("_peers")[peer]["offer"]), "")
+	var deadline := int(data["call_until_msec"])
+	_server.call("_free_enter", peer)
+	assert_false((data["deferred"] as Array).has(peer))
+	assert_eq(int(_server.get("_peers")[peer]["offer_until_msec"]), deadline)
+	assert_eq(str(_server.get("_peers")[peer]["offer"]), ids[1])
+	_server.call("_free_answer", peer, ids[1], true)
+	_server.call("_update_final", ids[1])
+	assert_eq(str(data["phase"]), Protocol.FINAL_PHASE_FINAL)
+
+
+func test_all_deferred_finalists_are_dropped_at_the_deadline() -> void:
+	var ids := _free_ids()
+	_server.set("clock_unix", 1000)
+	_make_final(ids[1], 2000, Protocol.ROOM_CAPACITY, WAIT_S)
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0], ids[1]])
+	await _accept_and_start("a")
+	_server.set("clock_unix", 2000)
+	_server.call("_update_final", ids[1])
+	var data: Dictionary = _server.get("_free_rooms")[ids[1]]
+	data["call_until_msec"] = Time.get_ticks_msec() - 1
+	_server.call("_update_final", ids[1])
+	assert_eq(str(data["phase"]), Protocol.FINAL_PHASE_DONE)
+	assert_true(_server.call("_free_entry_of", _peer_id("a"), ids[1]).is_empty())
+	assert_eq(str(_server.get("_peers")[_peer_id("a")]["final_room"]), "")
+
+
+func test_entry_rejection_identifies_the_room_and_prevents_a_late_pick_change() -> void:
+	var ids := _free_ids()
+	_server.set("answer_wait_s", WAIT_S)
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	await _wait_for("a", Protocol.FREE_OFFER)
+	var other := str(PururinRosterConfig.values()["roster"][1]["id"])
+	_clients["a"].send(Protocol.FREE_ENTRY, _entry_message(ids[0], other))
+	var error := await _wait_for("a", Protocol.ERROR)
+	assert_eq(str(error["code"]), Protocol.ERROR_PICK_LOCKED)
+	assert_eq(str(error["room_id"]), ids[0])
+	assert_eq(str(_server.call("_free_entry_of", _peer_id("a"), ids[0])["pururin_id"]), _first_pururin())
+
+
+func test_modals_keep_focus_and_block_background_shortcuts() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	var no_calls := [0]
+	screen.ask("確認", "はい", Callable(), "いいえ", func() -> void: no_calls[0] += 1)
+	var dialog: Control = screen.find_child("ConfirmDialog", true, false)
+	var select := InputEventJoypadButton.new()
+	select.pressed = true
+	select.button_index = JOY_BUTTON_BACK
+	screen.call("_unhandled_input", select)
+	assert_false((screen.find_child("ChatOverlay", true, false) as Control).visible)
+	(screen.find_child("RoomsTab", true, false) as Button).grab_focus()
+	assert_true(dialog.is_ancestor_of(get_viewport().gui_get_focus_owner()))
+	screen.call("_show_offer", {"room_id": ids[0], "name": "呼び出し", "pururin_id": _first_pururin(), "distance_m": float(OnlineConfig.free_rooms()[0]["distance_m"]), "wait_s": WAIT_S})
+	assert_false(dialog.visible)
+	assert_eq(no_calls[0], 0, "呼び出しは確認の行動を実行しない")
+	screen.call("_close_offer")
+	screen.open_room(ids[0])
+	screen.open_server_dialog()
+	(screen.find_child("ServerUrl", true, false) as Control).grab_focus()
+	var back := InputEventJoypadButton.new()
+	back.pressed = true
+	back.button_index = JOY_BUTTON_B
+	screen.call("_input", back)
+	assert_false((screen.find_child("ServerDialog", true, false) as Control).visible)
+	assert_not_null(get_viewport().gui_get_focus_owner())
+	assert_true((screen.find_child("RoomView", true, false) as Control).is_ancestor_of(get_viewport().gui_get_focus_owner()))
+
+
+func test_disconnect_replaces_confirmation_and_disables_entry() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	screen.open_room(ids[0])
+	screen.ask("退出", "出る", Callable(), "出ない", Callable())
+	OnlineSession.client(get_tree()).disconnect_from_server()
+	screen.call("_on_closed")
+	assert_true((screen.find_child("ConfirmText", true, false) as Label).text.contains("つながり"))
+	assert_true((screen.find_child("EntryButton", true, false) as Button).disabled)
+
+
+func test_removed_cards_and_connection_images_are_cleared() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	var card: Control = screen.get("_cards")[ids[0]]
+	card.grab_focus()
+	var data: Dictionary = OnlineSession.free_lobby.duplicate(true)
+	data["rooms"] = (data["rooms"] as Array).filter(func(room: Dictionary) -> bool: return str(room["room_id"]) != ids[0])
+	screen.call("_apply_lobby", data)
+	assert_false((screen.get("_cards") as Dictionary).has(ids[0]))
+	assert_not_null(get_viewport().gui_get_focus_owner())
+	OnlineSession.free_images[ids[1]] = ImageTexture.new()
+	screen.get("_asked_images")[ids[1]] = true
+	screen.call("_clear_connection_view")
+	assert_true(OnlineSession.free_images.is_empty())
+	assert_true((screen.get("_asked_images") as Dictionary).is_empty())
+
+
+func test_sending_entries_need_confirmation_and_only_matching_errors_restore_picks() -> void:
+	var ids := _free_ids()
+	var screen := _screen()
+	await _wait_node(screen, "Card_%s" % ids[0])
+	screen.open_room(ids[0])
+	screen.press_entry()
+	assert_true((screen.get("_sending_entries") as Dictionary).has(ids[0]))
+	assert_true((screen.find_child("EntryButton", true, false) as Button).disabled)
+	screen.close_room()
+	screen.request_leave()
+	assert_true((screen.find_child("ConfirmDialog", true, false) as Control).visible)
+	screen.call("_answer_confirm", false)
+	screen.open_room(ids[1])
+	screen.call("step_pick", 1)
+	var selected: String = screen.selected_pururin_id()
+	screen.call("_on_message", {"t": Protocol.ERROR, "code": Protocol.ERROR_PICK_LOCKED, "room_id": ids[0]})
+	assert_eq(screen.selected_pururin_id(), selected, "ほかのルームへの拒否では、今の選びを戻さない")
+	assert_false((screen.get("_sending_entries") as Dictionary).has(ids[0]))
+
+
+func test_wait_messages_are_scoped_consumed_once_and_cleared_on_disconnect() -> void:
+	var ids := _free_ids()
+	OnlineSession.begin_free_wait(ids[0])
+	OnlineSession._remember({"t": Protocol.ERROR, "code": Protocol.ERROR_BAD_MESSAGE})
+	OnlineSession._remember({"t": Protocol.FREE_OFFER_END, "room_id": ids[1]})
+	OnlineSession._remember({"t": Protocol.RACE_START, "free_room_id": ids[0]})
+	assert_eq(OnlineSession.take_free_wait_messages().size(), 1)
+	assert_true(OnlineSession.take_free_wait_messages().is_empty())
+	OnlineSession._remember({"t": Protocol.FREE_OFFER_END, "room_id": ids[0]})
+	OnlineSession.close()
+	assert_true(OnlineSession.take_free_wait_messages().is_empty())

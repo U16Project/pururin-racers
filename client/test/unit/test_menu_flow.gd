@@ -1028,3 +1028,239 @@ func test_title_shows_which_build_is_running() -> void:
 	assert_eq(BuildInfo.built_at(), "")
 	assert_eq(BuildInfo.label_text(), BuildInfo.DEVELOPMENT_TEXT)
 
+
+
+func test_modes_restore_the_last_decided_card() -> void:
+	var Mode := load("res://scripts/mode_select.gd")
+	var before: String = Mode._last_mode
+	Mode._last_mode = "OnlineFreeRaceButton"
+	var screen: Control = ModeSelectScene.instantiate()
+	add_child_autofree(screen)
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("OnlineFreeRaceButton", true, false))
+	Mode._last_mode = before
+
+
+## 通信の返事を手で届け、画面が返事を待つ間の操作を確かめる。
+class FreeLobbyClient extends Node:
+	signal connected
+	signal closed
+	signal message_received(data: Dictionary)
+	var sent: Array = []
+	var open := true
+	func is_open() -> bool:
+		return open
+	func send(type: String, fields: Dictionary = {}) -> bool:
+		if not open:
+			return false
+		sent.append({"t": type, "fields": fields.duplicate(true)})
+		return true
+	func disconnect_from_server() -> void:
+		open = false
+
+
+class FreeLobbyWaitingProbe extends "res://scripts/online_free_lobby.gd":
+	var entered: Array = []
+	func _go_to_waiting_venue(offer: Dictionary) -> void:
+		entered.append(offer)
+
+
+func _free_lobby_fixture() -> Dictionary:
+	var Session := load("res://scripts/online/online_session.gd")
+	var Server := load("res://scripts/online/online_server.gd")
+	var Config := load("res://scripts/config/online_config.gd")
+	var server: Node = Server.new()
+	server.listen_on_ready = false
+	add_child_autofree(server)
+	server.set_process(false)
+	var before := {"client": Session._client, "peer": Session.peer_id, "lobby": Session.free_lobby, "free": Session.free_mode}
+	var client := FreeLobbyClient.new()
+	add_child_autofree(client)
+	client.message_received.connect(Session._remember)
+	Session._client = client
+	Session.peer_id = 1
+	Session.free_lobby = {"peer_id": 1, "rooms": server.free_room_list(), "entries": [], "answer_wait_s": Config.free_answer_wait_s()}
+	var screen: Control = load("res://scenes/online_free_lobby.tscn").instantiate()
+	screen.set_script(FreeLobbyWaitingProbe)
+	add_child_autofree(screen)
+	return {"screen": screen, "client": client, "before": before}
+
+
+func _finish_free_lobby_fixture(fixture: Dictionary) -> void:
+	var Session := load("res://scripts/online/online_session.gd")
+	var screen: Control = fixture["screen"]
+	screen.free()
+	Session.clear_free_wait()
+	Session._client = fixture["before"]["client"]
+	Session.peer_id = fixture["before"]["peer"]
+	Session.free_lobby = fixture["before"]["lobby"]
+	Session.free_mode = fixture["before"]["free"]
+
+
+func test_free_lobby_waits_for_one_answer_and_discards_unrelated_errors() -> void:
+	var fixture := _free_lobby_fixture()
+	var screen: Control = fixture["screen"]
+	var client: FreeLobbyClient = fixture["client"]
+	var Config := load("res://scripts/config/online_config.gd")
+	var Protocol := load("res://scripts/online/online_protocol.gd")
+	var room: Dictionary = Config.free_rooms()[0]
+	screen.open_room(str(room["id"]))
+	screen.call("_show_offer", {"room_id": room["id"], "name": room["name"], "distance_m": room["distance_m"], "pururin_id": RaceSession.roster_ids()[0], "wait_s": Config.free_answer_wait_s()})
+	screen.answer(true)
+	screen.answer(false)
+	var back := InputEventJoypadButton.new()
+	back.button_index = JOY_BUTTON_B
+	back.pressed = true
+	screen.call("_input", back)
+	assert_eq(client.sent.filter(func(message: Dictionary) -> bool: return message["t"] == Protocol.FREE_ANSWER).size(), 1)
+	assert_true((screen.get("entered") as Array).is_empty())
+	(screen.find_child("RoomsTab", true, false) as Control).grab_focus()
+	assert_eq(get_viewport().gui_get_focus_owner(), screen.find_child("OfferPanel", true, false), "回答待ちでも背景へカーソルを出さない")
+	client.message_received.emit({"t": Protocol.ERROR, "code": Protocol.ERROR_BAD_MESSAGE})
+	assert_true((screen.get("entered") as Array).is_empty())
+	client.message_received.emit({"t": Protocol.FREE_ANSWER_RESULT, "room_id": room["id"], "accepted": true})
+	client.message_received.emit({"t": Protocol.FREE_ANSWER_RESULT, "room_id": room["id"], "accepted": true})
+	assert_eq((screen.get("entered") as Array).size(), 1)
+	_finish_free_lobby_fixture(fixture)
+
+
+func test_free_lobby_modals_restore_focus_and_close_without_running_actions() -> void:
+	var fixture := _free_lobby_fixture()
+	var screen: Control = fixture["screen"]
+	var Config := load("res://scripts/config/online_config.gd")
+	var room: Dictionary = Config.free_rooms()[0]
+	var calls := [0]
+	screen.ask("確認", "はい", Callable(), "いいえ", func() -> void: calls[0] += 1)
+	var select := InputEventJoypadButton.new()
+	select.button_index = JOY_BUTTON_BACK
+	select.pressed = true
+	screen.call("_unhandled_input", select)
+	assert_false((screen.find_child("ChatOverlay", true, false) as Control).visible)
+	(screen.find_child("RoomsTab", true, false) as Control).grab_focus()
+	assert_true((screen.find_child("ConfirmDialog", true, false) as Control).is_ancestor_of(get_viewport().gui_get_focus_owner()))
+	screen.call("_show_offer", {"room_id": room["id"], "name": room["name"], "distance_m": room["distance_m"], "pururin_id": RaceSession.roster_ids()[0], "wait_s": Config.free_answer_wait_s()})
+	assert_eq(calls[0], 0)
+	assert_false((screen.find_child("ConfirmDialog", true, false) as Control).visible)
+	screen.call("_close_offer")
+	screen.open_room(str(room["id"]))
+	screen.open_server_dialog()
+	(screen.find_child("ServerUrl", true, false) as Control).grab_focus()
+	var back := InputEventJoypadButton.new()
+	back.button_index = JOY_BUTTON_B
+	back.pressed = true
+	screen.call("_input", back)
+	assert_false((screen.find_child("ServerDialog", true, false) as Control).visible)
+	assert_true((screen.find_child("RoomView", true, false) as Control).is_ancestor_of(get_viewport().gui_get_focus_owner()))
+	_finish_free_lobby_fixture(fixture)
+
+
+## サーバーの状態遷移を、ソケットを使わずに確かめる。
+class FreeLobbyServer extends "res://scripts/online/online_server.gd":
+	var replies: Array = []
+	func _send(_peer_id: int, data: Dictionary) -> void:
+		replies.append(data)
+
+
+class FreeRaceRunner extends Node:
+	var released: Array = []
+	func release_remote_runner(peer: int) -> void:
+		released.append(peer)
+
+
+func _free_server_fixture() -> Dictionary:
+	var server := FreeLobbyServer.new()
+	server.listen_on_ready = false
+	add_child_autofree(server)
+	server.set_process(false)
+	var Config := load("res://scripts/config/online_config.gd")
+	var id := str(Config.free_rooms()[0]["id"])
+	var peer := {"socket": WebSocketPeer.new(), "name": "確認", "free": true, "room": 0, "viewing": "", "offer": "", "offer_until_msec": 0, "free_room": 0, "returning": false, "final_room": "", "rest_until_msec": 0,
+		"entries": [{"room_id": id, "pururin_id": RaceSession.roster_ids()[0], "hold": false, "since_msec": Time.get_ticks_msec()}]}
+	server._peers[1] = peer
+	return {"server": server, "peer": peer, "id": id}
+
+
+func test_free_server_defers_final_calls_and_cancels_accepted_finalists() -> void:
+	var fixture := _free_server_fixture()
+	var server: FreeLobbyServer = fixture["server"]
+	var peer: Dictionary = fixture["peer"]
+	var id: String = fixture["id"]
+	var Config := load("res://scripts/config/online_config.gd")
+	var Protocol := load("res://scripts/online/online_protocol.gd")
+	var data: Dictionary = server._free_rooms[id]
+	data.merge({"final": {"answer_wait_s": Config.free_answer_wait_s(), "max_players": Protocol.ROOM_CAPACITY}, "start_unix": 0, "accepted": [], "advancers": [], "deferred": [], "call_until_msec": 0, "call_stage": "", "phase": Protocol.FINAL_PHASE_CALLING})
+	peer["returning"] = true
+	assert_true(server._final_call(id, [1], Protocol.STAGE_SEMI))
+	assert_eq(server._final_pending(id), 1)
+	assert_eq(str(peer["offer"]), "")
+	var deadline := int(data["call_until_msec"])
+	server._free_enter(1)
+	assert_eq(str(peer["offer"]), id)
+	assert_eq(int(peer["offer_until_msec"]), deadline)
+	server._free_answer(1, id, true)
+	assert_eq(str(server.free_entry_list(1)[0]["state"]), Protocol.FREE_ENTRY_ACCEPTED)
+	server._free_answer(1, id, true)
+	assert_eq((data["accepted"] as Array).size(), 1, "同じ回答は重ねて受けない")
+	server._free_cancel(1, id)
+	assert_true((data["accepted"] as Array).is_empty())
+	assert_eq(str(peer["final_room"]), "")
+	server._update_final(id)
+	assert_eq(str(data["phase"]), Protocol.FINAL_PHASE_DONE)
+
+
+func test_free_server_finishes_when_all_deferred_finalists_miss_the_deadline() -> void:
+	var fixture := _free_server_fixture()
+	var server: FreeLobbyServer = fixture["server"]
+	var peer: Dictionary = fixture["peer"]
+	var id: String = fixture["id"]
+	var Config := load("res://scripts/config/online_config.gd")
+	var Protocol := load("res://scripts/online/online_protocol.gd")
+	var data: Dictionary = server._free_rooms[id]
+	data.merge({"final": {"answer_wait_s": Config.free_answer_wait_s(), "max_players": Protocol.ROOM_CAPACITY}, "start_unix": 0, "accepted": [], "advancers": [], "deferred": [], "call_until_msec": 0, "call_stage": "", "phase": Protocol.FINAL_PHASE_FINAL_CALLING})
+	peer["returning"] = true
+	server._final_call(id, [1], Protocol.STAGE_FINAL)
+	data["call_until_msec"] = Time.get_ticks_msec() - 1
+	server._update_final(id)
+	assert_eq(str(data["phase"]), Protocol.FINAL_PHASE_DONE)
+	assert_eq(str(peer["final_room"]), "")
+	assert_true((peer["entries"] as Array).is_empty())
+	assert_true(server.replies.any(func(data: Dictionary) -> bool: return data["t"] == Protocol.FREE_NOTICE))
+
+
+func test_free_server_enter_releases_a_race_that_started_before_cancel() -> void:
+	var fixture := _free_server_fixture()
+	var server: FreeLobbyServer = fixture["server"]
+	var peer: Dictionary = fixture["peer"]
+	var id: String = fixture["id"]
+	var runner := FreeRaceRunner.new()
+	add_child_autofree(runner)
+	var room := server._free_make_race(id)
+	server._rooms[room]["race"] = runner
+	server._rooms[room]["order"] = [1]
+	peer["free_room"] = room
+	server._free_cancel(1, id)
+	server._free_enter(1)
+	assert_eq(runner.released, [1])
+	assert_false((server._rooms[room]["order"] as Array).has(1))
+	assert_eq(int(peer["free_room"]), 0)
+	assert_false(bool(peer["returning"]))
+	# テスト用の走者の片づけは、テスト側で行う。
+	server._rooms[room]["race"] = null
+
+
+func test_free_server_rejects_expired_answers_and_reports_the_locked_room() -> void:
+	var fixture := _free_server_fixture()
+	var server: FreeLobbyServer = fixture["server"]
+	var peer: Dictionary = fixture["peer"]
+	var id: String = fixture["id"]
+	var Protocol := load("res://scripts/online/online_protocol.gd")
+	peer["offer"] = id
+	peer["offer_until_msec"] = Time.get_ticks_msec() - 1
+	server._free_answer(1, id, true)
+	assert_eq(str(server.replies.back()["t"]), Protocol.FREE_ANSWER_RESULT)
+	assert_false(bool(server.replies.back()["accepted"]))
+	assert_eq(int(peer["free_room"]), 0)
+	var original := str(peer["entries"][0]["pururin_id"])
+	server._free_entry(1, id, {"pururin_id": RaceSession.roster_ids()[1], "uid": "a".repeat(32), "secret": "b".repeat(64)})
+	assert_eq(str(server.replies.back()["code"]), Protocol.ERROR_PICK_LOCKED)
+	assert_eq(str(server.replies.back()["room_id"]), id)
+	assert_eq(str(peer["entries"][0]["pururin_id"]), original)

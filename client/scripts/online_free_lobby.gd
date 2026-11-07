@@ -36,6 +36,7 @@ const RULE_TICKET_TEXT := "チケットが必要"
 ## 帯の地の濃さ（色の不透明度）。
 const STRIP_FILL_ALPHA := 0.18
 const ERROR_TEXTS := {
+	Protocol.ERROR_PICK_LOCKED: "呼ばれている間・レースの間は、出るぷるりんを替えられません。",
 	Protocol.ERROR_VERSION: "ゲームとサーバーの版が違います。ゲームを新しくしてください。",
 	Protocol.ERROR_NO_ROOM: "そのルームはありません。",
 	Protocol.ERROR_NO_ENTRY: "そのルームには、エントリーしていません。",
@@ -208,21 +209,37 @@ var _connect_wait_s := -1.0
 ## 画像を聞いたルーム（同じルームに、何度も聞かないため）。
 var _asked_images := {}
 var _clock_wait_s := 0.0
+## 回答待ちと送信中は、同じ操作を重ねて送らない。
+var _answer_pending := false
+var _answer_accept := false
+var _sending_entries := {}
+## 窓の後ろへのクリックと、窓の外へのカーソル移動を止める。
+var _modal_shield: Control
+var _window_focus := {}
+var _focus_guard := false
 
 
 func _ready() -> void:
 	OnlineSession.free_mode = true
+	OnlineSession.clear_free_wait()
 	_card_template.visible = false
 	_entry_row_template.visible = false
 	_entrant_template.visible = false
 	_offer_panel.visible = false
+	_offer_panel.focus_mode = Control.FOCUS_ALL
 	_picker_status.visible = false
 	_confirm_dialog.visible = false
 	_chat_overlay.visible = false
 	_room_view.visible = false
 	_status_font_size = _status.get_theme_font_size("font_size")
 	_status.resized.connect(_fit_status)
-	get_viewport().gui_focus_changed.connect(func(_control: Control) -> void: _refresh_guide_accept())
+	_modal_shield = Control.new()
+	_modal_shield.name = "ModalShield"
+	_modal_shield.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_modal_shield.mouse_filter = Control.MOUSE_FILTER_STOP
+	_modal_shield.visible = false
+	add_child(_modal_shield)
+	get_viewport().gui_focus_changed.connect(_on_focus_changed)
 	_status.text = HINT_TEXT
 	_refresh_server_name()
 	_server_button.pressed.connect(open_server_dialog)
@@ -310,6 +327,9 @@ func _ready() -> void:
 		_set_status("ロビーに戻りました。")
 		if not OnlineSession.free_lobby.is_empty():
 			_apply_lobby(OnlineSession.free_lobby)
+		if not OnlineSession.free_return_notice.is_empty():
+			_set_status(OnlineSession.free_return_notice)
+			OnlineSession.free_return_notice = ""
 	elif _client.is_open():
 		_client.hello(TrainerProfile.trainer_name(), TrainerProfile.introduction(), OnlineSession.my_icon_to_send())
 	else:
@@ -327,6 +347,80 @@ func _link_room_focus() -> void:
 	_entry_button.focus_neighbor_bottom = _entry_button.get_path_to(_hold_button)
 	_hold_button.focus_neighbor_top = _hold_button.get_path_to(_entry_button)
 	_hold_button.focus_neighbor_bottom = _hold_button.get_path_to(_hold_button)
+
+
+## 前にある窓を、入力と表示で共通に使う。
+func _top_window() -> Control:
+	for window: Control in [_offer_panel, _confirm_dialog, _server_dialog, _picker, _chat_overlay]:
+		if window.visible:
+			return window
+	return null
+
+
+func _remember_window_focus(window: Control) -> void:
+	var focused := get_viewport().gui_get_focus_owner()
+	_window_focus[window] = weakref(focused) if focused != null else null
+
+
+func _sync_windows() -> void:
+	var window := _top_window()
+	_modal_shield.visible = window != null
+	if window != null:
+		move_child(_modal_shield, get_child_count() - 1)
+		move_child(window, get_child_count() - 1)
+
+
+func _focus_window(window: Control) -> void:
+	if _focus_guard:
+		return
+	_focus_guard = true
+	if window == _offer_panel:
+		if _answer_pending:
+			_offer_panel.grab_focus()
+		else:
+			_accept_button.grab_focus()
+	elif window == _confirm_dialog:
+		_confirm_no.grab_focus()
+	elif window == _server_dialog:
+		_server_ok.grab_focus()
+	elif window == _picker:
+		var tiles: Array = _picker.call("tiles")
+		if not tiles.is_empty():
+			(tiles[0] as Control).grab_focus()
+	elif window == _chat_overlay:
+		_chat_overlay_edit.grab_focus()
+	_focus_guard = false
+
+
+func _on_focus_changed(control: Control) -> void:
+	_refresh_guide_accept()
+	var window := _top_window()
+	if window != null and (control == null or not window.is_ancestor_of(control)):
+		_focus_window(window)
+
+
+func _restore_window_focus(window: Control) -> void:
+	_sync_windows()
+	var top := _top_window()
+	if top != null:
+		_on_focus_changed(get_viewport().gui_get_focus_owner())
+		return
+	var saved: WeakRef = _window_focus.get(window)
+	_window_focus.erase(window)
+	var control: Control = saved.get_ref() if saved != null else null
+	if is_instance_valid(control) and control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE and not (control is BaseButton and control.disabled):
+		control.grab_focus()
+	elif _room_view.visible:
+		_status_button.grab_focus()
+	else:
+		_focus_lobby()
+
+
+## 呼び出しや切断で窓を片づけるときは、登録された行動を実行しない。
+func _discard_confirm() -> void:
+	_confirm_dialog.visible = false
+	_confirm_yes_action = Callable()
+	_confirm_no_action = Callable()
 
 
 ## ゲームパッドのボタンのマーク（カーソルがどこにあっても、そのボタンを押すと、この動きになる、の印）。
@@ -488,7 +582,7 @@ func _fill_events(events: Array) -> void:
 
 
 func _focus_lobby() -> void:
-	if not is_inside_tree() or _room_view.visible or _offer_panel.visible:
+	if not is_inside_tree() or _room_view.visible or _top_window() != null:
 		return
 	if _rooms_page.visible:
 		for card: Button in _visible_cards():
@@ -514,6 +608,10 @@ func _apply_lobby(data: Dictionary) -> void:
 		_set_status("ロビーに入りました。ルームを選んで、くわしい条件を見てから、エントリーしてください。")
 	_rooms = data.get("rooms", [])
 	_entries = data.get("entries", [])
+	for entry: Dictionary in _entries:
+		var id := str(entry["room_id"])
+		if _sending_entries.has(id) and str(_sending_entries[id]) == str(entry["pururin_id"]):
+			_sending_entries.erase(id)
 	_answer_wait_s = float(data.get("answer_wait_s", 0.0))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
 	var rest_s := float(data.get("rest_s", 0.0))
@@ -565,6 +663,15 @@ func _refresh_filter() -> void:
 
 func _refresh_cards() -> void:
 	var tag := _filter.get_item_text(_filter.selected) if _filter.selected >= 0 else FILTER_ALL
+	var lost_focus := false
+	var ids: Array = _rooms.map(func(room: Dictionary) -> String: return str(room["room_id"]))
+	for id: String in _cards.keys():
+		if not ids.has(id):
+			var old: Control = _cards[id]
+			lost_focus = lost_focus or old.has_focus()
+			_room_grid.remove_child(old)
+			old.queue_free()
+			_cards.erase(id)
 	var index := 0
 	for room: Dictionary in _rooms:
 		var room_id := str(room["room_id"])
@@ -581,6 +688,8 @@ func _refresh_cards() -> void:
 		index += 1
 		card.visible = tag == FILTER_ALL or str(room["tag"]) == tag
 		fill_card(card, room, entry_for(room_id))
+	if lost_focus:
+		_focus_lobby()
 
 
 ## カードに、ルームのようすを入れる。
@@ -662,7 +771,7 @@ static func final_state_text(room: Dictionary, now_unix: int, short: bool = fals
 			return "本戦の呼び出し中"
 		Protocol.FINAL_PHASE_SEMIS:
 			return "準決勝 %dレース中" % int(room.get("races", 0))
-		Protocol.FINAL_PHASE_WAIT, Protocol.FINAL_PHASE_FINAL_CALLING:
+		Protocol.FINAL_PHASE_FINAL_CALLING:
 			return "決勝の呼び出し中"
 		Protocol.FINAL_PHASE_FINAL:
 			return "決勝 レース中"
@@ -701,7 +810,7 @@ func _set_strip_closed(strip: Control, dot: Control, label: Label, room: Diction
 func _set_strip_final(strip: Control, dot: Control, label: Label, room: Dictionary) -> void:
 	var phase := str(room.get("phase", ""))
 	var state := Protocol.FREE_STATE_IDLE
-	if phase in [Protocol.FINAL_PHASE_CALLING, Protocol.FINAL_PHASE_WAIT, Protocol.FINAL_PHASE_FINAL_CALLING]:
+	if phase in [Protocol.FINAL_PHASE_CALLING, Protocol.FINAL_PHASE_FINAL_CALLING]:
 		state = Protocol.FREE_STATE_CALLING
 	elif phase in [Protocol.FINAL_PHASE_SEMIS, Protocol.FINAL_PHASE_FINAL]:
 		state = Protocol.FREE_STATE_RACING
@@ -810,8 +919,10 @@ func _refresh_entries() -> void:
 		(row.find_child("Open", true, false) as Button).text = "%s　%s" % [str(room.get("name", entry["room_id"])), distance_text(float(room.get("distance_m", 0.0)))]
 		(row.find_child("Pururin", true, false) as Label).text = "%sで出る" % pururin_name(str(entry["pururin_id"]))
 		(row.find_child("State", true, false) as Label).text = entry_state_text(entry)
-		(row.find_child("Up", true, false) as Button).disabled = index == 0
-		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1
+		(row.find_child("Up", true, false) as Button).disabled = index == 0 or not _client.is_open()
+		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1 or not _client.is_open()
+		for action: String in ["Hold", "Cancel"]:
+			(row.find_child(action, true, false) as Button).disabled = not _client.is_open() or _sending_entries.has(str(entry["room_id"]))
 		(row.find_child("Hold", true, false) as Button).text = "保留を外す" if bool(entry["hold"]) else "保留にする"
 	# 行が消えて、カーソルが行き場をなくしたら（取り消した・呼ばれて答えなかった）、残った行かタブへ戻す。
 	if _entries_page.visible and is_inside_tree() and get_viewport().gui_get_focus_owner() == null:
@@ -851,6 +962,8 @@ static func pururin_name(pururin_id: String) -> String:
 
 ## 優先の順番を、1つ上げる（step＝-1）・下げる（step＝1）。
 func move_entry(index: int, step: int) -> void:
+	if not _client.is_open():
+		return
 	var target := index + step
 	if target < 0 or target >= _entries.size():
 		return
@@ -862,6 +975,8 @@ func move_entry(index: int, step: int) -> void:
 
 
 func set_hold(room_id: String, hold: bool) -> void:
+	if not _client.is_open():
+		return
 	_client.send(Protocol.FREE_HOLD, {"room_id": room_id, "hold": hold})
 	# 呼ばれているルームを保留にしたら、サーバーは呼び出しを取り消すので、窓も閉じる。
 	if hold and str(_offer.get("room_id", "")) == room_id:
@@ -870,6 +985,8 @@ func set_hold(room_id: String, hold: bool) -> void:
 
 
 func cancel_entry(room_id: String) -> void:
+	if not _client.is_open() or _sending_entries.has(room_id):
+		return
 	_client.send(Protocol.FREE_CANCEL, {"room_id": room_id})
 	if str(_offer.get("room_id", "")) == room_id:
 		_close_offer()
@@ -1033,7 +1150,7 @@ func _refresh_pick() -> void:
 	var missing := not needs.is_empty() and not owned_tickets.has(needs)
 	var closed := not is_open(room_by_id(_open_room))
 	# もうエントリーしていれば、いつでも取り消せる。まだなら、チケットが無い・受付の外のときは押せない。
-	_entry_button.disabled = (missing or closed) and entry.is_empty()
+	_entry_button.disabled = ((missing or closed) and entry.is_empty()) or not _client.is_open() or _sending_entries.has(_open_room)
 	# 本戦は、保留できない（開始の時刻に、エントリーした全員を呼ぶ）。
 	_hold_button.visible = not entry.is_empty() and not is_final(room_by_id(_open_room))
 	if closed and _entry_button.disabled:
@@ -1056,12 +1173,16 @@ func _refresh_pick() -> void:
 	else:
 		_entry_button.text = "取り消す"
 		_entry_note.text = "%sでエントリーしています（%s）。" % [pururin_name(pururin_id), entry_state_text(entry)]
+	for button: BaseButton in [_prev_button, _next_button, _status_button, _hold_button]:
+		button.disabled = not _client.is_open() or _sending_entries.has(_open_room)
 	_hold_button.text = "保留を外す" if not entry.is_empty() and bool(entry["hold"]) else "保留にする"
+	if is_inside_tree() and _room_view.visible and _top_window() == null and get_viewport().gui_get_focus_owner() == null:
+		(_conditions_tab if _status_button.disabled else _status_button).grab_focus()
 
 
 ## エントリーのボタン：まだならエントリー、もうしていれば取り消す（ぷるりんの替えは、選び直したときに、すぐ送る）。
 func press_entry() -> void:
-	if _open_room.is_empty():
+	if _open_room.is_empty() or not _client.is_open() or _sending_entries.has(_open_room):
 		return
 	var entry := entry_for(_open_room)
 	if not entry.is_empty():
@@ -1072,10 +1193,16 @@ func press_entry() -> void:
 
 ## 選んでいるぷるりんで、エントリーする（もうしていれば、ぷるりんを替える）。
 func _send_entry() -> void:
+	if _sending_entries.has(_open_room):
+		return
 	var entry := entry_for(_open_room)
 	var room_name := str(room_by_id(_open_room).get("name", _open_room))
 	OnlineSession.last_pick = selected_pururin_id()
-	_client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id())})
+	if not _client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id())}):
+		_set_status("送れませんでした。つながりを確かめてください。")
+		return
+	_sending_entries[_open_room] = selected_pururin_id()
+	_refresh_pick()
 	if entry.is_empty():
 		_set_status("「%s」にエントリーしました。番が来たら呼ばれます。" % room_name)
 	else:
@@ -1085,6 +1212,7 @@ func _send_entry() -> void:
 ## プル選択の窓を開く（ほかの人と重なってもよいので、選べないプルは無い）。横に、カーソル（マウス）のプルのステータスを出す。
 ## プルを押すと、そのプルに決まる。
 func open_picker() -> void:
+	_remember_window_focus(_picker)
 	_picker.size.x = PururinPicker.window_width()
 	_picker_status_window.offset_left = _picker.offset_left + _picker.size.x + PICKER_STATUS_GAP
 	_picker_status_window.offset_right = _picker_status_window.offset_left + PICKER_STATUS_WIDTH
@@ -1093,6 +1221,7 @@ func open_picker() -> void:
 	# 一覧を開いているあいだの B は、一覧を閉じる。
 	_back_button.text = "閉じる"
 	_picker.call("open_choices", "出るぷるりんを選ぶ", selected_pururin_id(), {})
+	_sync_windows()
 
 
 func is_picker_open() -> bool:
@@ -1129,8 +1258,8 @@ func _apply_pick_to_entry() -> void:
 func _on_picker_closed() -> void:
 	_picker_status.visible = false
 	_back_button.text = "ロビーへ戻る" if _room_view.visible else "戻る"
-	if is_inside_tree() and _room_view.visible and _offer.is_empty():
-		_status_button.grab_focus()
+	if is_inside_tree():
+		_restore_window_focus(_picker)
 
 
 func press_hold() -> void:
@@ -1197,7 +1326,9 @@ func toggle_chat_overlay() -> void:
 	if _chat_overlay.visible:
 		close_chat_overlay()
 		return
+	_remember_window_focus(_chat_overlay)
 	_chat_overlay.visible = true
+	_sync_windows()
 	_chat_overlay_tabs.visible = _room_view.visible
 	_show_overlay_chat(not _room_view.visible)
 	_chat_overlay_edit.grab_focus()
@@ -1207,10 +1338,7 @@ func close_chat_overlay() -> void:
 	if not _chat_overlay.visible:
 		return
 	_chat_overlay.visible = false
-	if _room_view.visible:
-		_entry_button.grab_focus()
-	else:
-		_focus_lobby()
+	_restore_window_focus(_chat_overlay)
 
 
 ## 大きなチャット欄に出すチャットを決める（lobby なら全体、でなければ開いているルーム）。
@@ -1233,12 +1361,17 @@ func _send_overlay_chat() -> void:
 
 ## 呼ばれた：どのルームか（画像・名前・距離・何番目の候補か・出るぷるりん）と、返事の残り秒を出して、答えを待つ。
 func _show_offer(data: Dictionary) -> void:
-	# ぷるりんを選んでいる途中・大きなチャット欄を開いているときも、呼ばれたら閉じて、確かめを先にする。
+	_remember_window_focus(_offer_panel)
+	_discard_confirm()
+	_server_dialog.visible = false
 	_chat_overlay.visible = false
 	_picker.call("close")
 	# 呼ばれたら、レースの画面を裏で読み込み始める（入ると答えてからレースまでの間に、読み終わるように）。
 	RaceScenePreload.start()
 	_offer = data
+	_answer_pending = false
+	_accept_button.disabled = false
+	_decline_button.disabled = false
 	_offer_total_s = maxf(float(data.get("wait_s", 0.0)), 0.1)
 	_offer_until_msec = Time.get_ticks_msec() + int(_offer_total_s * 1000.0)
 	_offer_image.texture = _room_image(str(data["room_id"]))
@@ -1249,6 +1382,7 @@ func _show_offer(data: Dictionary) -> void:
 	if not stage.is_empty():
 		_offer_info.text = "%sで出ます。答えないと失格になります" % pururin_name(str(data.get("pururin_id", "")))
 	_offer_panel.visible = true
+	_sync_windows()
 	_update_offer_time()
 	_accept_button.grab_focus()
 	UIAudio.play_confirmation()
@@ -1256,21 +1390,40 @@ func _show_offer(data: Dictionary) -> void:
 
 ## 呼ばれたルームに答える。
 func answer(accept: bool) -> void:
-	if _offer.is_empty():
+	if _offer.is_empty() or _answer_pending:
 		return
-	_client.send(Protocol.FREE_ANSWER, {"room_id": str(_offer["room_id"]), "accept": accept})
-	_set_status("入ると答えました。レースが始まるのを待っています…" if accept else "「%s」のエントリーを取り消しました。" % str(_offer["name"]))
 	if accept:
-		_go_to_waiting_venue(_offer)
+		OnlineSession.begin_free_wait(str(_offer["room_id"]))
+	if not _client.send(Protocol.FREE_ANSWER, {"room_id": str(_offer["room_id"]), "accept": accept}):
+		OnlineSession.clear_free_wait()
+		return
+	_answer_pending = true
+	_answer_accept = accept
+	_accept_button.disabled = true
+	_decline_button.disabled = true
+	_offer_panel.grab_focus()
+	_offer_info.text = "入っています…" if accept else "取り消しています…"
+
+
+func _answer_result(data: Dictionary) -> void:
+	if not _answer_pending or _offer.is_empty() or str(data.get("room_id", "")) != str(_offer["room_id"]):
+		return
+	var offer := _offer.duplicate()
+	var accepted := bool(data.get("accepted", false)) and _answer_accept
+	_answer_pending = false
 	_close_offer()
+	if accepted:
+		if _room_view.visible:
+			_status_button.grab_focus()
+		_go_to_waiting_venue(offer)
+	else:
+		OnlineSession.clear_free_wait()
+		_set_status("返事が間に合わず、入れませんでした。" if _answer_accept else "「%s」のエントリーを取り消しました。" % str(offer["name"]))
 
 
-## 「入る」と答えたら、すぐ会場へ移って、自分のぷるりんだけでパドックを歩きながら、出走者が集まるのを待つ。
+## 「入る」の返事が認められたら、会場へ移って、自分のぷるりんだけでパドックを歩きながら、出走者が集まるのを待つ。
 ## 出走者が決まったら（レースを始める知らせ）、会場の画面が、全員で入り直す。取りやめになったら、ロビーへ戻ってくる。
 func _go_to_waiting_venue(offer: Dictionary) -> void:
-	OnlineSession.pending_race_start = {}
-	if not _client.message_received.is_connected(OnlineSession.catch_race_start):
-		_client.message_received.connect(OnlineSession.catch_race_start)
 	var pururin_id := str(offer["pururin_id"])
 	OnlineSession.free_race_room = str(offer["room_id"])
 	OnlineSession.free_race_stage = str(offer.get("stage", ""))
@@ -1287,19 +1440,18 @@ func _go_to_waiting_venue(offer: Dictionary) -> void:
 ## （ルームの画面のエントリーのボタンは、入ると答えたあと「取り消す」になるため、そこへは戻さない）。
 func _close_offer() -> void:
 	_offer = {}
+	_answer_pending = false
 	if _offer_panel == null or not _offer_panel.visible:
 		return
 	_offer_panel.visible = false
-	if _room_view.visible:
-		_status_button.grab_focus()
-	else:
-		_focus_lobby()
+	_restore_window_focus(_offer_panel)
 
 
 func _update_offer_time() -> void:
 	var left := maxf(float(_offer_until_msec - Time.get_ticks_msec()) / 1000.0, 0.0)
 	_offer_bar.value = left / _offer_total_s * _offer_bar.max_value
-	_offer_time.text = "返事を待つのは、あと %d 秒" % int(ceil(left))
+	if not _answer_pending:
+		_offer_time.text = "返事を待つのは、あと %d 秒" % int(ceil(left))
 
 
 # ---------------------------------------------------------------- 戻る・つながり
@@ -1330,6 +1482,7 @@ func _refresh_server_name() -> void:
 
 ## つなぐサーバーを選ぶ窓を開く。
 func open_server_dialog() -> void:
+	_remember_window_focus(_server_dialog)
 	if LocalServer.is_running():
 		_server_local.button_pressed = true
 	elif ServerChoice.choice() == ServerChoice.CHOICE_CUSTOM:
@@ -1339,6 +1492,7 @@ func open_server_dialog() -> void:
 	_server_url_edit.text = ServerChoice.custom_url()
 	_refresh_server_dialog()
 	_server_dialog.visible = true
+	_sync_windows()
 	_server_ok.grab_focus()
 
 
@@ -1371,7 +1525,7 @@ func _link_server_dialog_focus() -> void:
 
 func close_server_dialog() -> void:
 	_server_dialog.visible = false
-	_focus_lobby()
+	_restore_window_focus(_server_dialog)
 
 
 func _refresh_server_dialog() -> void:
@@ -1388,7 +1542,7 @@ func apply_server_choice() -> void:
 		_server_local_note.text = "ws:// か wss:// で始まるURLを入れてください。"
 		_server_local_note.visible = true
 		return
-	_server_dialog.visible = false
+	close_server_dialog()
 	if _server_local.button_pressed:
 		if LocalServer.start(get_tree()) != OK:
 			_set_status("このPCでサーバーを起動できませんでした。")
@@ -1402,9 +1556,14 @@ func apply_server_choice() -> void:
 		_client.send(Protocol.FREE_LEAVE)
 		_client.disconnect_from_server()
 	_switching_server = false
+	_clear_connection_view()
 	_entries = []
 	_rooms = []
 	OnlineSession.free_lobby = {}
+	_refresh_cards()
+	_refresh_entries()
+	if not _open_room.is_empty():
+		close_room()
 	if LocalServer.is_running():
 		# 起動しきるまで、つなぎ直しながら待つ。
 		_local_wait_s = 0.0
@@ -1433,12 +1592,15 @@ func _wait_for_local_server(delta: float) -> void:
 
 ## 確かめの窓を出す（文、「はい」の字とすること、「いいえ」の字とすること）。
 func ask(text: String, yes_text: String, on_yes: Callable, no_text: String, on_no: Callable) -> void:
+	if not _confirm_dialog.visible:
+		_remember_window_focus(_confirm_dialog)
 	_confirm_text.text = text
 	_confirm_yes.text = yes_text
 	_confirm_no.text = no_text
 	_confirm_yes_action = on_yes
 	_confirm_no_action = on_no
 	_confirm_dialog.visible = true
+	_sync_windows()
 	_confirm_no.grab_focus()
 
 
@@ -1450,21 +1612,19 @@ func _answer_confirm(yes: bool) -> void:
 	if action.is_valid():
 		action.call()
 	if is_inside_tree() and not _confirm_dialog.visible:
-		if _room_view.visible:
-			_status_button.grab_focus()
-		else:
-			_focus_lobby()
+		_restore_window_focus(_confirm_dialog)
 
 
 ## 戻る（ロビーから）：エントリー候補があれば、全部消えることを確かめてから出る。
 func request_leave() -> void:
-	if _entries.is_empty() or not _client.is_open():
+	if (_entries.is_empty() and _sending_entries.is_empty()) or not _client.is_open():
 		go_back()
 		return
-	ask("ロビーを出ると、エントリー候補（%d件）は、すべて取り消されます。出ますか？" % _entries.size(), "出る", go_back, "出ない", Callable())
+	ask("ロビーを出ると、エントリー候補（%d件）は、すべて取り消されます。出ますか？" % (_entries.size() + _sending_entries.keys().filter(func(id: String) -> bool: return entry_for(id).is_empty()).size()), "出る", go_back, "出ない", Callable())
 
 
 func go_back() -> void:
+	OnlineSession.clear_free_wait()
 	if _client != null and is_instance_valid(_client):
 		_client.send(Protocol.FREE_LEAVE)
 	OnlineSession.free_mode = false
@@ -1487,24 +1647,42 @@ func _on_closed() -> void:
 	_close_offer()
 	_chat_overlay.visible = false
 	_picker.call("close")
+	_sending_entries.clear()
+	_refresh_entries()
+	if not _open_room.is_empty():
+		_refresh_pick()
+	_discard_confirm()
+	_server_dialog.visible = false
 	_set_status("サーバーにつながりません。" if was_waiting else "サーバーとのつながりが切れました。")
-	if _confirm_dialog.visible:
-		return
 	var text := "サーバーにつながりませんでした。" if was_waiting else "サーバーとのつながりが切れました。エントリー候補は、取り消されています。"
 	ask(text, "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
 
 
 ## つなぎ直す（つながったら、名乗って、ロビーに入り直す）。
+func _clear_connection_view() -> void:
+	OnlineSession.clear_free_wait()
+	OnlineSession.free_images.clear()
+	_asked_images.clear()
+	_sending_entries.clear()
+	_chat_lines.clear()
+	_close_offer()
+
+
 func reconnect() -> void:
+	_clear_connection_view()
 	if _open_room != "":
 		close_room()
 	_entries = []
 	_rooms = []
 	OnlineSession.free_lobby = {}
+	_refresh_cards()
+	_refresh_entries()
 	connect_to_server()
 
 
 func _on_message(data: Dictionary) -> void:
+	if not is_inside_tree():
+		return
 	match str(data["t"]):
 		Protocol.LOBBY:
 			# 名乗り終えた：フリー対戦のロビーに入る。
@@ -1526,22 +1704,35 @@ func _on_message(data: Dictionary) -> void:
 			apply_ticket(data)
 		Protocol.FREE_NOTICE:
 			_set_status(str(data.get("text", "")))
+			OnlineSession.free_return_notice = ""
 		Protocol.FREE_CHAT_LOG:
 			_apply_chat_log(data)
 		Protocol.FREE_CHAT_MESSAGE:
 			_apply_chat_message(data)
 		Protocol.FREE_OFFER:
 			_show_offer(data)
+		Protocol.FREE_ANSWER_RESULT:
+			_answer_result(data)
 		Protocol.FREE_OFFER_END:
+			if str(data.get("room_id", "")) != str(_offer.get("room_id", "")):
+				return
+			OnlineSession.clear_free_wait()
 			_close_offer()
 			if str(data.get("reason", "")) == Protocol.FREE_OFFER_TIMEOUT:
 				_set_status("返事がなかったので、「%s」のエントリーを取り消しました。" % str(room_by_id(str(data.get("room_id", ""))).get("name", "")))
 			else:
 				_set_status("待たずにレースが始まりました。次の番を待ちます。")
-		Protocol.RACE_START:
-			_close_offer()
-			_go_to_race(data)
 		Protocol.ERROR:
+			var id := str(data.get("room_id", ""))
+			if not id.is_empty():
+				_sending_entries.erase(id)
+				if str(data.get("code", "")) == Protocol.ERROR_PICK_LOCKED and id == _open_room:
+					var entry := entry_for(id)
+					if not entry.is_empty():
+						_pick_index = maxi(_roster_ids().find(str(entry["pururin_id"])), 0)
+						OnlineSession.last_pick = selected_pururin_id()
+				if id == _open_room:
+					_refresh_pick()
 			_set_status(str(ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。")))
 
 
@@ -1582,65 +1773,61 @@ func _update_clock() -> void:
 	_clock.text = "%d:%02d" % [int(now["hour"]), int(now["minute"])]
 
 
-## レースの画面が読むもの（距離・出走・自分の番号・どのルームか）を決めて、レースの画面へ。
-func _go_to_race(data: Dictionary) -> void:
-	OnlineSession.free_race_room = str(data.get("free_room_id", ""))
-	OnlineSession.free_race_stage = str(data.get("stage", ""))
-	RaceSession.select_distance(float(data["distance_m"]))
-	RaceSession.set_online_entries(data["entries"])
-	RaceSession.set_online_view(OnlineSession.peer_id)
-	RaceScenePreload.go(get_tree())
-
-
-## 大きなチャット欄は、入力らんで書いている途中でも、Esc・B・SELECT の1回で閉じる（入力らんより先に受け取る）。
-## キーボードの C（Bに当たるキー）は、字として打てるように、ここでは受け取らない。
+## 入力らんにいるときも、B・Esc は前にある窓だけを閉じる。C は文字として打てる。
 func _input(event: InputEvent) -> void:
-	if not _chat_overlay.visible:
-		return
-	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_B) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK):
+	var window := _top_window()
+	var cancel := event.is_action_pressed("ui_cancel") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_B)
+	var close_chat := window == _chat_overlay and RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK)
+	if window != null and (cancel or close_chat):
 		get_viewport().set_input_as_handled()
+		_cancel_window(window)
+
+
+func _cancel_window(window: Control) -> void:
+	if window == _offer_panel:
+		answer(false)
+	elif window == _confirm_dialog:
+		_answer_confirm(false)
+	elif window == _server_dialog:
+		close_server_dialog()
+	elif window == _picker:
+		_picker.call("close")
+	elif window == _chat_overlay:
 		close_chat_overlay()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
 	var focused := viewport.gui_get_focus_owner()
-	# 大きなチャット欄：T（入力らんで書いているときは除く）・SELECT で開く。開いているときの C（Bに当たるキー）は、書いていなければ閉じる。
-	var toggle_key: bool = event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).keycode == KEY_T and not focused is LineEdit
-	if _offer.is_empty() and (toggle_key or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK)):
+	var window := _top_window()
+	var cancel := event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)
+	if window != null:
+		if cancel:
+			_cancel_window(window)
+		elif window == _chat_overlay and RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK):
+			close_chat_overlay()
+		elif RaceControllerInput.is_accept_pressed(event) and not (window == _offer_panel and _answer_pending):
+			RaceControllerInput.activate_focused_control(viewport)
+		viewport.set_input_as_handled()
+		return
+	var toggle_key: bool = event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_T and not focused is LineEdit
+	if toggle_key or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK):
 		viewport.set_input_as_handled()
 		toggle_chat_overlay()
-		return
-	if _chat_overlay.visible and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)):
-		viewport.set_input_as_handled()
-		close_chat_overlay()
-		return
-	# チャットの入力らんで Esc・B：画面は戻らず、入力らんから抜ける。
-	if focused is LineEdit and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)):
+	elif focused is LineEdit and cancel:
 		viewport.set_input_as_handled()
 		if _room_view.visible:
-			_entry_button.grab_focus()
+			_status_button.grab_focus()
 		else:
 			focused.release_focus()
 			_focus_lobby()
-		return
-	if _server_dialog.visible and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)) and not focused is LineEdit:
+	elif cancel:
 		viewport.set_input_as_handled()
 		UIAudio.play_back()
-		close_server_dialog()
-		return
-	if _confirm_dialog.visible and (event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)):
-		viewport.set_input_as_handled()
-		_answer_confirm(false)
-		return
-	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
-		viewport.set_input_as_handled()
-		if _offer.is_empty() and not _room_view.visible and not is_picker_open():
-			UIAudio.play_back()
 		press_back()
 	elif RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
 		viewport.set_input_as_handled()
-	elif _offer.is_empty() and _lobby_view.visible and (RaceControllerInput.is_button_pressed(event, JOY_BUTTON_LEFT_SHOULDER) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER)):
+	elif _lobby_view.visible and (RaceControllerInput.is_button_pressed(event, JOY_BUTTON_LEFT_SHOULDER) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER)):
 		viewport.set_input_as_handled()
 		UIAudio.play_confirmation()
 		var step := 1 if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER) else -1

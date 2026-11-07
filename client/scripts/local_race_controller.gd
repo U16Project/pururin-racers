@@ -140,6 +140,11 @@ var _human_runners := {}
 var _cpu_sub_runners := {}
 var _free_wait_started_msec := 0
 var _free_joining := false
+var _free_cancel_dialog: Control
+var _free_cancel_wait: Button
+var _free_cancel_focus: WeakRef
+var _free_cancel_refocusing := false
+var _free_wait_guide: Label
 ## オンライン：サーバーが、全員の準備を待つのをやめて、入場の待ちへ進んだか。
 var _online_hold_released := false
 ## カウントダウンを始めたか（入場の待ちと、スタート前の準備が、両方終わってから true）。
@@ -341,10 +346,99 @@ func _ready() -> void:
 	]))
 
 
+## 会場で待つ間の B・Esc は、出走表より先に受け取る。
+func _input(event: InputEvent) -> void:
+	if not _free_waiting or _online_left:
+		return
+	if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+		get_viewport().set_input_as_handled()
+		if is_instance_valid(_free_cancel_dialog):
+			_close_free_cancel()
+		else:
+			_open_free_cancel()
+
+
+func _open_free_cancel() -> void:
+	if not _free_waiting or _online_left or is_instance_valid(_free_cancel_dialog):
+		return
+	var focused := get_viewport().gui_get_focus_owner()
+	_free_cancel_focus = weakref(focused) if focused != null else null
+	var shade := ColorRect.new()
+	shade.name = "FreeCancelDialog"
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.color = Color(0, 0, 0, 0.65)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	$UI.add_child(shade)
+	_free_cancel_dialog = shade
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.add_child(center)
+	var panel := PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", MenuStyle.panel_box())
+	center.add_child(panel)
+	var column := VBoxContainer.new()
+	panel.add_child(column)
+	column.add_child(MenuStyle.label("待つのをやめて、ロビーへ戻りますか？\nこのルームのエントリーは取り消されます。", 20))
+	var leave := MenuStyle.pill_button("戻る", "quiet", 20)
+	column.add_child(leave)
+	leave.pressed.connect(_cancel_free_waiting)
+	_free_cancel_wait = MenuStyle.pill_button("待つ", "primary", 20)
+	column.add_child(_free_cancel_wait)
+	_free_cancel_wait.pressed.connect(_close_free_cancel)
+	for button: Button in [leave, _free_cancel_wait]:
+		button.focus_neighbor_left = button.get_path_to(button)
+		button.focus_neighbor_right = button.get_path_to(button)
+		var other := _free_cancel_wait if button == leave else leave
+		button.focus_neighbor_top = button.get_path_to(other)
+		button.focus_neighbor_bottom = button.get_path_to(other)
+		button.focus_next = button.get_path_to(other)
+		button.focus_previous = button.get_path_to(other)
+		UIAudio.bind_button_sound(button, "back" if button == leave else "confirmation")
+	if not get_viewport().gui_focus_changed.is_connected(_keep_free_cancel_focus):
+		get_viewport().gui_focus_changed.connect(_keep_free_cancel_focus)
+	_free_cancel_wait.grab_focus()
+
+
+func _keep_free_cancel_focus(control: Control) -> void:
+	if _free_cancel_refocusing or not is_instance_valid(_free_cancel_dialog):
+		return
+	if control == null or not _free_cancel_dialog.is_ancestor_of(control):
+		_free_cancel_refocusing = true
+		_free_cancel_wait.grab_focus()
+		_free_cancel_refocusing = false
+
+
+func _close_free_cancel() -> void:
+	if not is_instance_valid(_free_cancel_dialog):
+		return
+	var dialog := _free_cancel_dialog
+	_free_cancel_dialog = null
+	dialog.hide()
+	dialog.queue_free()
+	var focused: Control = _free_cancel_focus.get_ref() if _free_cancel_focus != null else null
+	_free_cancel_focus = null
+	if _free_waiting and is_instance_valid(focused) and focused.is_visible_in_tree():
+		focused.grab_focus()
+
+
+func _cancel_free_waiting() -> void:
+	if not _free_waiting or _online_left:
+		return
+	if _online_client != null and is_instance_valid(_online_client):
+		_online_client.send(OnlineProtocol.FREE_CANCEL, {"room_id": OnlineSession.free_race_room})
+	OnlineSession.free_return_notice = "待つのをやめて、エントリーを取り消しました。"
+	_leave_free_waiting()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	# ボタンを押すと場面が変わることがあるので、画面は先に取っておく。
 	var viewport := get_viewport()
-	# パドックで出走表などを重ねている間・会場で出走者を待っている間は、操作は受けない（一時停止もしない）。
+	if _free_waiting and is_instance_valid(_free_cancel_dialog):
+		if RaceControllerInput.is_accept_pressed(event):
+			RaceControllerInput.activate_focused_control(viewport)
+		viewport.set_input_as_handled()
+		return
+	# パドックで出走表などを重ねている間・会場で出走者を待っている間は、一時停止しない。
 	if _is_in_paddock_overlay() or _free_waiting:
 		return
 	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
@@ -521,6 +615,11 @@ func _start_pre_race_show() -> void:
 		# 出走者が決まるまで、自分のぷるりんだけでパドックを歩いて待つ。
 		show.paddock_cards = false
 		_free_wait_started_msec = Time.get_ticks_msec()
+		_free_wait_guide = MenuStyle.label("B・Esc：やめてロビーへ", 18)
+		_free_wait_guide.name = "FreeWaitGuide"
+		$UI.add_child(_free_wait_guide)
+		_free_wait_guide.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+		_free_wait_guide.position = Vector2(MenuStyle.SCREEN_MARGIN, get_viewport().get_visible_rect().size.y - MenuStyle.GUIDE_HEIGHT)
 	if _paddock_mode == RaceScenePreload.PADDOCK_OFFLINE:
 		show.paddock_entered.connect(_open_offline_paddock)
 	elif _free_waiting:
@@ -554,8 +653,11 @@ func _open_offline_paddock() -> void:
 func _update_free_waiting() -> void:
 	if _free_joining:
 		return
-	if not OnlineSession.pending_race_start.is_empty():
-		_start_free_race(OnlineSession.pending_race_start)
+	for message: Dictionary in OnlineSession.take_free_wait_messages():
+		if not _free_waiting or _online_left:
+			break
+		_on_free_waiting_message(message)
+	if not _free_waiting or _online_left:
 		return
 	if _is_showing_pre_race():
 		var left := maxf(OnlineConfig.free_fill_wait_s() - float(Time.get_ticks_msec() - _free_wait_started_msec) / 1000.0, 0.0)
@@ -568,7 +670,9 @@ func _on_free_waiting_message(data: Dictionary) -> void:
 		OnlineProtocol.RACE_START:
 			_start_free_race(data)
 		OnlineProtocol.FREE_OFFER_END:
-			_leave_free_waiting()
+			if str(data.get("room_id", OnlineSession.free_race_room)) == OnlineSession.free_race_room:
+				OnlineSession.free_return_notice = "呼び出しが取りやめになったため、ロビーへ戻りました。"
+				_leave_free_waiting()
 
 
 ## 待っている間のパドックの画面：自分の行と、空いている枠の数だけ「待受中…」の行。枠番は「枠未定」。
@@ -577,6 +681,10 @@ func _open_free_waiting_paddock() -> void:
 	if not _free_waiting:
 		return
 	_open_online_paddock({"gates_unknown": true, "waiting_rows": OnlineProtocol.ROOM_CAPACITY - RaceSession.field_entries().size()})
+	if is_instance_valid(_free_wait_guide):
+		$UI.move_child(_free_wait_guide, $UI.get_child_count() - 1)
+	if is_instance_valid(_free_cancel_dialog):
+		$UI.move_child(_free_cancel_dialog, $UI.get_child_count() - 1)
 
 
 ## 出走者がそろった（レースを始める知らせ）：画面はそのまま、届いた出走で走者を並べ直し、パドックに全員を加える。
@@ -585,7 +693,10 @@ func _start_free_race(data: Dictionary) -> void:
 	if _free_joining:
 		return
 	_free_joining = true
-	OnlineSession.pending_race_start = {}
+	_close_free_cancel()
+	if is_instance_valid(_free_wait_guide):
+		_free_wait_guide.queue_free()
+	OnlineSession.clear_free_wait()
 	OnlineSession.free_race_room = str(data.get("free_room_id", OnlineSession.free_race_room))
 	OnlineSession.free_race_stage = str(data.get("stage", OnlineSession.free_race_stage))
 	RaceSession.set_online_entries(data["entries"])
@@ -631,7 +742,8 @@ func _leave_free_waiting() -> void:
 	if _online_left:
 		return
 	_online_left = true
-	OnlineSession.pending_race_start = {}
+	_close_free_cancel()
+	OnlineSession.clear_free_wait()
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
 	get_tree().change_scene_to_file(ONLINE_FREE_LOBBY_SCENE)
@@ -904,7 +1016,8 @@ func _send_online_input(delta: float) -> void:
 
 func _on_online_message(data: Dictionary) -> void:
 	if _free_waiting:
-		_on_free_waiting_message(data)
+		# セッションが保存した分を一度だけ受け取る（切り替え中に届いた分も含む）。
+		_update_free_waiting()
 		return
 	match str(data["t"]):
 		OnlineProtocol.RACE_STATE: _apply_online_state(data)

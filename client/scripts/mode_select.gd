@@ -44,6 +44,9 @@ const MODES := [
 		"image": "res://assets/ui/trainer_background.jpg", "region": Rect2(1250, 1020, 1900, 790)},
 ]
 
+## 最後に決めたモードへ、戻ってきたときのカーソルを戻す。
+static var _last_mode := "OfflineFreeRaceButton"
+
 var _offline_button: Button
 var _online_button: Button
 var _friend_button: Button
@@ -108,7 +111,7 @@ func _ready() -> void:
 	_quit_button = quit_button
 	_link_focus(cards, quit_button)
 	_build_quit_dialog()
-	_offline_button.grab_focus()
+	(grid.get_node(_last_mode) as Button).grab_focus()
 
 
 ## 絵つきのカード：絵を全面に敷き、下を暗くして、札・題・ひとことを乗せる。
@@ -270,20 +273,24 @@ func close_quit_dialog() -> void:
 
 ## オンラインフリー対戦：共通のロビーへ。
 func go_to_online_free_lobby() -> void:
+	_last_mode = "OnlineFreeRaceButton"
 	get_tree().change_scene_to_file(ONLINE_FREE_LOBBY_SCENE_PATH)
 
 
 ## ともだち対戦：部屋の画面へ（今は、合言葉の部屋に集まる所まで）。
 func go_to_online_lobby() -> void:
+	_last_mode = "FriendRaceButton"
 	OnlineSession.free_mode = false
 	get_tree().change_scene_to_file(ONLINE_LOBBY_SCENE_PATH)
 
 
 func go_to_pururin_maker() -> void:
+	_last_mode = "PururinMakerButton"
 	get_tree().change_scene_to_file(PURURIN_MAKER_SCENE_PATH)
 
 
 func go_to_race_select() -> void:
+	_last_mode = "OfflineFreeRaceButton"
 	get_tree().change_scene_to_file(RACE_SELECT_SCENE_PATH)
 
 

@@ -269,7 +269,10 @@ func _receive(peer_id: int, text: String) -> void:
 			return
 		Protocol.FREE_VIEW, Protocol.FREE_CHAT, Protocol.FREE_RESULTS_ASK, Protocol.FREE_EVENTS_ASK, Protocol.FREE_IMAGE_ASK, Protocol.FREE_ENTRY, Protocol.FREE_CANCEL, Protocol.FREE_HOLD, Protocol.FREE_ORDER, Protocol.FREE_ANSWER, Protocol.FREE_AFTER:
 			if not bool(_peers[peer_id]["free"]):
-				_refuse(peer_id, Protocol.ERROR_NOT_IN_FREE)
+				if type == Protocol.FREE_ANSWER:
+					_send(peer_id, Protocol.message(Protocol.FREE_ANSWER_RESULT, {"room_id": str(data.get("room_id", "")), "accepted": false}))
+				else:
+					_refuse(peer_id, Protocol.ERROR_NOT_IN_FREE, str(data.get("room_id", "")) if type == Protocol.FREE_ENTRY else "")
 				return
 			_free_message(peer_id, type, data)
 			return
@@ -1125,7 +1128,9 @@ func _make_free_rooms() -> void:
 			room["phase"] = Protocol.FINAL_PHASE_ENTRY
 			room["accepted"] = []
 			room["advancers"] = []
-			room["wait_until_msec"] = 0
+			room["call_until_msec"] = 0
+			room["deferred"] = []
+			room["call_stage"] = ""
 		_free_rooms[str(spec["id"])] = room
 
 
@@ -1238,6 +1243,8 @@ func free_entry_list(peer_id: int) -> Array:
 			state = Protocol.FREE_ENTRY_CALLED
 		elif int(peer["free_room"]) != 0 and str(_rooms[int(peer["free_room"])]["free_id"]) == free_id:
 			state = Protocol.FREE_ENTRY_RACING if room_race(int(peer["free_room"])) != null else Protocol.FREE_ENTRY_ACCEPTED
+		elif is_final(free_id) and (_free_rooms[free_id]["accepted"] as Array).has(peer_id):
+			state = Protocol.FREE_ENTRY_ACCEPTED
 		list.append({
 			"room_id": free_id, "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"]),
 			"place": free_line(free_id).find(peer_id) + 1, "state": state,
@@ -1267,11 +1274,17 @@ func _free_enter(peer_id: int) -> void:
 	var raced := int(_peers[peer_id]["free_room"])
 	if raced != 0 and _rooms.has(raced) and (_rooms[raced]["done"] as Dictionary).has(peer_id):
 		_free_back_from_race(peer_id, str(_rooms[raced]["free_id"]))
+	elif raced != 0 and room_race(raced) != null:
+		# 待機の取り消しより先にレースが始まっていたら、走者をCPUへ任せる。
+		_free_quit_race(peer_id, raced)
 	# レースから戻ってきたら、決めた秒数は呼ばない（一息つけるように）。
 	if bool(_peers[peer_id]["returning"]):
 		_peers[peer_id]["rest_until_msec"] = Time.get_ticks_msec() + int(_rest_after_race_s() * 1000.0)
 	_peers[peer_id]["free"] = true
 	_peers[peer_id]["returning"] = false
+	for free_id: String in _free_rooms:
+		if is_final(free_id):
+			_final_resume(peer_id, free_id)
 	_send_free_chat_log(peer_id, "")
 	_announce_free()
 
@@ -1289,6 +1302,9 @@ func _free_leave(peer_id: int) -> void:
 			_free_quit_race(peer_id, room)
 		else:
 			(_rooms[room]["accepted"] as Array).erase(peer_id)
+	for free_id: String in _free_rooms:
+		if is_final(free_id):
+			_final_drop(peer_id, free_id)
 	peer["free"] = false
 	peer["entries"] = []
 	peer["free_room"] = 0
@@ -1329,7 +1345,10 @@ func _free_message(peer_id: int, type: String, data: Dictionary) -> void:
 	var free_id := str(data.get("room_id", ""))
 	var may_be_empty := type in [Protocol.FREE_VIEW, Protocol.FREE_CHAT, Protocol.FREE_EVENTS_ASK]
 	if type != Protocol.FREE_ORDER and not (may_be_empty and free_id.is_empty()) and not _free_rooms.has(free_id):
-		_refuse(peer_id, Protocol.ERROR_NO_ROOM)
+		if type == Protocol.FREE_ANSWER:
+			_send(peer_id, Protocol.message(Protocol.FREE_ANSWER_RESULT, {"room_id": free_id, "accepted": false}))
+		else:
+			_refuse(peer_id, Protocol.ERROR_NO_ROOM, free_id if type == Protocol.FREE_ENTRY else "")
 		return
 	match type:
 		Protocol.FREE_VIEW:
@@ -1384,19 +1403,27 @@ func _free_entry(peer_id: int, free_id: String, data: Dictionary) -> void:
 	var uid := str(data.get("uid", ""))
 	var secret := str(data.get("secret", ""))
 	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty() or RegEx.create_from_string(UID_PATTERN).search(uid) == null or RegEx.create_from_string(SECRET_PATTERN).search(secret) == null:
-		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE, free_id)
+		return
+	var peer: Dictionary = _peers[peer_id]
+	var active_room := int(peer["free_room"])
+	var locked := str(peer["offer"]) == free_id or (active_room != 0 and str(_rooms[active_room]["free_id"]) == free_id)
+	if is_final(free_id):
+		locked = locked or str(peer["final_room"]) == free_id
+	if locked:
+		_refuse(peer_id, Protocol.ERROR_PICK_LOCKED, free_id)
 		return
 	if not free_open(free_id):
-		_refuse(peer_id, Protocol.ERROR_CLOSED)
+		_refuse(peer_id, Protocol.ERROR_CLOSED, free_id)
 		return
 	var secret_sha := secret.sha256_text()
 	var needs := str(_free_rooms[free_id].get("needs_ticket", ""))
 	if not needs.is_empty() and not has_ticket(uid, secret_sha, pururin_id, needs):
-		_refuse(peer_id, Protocol.ERROR_NO_TICKET)
+		_refuse(peer_id, Protocol.ERROR_NO_TICKET, free_id)
 		return
 	var entry := _free_entry_of(peer_id, free_id)
 	if entry.is_empty() and is_final(free_id) and free_line(free_id).size() >= int(_free_rooms[free_id]["final"]["max_players"]):
-		_refuse(peer_id, Protocol.ERROR_ROOM_FULL)
+		_refuse(peer_id, Protocol.ERROR_ROOM_FULL, free_id)
 		return
 	if entry.is_empty():
 		entry = {"room_id": free_id, "hold": false, "since_msec": Time.get_ticks_msec()}
@@ -1488,6 +1515,8 @@ func _free_cancel(peer_id: int, free_id: String) -> void:
 	if str(_peers[peer_id]["offer"]) == free_id:
 		_free_withdraw_offer(peer_id)
 	_free_withdraw_accept(peer_id, free_id)
+	if is_final(free_id):
+		_final_drop(peer_id, free_id)
 	_free_drop_empty_call(free_id)
 	(_peers[peer_id]["entries"] as Array).erase(entry)
 	_announce_free()
@@ -1527,23 +1556,25 @@ func _free_order(peer_id: int, data: Dictionary) -> void:
 ## 呼ばれたルームに答える。入る：そのルームのレースに出る人になる。入らない：そのルームのエントリーを取り消す。
 func _free_answer(peer_id: int, free_id: String, accept: bool) -> void:
 	var peer: Dictionary = _peers[peer_id]
-	if str(peer["offer"]) != free_id:
-		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
-		return
+	var valid := str(peer["offer"]) == free_id and Time.get_ticks_msec() < int(peer["offer_until_msec"])
 	var room := int(_free_rooms[free_id]["calling"])
+	valid = valid and (is_final(free_id) or room != 0)
+	if not valid:
+		_send(peer_id, Protocol.message(Protocol.FREE_ANSWER_RESULT, {"room_id": free_id, "accepted": false}))
+		return
 	_free_withdraw_offer(peer_id)
 	if is_final(free_id):
 		if accept:
 			(_free_rooms[free_id]["accepted"] as Array).append(peer_id)
 		else:
 			_final_drop(peer_id, free_id)
-		_announce_free()
-		return
-	if accept and room != 0:
+	elif accept:
 		(_rooms[room]["accepted"] as Array).append(peer_id)
 		peer["free_room"] = room
-	elif not accept:
+	else:
 		(peer["entries"] as Array).erase(_free_entry_of(peer_id, free_id))
+	# 参加したことを、一覧やレース開始の知らせより先に返す。
+	_send(peer_id, Protocol.message(Protocol.FREE_ANSWER_RESULT, {"room_id": free_id, "accepted": accept}))
 	_announce_free()
 
 
@@ -1586,8 +1617,8 @@ func _update_free(delta: float) -> void:
 		var free_id := str(peer["offer"])
 		_free_withdraw_offer(peer_id)
 		(peer["entries"] as Array).erase(_free_entry_of(peer_id, free_id))
-		if str(peer["final_room"]) == free_id:
-			peer["final_room"] = ""
+		if is_final(free_id):
+			_final_drop(peer_id, free_id)
 		_send(peer_id, Protocol.message(Protocol.FREE_OFFER_END, {"room_id": free_id, "reason": Protocol.FREE_OFFER_TIMEOUT}))
 		changed = true
 	# 受付が始まった・終わったルームは、ロビーの全員に知らせる。終わったルームは、呼んでいたレースを、入ると答えた人ですぐ始め
@@ -1815,19 +1846,14 @@ func _announce_free() -> void:
 
 # ---------------------------------------------------------------- オンラインフリー対戦の本戦
 
-## 決勝に進む人がロビーに戻るのを、最大でこの秒数だけ待ってから、決勝の呼び出しをする（戻っていない人は、呼び出しに答えられず失格になる）。
-const FINAL_RETURN_WAIT_S := 40.0
-
-
 func is_final(free_id: String) -> bool:
 	return _free_rooms.has(free_id) and _free_rooms[free_id].has("final")
 
 
 ## 本戦を進める（毎コマ）：開始の時刻で全員を呼ぶ → 答えがそろったら準決勝（8人以下なら決勝）→ 準決勝が全部終わったら、決勝に進む人を呼ぶ → 決勝 → 終わり。
-## 呼び出しに答えなかった人の失格は、ふつうの返事の締め切りと同じ所（_update_free）で、エントリーを取り消して行う。
+## 別のレースから戻る人も、共通の締め切りまで待つ。
 func _update_final(free_id: String) -> bool:
 	var data: Dictionary = _free_rooms[free_id]
-	var now := Time.get_ticks_msec()
 	match str(data["phase"]):
 		Protocol.FINAL_PHASE_ENTRY:
 			if now_unix() < int(data["start_unix"]):
@@ -1853,14 +1879,7 @@ func _update_final(free_id: String) -> bool:
 		Protocol.FINAL_PHASE_SEMIS:
 			if not (data["races"] as Array).is_empty():
 				return false
-			data["phase"] = Protocol.FINAL_PHASE_WAIT
-			data["wait_until_msec"] = now + int(FINAL_RETURN_WAIT_S * 1000.0)
-			return true
-		Protocol.FINAL_PHASE_WAIT:
-			var advancers: Array = (data["advancers"] as Array).filter(func(peer_id: int) -> bool: return _peers.has(peer_id))
-			var back := advancers.all(func(peer_id: int) -> bool: return not bool(_peers[peer_id]["returning"]))
-			if not back and now < int(data["wait_until_msec"]):
-				return false
+			var advancers: Array = (data["advancers"] as Array).duplicate()
 			data["advancers"] = []
 			if not _final_call(free_id, advancers, Protocol.STAGE_FINAL):
 				_final_finish(free_id)
@@ -1874,31 +1893,56 @@ func _update_final(free_id: String) -> bool:
 	return false
 
 
-## 本戦の呼び出し：呼べる人全員に、本戦の秒数で返事を待つ。だれかを呼んだら true。
+## 本戦に出る人と締め切りを決める。別のレースにいる人は、帰ってきてから残りの時間で呼ぶ。
 func _final_call(free_id: String, peer_ids: Array, stage: String) -> bool:
 	var data: Dictionary = _free_rooms[free_id]
-	var wait_s := float(data["final"]["answer_wait_s"])
-	var called := false
+	data["call_until_msec"] = Time.get_ticks_msec() + int(float(data["final"]["answer_wait_s"]) * 1000.0)
+	data["call_stage"] = stage
+	data["deferred"] = []
 	for peer_id: int in peer_ids:
 		if not _peers.has(peer_id) or not bool(_peers[peer_id]["free"]) or _free_entry_of(peer_id, free_id).is_empty():
 			continue
 		var peer: Dictionary = _peers[peer_id]
-		# ほかのルームで呼ばれていたら、そちらは取り消す（本戦が先）。
+		var other_offer := str(peer["offer"])
 		_free_withdraw_offer(peer_id)
-		peer["offer"] = free_id
-		peer["offer_until_msec"] = Time.get_ticks_msec() + int(wait_s * 1000.0)
+		if not other_offer.is_empty():
+			_free_drop_empty_call(other_offer)
 		peer["final_room"] = free_id
-		_send(peer_id, Protocol.message(Protocol.FREE_OFFER, {
-			"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]),
-			"pururin_id": str(_free_entry_of(peer_id, free_id)["pururin_id"]), "priority": 1, "wait_s": wait_s, "stage": stage,
-		}))
-		called = true
-	return called
+		(data["deferred"] as Array).append(peer_id)
+		_final_resume(peer_id, free_id)
+	return not (data["deferred"] as Array).is_empty() or _final_pending(free_id) > 0
 
 
-## 本戦の呼び出しに、まだ答えていない人の数。
+## 本戦の予約を、ロビーへ戻った人に届ける。休憩の秒数より、本戦の締め切りを優先する。
+func _final_resume(peer_id: int, free_id: String) -> void:
+	var data: Dictionary = _free_rooms[free_id]
+	if not (data["deferred"] as Array).has(peer_id) or not _peers.has(peer_id):
+		return
+	var peer: Dictionary = _peers[peer_id]
+	if int(peer["free_room"]) != 0 or bool(peer["returning"]):
+		return
+	var left := float(int(data["call_until_msec"]) - Time.get_ticks_msec()) / 1000.0
+	if left <= 0.0:
+		return
+	(data["deferred"] as Array).erase(peer_id)
+	peer["offer"] = free_id
+	peer["offer_until_msec"] = int(data["call_until_msec"])
+	_send(peer_id, Protocol.message(Protocol.FREE_OFFER, {
+		"room_id": free_id, "name": str(data["name"]), "distance_m": float(data["distance_m"]),
+		"pururin_id": str(_free_entry_of(peer_id, free_id)["pururin_id"]), "priority": 1, "wait_s": left, "stage": str(data["call_stage"]),
+	}))
+
+
+## 返事待ちと帰還待ちの人数。締め切りを過ぎた帰還待ちは欠場にする。
 func _final_pending(free_id: String) -> int:
-	var count := 0
+	var data: Dictionary = _free_rooms[free_id]
+	for peer_id: int in (data["deferred"] as Array).duplicate():
+		if not _peers.has(peer_id):
+			(data["deferred"] as Array).erase(peer_id)
+		elif Time.get_ticks_msec() >= int(data["call_until_msec"]):
+			_final_drop(peer_id, free_id)
+			_send(peer_id, Protocol.message(Protocol.FREE_NOTICE, {"room_id": free_id, "text": "本戦の返事の締め切りを過ぎたため、欠場になりました。"}))
+	var count := (data["deferred"] as Array).size()
 	for peer_id: int in _peers:
 		if str(_peers[peer_id]["offer"]) == free_id:
 			count += 1
@@ -1962,6 +2006,8 @@ func _free_final_result(room: int, rows: Array) -> void:
 
 ## その人を、本戦から外す（エントリーを取り消す）。
 func _final_drop(peer_id: int, free_id: String) -> void:
+	for key: String in ["accepted", "deferred", "advancers"]:
+		(_free_rooms[free_id][key] as Array).erase(peer_id)
 	var entry := _free_entry_of(peer_id, free_id)
 	if not entry.is_empty():
 		(_peers[peer_id]["entries"] as Array).erase(entry)
@@ -2122,8 +2168,11 @@ func _announce_rooms() -> void:
 			_send_text(peer_id, text)
 
 
-func _refuse(peer_id: int, code: String) -> void:
-	_send(peer_id, Protocol.message(Protocol.ERROR, {"code": code}))
+func _refuse(peer_id: int, code: String, free_id: String = "") -> void:
+	var fields := {"code": code}
+	if not free_id.is_empty():
+		fields["room_id"] = free_id
+	_send(peer_id, Protocol.message(Protocol.ERROR, fields))
 
 
 func _send(peer_id: int, data: Dictionary) -> void:

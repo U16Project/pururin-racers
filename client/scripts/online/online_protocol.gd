@@ -78,7 +78,7 @@ const ACTION := "action"
 const RACE_DONE := "race_done"
 ## レースの画面ができた（全員ぶんそろうと、入場の待ちとカウントダウンが始まる）。
 const READY := "ready"
-## オンラインフリー対戦。サーバーが持つルームの、全体のロビーに入る（レースから戻ったときも送る）。返事は free_lobby。
+## オンラインフリー対戦の全体のロビーに入る（レースから戻ったときも送る）。未完了のレースからは抜け、走者をCPUに任せる。返事は free_lobby。
 const FREE_ENTER := "free_enter"
 ## オンラインフリー対戦のロビーから出る（エントリー候補は、全部消える）。返事は lobby。
 const FREE_LEAVE := "free_leave"
@@ -95,7 +95,7 @@ const FREE_CANCEL := "free_cancel"
 const FREE_HOLD := "free_hold"
 ## エントリー候補の、優先の順番を並べ替える（room_ids＝今のエントリー候補の全部を、前ほど優先の順に）。
 const FREE_ORDER := "free_order"
-## 呼ばれたルームに、入るか答える（room_id、accept＝真偽）。入らないと、そのルームのエントリーを取り消す。
+## 呼ばれたルームに、一度だけ入るか答える（room_id、accept＝真偽）。返事は free_answer_result。入らないと、そのルームのエントリーを取り消す。
 const FREE_ANSWER := "free_answer"
 ## オンラインフリー対戦のチャットに書く（room_id＝ルームのID。空なら、全体のロビーのチャット。text＝文字だけ。長さは online.json の chat_max_length まで）。
 ## 全体のチャットは、ロビーにいる全員に、ルームのチャットは、そのルームの画面を開いている人に届く。
@@ -137,11 +137,10 @@ const FREE_EVENTS := "free_events"
 const FREE_EVENTS_SHOWN := 30
 ## 本戦の知らせ（room_id、text＝画面に出す文。決勝に進んだ・敗退・優勝など）。
 const FREE_NOTICE := "free_notice"
-## 本戦の進み方（free_lobby の rooms の phase）。エントリー受付中・呼び出し中・準決勝・決勝に進む人が戻るのを待つ・決勝の呼び出し中・決勝・終わり。
+## 本戦の進み方（free_lobby の rooms の phase）。エントリー受付中・呼び出し中・準決勝・決勝の呼び出し中・決勝・終わり。
 const FINAL_PHASE_ENTRY := "entry"
 const FINAL_PHASE_CALLING := "calling"
 const FINAL_PHASE_SEMIS := "semis"
-const FINAL_PHASE_WAIT := "wait"
 const FINAL_PHASE_FINAL_CALLING := "final_calling"
 const FINAL_PHASE_FINAL := "final"
 const FINAL_PHASE_DONE := "done"
@@ -154,6 +153,8 @@ const FREE_TICKET := "free_ticket"
 const FREE_IMAGE := "free_image"
 ## ルームに呼ばれた（room_id、name、distance_m、pururin_id、priority＝何番目の候補か、wait_s＝返事を待つ秒数、stage＝本戦なら "semi"（本戦の最初の呼び出し）か "final"（決勝）。ふつうは空）。
 const FREE_OFFER := "free_offer"
+## 呼び出しへの回答結果（room_id、accepted＝入れたか。入らないと答えたときも false）。
+const FREE_ANSWER_RESULT := "free_answer_result"
 ## 呼ばれたのが取り消された（room_id、reason＝"timeout"＝返事がなかった（そのルームのエントリーは取り消し）、"started"＝待たずにレースが始まった）。
 const FREE_OFFER_END := "free_offer_end"
 const FREE_STATE_IDLE := "idle"
@@ -245,6 +246,8 @@ const ERROR_WRONG_PHASE := "wrong_phase"
 const ERROR_NOT_IN_FREE := "not_in_free"
 ## そのルームに、エントリーしていない。
 const ERROR_NO_ENTRY := "no_entry"
+## 呼ばれている間・参加が決まったあとには、出るぷるりんを替えられない。
+const ERROR_PICK_LOCKED := "pick_locked"
 ## そのルームに要るチケットを、そのぷるりんが持っていない（または、IDと合言葉・能力が、チケットを渡したときと合わない）。
 const ERROR_NO_TICKET := "no_ticket"
 ## そのルームは、今は受付をしていない（受付の前・後）。

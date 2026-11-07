@@ -35,8 +35,10 @@ static var free_images := {}
 static var free_race_room := ""
 ## フリー対戦のレースの段階（"semi"＝準決勝・"final"＝決勝。ふつうのレースは空）。スタート前の見せ方の上の帯に出す。
 static var free_race_stage := ""
-## フリー対戦で「入る」と答えて、会場で出走者を待っている間に届いた、レースを始める知らせ（場面を切り替える間に届いても、なくさないように）。
-static var pending_race_start := {}
+## 会場へ移る間の知らせは、対象のルームだけを、届いた順に一度ずつ受け取る。
+static var _free_wait_room := ""
+static var _free_wait_messages: Array = []
+static var free_return_notice := ""
 ## レースの結果の画面で選んだこと（room_id、entry＝"on"・"hold"・"off"、top＝優先をいちばん前に、stay＝そのルームの画面に残る）。
 ## ロビーに戻ったときに、サーバーへ送って消す。
 static var free_after := {}
@@ -201,6 +203,11 @@ static func my_pururin_id() -> String:
 
 
 static func _remember(data: Dictionary) -> void:
+	if not _free_wait_room.is_empty():
+		var type := str(data.get("t", ""))
+		var id := str(data.get("free_room_id", "")) if type == Protocol.RACE_START else str(data.get("room_id", ""))
+		if type in [Protocol.RACE_START, Protocol.FREE_OFFER_END] and id == _free_wait_room:
+			_free_wait_messages.append(data)
 	match str(data["t"]):
 		Protocol.LOBBY:
 			# 部屋の一覧の所に入った（部屋を出た・出されたときも、これが届く）。
@@ -213,6 +220,8 @@ static func _remember(data: Dictionary) -> void:
 			_asked = {}
 		Protocol.ROOMS:
 			rooms = data["rooms"]
+		Protocol.FREE_NOTICE:
+			free_return_notice = str(data.get("text", ""))
 		Protocol.FREE_LOBBY:
 			peer_id = int(data["peer_id"])
 			free_lobby = data
@@ -233,6 +242,8 @@ static func _remember(data: Dictionary) -> void:
 
 
 static func _forget() -> void:
+	clear_free_wait()
+	free_return_notice = ""
 	peer_id = 0
 	free_lobby = {}
 	free_images = {}
@@ -246,7 +257,18 @@ static func _forget() -> void:
 	_asked = {}
 
 
-## 届いた知らせが、レースを始める知らせなら、覚えておく（会場で出走者を待つ画面が、あとで受け取る）。
-static func catch_race_start(data: Dictionary) -> void:
-	if str(data.get("t", "")) == Protocol.RACE_START:
-		pending_race_start = data
+## 入ると答えたときから、会場が開くまでの知らせも受け取る。
+static func begin_free_wait(room_id: String) -> void:
+	clear_free_wait()
+	_free_wait_room = room_id
+
+
+static func clear_free_wait() -> void:
+	_free_wait_room = ""
+	_free_wait_messages.clear()
+
+
+static func take_free_wait_messages() -> Array:
+	var messages := _free_wait_messages.duplicate()
+	_free_wait_messages.clear()
+	return messages

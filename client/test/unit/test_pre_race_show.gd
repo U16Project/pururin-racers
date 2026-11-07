@@ -217,3 +217,33 @@ func test_the_top_bar_says_which_race_this_is() -> void:
 	assert_eq(label["title"], "%s　%dm" % [category, int(distance)])
 	var show: Node = race.get("_pre_race_show")
 	assert_eq((show.get("_title") as Label).text, label["title"])
+
+
+func test_waiting_cancel_confirmation_closes_when_racers_arrive() -> void:
+	var Session := load("res://scripts/online/online_session.gd")
+	var Preload := load("res://scripts/race_scene_preload.gd")
+	Session.peer_id = 9
+	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
+	var entries := [{"gate": 0, "id": RaceSession.default_player_pururin_id(), "runner_id": RaceSession.default_player_pururin_id(), "player": true, "peer_id": 9, "trainer_id": "", "trainer_name": "自分"}]
+	RaceSession.set_online_entries(entries)
+	RaceSession.set_online_view(9)
+	Preload._paddock_mode = Preload.PADDOCK_FREE_WAIT
+	var race: Node = LocalRaceScene.instantiate()
+	add_child_autofree(race)
+	var back := InputEventJoypadButton.new()
+	back.pressed = true
+	back.button_index = JOY_BUTTON_B
+	race.call("_input", back)
+	assert_not_null(race.get("_free_cancel_dialog"))
+	assert_eq(get_viewport().gui_get_focus_owner(), race.get("_free_cancel_wait"))
+	race.call("_input", back)
+	assert_null(race.get("_free_cancel_dialog"), "Bは待機を続ける")
+	race.call("_input", back)
+	race.call("_start_free_race", {"t": "race_start", "free_room_id": "", "entries": entries})
+	assert_null(race.get("_free_cancel_dialog"), "開始したら、確認を何もせず閉じる")
+	assert_false(bool(race.get("_online_left")))
+	assert_false(bool(race.get("_free_waiting")))
+	Session.peer_id = 0
+	Session.clear_free_wait()
+	RaceSession.set_online_entries([])
+	RaceSession.set_online_view(0)
