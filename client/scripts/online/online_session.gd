@@ -198,7 +198,7 @@ static func my_lobby_ready() -> bool:
 static func my_pururin_id() -> String:
 	for member: Dictionary in all_members():
 		if int(member["peer_id"]) == peer_id:
-			return str(member["pururin_id"])
+			return local_id(str(member["pururin_id"]))
 	return ""
 
 
@@ -272,3 +272,8 @@ static func take_free_wait_messages() -> Array:
 	var messages := _free_wait_messages.duplicate()
 	_free_wait_messages.clear()
 	return messages
+
+
+## 自分の出走IDを、選択窓に使うローカルの my-… に戻す。
+static func local_id(id: String) -> String:
+	return str(_client.call("local_id", id)) if is_instance_valid(_client) else id

@@ -313,3 +313,8 @@ static func _gap(gap_m: float, scale: float) -> float:
 
 static func _heart(bpm: float, low: float, high: float) -> float:
 	return clampf((bpm - low) / maxf(high - low, 1.0), 0.0, 1.0)
+
+
+## オンライン個体の登録が変わったとき、能力の記憶を捨てる。
+static func forget(id: String) -> void:
+	_runner_info.erase(id)

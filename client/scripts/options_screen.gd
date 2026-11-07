@@ -66,6 +66,13 @@ func _ready() -> void:
 	column.add_child(MenuStyle.section_title("オプション", 17))
 	_build_quality_selector(column)
 	_build_screen_mode_selector(column)
+	var parts_row := CheckButton.new()
+	parts_row.name = "HideRemoteParts"
+	parts_row.text = "相手の自作部品を表示しない"
+	parts_row.custom_minimum_size.y = ROW_HEIGHT
+	parts_row.button_pressed = load("res://scripts/online/online_parts_settings.gd").hidden()
+	parts_row.toggled.connect(func(on: bool) -> void: load("res://scripts/online/online_parts_settings.gd").set_hidden(on))
+	column.add_child(parts_row)
 	# 3. 操作ガイドは、いちばん下に、小さな入口だけ。
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -107,8 +114,10 @@ func _ready() -> void:
 	_quality_button.focus_neighbor_top = _quality_button.get_path_to(_next_button)
 	_quality_button.focus_neighbor_bottom = _quality_button.get_path_to(_screen_mode_row)
 	_screen_mode_row.focus_neighbor_top = _screen_mode_row.get_path_to(_quality_button)
-	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(_guide_button)
-	_guide_button.focus_neighbor_top = _guide_button.get_path_to(_screen_mode_row)
+	_screen_mode_row.focus_neighbor_bottom = _screen_mode_row.get_path_to(parts_row)
+	parts_row.focus_neighbor_top = parts_row.get_path_to(_screen_mode_row)
+	parts_row.focus_neighbor_bottom = parts_row.get_path_to(_guide_button)
+	_guide_button.focus_neighbor_top = _guide_button.get_path_to(parts_row)
 	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_guide_button)
 	# オプションの行にいるときだけ、下の帯に「←→ 変える」を出す。
 	get_viewport().gui_focus_changed.connect(func(control: Control) -> void:

@@ -8,6 +8,9 @@ static var _texture_cache := {}
 
 ## メッシュの素材（.glb / .gltf、または取り込み済みの場面）から、部品の節を1つ作る。読めなければ null。
 static func instantiate_mesh(path: String) -> Node3D:
+	if path.begins_with("user://online_parts_cache/"):
+		if not load("res://scripts/online/online_part_validation.gd").check(FileAccess.get_file_as_bytes(path), "glb").is_empty():
+			return null
 	if ResourceLoader.exists(path, "PackedScene"):
 		return (load(path) as PackedScene).instantiate() as Node3D
 	if not FileAccess.file_exists(path):
@@ -21,6 +24,9 @@ static func instantiate_mesh(path: String) -> Node3D:
 
 ## 画像（.png など）を、貼るための絵にする。同じ画像は、1回だけ読む。読めなければ null。
 static func load_texture(path: String) -> Texture2D:
+	if path.begins_with("user://online_parts_cache/"):
+		if not load("res://scripts/online/online_part_validation.gd").check(FileAccess.get_file_as_bytes(path), "png").is_empty():
+			return null
 	if _texture_cache.has(path):
 		return _texture_cache[path]
 	var texture: Texture2D = null
@@ -38,3 +44,8 @@ static func load_texture(path: String) -> Texture2D:
 ## 素材のファイルがあるか（設定の検査用）。
 static func exists(path: String) -> bool:
 	return ResourceLoader.exists(path) or FileAccess.file_exists(path)
+
+
+## 使い終わったオンライン部品の、メモリ上の絵だけを捨てる。ディスクのキャッシュは再利用する。
+static func forget(path: String) -> void:
+	_texture_cache.erase(path)

@@ -111,6 +111,8 @@ static func pururin_by_id(identifier: String) -> Dictionary:
 	for pururin: Variant in values().get("roster", []):
 		if pururin is Dictionary and pururin.get("id") == identifier:
 			return pururin
+	if identifier.begins_with("c-"):
+		return load("res://scripts/online/online_custom_pururins.gd").pururin_by_id(identifier)
 	return load(MY_PURURINS_PATH).pururin_by_id(identifier)
 
 

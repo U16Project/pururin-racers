@@ -61,6 +61,9 @@ static func validate(data: Variant) -> PackedStringArray:
 		var limits: Vector2 = WHOLE_NUMBER_RANGES[key]
 		if not (number is float or number is int) or float(number) != floorf(float(number)) or float(number) < limits.x or float(number) > limits.y:
 			errors.append("online.%s: %d〜%d の整数が必要です" % [key, int(limits.x), int(limits.y)])
+	errors.append_array(validate_custom_limits(data.get("custom_limits")))
+	if not data.get("hide_remote_parts") is bool:
+		errors.append("online.hide_remote_parts: 真偽が必要です")
 	errors.append_array(validate_free_tickets(data.get("free_tickets")))
 	errors.append_array(validate_free_rooms(data.get("free_rooms"), data.get("free_tickets")))
 	var fps: Variant = data.get("server_max_fps")
@@ -273,3 +276,22 @@ static func default_room() -> String:
 
 static func connect_timeout_s() -> float:
 	return float(values()["connect_timeout_s"])
+
+
+const CUSTOM_LIMIT_KEYS := ["image_side_px", "image_bytes", "mesh_bytes", "triangles", "pururin_bytes", "server_bytes", "pending_bytes", "pending_count", "transfer_timeout_s", "message_bytes", "custom_json_bytes", "chunk_bytes", "nodes", "meshes", "materials", "parts", "motions_per_action"]
+
+static func custom_limits() -> Dictionary:
+	return values()["custom_limits"]
+
+static func validate_custom_limits(data: Variant) -> PackedStringArray:
+	var errors := PackedStringArray()
+	if not data is Dictionary:
+		return PackedStringArray(["online.custom_limits: オブジェクトが必要です"])
+	for key: String in CUSTOM_LIMIT_KEYS:
+		var n: Variant = data.get(key)
+		if not (n is int or n is float) or not is_finite(float(n)) or float(n) != floorf(float(n)) or float(n) < 1 or float(n) > 134217728:
+			errors.append("online.custom_limits.%s: 1〜134217728 の整数が必要です" % key)
+	if errors.is_empty():
+		if int(data["chunk_bytes"]) * 2 + 512 > int(data["message_bytes"]) or int(data["custom_json_bytes"]) * Protocol.ROOM_CAPACITY * 2 + 16384 > int(data["message_bytes"]) or int(data["pending_bytes"]) < maxi(int(data["image_bytes"]), int(data["mesh_bytes"])) or int(data["server_bytes"]) < int(data["pending_bytes"]):
+			errors.append("online.custom_limits: 切れ端・文・保存量の上限が矛盾しています")
+	return errors

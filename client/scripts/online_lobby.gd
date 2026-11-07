@@ -10,7 +10,7 @@ const BACKGROUND_IMAGE_PATH := "res://assets/ui/trainer_background.jpg"
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const LockMark := preload("res://scripts/menu/lock_mark.gd")
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
-const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
+const PururinPicker := preload("res://scripts/online/online_pururin_picker.gd")
 const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const PururinSlot := preload("res://scripts/menu/pururin_slot.gd")
 const PururinPortrait := preload("res://scripts/menu/pururin_portrait.gd")
@@ -140,6 +140,8 @@ const COLOR_DIALOG_SHADE := Color(0.0, 0.0, 0.0, 0.55)
 const ERROR_TEXTS := {
 	Protocol.ERROR_ROOM_FULL: "その部屋は、満員です。",
 	Protocol.ERROR_VERSION: "ゲームとサーバーの版が合っていません。ゲームを新しくしてください。",
+	Protocol.ERROR_CUSTOM: "このぷるりんの見た目・部品はオンラインで使えません。",
+	Protocol.ERROR_ASSETS_MISSING: "部品がまだサーバーへ届いていません。選び直してください。",
 	Protocol.ERROR_BAD_MESSAGE: "サーバーに断られました（入れた内容を確かめてください）。",
 	Protocol.ERROR_TAKEN: "そのぷるりんは、ほかの人が選んでいます。",
 	Protocol.ERROR_NOT_HOST: "部屋の主だけができます。",
@@ -1411,7 +1413,7 @@ func _on_message(data: Dictionary) -> void:
 			_race_start_data = data
 			_show_popup_text(RACE_START_TEXT)
 		Protocol.ERROR:
-			_set_status(str(ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。")))
+			_set_status(str(data.get("reason", ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。"))))
 
 
 func _on_closed() -> void:
@@ -2661,9 +2663,10 @@ func open_pick_picker() -> void:
 	var status_window := _picker_status.get_node("PickerStatusWindow") as Control
 	status_window.position = _picker.position + Vector2(_picker.size.x + PICKER_MARGIN, 0.0)
 	status_window.size = Vector2(PICKER_STATUS_WIDTH, _picker.size.y)
-	var current := str(_pick_target.get("pururin_id", ""))
+	var current := OnlineSession.local_id(str(_pick_target.get("pururin_id", "")))
 	_picker_status_detail.call("show_pururin", current, "", false, false)
 	_picker_status.visible = true
+	_picker.set("cpu_only", str(_pick_target.get("kind", "")) == "cpu")
 	_picker.call("open_choices", "CPUのプルを選ぶ" if str(_pick_target.get("kind", "")) == "cpu" else "プルを選ぶ", current, {})
 
 

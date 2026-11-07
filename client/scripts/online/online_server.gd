@@ -11,6 +11,14 @@ const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
+const Custom := preload("res://scripts/online/online_custom_pururins.gd")
+const CustomValidation := preload("res://scripts/online/online_custom_validation.gd")
+const AssetStore := preload("res://scripts/online/online_asset_store.gd")
+var _assets := AssetStore.new()
+var _customs := {}
+var _asset_downloads := {}
+var _asset_incoming := {}
+
 const OnlineRaceLog := preload("res://scripts/online/online_race_log.gd")
 
 ## 起動したときに、自分で待ち受けを始めるか（テストでは false にして、入口の番号を選ぶ）。
@@ -105,6 +113,12 @@ func stop() -> void:
 	_rooms.clear()
 	_free_rooms.clear()
 	_tcp.stop()
+	_customs.clear()
+	Custom.release(_custom_scope())
+	_assets.assets.clear()
+	_assets.pending.clear()
+	_asset_downloads.clear()
+	_asset_incoming.clear()
 
 
 func _exit_tree() -> void:
@@ -209,6 +223,8 @@ func room_list() -> Array:
 func _process(delta: float) -> void:
 	while _tcp.is_connection_available():
 		var socket := WebSocketPeer.new()
+		socket.inbound_buffer_size = int(OnlineConfig.custom_limits()["message_bytes"])
+		socket.outbound_buffer_size = int(OnlineConfig.custom_limits()["message_bytes"]) * 2
 		if socket.accept_stream(_tcp.take_connection()) == OK:
 			_peers[_next_peer_id] = {
 				"socket": socket, "name": "", "room": 0, "introduction": "", "icon": clean_icon({}),
@@ -226,12 +242,36 @@ func _process(delta: float) -> void:
 		match socket.get_ready_state():
 			WebSocketPeer.STATE_OPEN:
 				while _peers.has(peer_id) and socket.get_available_packet_count() > 0:
-					_receive(peer_id, socket.get_packet().get_string_from_utf8())
+					var packet := socket.get_packet()
+					if packet.size() > int(OnlineConfig.custom_limits()["message_bytes"]):
+						_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+						continue
+					var text := packet.get_string_from_utf8()
+					var decoded := Protocol.decode(text)
+					if str(decoded.get("t", "")) in [Protocol.ASSET_PUT, Protocol.ASSET_GET]:
+						var queue: Array = _asset_incoming.get_or_add(peer_id, [])
+						if text.to_utf8_buffer().size() > int(OnlineConfig.custom_limits()["chunk_bytes"]) * 2 + 512 or queue.size() >= int(OnlineConfig.custom_limits()["pending_count"]):
+							_send(peer_id, Protocol.message(Protocol.ASSET_ERROR, {"hash": str(decoded.get("hash", "")), "reason": "transfer_budget"}))
+							_assets.pending.erase("%d/%s" % [peer_id, str(decoded.get("hash", ""))])
+						else:
+							queue.append({"text": text, "until": Time.get_ticks_msec() + int(OnlineConfig.custom_limits()["transfer_timeout_s"]) * 1000})
+					else:
+						_receive(peer_id, text)
 			WebSocketPeer.STATE_CLOSED:
 				_drop(peer_id)
 	for room: int in _rooms.keys():
 		_update_race(room, delta)
 	_update_free(delta)
+	for peer: int in _asset_incoming.keys():
+		var queue: Array = _asset_incoming[peer]
+		if not queue.is_empty():
+			var packet: Dictionary = queue.pop_front()
+			if _peers.has(peer) and Time.get_ticks_msec() < int(packet["until"]):
+				_receive(peer, str(packet["text"]))
+		if queue.is_empty():
+			_asset_incoming.erase(peer)
+	_sync_customs()
+	_flush_assets()
 
 
 # ---------------------------------------------------------------- 受け取る
@@ -260,6 +300,14 @@ func _receive(peer_id: int, text: String) -> void:
 		_refuse(peer_id, Protocol.ERROR_NO_NAME)
 		return
 	match type:
+		Protocol.ASSET_PUT:
+			var reply := _assets.put_chunk(peer_id, data)
+			if not reply.is_empty():
+				_send(peer_id, Protocol.message(str(reply["t"]), reply))
+			return
+		Protocol.ASSET_GET:
+			_asset_get(peer_id, data)
+			return
 		Protocol.FREE_ENTER:
 			_free_enter(peer_id)
 			return
@@ -454,6 +502,10 @@ func _drop(peer_id: int) -> void:
 	_free_leave(peer_id)
 	_leave_room(peer_id, Protocol.NOTICE_DISCONNECTED)
 	_peers.erase(peer_id)
+	_asset_downloads.erase(peer_id)
+	_asset_incoming.erase(peer_id)
+	_sync_customs()
+	_assets.drop(peer_id)
 
 
 ## 今いる部屋から抜ける。部屋の主が抜けたら、次に古い人が主になる。誰もいなくなった部屋は、消す。
@@ -512,9 +564,8 @@ func _pick(peer_id: int, room: int, data: Dictionary) -> void:
 	if str(_rooms[room]["phase"]) != Protocol.PHASE_ROOM:
 		_refuse(peer_id, Protocol.ERROR_IN_ENTRIES if str(_rooms[room]["phase"]) == Protocol.PHASE_ENTRIES else Protocol.ERROR_WRONG_PHASE)
 		return
-	var pururin_id := str(data.get("pururin_id", ""))
-	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty():
-		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
+	var pururin_id := _resolve_pururin(peer_id, data)
+	if pururin_id.is_empty():
 		return
 	# 同じプルを、ほかの人やCPUと重ねて選んでもよい。
 	(_rooms[room]["picks"] as Dictionary)[peer_id] = pururin_id
@@ -536,7 +587,7 @@ func _cpu_pick(peer_id: int, room: int, data: Dictionary) -> void:
 		_refuse(peer_id, Protocol.ERROR_WRONG_PHASE)
 		return
 	var pururin_id := str(data.get("pururin_id", ""))
-	if data.has("trainer_id") or (not pururin_id.is_empty() and PururinRosterConfig.pururin_by_id(pururin_id).is_empty()):
+	if data.has("custom") or data.has("trainer_id") or (not pururin_id.is_empty() and _roster_only(pururin_id).is_empty()):
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE)
 		return
 	var index := int(data.get("index", -1))
@@ -947,11 +998,14 @@ static func _entry(gate: int, pururin: Dictionary, peer_id: int, name_or_trainer
 	if peer_id == 0 and not name_or_trainer.is_empty():
 		trainer_id = name_or_trainer
 	var trainer := CpuTrainers.by_id(trainer_id)
-	return {
+	var result := {
 		"gate": gate, "id": str(pururin["id"]), "player": peer_id != 0, "peer_id": peer_id,
 		"trainer_id": trainer_id,
 		"trainer_name": name_or_trainer if peer_id != 0 else str(trainer.get("name", "")),
 	}
+	if not Custom.custom_for(str(pururin["id"])).is_empty():
+		result["custom"] = Custom.custom_for(str(pururin["id"])).duplicate(true)
+	return result
 
 
 ## レースを始める（部屋の主だけ）。出走表で、全員が確定していること。出走と枠順は、出走表のとおり。
@@ -1258,7 +1312,7 @@ func free_room_detail(free_id: String) -> Dictionary:
 	var entrants: Array = []
 	for peer_id: int in free_line(free_id):
 		var entry := _free_entry_of(peer_id, free_id)
-		entrants.append({"name": str(_peers[peer_id]["name"]), "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"])})
+		entrants.append({"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"])})
 	return {
 		"room_id": free_id, "intro": str(data["intro"]), "capacity": Protocol.ROOM_CAPACITY, "fill_wait_s": _fill_wait_s(),
 		"races": _free_racing_count(free_id), "entrants": entrants,
@@ -1399,10 +1453,12 @@ func _send_free_chat_log(peer_id: int, free_id: String) -> void:
 ## ルームにエントリーする。もうエントリーしていれば、出るぷるりんだけ替える（待っている時間は、そのまま）。
 ## 自分のぷるりんのIDと合言葉も受け取る（合言葉は、元に戻せない形にして覚える）。チケットの要るルームは、そのぷるりんがチケットを持っていること。
 func _free_entry(peer_id: int, free_id: String, data: Dictionary) -> void:
-	var pururin_id := str(data.get("pururin_id", ""))
+	var pururin_id := _resolve_pururin(peer_id, data, free_id)
+	if pururin_id.is_empty():
+		return
 	var uid := str(data.get("uid", ""))
 	var secret := str(data.get("secret", ""))
-	if PururinRosterConfig.pururin_by_id(pururin_id).is_empty() or RegEx.create_from_string(UID_PATTERN).search(uid) == null or RegEx.create_from_string(SECRET_PATTERN).search(secret) == null:
+	if RegEx.create_from_string(UID_PATTERN).search(uid) == null or RegEx.create_from_string(SECRET_PATTERN).search(secret) == null:
 		_refuse(peer_id, Protocol.ERROR_BAD_MESSAGE, free_id)
 		return
 	var peer: Dictionary = _peers[peer_id]
@@ -1440,7 +1496,7 @@ func has_ticket(uid: String, secret_sha: String, pururin_id: String, ticket_id: 
 	if expires > 0 and now_unix() >= expires:
 		return false
 	var record: Dictionary = _tickets.get(uid, {})
-	return not record.is_empty() and str(record["secret_sha256"]) == secret_sha and str(record["pururin_id"]) == pururin_id \
+	return not record.is_empty() and str(record["secret_sha256"]) == secret_sha and str(record["pururin_id"]) == _ticket_pururin_id(pururin_id) \
 		and record["stats"] == pururin_stats(pururin_id) and (record["tickets"] as Dictionary).has(ticket_id)
 
 
@@ -1470,8 +1526,8 @@ func _free_give_ticket(room: int, rows: Array) -> void:
 			return
 		var uid := str(entry["uid"])
 		var record: Dictionary = _tickets.get(uid, {})
-		if record.is_empty() or str(record["secret_sha256"]) != str(entry["secret_sha256"]):
-			record = {"secret_sha256": str(entry["secret_sha256"]), "pururin_id": str(entry["pururin_id"]), "stats": pururin_stats(str(entry["pururin_id"])), "tickets": {}}
+		if record.is_empty() or str(record["secret_sha256"]) != str(entry["secret_sha256"]) or record["stats"] != pururin_stats(str(entry["pururin_id"])) or record["pururin_id"] != _ticket_pururin_id(str(entry["pururin_id"])):
+			record = {"secret_sha256": str(entry["secret_sha256"]), "pururin_id": _ticket_pururin_id(str(entry["pururin_id"])), "stats": pururin_stats(str(entry["pururin_id"])), "tickets": {}}
 			_tickets[uid] = record
 		(record["tickets"] as Dictionary)[ticket_id] = {"room_id": free_id, "unix": int(Time.get_unix_time_from_system())}
 		_save_tickets()
@@ -2133,7 +2189,7 @@ func _announce_room(room: int) -> void:
 	if not _rooms.has(room) or bool(_rooms[room].get("free", false)):
 		return
 	var fields := _room_fields(room)
-	var text := Protocol.encode(Protocol.message(Protocol.ROOM, fields))
+	var text := Protocol.encode(_custom_message(Protocol.message(Protocol.ROOM, fields)))
 	var host := int(_rooms[room]["host"])
 	for peer_id: int in _rooms[room]["order"]:
 		if peer_id == host:
@@ -2143,14 +2199,14 @@ func _announce_room(room: int) -> void:
 
 
 func _send_room(room: int, data: Dictionary) -> void:
-	var text := Protocol.encode(data)
+	var text := Protocol.encode(_custom_message(data))
 	for peer_id: int in _rooms[room]["order"]:
 		_send_text(peer_id, text)
 
 
 ## レースに出る人にだけ送る（レースの始まり・状態・結果・片づけ）。待機室に残った人には、送らない。
 func _send_racers(room: int, data: Dictionary) -> void:
-	var text := Protocol.encode(data)
+	var text := Protocol.encode(_custom_message(data))
 	for peer_id: int in present_racers(room):
 		_send_text(peer_id, text)
 
@@ -2176,7 +2232,7 @@ func _refuse(peer_id: int, code: String, free_id: String = "") -> void:
 
 
 func _send(peer_id: int, data: Dictionary) -> void:
-	_send_text(peer_id, Protocol.encode(data))
+	_send_text(peer_id, Protocol.encode(_custom_message(data)))
 
 
 func _send_text(peer_id: int, text: String) -> void:
@@ -2184,4 +2240,121 @@ func _send_text(peer_id: int, text: String) -> void:
 		return
 	var socket: WebSocketPeer = _peers[peer_id]["socket"]
 	if socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
-		socket.send_text(text)
+		if text.to_utf8_buffer().size() > int(OnlineConfig.custom_limits()["message_bytes"]):
+			socket.send_text(Protocol.encode(Protocol.message(Protocol.ERROR, {"code": "message_too_large"})))
+		else:
+			socket.send_text(text)
+
+
+# ---------------------------------------------------------------- 作成個体と部品
+func _custom_scope() -> String:
+	return "server:%d" % get_instance_id()
+
+static func _roster_only(id: String) -> Dictionary:
+	for pururin: Dictionary in PururinRosterConfig.values()["roster"]:
+		if pururin["id"] == id:
+			return pururin
+	return {}
+
+static func _ticket_pururin_id(id: String) -> String:
+	return "custom" if id.begins_with("c-") else id
+
+func _resolve_pururin(peer: int, data: Dictionary, free_id: String = "") -> String:
+	if data.has("custom"):
+		if data.has("pururin_id") or not CustomValidation.validate(data["custom"]).is_empty():
+			_refuse(peer, Protocol.ERROR_CUSTOM, free_id)
+			return ""
+		var custom: Dictionary = data["custom"]
+		if _assets.missing(custom):
+			_refuse(peer, Protocol.ERROR_ASSETS_MISSING, free_id)
+			return ""
+		var id := Custom.content_id(custom, str(peer))
+		_customs[id] = custom.duplicate(true)
+		Custom.register(custom, _custom_scope(), id)
+		return id
+	var id := str(data.get("pururin_id", ""))
+	if _roster_only(id).is_empty():
+		_refuse(peer, Protocol.ERROR_BAD_MESSAGE, free_id)
+		return ""
+	return id
+
+## 実際の参照元から集合を作る。片方のレースの終了で、ほかのレースの登録を消さない。
+func _sync_customs() -> void:
+	var used := {}
+	for room: Dictionary in _rooms.values():
+		for id: Variant in room.get("picks", {}).values():
+			if _customs.has(str(id)):
+				used[str(id)] = _customs[str(id)]
+		for entry: Dictionary in room.get("entries", []):
+			var id := str(entry.get("id", ""))
+			if _customs.has(id):
+				used[id] = _customs[id]
+	for peer: Dictionary in _peers.values():
+		for entry: Dictionary in peer.get("entries", []):
+			var id := str(entry["pururin_id"])
+			if _customs.has(id):
+				used[id] = _customs[id]
+	_customs = used
+	Custom.replace_scope(_custom_scope(), used)
+	var hashes := {}
+	for custom: Dictionary in used.values():
+		for part: Dictionary in custom["parts"].values():
+			hashes[str(part["source"]["hash"])] = true
+	for error: Dictionary in _assets.collect(hashes):
+		_send(int(error["peer"]), Protocol.message(Protocol.ASSET_ERROR, {"hash": error["hash"], "reason": error["reason"]}))
+
+func _custom_message(data: Dictionary) -> Dictionary:
+	if str(data.get("t", "")) not in [Protocol.ROOM, Protocol.WELCOME, Protocol.FREE_LOBBY, Protocol.FREE_ROOM, Protocol.FREE_OFFER, Protocol.RACE_START]:
+		return data
+	var copy := data.duplicate(true)
+	_add_custom_fields(copy)
+	return copy
+
+func _add_custom_fields(value: Variant) -> void:
+	if value is Dictionary:
+		var id := str(value.get("pururin_id", value.get("id", "")))
+		if _customs.has(id):
+			value["custom"] = _customs[id]
+		for key: String in value.keys():
+			if key != "custom":
+				_add_custom_fields(value[key])
+	elif value is Array:
+		for item: Variant in value:
+			_add_custom_fields(item)
+
+func _asset_get(peer: int, data: Dictionary) -> void:
+	var hash_value := str(data.get("hash", ""))
+	if not _assets.assets.has(hash_value):
+		_send(peer, Protocol.message(Protocol.ASSET_ERROR, {"hash": hash_value, "reason": "not_found"}))
+		return
+	if not _asset_downloads.has(peer):
+		_asset_downloads[peer] = {}
+	# キューには hash と次の番号だけ。部品本体を接続ごとに複製しない。
+	if not _asset_downloads[peer].has(hash_value):
+		if _asset_downloads[peer].size() >= int(OnlineConfig.custom_limits()["parts"]):
+			_send(peer, Protocol.message(Protocol.ASSET_ERROR, {"hash": hash_value, "reason": "transfer_budget"}))
+			return
+		_asset_downloads[peer][hash_value] = 0
+
+func _flush_assets() -> void:
+	for peer: int in _asset_downloads.keys():
+		if not _peers.has(peer):
+			_asset_downloads.erase(peer)
+			continue
+		var socket: WebSocketPeer = _peers[peer]["socket"]
+		if socket.get_ready_state() != WebSocketPeer.STATE_OPEN or socket.get_current_outbound_buffered_amount() > 0:
+			continue
+		var queue: Dictionary = _asset_downloads[peer]
+		if queue.is_empty():
+			continue
+		var hash_value: String = queue.keys()[0]
+		if not _assets.assets.has(hash_value):
+			queue.erase(hash_value)
+			_send(peer, Protocol.message(Protocol.ASSET_ERROR, {"hash": hash_value, "reason": "not_found"}))
+			continue
+		var asset: Dictionary = _assets.assets[hash_value]
+		var chunk := AssetStore.chunk(hash_value, str(asset["ext"]), asset["data"], int(queue[hash_value]), Protocol.ASSET_DATA)
+		_send(peer, Protocol.message(Protocol.ASSET_DATA, chunk))
+		queue[hash_value] = int(queue[hash_value]) + 1
+		if int(queue[hash_value]) >= int(chunk["count"]):
+			queue.erase(hash_value)

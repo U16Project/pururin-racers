@@ -45,6 +45,10 @@ static func texture_for(pururin_id: String, tree: SceneTree) -> Texture2D:
 static func forget(pururin_id: String) -> void:
 	if _viewports.has(pururin_id):
 		var viewport: SubViewport = _viewports[pururin_id]
+		if pururin_id.begins_with("c-") and not load("res://scripts/online/online_custom_pururins.gd").custom_for(pururin_id).is_empty() and is_instance_valid(viewport) and viewport.is_inside_tree():
+			# 既に絵を表示しているコントロールの Texture 参照を保ち、古い写しを撮り直す。
+			_take_picture(viewport, viewport.get_tree())
+			return
 		_viewports.erase(pururin_id)
 		if is_instance_valid(viewport):
 			viewport.queue_free()

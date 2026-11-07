@@ -4,7 +4,7 @@ extends RefCounted
 ##   {"schema_version": 1, "id", "display_name", "trainer_id", "attribute", "running_style", "allocation", "look"}
 ## look は、ぷるりんの見た目の設定（pururin_looks.json の1体ぶん）と同じ形。
 ## 読めないファイルや、検査を通らないファイルは、使わずに、理由を errors() に入れる（作成コーナーに出す）。
-## オンラインでは使わない（サーバーは、一覧 pururin_roster.json の個体しか知らない）。
+## オンラインでは、検査済みの能力・見た目・部品を出走用IDで送る。
 
 const MakerConfig := preload("res://scripts/config/pururin_maker_config.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
@@ -118,6 +118,8 @@ static func save(data: Dictionary) -> String:
 	file.store_string(JSON.stringify(data, "  "))
 	file.close()
 	_loaded = false
+	# 能力が変わったときだけ、持ち主のIDと合言葉を更新する。
+	load("res://scripts/config/owned_pururins.gd").entry_for(str(data["id"]))
 	return ""
 
 

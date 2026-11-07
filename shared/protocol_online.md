@@ -7,7 +7,7 @@
 
 - つなぎ方：WebSocket。自分のパソコンでは `ws://127.0.0.1:18766`。
 - 入口の番号：環境変数 `PORT` があればそれ、無ければ `18766`。
-- 文は JSON。どの文にも、決まりの版 `v`（今は `9`）と、種類 `t` が入る。版が違う文は、`version` で断る。
+- 文は JSON。どの文にも、決まりの版 `v`（今は `10`）と、種類 `t` が入る。版が違う文は、`version` で断る。
 - 部屋は、同時に6つまで（`client/data/config/online.json` の `max_rooms`）。1部屋に8人まで入れる。レースの出走数は2〜8体で、出る人と、部屋の主がCPUを入れると決めた席の数で決まる。
 - 流れ：つなぐ → 名乗る（`hello`）→ 部屋の一覧の所 → 部屋を作る（`create`）か、入る（`join`）→ 待機室（各自が「準備OK」＝`lobby_ready`）→ 主がレース開始（`race_open`。準備OKの人と主がレースに出る人になる。ほかの人は待機室に残る）→ レース設定（主が距離と、人の足りない席にCPUを入れるかを決めて、`pick_open`）→ ぷるりんを選ぶ所（各自が選んで「確定」）→ 主が出走表へ（`entries`）→ 出走表（枠順を確かめて「確定」）→ 主がレースを始める（`start`）→ 結果のあと、全員が待機室へ戻る。
 
@@ -33,7 +33,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `lobby_ready` | `on`（真偽） | 待機室の「準備OK」を押す・外す |
 | `race_open` | — | 待機室から、レースへ進む。部屋の主だけ。準備OKの人と主が、レースに出る人（`racers`）になって、レース設定へ。全員に `notice`（`race_open`）が届く |
 | `pick_open` | — | レース設定を終えて、ぷるりんを選ぶ所へ進む。部屋の主だけ。出走が2体に足りなければ `too_few` |
-| `pick` | `pururin_id` | 自分のぷるりんを選ぶ。レースに出る人だけ。ほかの人・CPUと同じプルでもよい |
+| `pick` | `pururin_id` または `custom`（両方は不可。下記） | 自分のぷるりんを選ぶ。レースに出る人だけ。ほかの人・CPUと同じプルでもよい |
 | `settings` | `password`・`description`（部屋の紹介文。70字まで）はいつでも。`distance_m`・`seats`（人の足りない席ごとに、CPUを入れるかの真偽の並び。長さは 8 − レースに出る人数）はレース設定でだけ。変えたいものだけ | 部屋の決めごとを変える。部屋の主だけ。1つでも受け付けられない値があれば、何も変えない |
 | `kick` | `peer_id` | 部屋の人を出す。部屋の主だけ |
 | `chat` | `text`（60字まで。`chat_max_length`） | 部屋の中で、ひとこと送る。レースの最中も送れる（待機室に残った人どうしで話せる） |
@@ -52,7 +52,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `free_leave` | — | ロビーから出る。呼ばれていたら取り消し、レース中なら抜ける（その走者は、その個体のCPUトレーナーが最後まで走る）。エントリー候補は、全部消える。返事は `lobby` |
 | `free_view` | `room_id`（閉じたら空） | ルームの画面を開いた・閉じた。開いているあいだ、そのルームの `free_room` が届く |
 | `free_image_ask` | `room_id` | ルームの画像を聞く。返事は `free_image` |
-| `free_entry` | `room_id`、`pururin_id`、`uid`（自分のぷるりんのID。16進32字）、`secret`（合言葉。16進64字） | ルームにエントリーする。IDと合言葉は、アプリが自動で作って機械に保存したもの（`client/scripts/config/owned_pururins.gd`）。合言葉は、サーバーにだけ送る。チケットの要るルームは、そのぷるりんがチケットを持っていないと `no_ticket`。エントリー候補の、優先のいちばん後ろに入り、そのときから待ち始める。もうエントリーしていれば、出るぷるりんだけ替える（待っている時間は、そのまま）。呼び出し中・参加確定後・レース中の変更は `pick_locked`。ほかの人と同じプルでもよい |
+| `free_entry` | `room_id`、`pururin_id` または `custom`、`uid`（自分のぷるりんのID。16進32字）、`secret`（合言葉。16進64字） | ルームにエントリーする。IDと合言葉は、アプリが自動で作って機械に保存したもの（`client/scripts/config/owned_pururins.gd`）。合言葉は、サーバーにだけ送る。チケットの要るルームは、そのぷるりんがチケットを持っていないと `no_ticket`。エントリー候補の、優先のいちばん後ろに入り、そのときから待ち始める。もうエントリーしていれば、出るぷるりんだけ替える（待っている時間は、そのまま）。呼び出し中・参加確定後・レース中の変更は `pick_locked`。ほかの人と同じプルでもよい |
 | `free_cancel` | `room_id` | エントリーを取り消す。呼ばれていた・入ると答えていた（まだ始まっていない）なら、それも取り消す。エントリーしていなければ `no_entry` |
 | `free_hold` | `room_id`、`hold`（真偽） | エントリー候補を、一時保留にする・保留を外す。保留のあいだは呼ばれない（呼ばれていたら取り消す）。待っている時間は、保留のあいだも数え続ける |
 | `free_order` | `room_ids`（今のエントリー候補の全部を、前ほど優先の順に） | 優先の順番を並べ替える。全部がそろっていないと `bad_message` |
@@ -164,3 +164,75 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 ## まだ決めていないもの（これから足す）
 
 オンラインのCPUトレーナーは個体の既定担当に固定し、`trainer_id` の指定は受け付けない。選択機能を今後足すかは未決（オフラインでは選べる）。通信が遅い・途切れるときの見え方の調整。途中で切れた人が、同じレースに戻ること。
+
+
+## 作成したぷるりんと自作部品（v10）
+
+`pick` と `free_entry` は、一覧の `pururin_id` の代わりに次の `custom` を受け付ける。
+`free_entry` の `uid`・`secret` は一覧の個体と同じ。合言葉は相手には配らない。
+
+```json
+{"display_name":"名前","attribute":"属性ID","running_style":"脚質ID","allocation":{},"trainer_id":"トレーナーID","look":{},"parts":{}}
+```
+
+`allocation` は40点、各能力1〜10。名前は `pururin_maker.json.name_max_length` まで。
+`look` は作成コーナーの保存の形。体は組み込み `dome`、`body_texture` は null。
+すべての `path`、未知の項目、未知の組み込み部品は拒否する。
+`params` は空を許可する。空でない場合、サーバーの `pururin_looks.json` の元の10体に実在する
+「同じ組み込み部品ID・同じ params 全体」の組み合わせだけを許可する。自作部品の params は空だけ。
+見た目・動きの数値範囲は `online_custom_validation.gd` の定数（設定管理に一覧）。
+
+`parts` は、使う `user/…` ID → 部品定義。顔も表情・スロットごとの定義に分ける。
+ローカルの `source.path` を外し、`source.hash`（小文字64桁のsha256）、`ext`（png/glb）、`bytes` を入れる。
+それ以外は `user_parts.gd` が集める形と同じ。
+`body_part` は mesh・top/side/tail・scale・material（body/own）・motions、
+`face` は image・eyes/brows/mouth/cheeks/effect・width/height、`decoration` は image・mark。
+定義と source・motions の未知の項目は拒否する。使っていない自作部品の定義も拒否する。
+
+出走用IDは `c-` +「キー順と数値表現を正規化した custom と、この接続の peer_id」のsha256。
+同じ内容でも所有する接続が違えば別IDとなり、相手の非表示設定と自分の表示を区別できる。
+チケットはこのIDを保存せず、`pururin_id: "custom"` の印と uid・能力・合言葉のhashで照合する。
+名前・見た目だけの変更では同じチケットを使える。能力が変わる保存では uid・secret を作り直す。
+CPU の明示選択とおまかせは、元の一覧の個体のみ。
+
+部屋の `members`、出走表・`race_start.entries`、自分の `free_lobby.entries`、
+`free_room.entrants`、`free_offer` には、作成個体ならその `custom` も付ける。
+`free_room.entrants` には所有する接続の `peer_id` も付ける。
+部品IDは描画時に `<出走ID>/user/…` に付け直し、ローカルの部品一覧に混ぜない。
+
+### 部品の文
+
+- `asset_put`（ゲーム→サーバー）：`hash`, `ext`, `bytes`, `index`, `count`, `data`。
+- `asset_ok`（サーバー→ゲーム）：`hash`。全切れ端がそろい、hash・bytes・形式の検査が通った。
+- `asset_error`（サーバー→ゲーム）：`hash`, `reason`。
+- `asset_get`（ゲーム→サーバー）：`hash`。
+- `asset_data`（サーバー→ゲーム）：`asset_put` と同じ項目。
+
+どの文にも `v: 10` と `t` が必要。`index` は0から、`count` は
+`ceil(bytes / custom_limits.chunk_bytes)`。最終片以外は chunk_bytes ちょうど、最終片は残りの長さ。
+`data` は切り出したバイト列をbase64にした文字列（文字列の途中を切る方式ではない）。順不同で再構成できる。
+同じ転送の同じ index の重複、宣言の変更、不正なbase64、hash不一致はその転送を捨てる。
+既に完成している同じhash・ext・bytesの再送には、再構成せず `asset_ok` を返せる。
+
+送信者は、すべての部品の `asset_ok` を待ってから `pick` / `free_entry` を送る。
+不足した custom は `error.code: "assets_missing"`、定義の不正は `invalid_custom`。
+`asset_error.reason` は `chunk_fields`, `asset_declaration`, `chunk_index_count`, `chunk_limit`,
+`chunk_data`, `duplicate_or_mismatch`, `transfer_budget`, `transfer_timeout`, `hash_or_bytes`,
+`not_found`、または `image_*`・`png_*`・`jpeg_*`・`glb_*`・`extension`（ファイル検査の理由）。
+文全体が大きすぎる場合はJSONを読む前に断る（受信は `bad_message`、送信は `message_too_large`）。
+
+上限の正本は `online.json.custom_limits`。サーバーは完成した部品をメモリで持つ。
+未使用のアップロードには期限を付け、参照された部品は使うエントリー・部屋・レースがなくなると消す。
+途中切断ではその接続の送りかけを消すが、走っているレースが使う完成品は残す。
+各サーバーの登録は独立し、片方のレースの終了で他方の登録を消さない。
+
+受信側は hash・bytes・上限・形式を検査し、`user://online_parts_cache/<hash>.<ext>` に保存する。
+正常なキャッシュは次回要求しない。未着の部品だけ省き、レースの開始を待たせない。
+未着の自作の顔は `pururin_maker.json.base_pururin` の顔を代わりに出す。
+届いた時点で、表示中の体とポートレートを更新する。
+「相手の自作部品を表示しない」がオンなら、相手の部品は取得・表示せず、自分の部品は表示する。
+設定はこの機械に保存する。サーバーは受け取った部品をGLTFDocumentで読み込まない。
+
+部品の送受信処理はレースの操作・状態の後。接続ごとに1コマ1切れ端まで送り、
+送信バッファが空でない間は追加しない。部品は同じWebSocketを使うため、既に送信中の切れ端を追い越すことはできない。
+レースログには作成個体の名前・能力・部品hashを保存し、部品の中身・path・合言葉は保存しない。

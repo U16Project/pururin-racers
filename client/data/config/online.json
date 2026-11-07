@@ -27,5 +27,25 @@
   "free_fill_wait_s": 20,
   "free_answer_wait_s": 15,
   "free_result_keep": 20,
-  "free_rest_after_race_s": 15
+  "free_rest_after_race_s": 15,
+  "custom_limits": {
+    "image_side_px": 256,
+    "image_bytes": 102400,
+    "mesh_bytes": 204800,
+    "triangles": 5000,
+    "pururin_bytes": 1048576,
+    "server_bytes": 67108864,
+    "pending_bytes": 1048576,
+    "pending_count": 8,
+    "transfer_timeout_s": 30,
+    "message_bytes": 1048576,
+    "custom_json_bytes": 32768,
+    "chunk_bytes": 12288,
+    "nodes": 64,
+    "meshes": 32,
+    "materials": 32,
+    "parts": 48,
+    "motions_per_action": 8
+},
+  "hide_remote_parts": false
 }

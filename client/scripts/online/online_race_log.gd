@@ -33,6 +33,18 @@ static func directory() -> String:
 ## レースが始まった。header：部屋・出走・人の情報（そのまま記録の頭に入る）。
 func start(header: Dictionary) -> void:
 	_header = header.duplicate(true)
+	for entry: Dictionary in _header.get("entries", []):
+		if entry.has("custom"):
+			var custom: Dictionary = entry["custom"]
+			var hashes: Array[String] = []
+			for part: Dictionary in custom["parts"].values():
+				var hash_value := str(part["source"]["hash"])
+				if hash_value not in hashes:
+					hashes.append(hash_value)
+			hashes.sort()
+			custom.erase("look")
+			custom.erase("parts")
+			custom["part_hashes"] = hashes
 	_header["started_at"] = Time.get_datetime_string_from_system(true)
 	_detail.start(float(header.get("distance_m", 0.0)), DETAIL_INTERVAL_S)
 	_track.clear()

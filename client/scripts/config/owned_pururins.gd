@@ -27,8 +27,13 @@ static func use_path(path: String) -> void:
 ## 一覧のぷるりんの、自分の写し。まだ無ければ、uid と合言葉を作って保存する。
 static func entry_for(pururin_id: String) -> Dictionary:
 	_load()
-	if not _owned.has(pururin_id):
-		_owned[pururin_id] = {"uid": _random_hex(UID_BYTES), "secret": _random_hex(SECRET_BYTES), "tickets": {}}
+	var stats := {}
+	if pururin_id.begins_with(str(load("res://scripts/config/pururin_maker_config.gd").values()["id_prefix"])):
+		var pururin: Dictionary = PururinRosterConfig.pururin_by_id(pururin_id)
+		for key: String in ["attribute", "running_style", "allocation"]:
+			stats[key] = pururin.get(key)
+	if not _owned.has(pururin_id) or (not stats.is_empty() and _owned[pururin_id].get("stats", {}) != stats):
+		_owned[pururin_id] = {"uid": _random_hex(UID_BYTES), "secret": _random_hex(SECRET_BYTES), "tickets": {}, "stats": stats.duplicate(true)}
 		_save()
 	return _owned[pururin_id]
 
@@ -56,6 +61,9 @@ static func tickets(pururin_id: String, now_unix: int) -> Dictionary:
 static func any_has_ticket(ticket_id: String, now_unix: int) -> bool:
 	for pururin: Dictionary in PururinRosterConfig.values()["roster"]:
 		if tickets(str(pururin["id"]), now_unix).has(ticket_id):
+			return true
+	for id: String in load("res://scripts/config/my_pururins.gd").ids():
+		if tickets(id, now_unix).has(ticket_id):
 			return true
 	return false
 

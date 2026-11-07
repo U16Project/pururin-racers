@@ -282,11 +282,14 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	assert_eq(previous.text, "◀")
 	assert_eq(next.text, "▶")
 	var diagnostics := menu.get_node_or_null("Columns/MenuColumn/PadDiagnosticsButton")
-	# 並びは「次へ」→ オプション（画質・ウィンドウサイズ）→ 操作ガイド（いちばん下に小さく）。
+	# 並びは「次へ」→ 画質 → ウィンドウサイズ → 相手の自作部品 → 操作ガイド。
 	var quality: Control = menu.find_child("QualityButton", true, false)
+	var hide_remote_parts: Control = menu.find_child("HideRemoteParts", true, false)
 	assert_eq(quality.find_valid_focus_neighbor(SIDE_TOP), menu.find_child("NextButton", true, false))
-	assert_eq(row.find_valid_focus_neighbor(SIDE_BOTTOM), guide_button)
-	assert_eq(guide_button.find_valid_focus_neighbor(SIDE_TOP), row)
+	assert_eq(row.find_valid_focus_neighbor(SIDE_BOTTOM), hide_remote_parts)
+	assert_eq(hide_remote_parts.find_valid_focus_neighbor(SIDE_TOP), row)
+	assert_eq(hide_remote_parts.find_valid_focus_neighbor(SIDE_BOTTOM), guide_button)
+	assert_eq(guide_button.find_valid_focus_neighbor(SIDE_TOP), hide_remote_parts)
 	assert_eq(guide_button.find_valid_focus_neighbor(SIDE_BOTTOM), guide_button)
 	assert_null(diagnostics)
 	var quality_row: Control = menu.find_child("QualityButton", true, false)

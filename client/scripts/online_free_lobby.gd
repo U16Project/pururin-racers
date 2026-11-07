@@ -36,6 +36,8 @@ const RULE_TICKET_TEXT := "チケットが必要"
 ## 帯の地の濃さ（色の不透明度）。
 const STRIP_FILL_ALPHA := 0.18
 const ERROR_TEXTS := {
+	Protocol.ERROR_CUSTOM: "このぷるりんの見た目・部品はオンラインで使えません。",
+	Protocol.ERROR_ASSETS_MISSING: "部品がまだサーバーへ届いていません。選び直してください。",
 	Protocol.ERROR_PICK_LOCKED: "呼ばれている間・レースの間は、出るぷるりんを替えられません。",
 	Protocol.ERROR_VERSION: "ゲームとサーバーの版が違います。ゲームを新しくしてください。",
 	Protocol.ERROR_NO_ROOM: "そのルームはありません。",
@@ -610,7 +612,7 @@ func _apply_lobby(data: Dictionary) -> void:
 	_entries = data.get("entries", [])
 	for entry: Dictionary in _entries:
 		var id := str(entry["room_id"])
-		if _sending_entries.has(id) and str(_sending_entries[id]) == str(entry["pururin_id"]):
+		if _sending_entries.has(id) and str(_sending_entries[id]) == OnlineSession.local_id(str(entry["pururin_id"])):
 			_sending_entries.erase(id)
 	_answer_wait_s = float(data.get("answer_wait_s", 0.0))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
@@ -917,7 +919,7 @@ func _refresh_entries() -> void:
 		row.set_meta("index", index)
 		(row.find_child("Number", true, false) as Label).text = str(index + 1)
 		(row.find_child("Open", true, false) as Button).text = "%s　%s" % [str(room.get("name", entry["room_id"])), distance_text(float(room.get("distance_m", 0.0)))]
-		(row.find_child("Pururin", true, false) as Label).text = "%sで出る" % pururin_name(str(entry["pururin_id"]))
+		(row.find_child("Pururin", true, false) as Label).text = "%sで出る" % pururin_name(OnlineSession.local_id(str(entry["pururin_id"])))
 		(row.find_child("State", true, false) as Label).text = entry_state_text(entry)
 		(row.find_child("Up", true, false) as Button).disabled = index == 0 or not _client.is_open()
 		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1 or not _client.is_open()
@@ -1011,7 +1013,7 @@ func open_room(room_id: String) -> void:
 	_room_chat_edit.text = ""
 	_client.send(Protocol.FREE_VIEW, {"room_id": room_id})
 	var entry := entry_for(room_id)
-	var pururin_id := str(entry["pururin_id"]) if not entry.is_empty() else OnlineSession.last_pick
+	var pururin_id := OnlineSession.local_id(str(entry["pururin_id"])) if not entry.is_empty() else OnlineSession.last_pick
 	_pick_index = maxi(_roster_ids().find(pururin_id), 0)
 	_lobby_view.visible = false
 	_room_view.visible = true
@@ -1039,7 +1041,7 @@ func close_room() -> void:
 
 
 func _roster_ids() -> Array:
-	return (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"]))
+	return (PururinRosterConfig.values()["roster"] as Array).map(func(pururin: Dictionary) -> String: return str(pururin["id"])) + load("res://scripts/config/my_pururins.gd").ids()
 
 
 func selected_pururin_id() -> String:
@@ -1162,11 +1164,11 @@ func _refresh_pick() -> void:
 	elif entry.is_empty():
 		_entry_button.text = "エントリーする"
 		_entry_note.text = "エントリーすると、番が来たときに呼ばれます。呼ばれたら、入るか答えます。"
-	elif str(entry["pururin_id"]) != pururin_id and (missing or closed):
+	elif OnlineSession.local_id(str(entry["pururin_id"])) != pururin_id and (missing or closed):
 		# チケットが無い・受付の外なので、替えなかった。
 		_entry_button.text = "取り消す"
-		_entry_note.text = "%sでエントリーしています（%sには替えられません：%s）。" % [pururin_name(str(entry["pururin_id"])), pururin_name(pururin_id), "チケットがありません" if missing else "受付の外です"]
-	elif str(entry["pururin_id"]) != pururin_id:
+		_entry_note.text = "%sでエントリーしています（%sには替えられません：%s）。" % [pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))), pururin_name(pururin_id), "チケットがありません" if missing else "受付の外です"]
+	elif OnlineSession.local_id(str(entry["pururin_id"])) != pururin_id:
 		# 選び直したぷるりんへの替えを、サーバーに送ったところ（返事が届くと、下の「エントリーしています」になる）。
 		_entry_button.text = "取り消す"
 		_entry_note.text = "%sに替えています…" % pururin_name(pururin_id)
@@ -1199,7 +1201,7 @@ func _send_entry() -> void:
 	var room_name := str(room_by_id(_open_room).get("name", _open_room))
 	OnlineSession.last_pick = selected_pururin_id()
 	if not _client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id())}):
-		_set_status("送れませんでした。つながりを確かめてください。")
+		_set_status(str(_client.get("last_error")) if not str(_client.get("last_error")).is_empty() else "送れませんでした。つながりを確かめてください。")
 		return
 	_sending_entries[_open_room] = selected_pururin_id()
 	_refresh_pick()
@@ -1241,10 +1243,10 @@ func _on_picker_picked(pururin_id: String) -> void:
 ## チケットが無い・受付の外のときは、替えない（下の文で、理由を知らせる）。
 func _apply_pick_to_entry() -> void:
 	var entry := entry_for(_open_room)
-	if entry.is_empty() or str(entry["pururin_id"]) == selected_pururin_id():
+	if entry.is_empty() or OnlineSession.local_id(str(entry["pururin_id"])) == selected_pururin_id():
 		return
 	if str(entry.get("state", Protocol.FREE_ENTRY_WAIT)) != Protocol.FREE_ENTRY_WAIT:
-		_pick_index = maxi(_roster_ids().find(str(entry["pururin_id"])), 0)
+		_pick_index = maxi(_roster_ids().find(OnlineSession.local_id(str(entry["pururin_id"]))), 0)
 		OnlineSession.last_pick = selected_pururin_id()
 		_set_status("呼ばれている間・レースの間は、出るぷるりんを替えられません。")
 		UIAudio.play_error()
@@ -1729,11 +1731,11 @@ func _on_message(data: Dictionary) -> void:
 				if str(data.get("code", "")) == Protocol.ERROR_PICK_LOCKED and id == _open_room:
 					var entry := entry_for(id)
 					if not entry.is_empty():
-						_pick_index = maxi(_roster_ids().find(str(entry["pururin_id"])), 0)
+						_pick_index = maxi(_roster_ids().find(OnlineSession.local_id(str(entry["pururin_id"]))), 0)
 						OnlineSession.last_pick = selected_pururin_id()
 				if id == _open_room:
 					_refresh_pick()
-			_set_status(str(ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。")))
+			_set_status(str(data.get("reason", ERROR_TEXTS.get(str(data.get("code", "")), "サーバーに断られました。"))))
 
 
 func _process(delta: float) -> void:

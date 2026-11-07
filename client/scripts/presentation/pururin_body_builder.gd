@@ -115,9 +115,12 @@ const FINISH_COLOR_KEYS := ["core_color"]
 
 ## look（個体の見た目）と、config（読み込んだ見た目の設定。parts＝部品の一覧、finishes＝質感の一覧、body_motions＝体全体の動かし方の一覧）から、体を組み立てる。
 ## look は、第一カラーの番号を色に直したもの（PururinLookConfig.look_for() か resolved_look() の結果）。
-static func build(look: Dictionary, config: Dictionary) -> Node3D:
-	var parts: Dictionary = config["parts"]
-	var root: Node3D = PururinBody.new()
+static func build(look: Dictionary, config: Dictionary, watch: bool = true, target: Node3D = null) -> Node3D:
+	var parts: Dictionary = config["parts"].duplicate()
+	parts.merge(look.get("_online_parts", {}))
+	var root: Node3D = PururinBody.new() if target == null else target
+	if watch and look.has("_online_id"):
+		load("res://scripts/online/online_custom_pururins.gd").watch(root, str(look["_online_id"]))
 	root.name = "PururinBody"
 	var body: Dictionary = look["body"]
 	var shape := {"height": float(body["height"]), "base_height": float(body["base_height"])}

@@ -2,7 +2,7 @@ extends RefCounted
 ## オンライン対戦の、通信の決まり（ゲームと、画面なしで動くサーバーの、両方が使う）。
 ## 文は JSON。どの文にも、決まりの版 `v` と、種類 `t` が入る。くわしくは shared/protocol_online.md。
 
-const VERSION := 9
+const VERSION := 10
 ## サーバーが待ち受ける入口の番号。置き場所が番号を指定してくるとき（環境変数 PORT）は、そちらを使う。
 const DEFAULT_PORT := 18766
 const PORT_ENVIRONMENT := "PORT"
@@ -292,10 +292,18 @@ static func encode(data: Dictionary) -> String:
 
 ## 受け取った文を読む。読めない・決まりの形でないときは、空の辞書。
 static func decode(text: String) -> Dictionary:
+	if text.to_utf8_buffer().size() > int(load("res://scripts/config/online_config.gd").custom_limits()["message_bytes"]):
+		return {}
 	var json := JSON.new()
 	if json.parse(text) != OK or not (json.data is Dictionary) or not (json.data as Dictionary).has("t"):
 		return {}
-	return json.data
+	var data: Dictionary = json.data
+	if not data["t"] is String:
+		return {}
+	var version: Variant = data.get("v", 0)
+	if not (version is int or version is float) or not is_finite(float(version)) or float(version) != floorf(float(version)):
+		return {}
+	return data
 
 
 ## サーバーが待ち受ける入口の番号。
@@ -307,3 +315,12 @@ static func server_port() -> int:
 ## 名前や合言葉を、前後の空白を取り、長さの上限で切る。
 static func clean_text(value: Variant, max_length: int) -> String:
 	return str(value).strip_edges().left(max_length)
+
+
+const ASSET_PUT := "asset_put"
+const ASSET_OK := "asset_ok"
+const ASSET_ERROR := "asset_error"
+const ASSET_GET := "asset_get"
+const ASSET_DATA := "asset_data"
+const ERROR_CUSTOM := "invalid_custom"
+const ERROR_ASSETS_MISSING := "assets_missing"

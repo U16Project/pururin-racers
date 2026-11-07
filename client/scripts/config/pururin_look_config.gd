@@ -139,6 +139,8 @@ static func look_for(pururin_id: String) -> Dictionary:
 	var looks: Dictionary = values().get("looks", {})
 	if looks.has(pururin_id):
 		return looks[pururin_id]
+	if pururin_id.begins_with("c-"):
+		return load("res://scripts/online/online_custom_pururins.gd").look_for(pururin_id)
 	return load(MY_PURURINS_PATH).look_for(pururin_id)
 
 

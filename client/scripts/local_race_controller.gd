@@ -929,7 +929,11 @@ func _spawn_field() -> void:
 		runner.name = "Runner%d" % (i + 1)
 		runner.set_script(RunnerScript)
 		# 体は、個体の見た目の設定から組み立てる（足元が走者の位置、正面が進む向き）。
-		var body := PururinBodyBuilder.build(PururinLookConfig.look_for(str(entry["id"])), PururinLookConfig.values())
+		# 権威サーバーは受信した自作ファイルを開かない。走者の能力は上の pururin のまま。
+		var visual_id := str(entry["id"])
+		if not _online_view and DisplayServer.get_name() == "headless" and visual_id.begins_with("c-"):
+			visual_id = str(load("res://scripts/config/pururin_maker_config.gd").values()["base_pururin"])
+		var body := PururinBodyBuilder.build(PururinLookConfig.look_for(visual_id), PururinLookConfig.values())
 		body.name = "Body"
 		runner.add_child(body)
 		_runners_root.add_child(runner)
