@@ -3,6 +3,8 @@
 Gran Turismo の Sophy と同じ考え方。人が決めるのは「何を見るか」と「何が良いか（点）」だけで、走り方はCPUが自分で見つける。
 ゴドーに `client/` を開かせて、ここの台本を外から渡す。ゲーム本体には、ラボから起動したときだけ働く差し込み口を少し足してある（下の「ゲーム本体の差し込み口」）。
 
+性格の正本は `client/data/config/cpu_trainers.json`。`lab/trainer_styles.json` は旧つまみ式ラボ用で、今の性格の正本ではない。
+
 ## 入れたもの（リポジトリの外）
 
 - Python の仮の箱：`/media/u16/Backup/pururin-rl-venv/`（PyTorch・stable-baselines3・sb3-contrib・gymnasium・numpy）。中身はゲームと関係のない道具だけなので、ほかのゲームの育成にも使える
@@ -17,7 +19,7 @@ Gran Turismo の Sophy と同じ考え方。人が決めるのは「何を見る
 - 席は、オンラインで「通信ごしの人」が使うのと同じ入口（ライン・ノッチ・ブレーキ・ダッシュ・ブースト）で走る。操作は、ゲームの設定 `cpu_reaction_delay_s`（0.3秒）だけ遅れて届く（人の反応に合わせる。本番に入れるときも同じ値を使う）。
 - 0.5秒ごとに、ゴドーが「見たもの（数字の並び）・点・選べる操作」を Python に送り、Python が操作を返す。返事を待つあいだ、ゲームの時間は止まる。
 - 選べない操作（ブーストの残り0、ブレーキ中のダッシュ・ブースト、体力-100%でのダッシュなど、ゲームが受け付けないもの）は外す。場面ごとの決めごとは入れない。
-- 見るもの：レースの状況・コースの先の形・流れ（先頭の速さ・隊列の長さ・集団の中の位置）・自分の値と能力・トレーナーの性格の数字（`lab/trainer_styles.json` の frame）・ほかの7体の値と能力・風よけ・押し合い。くわしくは `client/scripts/cpu_brain/brain_observe.gd`（ゲームと同じもの）。見るのは「今の様子」だけで、それまでに何をしたか（ブーストを押した場所など）は入っていない。そのため、点は、良い・悪いが決まったその場で渡す（下）。
+- 見るもの：レースの状況・コースの先の形・流れ（先頭の速さ・隊列の長さ・集団の中の位置）・自分の値と能力・トレーナーの性格の数字（`client/data/config/cpu_trainers.json` の `frame`）・ほかの7体の値と能力・風よけ・押し合い。くわしくは `client/scripts/cpu_brain/brain_observe.gd`（ゲームと同じもの）。見るのは「今の様子」だけで、それまでに何をしたか（ブーストを押した場所など）は入っていない。そのため、点は、良い・悪いが決まったその場で渡す（下）。
 - 点（`rl_settings.json` の `reward`）：ゴールの着順の点・1位とのタイム差の点・前へ進んだ分の小さな点・性格に合った走りの点。
   - 着順と1位とのタイム差はゴールで渡す。そのほかの点は、その場で渡す（2026-10-27から。ゴールでまとめて渡すと、どの判断の点か頭に伝わらず、本番3でブーストが早押しのまま直らなかった）。
   - 集団の得の点（`reward.group`。性格とは別）：前から風よけをもらっていた間に進んだ距離の割合 × draft ＋ 後ろから後方支援をもらっていた間に進んだ距離の割合 × rear。進むたびに少しずつ渡す。ふつうは0。
@@ -86,8 +88,8 @@ Gran Turismo の Sophy と同じ考え方。人が決めるのは「何を見る
 
 ```bash
 # 育成（止めるときは Ctrl+C。それまでのCPUは保存される。--games は同時に動かすゲームの数）
-# 本番6（初回だけ。2回目からは --resume lab/rl/runs/本番6/latest.zip で、--override は要らない）
-nice -n 19 /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/train.py --name 本番6 --games 5 --resume lab/rl/runs/保存/本採用_末脚.zip --override lab/rl/override_本番6.json
+# 末脚の控えから本番6を始める例（初回だけ。2回目からは --resume lab/rl/runs/本番6/latest.zip で、--override は要らない）
+nice -n 19 /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/train.py --name 本番6 --games 5 --resume lab/rl/runs/保存/控え_末脚.zip --override lab/rl/override_本番6.json
 # 新しく始めるとき：--resume を付けない（上書きの設定は初回だけ --override で渡す）
 # ゲームのCPUに書き出す（最新から：--run 本番6、保存した版から：--file lab/rl/runs/保存/本採用_安定版.zip）
 /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/export_brain.py --file lab/rl/runs/保存/本採用_安定版.zip
@@ -101,4 +103,5 @@ nice -n 19 /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/train.py --name �
 /media/u16/Backup/pururin-rl-venv/bin/python lab/rl/check.py
 ```
 
+- 育成レースの記録は `runs/<名前>/race_logs/`。頻度と保持数は `lab/rl/rl_settings.json` の `train.race_log_every`・`train.race_log_keep` で決める（現在は100レースに1本、最新30本）。`rl_race.gd` が全員の状態を記録する。
 - 進み具合は `runs/<名前>/progress.csv`（100レースごとに1行）：1位のタイム・ダッシュ・ブーストの回数・ブーストを押した残り距離・スパートの範囲で押したブースト・風よけをもらっていた割合・後方支援をもらっていた割合・性格に合っていた割合・お手本と合う見込み など。
