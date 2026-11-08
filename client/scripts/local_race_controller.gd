@@ -21,8 +21,7 @@ const FirstDrawWarmup := preload("res://scripts/presentation/first_draw_warmup.g
 const FACE_PREPARE_BUDGET_MS := 8
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
 const HudStatsConfig := preload("res://scripts/config/pururin_stats_config.gd")
-## 左上の操作盤（場面 race_control_panel.tscn）の大きさ（場面の大きさの何倍か）と、画面の左上の角からのすき間。
-const HEART_HUD_SCALE := 0.45
+## 左上の操作盤と、画面の左上の角からのすき間。
 const HEART_HUD_MARGIN := Vector2(20.0, 20.0)
 ## 操作盤と、その下の順位表とのすき間。
 const STANDINGS_GAP := 10.0
@@ -1737,13 +1736,14 @@ func _place_heart_hud() -> void:
 	var screen := get_viewport().get_visible_rect().size
 	# 絵は、画面の実際の点の細かさで描く（拡大してぼやけないように）。貼るときに、もとの大きさへ戻す。
 	var zoom := maxf(get_viewport().get_stretch_transform().get_scale().x, 1.0)
-	_heart_hud.call("set_scale_factor", HEART_HUD_SCALE * zoom)
+	_heart_hud.call("set_scale_factor", zoom)
 	var drawn_size := _heart_hud.custom_minimum_size.ceil()
 	# 操作盤は、自分で、台の左上が絵の左上に来るように置く。
 	_heart_hud_viewport.size = Vector2i(drawn_size)
 	_heart_hud_view.size = drawn_size / zoom
 	_heart_hud_view.position = HEART_HUD_MARGIN
 	# 順位表は、操作盤のすぐ下。自分の行の色の帯の左はしを、操作盤の左はしにそろえる。
+	_race_hud.set("standings_panel_width", _heart_hud_view.size.x)
 	_race_hud.set("standings_origin", HEART_HUD_MARGIN + Vector2(RaceHud.STANDINGS_ROW_PAD, _heart_hud_view.size.y + STANDINGS_GAP))
 	_heart_hud_drawn_msec = -1000000
 	if _race_hud_viewport != null:

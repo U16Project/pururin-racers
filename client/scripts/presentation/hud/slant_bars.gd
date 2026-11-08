@@ -101,46 +101,68 @@ extends Control
 		_refresh()
 
 
-## 四角を合わせている最中か。
-var _fitting := false
-
+@export_group("弧に沿わせる")
+@export var follow_arc := false
+@export var arc_path: NodePath
+@export var arc_gap := 9.0
+@export var right_edge := 520.0
+@export var lean := 120.0
+@export var bend := -30.0
+@export var length_growth := 8.0
+@export var bar_space := 6.0
+@export var bottom := 617.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_refresh()
 
+func _process(_delta: float) -> void:
+	if Engine.is_editor_hint() and follow_arc:
+		queue_redraw()
 
 func _refresh() -> void:
-	if is_inside_tree() and not _fitting:
-		_fit_rect()
 	queue_redraw()
 
-
-## 描いている所の四角（この部品の左上から）。全部の棒と、まわりの光のはみ出しを含む。
 func drawn_rect() -> Rect2:
-	var box := Rect2(first_bottom_left, Vector2.ZERO)
+	var box := Rect2(bar_shape(0)[0], Vector2.ZERO)
 	for index in count:
 		for point in bar_shape(index):
 			box = box.expand(point)
 	return box.grow(glow_width + 3.0)
 
+## 弧の本当の位置を、この部品の座標へ直す。
+func _arc_left(y: float) -> float:
+	var arc := get_node_or_null(arc_path) as Control
+	if arc == null:
+		return 0.0
+	var transform := get_global_transform().affine_inverse() * arc.get_global_transform()
+	var c: Vector2 = transform * Vector2(arc.get("center"))
+	var r := (float(arc.get("radius")) + float(arc.get("thickness")) * 0.5) * transform.x.length() + arc_gap
+	return c.x + sqrt(maxf(0.0, r * r - (y - c.y) * (y - c.y)))
 
-## この部品の四角を、描いている所に合わせる（見た目の位置は変えない）。回したり縮めたりしているときは、合わせない。
-func _fit_rect() -> void:
-	if rotation != 0.0 or scale != Vector2.ONE:
-		return
-	var box := drawn_rect()
-	if box.position.distance_to(Vector2.ZERO) < 0.5 and box.size.distance_to(size) < 0.5:
-		return
-	_fitting = true
-	position += box.position
-	first_bottom_left -= box.position
-	size = box.size
-	_fitting = false
+func _right(y: float) -> float:
+	var u := (bottom - y) / 100.0
+	return right_edge + lean * u + bend * u * u
+
+func _follow_shape(index: int) -> PackedVector2Array:
+	var previous := 0.0
+	var shape := PackedVector2Array()
+	for i in index + 1:
+		var yb := bottom - float(i) * (height + bar_space)
+		var yt := yb - height
+		var lb := _arc_left(yb)
+		var lt := _arc_left(yt)
+		var push := maxf(0.0, lb + maxf(20.0, previous + (length_growth if i > 0 else 0.0)) - _right(yb))
+		var rb := _right(yb) + push
+		shape = PackedVector2Array([Vector2(lb, yb), Vector2(rb, yb), Vector2(maxf(_right(yt) + push, lt + 8.0), yt), Vector2(lt, yt)])
+		previous = rb - lb
+	return shape
 
 
 ## index 本目（0が下）の棒の形（左下・右下・右上・左上）。
 func bar_shape(index: int) -> PackedVector2Array:
+	if follow_arc:
+		return _follow_shape(index)
 	var bottom_left := first_bottom_left + step * float(index)
 	var ratio := pow(float(index) / float(maxi(count - 1, 1)), grow)
 	var length := lerpf(first_length, last_length, ratio)

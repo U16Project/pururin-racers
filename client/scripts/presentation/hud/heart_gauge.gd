@@ -37,6 +37,15 @@ const HeartShader := preload("res://scripts/presentation/hud/heart_gauge.gdshade
 	set(next):
 		dip = next
 		_push()
+## 下半分の長さと、まん中のなめらかさ。
+@export_range(0.4, 1.0, 0.01) var tip := 1.0:
+	set(next):
+		tip = next
+		_push()
+@export_range(0.006, 0.3, 0.002) var blunt := 0.006:
+	set(next):
+		blunt = next
+		_push()
 ## 鼓動のいちばん強い瞬間に、ハートが大きくなる割合（0.06＝6%大きくなる）。
 @export_range(0.0, 0.3, 0.01) var beat_grow := 0.06:
 	set(next):
@@ -148,9 +157,12 @@ func _push() -> void:
 		shader_material = ShaderMaterial.new()
 		shader_material.shader = HeartShader
 		material = shader_material
-	for key: String in ["center", "size_x", "size_y", "dip", "water_color", "water_bottom_shade", "wave_height", "wave_length", "surface_color", "surface_width", "stripe_spacing", "stripe_strength", "glass_color", "gloss_strength", "edge_color", "edge_width", "edge_core_color", "edge_core_width", "glow_width", "glow_strength", "beat", "beat_color"]:
+	for key: String in ["center", "size_x", "size_y", "dip", "tip", "blunt", "water_color", "water_bottom_shade", "wave_height", "wave_length", "surface_color", "surface_width", "stripe_spacing", "stripe_strength", "glass_color", "gloss_strength", "edge_color", "edge_width", "edge_core_color", "edge_core_width", "glow_width", "glow_strength", "beat", "beat_color"]:
 		shader_material.set_shader_parameter(key, get(key))
 	# 鼓動で、ハートを少しふくらませる。
+	var bounds := shape_heights()
+	shader_material.set_shader_parameter("heart_bottom", bounds.x)
+	shader_material.set_shader_parameter("heart_top", bounds.y)
 	shader_material.set_shader_parameter("size_x", size_x * (1.0 + beat_grow * beat))
 	shader_material.set_shader_parameter("size_y", size_y * (1.0 + beat_grow * beat))
 	shader_material.set_shader_parameter("rect_size", size)
@@ -164,22 +176,25 @@ var _fitting := false
 ## 描いている所の四角（この部品の左上から）。ハートと、ふち・まわりの光のはみ出しを含む。
 ## ハートの上のてっぺんは、まん中から 1.577 ÷ dip、下の先は 1 ÷ dip（縦の大きさ1あたり）。
 func drawn_rect() -> Rect2:
-	var margin := edge_width + glow_width * 2.5 + 4.0
-	var top := center.y - 1.577 / dip * size_y
-	var bottom := center.y + 1.0 / dip * size_y
-	return Rect2(Vector2(center.x - size_x, top), Vector2(size_x * 2.0, bottom - top)).grow(margin)
+	var margin := edge_width + glow_width * 2.5 * 1.4 + 4.0
+	var bounds := shape_heights()
+	var grow := 1.0 + beat_grow
+	return Rect2(center + Vector2(-size_x, -bounds.y * size_y) * grow, Vector2(size_x * 2.0, (bounds.y - bounds.x) * size_y) * grow).grow(margin)
 
 
-## この部品の四角を、描いている所に合わせる（見た目の位置は変えない）。回したり縮めたりしているときは、合わせない。
+## 参考ページと同じ式で、空と満タンの高さを調べる。
+func shape_heights() -> Vector2:
+	var bounds := Vector2((pow(blunt, 0.25) - 1.0) / dip * tip, 0.0)
+	for i in 401:
+		var x := float(i) / 400.0
+		bounds.y = maxf(bounds.y, (sqrt(1.0 - x * x) + pow(x * x + blunt, 0.25)) / dip)
+	return bounds
+
+
+
+## 描画用の四角だけ広げ、編集した位置と中心は動かさない。
 func _fit_rect() -> void:
-	if rotation != 0.0 or scale != Vector2.ONE:
-		return
 	var box := drawn_rect()
-	if box.position.distance_to(Vector2.ZERO) < 0.5 and box.size.distance_to(size) < 0.5:
-		return
 	_fitting = true
-	position += box.position
-	center -= box.position
-	size = box.size
+	size = size.max(box.end)
 	_fitting = false
-

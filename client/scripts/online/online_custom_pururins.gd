@@ -143,7 +143,7 @@ static func look_for(id: String) -> Dictionary:
 					slots[slot] = id + "/" + str(slots[slot])
 	look["_online_parts"] = parts
 	look["_online_id"] = id
-	return Looks.resolved_look(look, Stats.values()["attributes"][custom["attribute"]]["primary_colors"])
+	return Looks.resolved_look(look, Stats.primary_colors(str(custom["attribute"])))
 
 static func cache_path(source: Dictionary) -> String:
 	return "user://online_parts_cache/" + str(source["hash"]) + "." + str(source["ext"])

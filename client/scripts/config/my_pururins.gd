@@ -100,7 +100,7 @@ static func validate(data: Variant) -> PackedStringArray:
 	var stats := PururinStatsConfig.values()
 	PururinRosterConfig._validate_pururin(_record(data), 0, stats["attributes"], stats["running_styles"], {}, errors)
 	if errors.is_empty():
-		errors.append_array(PururinLookConfig.validate_single_look(data["look"], stats["attributes"][str(data["attribute"])]["primary_colors"]))
+		errors.append_array(PururinLookConfig.validate_single_look(data["look"], PururinStatsConfig.primary_colors(str(data["attribute"]))))
 	return errors
 
 
@@ -161,7 +161,6 @@ static func _load() -> void:
 		return
 	var files := DirAccess.get_files_at(directory)
 	files.sort()
-	var attributes: Dictionary = PururinStatsConfig.values().get("attributes", {})
 	for file: String in files:
 		if file.get_extension() != "json":
 			continue
@@ -177,4 +176,4 @@ static func _load() -> void:
 		var identifier := str(data["id"])
 		_entries[identifier] = data
 		_pururins[identifier] = _record(data)
-		_looks[identifier] = PururinLookConfig.resolved_look(data["look"], attributes[str(data["attribute"])]["primary_colors"])
+		_looks[identifier] = PururinLookConfig.resolved_look(data["look"], PururinStatsConfig.primary_colors(str(data["attribute"])))

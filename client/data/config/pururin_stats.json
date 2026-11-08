@@ -24,6 +24,20 @@
     "distant": -1
   },
   "race_phase_count": 4,
+  "common_primary_colors": [
+    {"color": "#FF8FB8", "outline": "#B8366A"},
+    {"color": "#FFC2D9", "outline": "#C46A8E"},
+    {"color": "#E85CE0", "outline": "#8A1F84"},
+    {"color": "#B07CF0", "outline": "#5B2DA0"},
+    {"color": "#D7C2FF", "outline": "#7E63B8"},
+    {"color": "#2E3F8F", "outline": "#121A47"},
+    {"color": "#FF9E80", "outline": "#B5523A"},
+    {"color": "#8A5A3C", "outline": "#46291A"},
+    {"color": "#FFF0C2", "outline": "#B39445"},
+    {"color": "#F7F7FA", "outline": "#8C8FA3"},
+    {"color": "#B8BCC8", "outline": "#5E6270"},
+    {"color": "#4A4A5A", "outline": "#1C1C26"}
+  ],
   "attributes": {
     "earth": {
       "label": "地",

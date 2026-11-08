@@ -470,7 +470,7 @@ func test_config_errors_stop_the_load_instead_of_using_another_shape() -> void:
 	missing_number["parts"]["nub_drop"]["source"].erase("lean")
 	assert_true("; ".join(LookConfig.validate(missing_number, looks)).contains("nub_drop.source.lean"))
 	var unknown_shape := parts.duplicate(true)
-	unknown_shape["parts"]["nub_drop"]["source"]["shape"] = "horn"
+	unknown_shape["parts"]["nub_drop"]["source"]["shape"] = "no_such_shape"
 	assert_true("; ".join(LookConfig.validate(unknown_shape, looks)).contains("使える形"))
 	# 色の書き間違い、未知の項目
 	var bad_color := looks.duplicate(true)
@@ -582,6 +582,9 @@ func test_finish_and_part_override_errors_stop_the_load() -> void:
 	assert_true("; ".join(LookConfig.validate(missing_number, looks)).contains("roughness"))
 	# 部品の色が足りない
 	for part_id: String in parts["parts"]:
+		# 体の一部の色の決まり（マークにも同じ名前の形があるので、体の一部だけを見る）。
+		if str(parts["parts"][part_id]["kind"]) != "body_part":
+			continue
 		var source: Dictionary = parts["parts"][part_id]["source"]
 		for key: String in BodyParts.REQUIRED_COLORS.get(str(source.get("shape", "")), []):
 			var missing_color := parts.duplicate(true)

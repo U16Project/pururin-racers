@@ -8,9 +8,9 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown"],
-	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bat_wing", "hand"],
-	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft"],
+	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna"],
+	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bat_wing", "hand", "bow", "butterfly", "star"],
+	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft", "star", "heart", "devil", "spiky"],
 }
 ## 形ごとに、必ず要る数字。
 const REQUIRED_PARAMS := {
@@ -36,6 +36,15 @@ const REQUIRED_PARAMS := {
 	"hand": ["size", "tilt_deg"],
 	"curl": ["length", "thickness", "turns"],
 	"tuft": ["size", "count", "seed"],
+	"flower": ["size", "petals"],
+	"horn": ["length", "width"],
+	"hat": ["radius", "height", "tilt_deg"],
+	"star_antenna": ["length", "thickness", "curve", "star_size"],
+	"butterfly": ["size", "tilt_deg"],
+	"star": ["size", "depth", "tilt_deg"],
+	"heart": ["size", "depth", "tilt_deg"],
+	"devil": ["length", "thickness", "tip_size"],
+	"spiky": ["length", "thickness", "spikes"],
 }
 ## 形ごとに、必ず要る色。
 const REQUIRED_COLORS := {
@@ -57,6 +66,15 @@ const REQUIRED_COLORS := {
 	"crown": ["color", "gem_color"],
 	"bat_wing": ["color"],
 	"tuft": ["color"],
+	"flower": ["color", "center_color", "stem_color"],
+	"horn": ["color"],
+	"hat": ["color", "band_color"],
+	"star_antenna": ["color"],
+	"butterfly": ["color", "spot_color"],
+	"star": ["color"],
+	"heart": ["color"],
+	"devil": ["color"],
+	"spiky": ["color"],
 }
 ## メッシュの部品に、必ず要る項目。material は "body"（体と同じ素材で塗る）か "own"（メッシュの素材のまま）。
 const REQUIRED_MESH_PARAMS := ["path", "scale", "material"]
@@ -94,6 +112,10 @@ static func build_top(shape: Dictionary, source: Dictionary, body_material: Mate
 			"antenna": _add_antenna(bits, source)
 			"bow": _add_bow(bits, source, false)
 			"crown": _add_crown(bits, shape, source)
+			"flower": _add_flower(bits, source)
+			"horn": _add_horn(bits, source)
+			"hat": _add_hat(bits, source)
+			"star_antenna": _add_star_antenna(bits, source)
 		node = _builtin_node(bits, body_material, str(source["shape"]) in ["rocks", "crystals"])
 	node.position = Vector3(0.0, float(shape["height"]), 0.0)
 	node.name = "Top"
@@ -109,7 +131,7 @@ static func build_sides(shape: Dictionary, source: Dictionary, placement: Dictio
 		var outward := Vector3(point.x, 0.0, point.z).normalized()
 		# 左は、右を鏡に映した形にする（部品の中の +Z は、右も左も、体の後ろ向き）。
 		var backward := outward.cross(Vector3.UP).normalized() * side
-		var node := _attached(source, point, Basis(outward, Vector3.UP, backward), body_material)
+		var node := _attached(source, point, Basis(outward, Vector3.UP, backward), body_material, true)
 		node.name = "Side%s" % ("R" if side > 0.0 else "L")
 		nodes.append(node)
 	return nodes
@@ -118,13 +140,13 @@ static func build_sides(shape: Dictionary, source: Dictionary, placement: Dictio
 ## 尾の部品。placement は、付ける高さ（height_ratio）。真後ろに付ける。
 static func build_tail(shape: Dictionary, source: Dictionary, placement: Dictionary, body_material: Material) -> Array[Node3D]:
 	var spot := Surface.anchor(shape, 180.0, float(placement["height_ratio"]))
-	var node := _attached(source, spot[0], Basis(Vector3.BACK, Vector3.UP, Vector3.BACK.cross(Vector3.UP)), body_material)
+	var node := _attached(source, spot[0], Basis(Vector3.BACK, Vector3.UP, Vector3.BACK.cross(Vector3.UP)), body_material, false)
 	node.name = "Tail"
 	return [node]
 
 
-## 体の表面の点に付ける部品。basis の x が、体から外へ伸びる向き、y が上。
-static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_material: Material) -> Node3D:
+## 体の表面の点に付ける部品。basis の x が、体から外へ伸びる向き、y が上。on_side なら左右、でなければ尾。
+static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_material: Material, on_side: bool) -> Node3D:
 	var node: Node3D
 	if str(source["type"]) == "mesh":
 		node = _mesh_node(source, body_material)
@@ -136,13 +158,22 @@ static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_mat
 		"rock": _add_side_rocks(bits, source)
 		"flame": _add_side_flame(bits, source)
 		"leaf": _add_leaves(bits, source)
-		"bubble": _add_side_bubbles(bits, source)
+		"bubble":
+			if on_side:
+				_add_floating_bubbles(bits, source)
+			else:
+				_add_side_bubbles(bits, source)
 		"crystal": _add_side_crystal(bits, source)
 		"bat_wing": _add_bat_wing(bits, source)
 		"hand": _add_hand(bits, source)
 		"bow": _add_bow(bits, source, true)
 		"curl": _add_curl(bits, source)
 		"tuft": _add_tuft(bits, source)
+		"butterfly": _add_butterfly(bits, source)
+		"star": _add_attached_puffy(bits, source, _star_outline(float(source["size"])), on_side)
+		"heart": _add_attached_puffy(bits, source, _heart_outline(float(source["size"])), on_side)
+		"devil": _add_devil(bits, source)
+		"spiky": _add_spiky(bits, source)
 	node = _builtin_node(bits, body_material, str(source["shape"]) in ["rock", "crystal"])
 	node.transform = Transform3D(basis, point)
 	return node
@@ -418,7 +449,27 @@ static func _add_bubbles(bits: Bits, shape: Dictionary, source: Dictionary) -> v
 		_add_ellipsoid(bits, Vector3(cos(angle) * distance, drop + small * 0.85, sin(angle) * distance), Vector3.ONE * small, _tint(color, 0.8), Transform3D.IDENTITY)
 
 
-## 水の泡（左右・尾）：外へ向かって、だんだん小さくなる玉を並べる。
+## 水の泡（左右）：体のそばから、斜め上へ浮かんでいく玉。玉どうしは離して、だんだん小さくする（つながった腕に見せない）。
+static func _add_floating_bubbles(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var color := Color(str(source["color"]))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(source["seed"])
+	var count := int(source["count"])
+	var rise := Vector3(0.55, 1.0, 0.0).normalized()
+	var at := Vector3(size * 0.95, 0.0, 0.0)
+	var previous := 0.0
+	for index in count:
+		var radius := size * lerpf(0.85, 0.4, float(index) / float(maxi(count - 1, 1)))
+		if index > 0:
+			# 前の玉と、すき間をあけて置く。
+			at += rise * (previous + radius + size * 0.35)
+		var drift := Vector3(0.0, 0.0, size * rng.randf_range(-0.3, 0.3))
+		_add_ellipsoid(bits, at + drift, Vector3.ONE * radius, _tint(color, 0.8), Transform3D.IDENTITY)
+		previous = radius
+
+
+## 水の泡（尾）：外へ向かって、だんだん小さくなる玉を並べる。
 static func _add_side_bubbles(bits: Bits, source: Dictionary) -> void:
 	var size := float(source["size"])
 	var color := Color(str(source["color"]))
@@ -696,3 +747,206 @@ static func _add_tuft(bits: Bits, source: Dictionary) -> void:
 		var small := size * rng.randf_range(0.55, 0.75)
 		var at := Vector3(size * rng.randf_range(0.6, 1.0), sin(angle) * size * 0.7, cos(angle) * size * 0.7)
 		_add_ellipsoid(bits, at, Vector3.ONE * small, tint, Transform3D.IDENTITY)
+
+
+## 花（頭の上）：短い茎の先に、正面を向いた花びらと、まん中の玉。
+static func _add_flower(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var lift := size * 1.1
+	var stem := _tint(Color(str(source["stem_color"])), 1.0)
+	var stem_centers: Array[Vector3] = [Vector3(0.0, -0.08, 0.0), Vector3(0.0, lift * 0.5, 0.0), Vector3(0.0, lift, 0.0)]
+	var stem_radii: Array[float] = [size * 0.16, size * 0.12, size * 0.1]
+	var stem_colors: Array[Color] = [stem, stem, stem]
+	_add_tube(bits, stem_centers, stem_radii, 1.0, stem_colors, Transform3D.IDENTITY)
+	# 少し上を向ける（前は -Z）。
+	var face := Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-20.0)), Vector3(0.0, lift, 0.0))
+	var petal := _tint(Color(str(source["color"])), 1.0)
+	var petals := int(source["petals"])
+	for index in petals:
+		var angle := TAU * float(index) / float(petals) + PI * 0.5
+		var around := Basis(Vector3.BACK, angle)
+		_add_ellipsoid(bits, Vector3.ZERO, Vector3(size * 0.55, size * 0.34, size * 0.12), petal, face * Transform3D(around, around * Vector3(size * 0.58, 0.0, 0.0)))
+	_add_ellipsoid(bits, Vector3(0.0, 0.0, -size * 0.06), Vector3(size * 0.36, size * 0.36, size * 0.2), _tint(Color(str(source["center_color"])), 1.0), face)
+
+
+## 一本角（頭の上）：まっすぐ上へ伸びて、先がとがる。少し前へ傾ける。しま模様。
+static func _add_horn(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var color := Color(str(source["color"]))
+	var steps := 24
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(0.0, -0.06 + (length + 0.06) * t, 0.0))
+		radii.append(width * pow(1.0 - t, 0.9))
+		var stripe := 0.5 + 0.5 * sin(t * TAU * 3.5)
+		colors.append(_tint(color.darkened(0.12 * stripe).lerp(color.lightened(0.25), t * 0.5), 1.0))
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-14.0)), Vector3(0.0, 0.0, -width * 0.4)))
+
+
+## シルクハット（頭の上）：平たいつばと、筒の帽子。帽子の下のほうに、帯。
+static func _add_hat(bits: Bits, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var height := float(source["height"])
+	var tilt := Transform3D(Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"]))), Vector3(0.0, -0.02, 0.0))
+	var color := _tint(Color(str(source["color"])), 1.0)
+	_add_ellipsoid(bits, Vector3.ZERO, Vector3(radius * 1.55, radius * 0.1, radius * 1.55), color, tilt)
+	_add_cylinder(bits, 0.0, height, radius, color, tilt)
+	_add_cylinder(bits, height * 0.08, height * 0.3, radius * 1.04, _tint(Color(str(source["band_color"])), 1.0), tilt)
+
+
+## 上下が閉じた筒（Y の向き）。
+static func _add_cylinder(bits: Bits, bottom: float, top: float, radius: float, color: Color, xform: Transform3D) -> void:
+	var edge := minf(radius * 0.08, (top - bottom) * 0.1)
+	var centers: Array[Vector3] = [Vector3(0.0, bottom, 0.0), Vector3(0.0, bottom + 0.001, 0.0), Vector3(0.0, bottom + edge, 0.0), Vector3(0.0, top - edge, 0.0), Vector3(0.0, top - 0.001, 0.0), Vector3(0.0, top, 0.0)]
+	var radii: Array[float] = [0.0, radius - edge, radius, radius, radius - edge, 0.0]
+	var colors: Array[Color] = [color, color, color, color, color, color]
+	_add_tube(bits, centers, radii, 1.0, colors, xform)
+
+
+## 星のアンテナ（頭の上）：細い茎が曲がって、先に正面を向いた星。
+static func _add_star_antenna(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var curve := float(source["curve"])
+	var steps := 14
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(curve * t * t, -0.08 + (length + 0.08) * t, 0.0))
+		radii.append(thickness * lerpf(1.6, 1.0, smoothstep(0.0, 0.3, t)))
+		colors.append(_plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
+	var star_size := float(source["star_size"])
+	_add_puffy(bits, _star_outline(star_size), star_size * 0.35, Color(str(source["color"])), Transform3D(Basis.IDENTITY, centers[steps] + Vector3(0.0, star_size * 0.7, 0.0)))
+
+
+## ちょうちょの羽（左右）：上の大きい羽と、下の小さい羽。正面から見える向き。羽のまん中に、丸い模様。
+static func _add_butterfly(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var tilt := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
+	var wing := _tint(Color(str(source["color"])), 1.0)
+	var spot := _tint(Color(str(source["spot_color"])), 1.0)
+	var lobes := [[Vector3(size * 0.8, size * 0.42, 0.0), Vector2(size, size * 0.72), 35.0], [Vector3(size * 0.58, -size * 0.38, 0.0), Vector2(size * 0.66, size * 0.48), -30.0]]
+	for lobe: Array in lobes:
+		var turn := Basis(Vector3.BACK, deg_to_rad(float(lobe[2])))
+		var xform := Transform3D(tilt * turn, tilt * (lobe[0] as Vector3))
+		var radii: Vector2 = lobe[1]
+		_add_ellipsoid(bits, Vector3.ZERO, Vector3(radii.x, radii.y, size * 0.06), wing, xform)
+		_add_ellipsoid(bits, Vector3(radii.x * 0.15, 0.0, 0.0), Vector3(radii.x * 0.38, radii.y * 0.42, size * 0.08), spot, xform)
+
+
+## 星・ハート（左右・尾）。左右は、正面から見える向き。尾は、後ろから見える向き。
+static func _add_attached_puffy(bits: Bits, source: Dictionary, outline: PackedVector2Array, on_side: bool) -> void:
+	var size := float(source["size"])
+	var tilt := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
+	var lay := Basis.IDENTITY if on_side else Basis(Vector3.UP, PI * 0.5)
+	_add_puffy(bits, outline, float(source["depth"]), Color(str(source["color"])), Transform3D(tilt * lay, tilt * Vector3(size * 0.75, 0.0, 0.0)))
+
+
+## あくましっぽ：細いしっぽが外へ出てから上へ曲がり、先に、上を向いたとがった形（ハートの逆さ）。
+static func _add_devil(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var steps := 20
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(-0.03 + length * 0.7 * sin(t * PI * 0.5), length * (1.0 - cos(t * PI * 0.5)) * 0.9, 0.0))
+		radii.append(thickness * lerpf(1.0, 0.6, t))
+		colors.append(_plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
+	var tip_size := float(source["tip_size"])
+	# ハートを逆さにして、とがった先を上へ。後ろから見える向き。
+	var flip := Basis(Vector3.BACK, PI)
+	_add_puffy(bits, _heart_outline(tip_size), tip_size * 0.3, Color(str(source["color"])), Transform3D(Basis(Vector3.UP, PI * 0.5) * flip, centers[steps] + Vector3(0.0, tip_size * 0.75, 0.0)))
+
+
+## ドラゴンしっぽ：太い根元から外へ細くなるしっぽと、背中側に並んだとげ。
+static func _add_spiky(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var steps := 24
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(-0.03 + length * t, -length * 0.12 * sin(t * PI) + length * 0.18 * t * t, 0.0))
+		radii.append(thickness * pow(1.0 - t, 0.75) + 0.004 * (1.0 - t))
+		colors.append(_plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
+	var spikes := int(source["spikes"])
+	var color := Color(str(source["color"]))
+	for index in spikes:
+		var t := (float(index) + 0.6) / (float(spikes) + 0.6)
+		var at := int(round(t * float(steps)))
+		var r := radii[at]
+		_add_shard(bits, centers[at] + Vector3(0.0, r * 0.7, 0.0), Vector3(0.35, 1.0, 0.0).normalized(), thickness * 1.1 * (1.0 - t * 0.55), r * 0.45 + 0.006, color)
+
+
+## 星の外周（XY 平面、上の角から）。
+static func _star_outline(size: float) -> PackedVector2Array:
+	var outline := PackedVector2Array()
+	for index in 10:
+		var angle := PI * 0.5 + TAU * float(index) / 10.0
+		var radius := size if index % 2 == 0 else size * 0.48
+		outline.append(Vector2(cos(angle), sin(angle)) * radius)
+	return outline
+
+
+## ハートの外周（XY 平面、とがった先が下）。まん中が原点の近くに来るように、少し下げる。
+static func _heart_outline(size: float) -> PackedVector2Array:
+	var outline := PackedVector2Array()
+	for index in 32:
+		var t := TAU * float(index) / 32.0
+		var x := 16.0 * pow(sin(t), 3.0)
+		var y := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
+		outline.append(Vector2(x, y + 2.0) * (size / 17.0))
+	return outline
+
+
+## ふっくらした平たい形（星・ハート）。outline は XY 平面の外周。depth は、まん中の厚み（半分）。前後（±Z）にふくらむ。
+static func _add_puffy(bits: Bits, outline: PackedVector2Array, depth: float, color: Color, xform: Transform3D) -> void:
+	var tint := _tint(color, 1.0)
+	var count := outline.size()
+	var center := Vector2.ZERO
+	for point: Vector2 in outline:
+		center += point
+	center /= float(count)
+	# 外周から、まん中へ、だんだん小さく・厚くなる輪（大きさ、厚みの割合）。
+	var layers := [[1.0, 0.0], [0.74, 0.7], [0.4, 0.94]]
+	for face: float in [1.0, -1.0]:
+		var first := bits.vertices.size()
+		for layer: Array in layers:
+			var scale := float(layer[0])
+			var rise := float(layer[1])
+			for point: Vector2 in outline:
+				var flat := center + (point - center) * scale
+				var out := (point - center).normalized() * (1.0 - rise)
+				bits.vertices.append(xform * Vector3(flat.x, flat.y, depth * rise * face))
+				bits.normals.append((xform.basis * Vector3(out.x, out.y, rise * face + 0.001 * face)).normalized())
+				bits.colors.append(tint)
+		var tip := bits.vertices.size()
+		bits.vertices.append(xform * Vector3(center.x, center.y, depth * face))
+		bits.normals.append((xform.basis * Vector3(0.0, 0.0, face)).normalized())
+		bits.colors.append(tint)
+		for layer in layers.size() - 1:
+			for step in count:
+				var next := (step + 1) % count
+				var a := first + layer * count + step
+				var b := first + layer * count + next
+				var c := first + (layer + 1) * count + step
+				var d := first + (layer + 1) * count + next
+				Surface.push_triangle(bits.indices, bits.vertices, bits.normals, a, b, c)
+				Surface.push_triangle(bits.indices, bits.vertices, bits.normals, b, d, c)
+		var last := first + (layers.size() - 1) * count
+		for step in count:
+			Surface.push_triangle(bits.indices, bits.vertices, bits.normals, last + step, last + (step + 1) % count, tip)

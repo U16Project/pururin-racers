@@ -16,6 +16,9 @@ const ArcShader := preload("res://scripts/presentation/hud/arc_gauge.gdshader")
 		value = clampf(next, 0.0, 1.0)
 		_push()
 
+## 共通の輪の中心・半径・太さに合わせる。外すと、この弧だけで決められる。
+@export var follow_ring := false
+
 @export_group("形")
 ## 弧のまん中（この部品の左上から）。
 @export var center := Vector2(100.0, 100.0):
@@ -177,15 +180,9 @@ func drawn_rect() -> Rect2:
 	return box.grow(margin * 0.5)
 
 
-## この部品の四角を、描いている所に合わせる（見た目の位置は変えない）。回したり縮めたりしているときは、合わせない。
+## 描画用の四角だけ広げ、編集した位置と中心は動かさない。
 func _fit_rect() -> void:
-	if rotation != 0.0 or scale != Vector2.ONE:
-		return
 	var box := drawn_rect()
-	if box.position.distance_to(Vector2.ZERO) < 0.5 and box.size.distance_to(size) < 0.5:
-		return
 	_fitting = true
-	position += box.position
-	center -= box.position
-	size = box.size
+	size = size.max(box.end)
 	_fitting = false

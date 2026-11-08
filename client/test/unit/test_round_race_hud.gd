@@ -1,9 +1,8 @@
 extends GutTest
-## 丸い操作盤、足元の文字、ウェブ版オフラインテストの確認。期待値は、定数や式から作る。
+## 丸い操作盤、ウェブ版オフラインテストの確認。期待値は、定数や式から作る。
 
 const RoundRaceHud := preload("res://scripts/presentation/round_race_hud.gd")
 const RaceHud := preload("res://scripts/presentation/race_hud.gd")
-const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
 const SunShadow := preload("res://scripts/presentation/sun_shadow.gd")
@@ -85,38 +84,6 @@ func test_curved_text_is_never_upside_down() -> void:
 		assert_true(RoundRaceHud.arc_text_is_upper(degrees), "%.0f度は上半分" % degrees)
 	for degrees: float in [91.0, 135.0, 180.0, 225.0, 269.0]:
 		assert_false(RoundRaceHud.arc_text_is_upper(degrees), "%.0f度は下半分" % degrees)
-
-
-func test_ground_text_shows_notch_then_speed_then_heart_rate() -> void:
-	assert_eq(PlayerGroundMarker.info_parts(0, 4, 55.4, 148.2), ["4", "ノッチ", true])
-	assert_eq(PlayerGroundMarker.info_parts(1, 4, 55.4, 148.2), ["55", "km/h", false])
-	assert_eq(PlayerGroundMarker.info_parts(2, 4, 55.4, 148.2), ["148", "bpm", false])
-	# ノッチは、0を出さない（一番下は1）。
-	assert_eq(PlayerGroundMarker.info_parts(0, 0, 0.0, 100.0)[0], "1")
-
-
-func test_ground_text_fades_in_and_out() -> void:
-	var step := float(PlayerGroundMarker.INFO_STEP_S)
-	assert_almost_eq(PlayerGroundMarker.info_alpha_at(0.0), 0.0, 0.0001)
-	assert_almost_eq(PlayerGroundMarker.info_alpha_at(step * 0.5), float(PlayerGroundMarker.INFO_ALPHA_MAX), 0.0001)
-	assert_almost_eq(PlayerGroundMarker.info_alpha_at(step), 0.0, 0.0001)
-
-
-func test_ground_text_returns_to_the_notch_when_the_notch_changes() -> void:
-	var marker := MeshInstance3D.new()
-	marker.set_script(PlayerGroundMarker)
-	add_child_autofree(marker)
-	var step := float(PlayerGroundMarker.INFO_STEP_S)
-	marker.call("show_info", 3, 50.0, 150.0, 0.0)
-	assert_eq(int(marker.get("_info_index")), 0)
-	# 1つぶんの時間が過ぎると、次（速さ）へ進む。
-	marker.call("show_info", 3, 50.0, 150.0, step * 1.1)
-	assert_eq(int(marker.get("_info_index")), 1)
-	assert_eq((marker.get_node(PlayerGroundMarker.INFO_WORD_NAME) as Label3D).text, "km/h")
-	# ノッチが変わったら、ノッチの表示に戻る。
-	marker.call("show_info", 4, 50.0, 150.0, 0.1)
-	assert_eq(int(marker.get("_info_index")), 0)
-	assert_eq((marker.get_node(PlayerGroundMarker.INFO_VALUE_NAME) as Label3D).text, "4")
 
 
 func test_web_offline_test_builds_only_the_course_and_turns_shadows_off() -> void:

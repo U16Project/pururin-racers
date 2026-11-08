@@ -3,7 +3,7 @@ extends Control
 ## 見た目（形・色・光り方・文字の型・置き場所）は、場面の部品の欄が正。ここは、レースの値を部品に入れるだけ。
 ## 上の行（RaceInfo）に、順位・残り距離・タイムと区切りの線。
 ## 値を受け取るのは update_state（レースの操作盤の値。local_race_controller が作る）。
-## 大きさは set_scale_factor（1＝場面の大きさのまま）。台（Board）の左上が、この部品の左上に来るように置く。
+## 全体の倍率と描く範囲は、この部品の欄で決める。
 
 ## 速さの弧が満タンになる速さ（km/h）。
 const SPEED_FULL_KMH := 110.0
@@ -28,11 +28,20 @@ const HEART_HIT_EDGE_COLOR := Color(1.0, 0.12, 0.12, 1.0)
 const HEART_HIT_FLASH_PER_S := 2.5
 const HEART_HIT_SHAKE_PX := 3.0
 
-@onready var _board: Control = $Board
+@export var panel_scale := 0.387
+@export var render_rect := Rect2(-8, 24, 904, 695)
+@export var fit_long_names := true
+## トレーナー名を、名前の見た目の右はしへ続ける。外すと場面の位置を使う。
+@export var trainer_after_name := true
+@export_range(0.0, 24.0, 0.5) var trainer_name_gap := 2.0
+
+@onready var _trainer: Label = $NameRow/Trainer
+@onready var _minutes: Label = $RaceInfo/Minutes
+@onready var _seconds: Label = $RaceInfo/Seconds
+@onready var _centiseconds: Label = $RaceInfo/Centiseconds
 @onready var _place: Label = $RaceInfo/Place
 @onready var _field: Label = $RaceInfo/Field
 @onready var _remaining: Label = $RaceInfo/Remaining
-@onready var _time: Label = $RaceInfo/Time
 @onready var _name: Label = $NameRow/Name
 @onready var _attribute: Control = $NameRow/Attribute
 @onready var _style: Control = $NameRow/Style
@@ -50,13 +59,15 @@ const HEART_HIT_SHAKE_PX := 3.0
 @onready var _stamina_value: Label = $StaminaText/StaminaValue
 @onready var _notch_bars: Control = $Notch/NotchBars
 @onready var _notch_value: Label = $Notch/NotchValue
-@onready var _boost_bars: Control = $Boost/BoostBars
+@onready var _boost_bars: Control = $Boost/BoostRing
 @onready var _boost_count: Label = $Boost/BoostCount
 @onready var _dash_bar: Control = $Dash/DashBar
 
 var _scale := 1.0
 ## 名前の、場面で決めた大きさ（長い名前は、ここから横に縮める）。
 var _name_scale := Vector2.ONE
+var _trainer_scale := Vector2.ONE
+var _heart_shaking := false
 ## 赤い帯の上のはし（体力の割合）。押し合いのあいだは、始まったときの値で止め、終わったら、だんだん今の値へ戻す。
 var _stamina_hit_ratio := 1.0
 var _stamina_hit_from := 1.0
@@ -70,19 +81,21 @@ var _heart_position := Vector2.ZERO
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_name_scale = _name.scale
+	_trainer_scale = _trainer.scale
 	_heart_edge_color = _heart.get("edge_color")
 	_heart_position = _heart.position
 	set_scale_factor(_scale)
 
 
-## 全体の大きさを変える（1＝場面の大きさのまま）。台の左上が、この部品の左上に来るように置く。
+## 画面の細かさに合わせる。場面で決めた倍率と描く範囲は変えない。
 func set_scale_factor(value: float) -> void:
 	_scale = value
 	if not is_node_ready():
 		return
-	scale = Vector2(value, value)
-	position = -_board.position * value
-	custom_minimum_size = _board.size * value
+	var factor := panel_scale * value
+	scale = Vector2.ONE * factor
+	position = -render_rect.position * factor
+	custom_minimum_size = render_rect.size * factor
 
 
 ## 心拍の水の色。低いうちは水色、ふつうの上限に近づくと黄、超えると赤。
@@ -120,9 +133,12 @@ func update_state(values: Dictionary) -> void:
 	# 上の行：順位・残り距離・タイム。初めから出す（スタート前は、順位がまだ無いので1位と出す）。
 	var place := maxi(int(values.get("place", 0)), 1)
 	_place.text = "%d" % place
-	_field.text = "/ %d 位" % int(values.get("field_size", 0))
-	_remaining.text = "残り %.0f m" % float(values.get("remaining_m", 0.0))
-	_time.text = str(values.get("time_text", ""))
+	_field.text = "%d" % int(values.get("field_size", 0))
+	_remaining.text = "%.0f" % float(values.get("remaining_m", 0.0))
+	var ticks := maxi(roundi(float(values.get("time_s", 0.0)) * 100.0), 0)
+	_minutes.text = "%d" % (ticks / 6000)
+	_seconds.text = "%02d" % ((ticks / 100) % 60)
+	_centiseconds.text = "%02d" % (ticks % 100)
 	var speed := float(values.get("speed_kmh", 0.0))
 	_speed.set("value", clampf(speed / SPEED_FULL_KMH, 0.0, 1.0))
 	_speed_value.text = "%d" % int(round(speed))
@@ -151,7 +167,7 @@ func update_state(values: Dictionary) -> void:
 	_boost_bars.set("count", boost_max)
 	_boost_bars.set("lit_count", boost_left)
 	_boost_bars.set("partial", clampf(float(values.get("boost_ratio", 0.0)), 0.0, 1.0) if boost_left < boost_max else 0.0)
-	_boost_count.text = "( %d )" % boost_left
+	_boost_count.text = "%d" % boost_left
 	_dash_bar.set("value", clampf(float(values.get("dash_ratio", 0.0)), 0.0, 1.0))
 	var bpm := float(values.get("heart_bpm", 100.0))
 	var max_bpm := float(values.get("heart_max_bpm", 230.0))
@@ -161,7 +177,8 @@ func update_state(values: Dictionary) -> void:
 	_update_heart_hit(bool(values.get("push_lost", false)), Time.get_ticks_msec())
 	_bpm.text = "%d" % int(round(bpm))
 	var trainer := str(values.get("trainer_name", ""))
-	_name.text = str(values.get("player_name", "")) + ("（%s）" % trainer if not trainer.is_empty() else "")
+	_name.text = str(values.get("player_name", ""))
+	_trainer.text = "（%s）" % trainer if not trainer.is_empty() else ""
 	_fit_name()
 	_attribute.set("attribute_id", str(values.get("attribute_id", "")))
 	_attribute.set("attribute_color", values.get("attribute_color", Color.WHITE))
@@ -193,18 +210,43 @@ func _update_stamina_hit(fuel: float, pushing: bool, now_msec: int) -> void:
 
 ## 押し負けているあいだ、ハートのふちを赤く点滅させ、小さく震わせる。負けていなければ、場面で決めた見た目に戻す。
 func _update_heart_hit(losing: bool, now_msec: int) -> void:
+	if not _heart_shaking:
+		_heart_position = _heart.position
+		_heart_edge_color = _heart.get("edge_color")
 	if not losing:
+		_heart_shaking = false
 		_heart.set("edge_color", _heart_edge_color)
 		_heart.position = _heart_position
 		return
+	_heart_shaking = true
 	var seconds := float(now_msec) / 1000.0
 	var flash := 0.5 + 0.5 * sin(seconds * TAU * HEART_HIT_FLASH_PER_S)
 	_heart.set("edge_color", _heart_edge_color.lerp(HEART_HIT_EDGE_COLOR, flash))
 	_heart.position = _heart_position + Vector2(sin(seconds * 71.0), cos(seconds * 53.0)) * HEART_HIT_SHAKE_PX
 
 
-## 長い名前は、属性の印にかからないよう、横に縮める（縦の大きさは、場面で決めたまま）。
+## 名前とトレーナー名を、属性の印にかからない幅へ横に縮める。
 func _fit_name() -> void:
-	var room := _attribute.position.x - _name.position.x - NAME_GAP
-	var natural := _name.get_minimum_size().x * _name_scale.x
-	_name.scale = Vector2(_name_scale.x * minf(1.0, room / maxf(natural, 1.0)), _name_scale.y)
+	var name_width := _text_width(_name) * _name_scale.x
+	var trainer_width := _text_width(_trainer) * _trainer_scale.x
+	if trainer_after_name:
+		var gap := trainer_name_gap if not _trainer.text.is_empty() else 0.0
+		var room := maxf(0.0, _attribute.position.x - _name.position.x - NAME_GAP - gap)
+		var ratio := minf(1.0, room / maxf(name_width + trainer_width, 1.0)) if fit_long_names else 1.0
+		if fit_long_names:
+			_name.scale.x = _name_scale.x * ratio
+			_trainer.scale.x = _trainer_scale.x * ratio
+		# 縦の位置・倍率・表示は変えず、縮めたあとの文字の右に続ける。
+		_trainer.position.x = _name.position.x + _text_width(_name) * _name.scale.x + gap
+	elif fit_long_names:
+		# 位置を続けない場合は、場面で決めたそれぞれの幅に収める。
+		var room := maxf(0.0, _trainer.position.x - _name.position.x - NAME_GAP)
+		_name.scale.x = _name_scale.x * minf(1.0, room / maxf(name_width, 1.0))
+		room = maxf(0.0, _attribute.position.x - _trainer.position.x - NAME_GAP)
+		_trainer.scale.x = _trainer_scale.x * minf(1.0, room / maxf(trainer_width, 1.0))
+
+
+## 四角に余白があっても、文字そのものの幅で並べる。
+func _text_width(label: Label) -> float:
+	var settings := label.label_settings
+	return settings.font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, settings.font_size).x

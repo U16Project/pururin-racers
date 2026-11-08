@@ -8,6 +8,10 @@ uniform vec2 center = vec2(100.0);
 uniform float size_x = 80.0;
 uniform float size_y = 80.0;
 uniform float dip = 1.25;
+uniform float tip = 1.0;
+uniform float blunt = 0.006;
+uniform float heart_bottom = -0.8;
+uniform float heart_top = 1.262;
 uniform float fill : hint_range(0.0, 1.0) = 0.5;
 uniform vec4 water_color : source_color = vec4(0.2, 0.92, 1.0, 1.0);
 uniform float water_bottom_shade : hint_range(0.0, 1.0) = 0.25;
@@ -32,8 +36,9 @@ uniform vec4 beat_color : source_color = vec4(1.0, 0.7, 0.9, 1.0);
 
 // ハートの式の値（負が中）。まん中の縦の線で、とがりすぎないよう、|x| を少しなめらかにする。
 float heart_value(vec2 q) {
-	float ax = sqrt(q.x * q.x + 0.006);
-	float b = dip * q.y - sqrt(ax);
+	float ax = sqrt(q.x * q.x + blunt);
+	float y = q.y < 0.0 ? q.y / tip : q.y;
+	float b = dip * y - sqrt(ax);
 	return q.x * q.x + b * b - 1.0;
 }
 
@@ -51,13 +56,11 @@ void fragment() {
 	color.rgb += gloss;
 	// 水：値の高さまで（水面は波）。下ほど少し暗く、横じま。
 	// ハートの下の先と、上のふくらみのてっぺん（式の上で、y の範囲）。
-	float heart_bottom = -1.0 / dip;
-	float heart_top = 1.577 / dip;
 	float level = mix(heart_bottom, heart_top, fill);
 	float wave = sin(p.x / max(wave_length, 0.001) * 6.2832 + wave_phase) * wave_height / size_y;
 	float surface = level + wave;
 	float below_px = (surface - q.y) * size_y;
-	if (fill > 0.0 && below_px > 0.0) {
+	if (fill > 0.0 && (fill >= 1.0 || below_px > 0.0)) {
 		float depth = clamp((surface - q.y) / max(surface - heart_bottom, 0.001), 0.0, 1.0);
 		vec3 water = water_color.rgb * mix(1.0, 1.0 - water_bottom_shade, depth);
 		float stripe = step(0.5, fract(p.y / max(stripe_spacing, 0.001))) * stripe_strength;

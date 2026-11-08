@@ -27,6 +27,9 @@ const RIGHT_WIDTH := 540.0
 const GAP := 14.0
 const STRIP_HEIGHT := 48.0
 const ROW_TITLE_WIDTH := 56.0
+## 色のページの、見本の大きさと、1行に並べる数。
+const COLOR_SWATCH := 46.0
+const COLOR_COLUMNS := 8
 ## 能力の棒の枠の高さ（レース選択の詳細の棒と、同じくらい）。
 const STAT_BARS_HEIGHT := 230.0
 ## 棒の段が始まる高さ（枠の上から。上に数字を描く）。
@@ -124,8 +127,12 @@ func _ready() -> void:
 	right.add_child(_page)
 	var guide := MenuStyle.guide_bar(self)
 	MenuStyle.guide_item(guide, "A", "決定")
-	MenuStyle.guide_item(guide, "L1", "")
-	MenuStyle.guide_item(guide, "R1", "種類を替える")
+	# L1 と R1 は、1つの案内に並べる（左の項目を、前後に切り替える）。
+	var switch_item := MenuStyle.guide_item(guide, "R1", "項目切替え").get_parent()
+	var l1_mark := MenuStyle.mark("L1", 24.0)
+	l1_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	switch_item.add_child(l1_mark)
+	switch_item.move_child(l1_mark, 0)
 	var back := MenuStyle.guide_button(guide, "B", "戻る")
 	back.name = "BackButton"
 	back.pressed.connect(go_back)
@@ -585,16 +592,45 @@ func _points_left() -> int:
 # --- 色
 
 func _build_color_page() -> void:
-	var row := _row("体の色")
+	var body_grid := _color_grid("体の色")
 	for index in _primary_colors().size():
-		var swatch := _swatch(Color(str(_primary_colors()[index]["color"])), 64.0)
+		var swatch := _swatch(Color(str(_primary_colors()[index]["color"])), COLOR_SWATCH)
 		swatch.pressed.connect(func() -> void: _apply(func() -> void: _entry["look"]["primary_color_index"] = index))
-		row.add_child(swatch)
+		body_grid.add_child(swatch)
 		_choices.append({"button": swatch, "chosen": func() -> bool: return int(_entry["look"]["primary_color_index"]) == index})
+	# 下の色。高さが「なし」のときに色を選んだら、見えるように、2つ目の高さにする。
+	var lower_grid := _color_grid("下の色")
+	var heights: Array = MakerConfig.values()["secondary_heights"]
+	for color: String in MakerConfig.values()["secondary_colors"]:
+		var swatch := _swatch(Color(color), COLOR_SWATCH)
+		swatch.pressed.connect(func() -> void: _apply(_set_lower_color.bind(color, heights)))
+		lower_grid.add_child(swatch)
+		_choices.append({"button": swatch, "chosen": func() -> bool: return float(_entry["look"]["secondary_top_ratio"]) > 0.0 and str(_entry["look"]["secondary_color"]).to_upper() == color.to_upper()})
+	var height_items: Array = []
+	for height: Dictionary in heights:
+		height_items.append([float(height["ratio"]), str(height["label"])])
+	_pill_choices(_row("下の高さ"), height_items, func() -> float: return float(_entry["look"]["secondary_top_ratio"]), func(value: Variant) -> void: _entry["look"]["secondary_top_ratio"] = float(value))
 	var finish_items: Array = []
 	for finish_id: String in PururinLookConfig.finishes():
 		finish_items.append([finish_id, MakerConfig.label("finishes", finish_id)])
 	_pill_choices(_row("質感"), finish_items, func() -> String: return str(_entry["look"]["finish"]), func(value: Variant) -> void: _entry["look"]["finish"] = str(value))
+
+
+## 色の見本を並べる枠（題の横に、8つずつ折り返す）。
+func _color_grid(title: String) -> GridContainer:
+	var row := _row(title)
+	var grid := GridContainer.new()
+	grid.columns = COLOR_COLUMNS
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 8)
+	row.add_child(grid)
+	return grid
+
+
+func _set_lower_color(color: String, heights: Array) -> void:
+	_entry["look"]["secondary_color"] = color
+	if float(_entry["look"]["secondary_top_ratio"]) <= 0.0 and heights.size() > 1:
+		_entry["look"]["secondary_top_ratio"] = float(heights[1]["ratio"])
 
 
 ## 色の見本のボタン（丸）。選んでいると、水色の縁。
@@ -773,12 +809,17 @@ func _write_marks() -> void:
 	_entry["look"]["marks"] = _marks_from(_mark_slots)
 
 
-## 見た目の設定のマークを、場所の順に入れる。場所より多いマークは、場所の数までにする。
+## 見た目の設定のマークを、向き（yaw_deg）が同じ場所に入れる。どの場所にも合わないマーク（前の、顔のそばのマークなど）は外す。
 func _read_marks() -> void:
 	var spots: Array = MakerConfig.values()["mark_spots"]
 	_mark_slots = []
-	for index in spots.size():
-		_mark_slots.append((_entry["look"]["marks"][index] as Dictionary).duplicate() if index < _entry["look"]["marks"].size() else {})
+	for spot: Dictionary in spots:
+		var found := {}
+		for mark: Dictionary in _entry["look"]["marks"]:
+			if is_equal_approx(float(mark["yaw_deg"]), float(spot["yaw_deg"])):
+				found = mark.duplicate()
+				break
+		_mark_slots.append(found)
 	_write_marks()
 
 
@@ -987,7 +1028,7 @@ func _refresh_preview() -> void:
 
 
 func _primary_colors() -> Array:
-	return PururinStatsConfig.values()["attributes"][_entry["attribute"]]["primary_colors"]
+	return PururinStatsConfig.primary_colors(str(_entry["attribute"]))
 
 
 func _show_message(text: String, warn: bool) -> void:

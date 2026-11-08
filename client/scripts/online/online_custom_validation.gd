@@ -133,7 +133,7 @@ static func validate(custom: Variant) -> PackedStringArray:
 		return errors
 	if float(look["body"]["base_height"]) > float(look["body"]["height"]):
 		errors.append("body_base_height")
-	var colors: Array = Stats.values()["attributes"][custom["attribute"]]["primary_colors"]
+	var colors: Array = Stats.primary_colors(str(custom["attribute"]))
 	if int(look["primary_color_index"]) >= colors.size():
 		errors.append("primary_color_index")
 	if not Check.whole(look["face"]["eye_lashes"]):

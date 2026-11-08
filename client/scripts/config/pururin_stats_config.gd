@@ -11,7 +11,7 @@ const ALLOWED_KEYS := [
 	"schema_version", "stat_ids", "allocation_total", "allocation_min", "allocation_max",
 	"attribute_bonus_per_stat", "attribute_stat_max", "race_effective_min",
 	"race_effective_max", "rank_groups", "rank_bonus", "race_phase_count",
-	"attributes", "running_styles",
+	"common_primary_colors", "attributes", "running_styles",
 ]
 const ATTRIBUTE_IDS := ["earth", "water", "fire", "wind"]
 const RUNNING_STYLE_IDS := ["escape", "pace", "stalk", "closer"]
@@ -87,6 +87,7 @@ static func validate(data: Variant) -> PackedStringArray:
 		elif total / stat_ids.size() < int(data.allocation_min) or total / stat_ids.size() > int(data.allocation_max):
 			errors.append("allocation_total: 均等配分が allocation_min〜allocation_max に収まる必要があります")
 	_validate_rank_groups(data, errors)
+	_validate_color_choices(data.get("common_primary_colors"), "common_primary_colors", errors)
 	_validate_attributes(data, stat_ids, errors)
 	_validate_running_styles(data, stat_ids, errors)
 	return errors
@@ -143,14 +144,18 @@ static func _validate_attributes(data: Dictionary, stat_ids: Array, errors: Pack
 			if not stat_id in stat_ids:
 				errors.append("attributes.%s.bonus_stats: 未知のステータスです" % attribute_id)
 		# 第一カラーの選択肢（体の色と、ふちの線の色の組）。
-		var primary_colors: Variant = definition.get("primary_colors")
-		if not primary_colors is Array or primary_colors.is_empty():
-			errors.append("attributes.%s.primary_colors: 第一カラーの選択肢が1つ以上必要です" % attribute_id)
-			continue
-		for index in primary_colors.size():
-			var choice: Variant = primary_colors[index]
-			if not choice is Dictionary or not choice.get("color") is String or not Color.html_is_valid(choice["color"]) or not choice.get("outline") is String or not Color.html_is_valid(choice["outline"]):
-				errors.append("attributes.%s.primary_colors[%d]: color と outline（どちらも色）が必要です" % [attribute_id, index])
+		_validate_color_choices(definition.get("primary_colors"), "attributes.%s.primary_colors" % attribute_id, errors)
+
+
+## 第一カラーの選択肢（体の色と、ふちの線の色の組）の並びを検査する。
+static func _validate_color_choices(choices: Variant, label: String, errors: PackedStringArray) -> void:
+	if not choices is Array or choices.is_empty():
+		errors.append("%s: 第一カラーの選択肢が1つ以上必要です" % label)
+		return
+	for index in choices.size():
+		var choice: Variant = choices[index]
+		if not choice is Dictionary or not choice.get("color") is String or not Color.html_is_valid(choice["color"]) or not choice.get("outline") is String or not Color.html_is_valid(choice["outline"]):
+			errors.append("%s[%d]: color と outline（どちらも色）が必要です" % [label, index])
 
 
 static func _validate_running_styles(data: Dictionary, stat_ids: Array, errors: PackedStringArray) -> void:
@@ -190,3 +195,10 @@ static func values() -> Dictionary:
 			_cached = result.data
 			_cached.make_read_only()
 	return _cached
+
+
+## 属性で選べる第一カラー（体の色）。属性ごとの色のあとに、どの属性でも使える色（common_primary_colors）が続く。
+## 見た目の primary_color_index は、この並びの何番目か。
+static func primary_colors(attribute_id: String) -> Array:
+	var data := values()
+	return (data["attributes"][attribute_id]["primary_colors"] as Array) + (data["common_primary_colors"] as Array)

@@ -72,7 +72,7 @@ static func values() -> Dictionary:
 			if errors.is_empty():
 				for pururin: Dictionary in roster:
 					var id := str(pururin["id"])
-					result["looks"][id] = resolved_look(result["looks"][id], attributes[str(pururin["attribute"])]["primary_colors"])
+					result["looks"][id] = resolved_look(result["looks"][id], PururinStatsConfig.primary_colors(str(pururin["attribute"])))
 				_add_user_parts(result)
 			else:
 				result = {"error": "; ".join(errors)}

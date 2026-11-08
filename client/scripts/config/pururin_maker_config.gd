@@ -1,11 +1,11 @@
 extends RefCounted
 ## ぷるりん作成コーナーの設定（data/config/pururin_maker.json）。
 ## 作ったぷるりんの保存場所、ユーザーが用意した部品の置き場所と、その初期の大きさ、
-## 新しく付ける部品の置き方、マークの色、顔のセット、画面に出す名前。
+## 新しく付ける部品の置き方、マークの色、下の色（色と高さ）、顔のセット、画面に出す名前。
 ## 誤りがあれば、読み込みを失敗にする（last_error に理由を入れ、values() は空を返す）。
 
 const PATH := "res://data/config/pururin_maker.json"
-const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "user_parts", "face_sets", "labels", "parts_readme"]
+const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "secondary_colors", "secondary_heights", "user_parts", "face_sets", "labels", "parts_readme"]
 ## 顔のスロットのうち、ユーザーが画像で用意できるもの（ファイル名の「表情_スロット」のスロット）。
 const IMAGE_FACE_SLOTS := ["eyes", "brows", "mouth", "cheeks", "effect"]
 
@@ -71,6 +71,19 @@ static func validate(data: Variant) -> PackedStringArray:
 		for color: Variant in data["mark_colors"]:
 			if not color is String or not Color.html_is_valid(str(color)):
 				errors.append("mark_colors: 色（#RRGGBB）が必要です: %s" % color)
+	if not data["secondary_colors"] is Array or data["secondary_colors"].is_empty():
+		errors.append("secondary_colors: 色が1つ以上必要です")
+	else:
+		for color: Variant in data["secondary_colors"]:
+			if not color is String or not Color.html_is_valid(str(color)):
+				errors.append("secondary_colors: 色（#RRGGBB）が必要です: %s" % color)
+	if not data["secondary_heights"] is Array or data["secondary_heights"].is_empty():
+		errors.append("secondary_heights: 高さの選択肢が1つ以上必要です")
+	else:
+		for index in (data["secondary_heights"] as Array).size():
+			var height: Variant = data["secondary_heights"][index]
+			if not height is Dictionary or not height.get("label") is String or not _is_number(height.get("ratio")) or float(height["ratio"]) < 0.0 or float(height["ratio"]) > 1.0:
+				errors.append("secondary_heights[%d]: label（文字）と ratio（0〜1）が必要です" % index)
 	_validate_user_parts(data["user_parts"], errors)
 	if not data["face_sets"] is Dictionary:
 		errors.append("face_sets: オブジェクトが必要です")

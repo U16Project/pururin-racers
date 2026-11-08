@@ -125,6 +125,16 @@ var _state := {
 }
 ## 下の操作盤を出すか。左上の操作盤（race_control_panel）を出しているあいだは、消す。順位表は、そのまま。
 var main_panel_visible := true
+## 操作盤の幅に対する順位表の幅。
+@export_range(0.01, 5.0, 0.01, "or_greater") var standings_scale := 1.0:
+	set(next):
+		standings_scale = next
+		queue_redraw()
+## 操作盤の画面上の幅。
+var standings_panel_width := STANDINGS_ROW_PAD + STANDINGS_WIDTH:
+	set(next):
+		standings_panel_width = next
+		queue_redraw()
 ## 順位表の左上（行の左のはし）。自分の行の色の帯は、ここから STANDINGS_ROW_PAD だけ左へはみ出す。
 var standings_origin := Vector2(54.0, 120.0):
 	set(next):
@@ -135,6 +145,10 @@ var _blink := 0.0
 var _bold_font: FontVariation
 ## 丸・線・面・文字は、ここにためて、最後にまとめて描く（1つずつ描くと、描く命令が多くて重いため）。文字は、ほかの絵より手前に出る。
 var _painter := HudPainter.new()
+
+
+func standings_draw_scale() -> float:
+	return standings_panel_width * standings_scale / (STANDINGS_ROW_PAD + STANDINGS_WIDTH)
 
 
 func _ready() -> void:
@@ -286,10 +300,16 @@ func _draw() -> void:
 		_bold_font = FontVariation.new()
 		_bold_font.variation_embolden = 0.8
 	_bold_font.base_font = font
+	var factor := standings_draw_scale()
+	var anchor := standings_origin - Vector2(STANDINGS_ROW_PAD, 0.0)
+	draw_set_transform(anchor * (1.0 - factor), 0.0, Vector2.ONE * factor)
 	_draw_standings(font)
-	if main_panel_visible:
-		_draw_main_panel(font)
 	_painter.flush()
+	draw_set_transform(Vector2.ZERO)
+	if main_panel_visible:
+		_painter.begin(self)
+		_draw_main_panel(font)
+		_painter.flush()
 
 
 func _draw_main_panel(font: Font) -> void:

@@ -16,12 +16,6 @@
   },
   "mark_spots": [
     {
-      "label": "おなかのマーク",
-      "yaw_deg": 0.0,
-      "height_ratio": 0.66,
-      "size": 0.17
-    },
-    {
       "label": "せなかのマーク",
       "yaw_deg": 180.0,
       "height_ratio": 0.58,
@@ -37,6 +31,8 @@
     "#C9A3FF",
     "#2B2B3A"
   ],
+  "secondary_colors": ["#FFFFFF", "#FFF2BF", "#FFE9B8", "#EAF6FF", "#FFD8F0", "#FFC2D9", "#FF8FB8", "#FF9E80", "#FFE14D", "#B6F28A", "#8FE3C8", "#9FE3FF", "#5A6FE0", "#C9A3FF", "#9C6B33", "#2B2B3A"],
+  "secondary_heights": [{"label": "なし", "ratio": 0.0}, {"label": "少し", "ratio": 0.2}, {"label": "半分", "ratio": 0.4}, {"label": "多め", "ratio": 0.55}],
   "user_parts": {
     "mesh": {
       "scale": 1.0,
@@ -279,6 +275,21 @@
       "bow_tail": "リボンしっぽ",
       "curl_tail": "くるりんしっぽ",
       "tuft_tail": "ふさふさしっぽ",
+      "flower_top": "花",
+      "bear_ears": "くま耳",
+      "unicorn_horn": "一本角",
+      "top_hat": "シルクハット",
+      "star_antenna": "星のアンテナ",
+      "butterfly_wing": "ちょうちょの羽",
+      "bird_wing": "鳥の羽",
+      "dragon_wing": "ドラゴンの羽",
+      "star_hand": "星の手",
+      "bow_side": "小さなリボン",
+      "cat_tail": "ねこしっぽ",
+      "devil_tail": "あくましっぽ",
+      "star_tail": "星しっぽ",
+      "heart_tail": "ハートしっぽ",
+      "dragon_tail": "ドラゴンしっぽ",
       "mark_star": "星",
       "mark_heart": "ハート",
       "mark_drop": "しずく",

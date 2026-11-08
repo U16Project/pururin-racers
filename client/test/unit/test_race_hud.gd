@@ -100,6 +100,17 @@ func test_confirmed_count_counts_the_finished_rows_at_the_top() -> void:
 	assert_eq(RaceHud.confirmed_count([{"finished": true}, {"finished": true}]), 2)
 
 
+func test_standings_scale_changes_the_width() -> void:
+	var hud := RaceHud.new()
+	add_child_autofree(hud)
+	assert_eq(hud.standings_scale, 1.0)
+	hud.standings_panel_width = 240.0
+	for factor in [0.5, 1.0, 1.5]:
+		hud.standings_scale = factor
+		var width: float = (RaceHud.STANDINGS_ROW_PAD + RaceHud.STANDINGS_WIDTH) * hud.standings_draw_scale()
+		assert_almost_eq(width, hud.standings_panel_width * factor, 0.001)
+
+
 ## 全角9文字の名前。
 func _nine_characters() -> String:
 	return "ア".repeat(9)

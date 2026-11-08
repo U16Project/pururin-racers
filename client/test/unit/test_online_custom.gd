@@ -158,7 +158,7 @@ func test_ability_name_trainer_and_color_bounds() -> void:
 	custom["allocation"][key] = 0
 	assert_false(Validation.validate(custom).is_empty())
 	custom = _custom()
-	custom["look"]["primary_color_index"] = (preload("res://scripts/config/pururin_stats_config.gd").values()["attributes"][custom["attribute"]]["primary_colors"] as Array).size()
+	custom["look"]["primary_color_index"] = preload("res://scripts/config/pururin_stats_config.gd").primary_colors(str(custom["attribute"])).size()
 	assert_false(Validation.validate(custom).is_empty())
 
 func test_numbers_are_finite_bounded_and_shapes_are_builtin_only() -> void:
