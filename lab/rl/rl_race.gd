@@ -176,6 +176,8 @@ func _process(delta: float) -> void:
 		var gate := int(runner.get("gate_index"))
 		if _seats.has(gate) and int(_seats[gate]["mid_place"]) == 0 and float(runner.call("get_race_progress")) >= float(_spec["distance_m"]) * 0.5:
 			_seats[gate]["mid_place"] = _place_of(runner, runners)
+		if _seats.has(gate) and not bool(runner.call("is_finished")):
+			_owe(_seats[gate], _heart_penalty(runner, delta))
 	if _first_finish_s < 0.0 and runners.any(func(r): return bool(r.call("is_finished"))):
 		_first_finish_s = _elapsed
 	# 画面に出すレース（人が走る・観戦）は、打ち切らない（全員のゴールを待つ）。
@@ -368,6 +370,25 @@ static func _count_place(fit: Dictionary, place: int, wanted: Array) -> void:
 static func _owe(seat: Dictionary, points: float) -> void:
 	seat["owed"] = float(seat["owed"]) + points
 	seat["paid_now"] = float(seat["paid_now"]) + points
+
+
+## 心拍の超えすぎ（減点だけ）：心拍が通常の上限（ゲームの heart_rate_normal_max_bpm）を超えている間、毎こま、
+## 超えた割合（頭打ち heart_rate_overheat_max_bpm で1）× 過ぎた秒数 × その区間の per を引く。
+## 区間は reward.heart.sections の並び（進んだ割合が until より前の、最初の区間）。どの区間にも入らなければ引かない。
+func _heart_penalty(runner: Node3D, delta: float) -> float:
+	var sections: Array = _settings["reward"].get("heart", {}).get("sections", [])
+	if sections.is_empty():
+		return 0.0
+	var limit := LocalRaceMath.Config.number("heart_rate_normal_max_bpm")
+	var top := LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
+	var over := clampf((float(runner.call("get_heart_rate_bpm")) - limit) / (top - limit), 0.0, 1.0)
+	if over <= 0.0:
+		return 0.0
+	var ratio := float(runner.call("get_race_progress")) / float(_spec["distance_m"])
+	for section: Dictionary in sections:
+		if ratio < float(section["until"]):
+			return -float(section["per"]) * over * delta
+	return 0.0
 
 
 ## 貯めた点を渡して、0に戻す。
