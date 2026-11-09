@@ -16,10 +16,12 @@ func test_device_tabs_show_only_the_selected_controls_and_reset_scroll() -> void
 	await get_tree().process_frame
 	var labels := _all_label_text(guide)
 	assert_true(labels.contains("レース操作ガイド"))
-	assert_true(labels.contains("ノッチ0〜6"))
-	assert_true(labels.contains("A または LT"))
+	assert_true(labels.contains("ノッチ%d〜%d" % [ControlGuide.LocalRaceMath.Config.number("drive_level_min"), ControlGuide.LocalRaceMath.Config.number("drive_level_max")]))
+	assert_true(labels.contains("ブレーキ ｜ A を押し続ける"))
 	assert_false(labels.contains("C を1回押す"))
-	assert_true(labels.contains("オンライン対戦での一時停止") or labels.contains("オンライン対戦"))
+	assert_false(labels.contains("操作盤を見る"))
+	assert_true(labels.contains("ダッシュとブースト"))
+	assert_true(labels.contains("ブースト（X）：押すと%s秒間、走る力が大きく増える（体力が少ないと少し弱まる）。効いている間にもう一度押すと、重ねてさらに強く効く。1レース%s回まで。" % [guide._config_number("boost_duration_s"), guide._config_number("boost_max_uses")]))
 	var diagram := guide.find_child("GuideDiagram", true, false) as TextureRect
 	assert_not_null(diagram)
 	assert_not_null(diagram.texture)
@@ -29,7 +31,7 @@ func test_device_tabs_show_only_the_selected_controls_and_reset_scroll() -> void
 	await get_tree().process_frame
 	labels = _all_label_text(guide)
 	assert_true(labels.contains("C を1回押す"))
-	assert_false(labels.contains("A または LT"))
+	assert_false(labels.contains("ブレーキ ｜ A を押し続ける"))
 	diagram = guide.find_child("GuideDiagram", true, false) as TextureRect
 	assert_ne(diagram.texture, pad_texture)
 	var scroll := guide.find_child("GuideScroll", true, false) as ScrollContainer
@@ -69,7 +71,7 @@ func test_guide_panel_stays_in_648px_viewport_and_footer_remains_visible() -> vo
 	var diagram_rect := diagram.get_global_rect()
 	assert_true(diagram_rect.position.y >= scroll_rect.position.y)
 	assert_true(diagram_rect.end.y <= scroll_rect.end.y)
-	var footer := guide.find_child("GuideFooter", true, false) as Label
+	var footer := guide.find_child("GuideFooter", true, false) as VBoxContainer
 	assert_not_null(footer)
 	assert_true(footer.is_visible_in_tree())
 	assert_true(footer.get_global_rect().end.y <= panel_rect.end.y)

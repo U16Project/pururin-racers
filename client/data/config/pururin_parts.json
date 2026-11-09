@@ -2132,15 +2132,16 @@
         ]
       }
     },
-    "bubble_side": {
+    "drop_wing": {
       "kind": "body_part",
       "slot": "side",
       "source": {
         "type": "builtin",
-        "shape": "bubble",
-        "size": 0.11,
-        "count": 3,
-        "seed": 9,
+        "shape": "drop",
+        "length": 0.3,
+        "width": 0.075,
+        "tilt_deg": 20.0,
+        "fan_deg": 28.0,
         "color": "#9FE3FF"
       },
       "motions": {

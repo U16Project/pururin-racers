@@ -115,3 +115,64 @@ func test_after_the_goal_the_camera_moves_to_the_front_at_the_same_distance() ->
 	assert_lt((-camera.global_transform.basis.z).z, 0.0)
 	assert_false((target.get_node("Body") as Node3D).visible)
 
+
+
+func _look_key(key: Key, pressed: bool) -> void:
+	var event := InputEventKey.new()
+	event.keycode = key
+	event.physical_keycode = key
+	event.pressed = pressed
+	Input.parse_input_event(event)
+	Input.flush_buffered_events()
+
+
+func test_keyboard_look_directions_release_and_first_person() -> void:
+	var target := Node3D.new()
+	add_child_autofree(target)
+	var camera := Camera3D.new()
+	camera.set_script(LocalRaceCamera)
+	add_child_autofree(camera)
+	camera.call("set_follow_target", target)
+	var input_script = load("res://scripts/input/race_controller_input.gd")
+	for keys: Array in [[KEY_A], [KEY_D], [KEY_W], [KEY_A, KEY_W], [KEY_D, KEY_W]]:
+		for key: Key in keys:
+			_look_key(key, true)
+		var expected := Vector2(float(KEY_D in keys) - float(KEY_A in keys), float(KEY_W in keys)).normalized()
+		assert_eq(input_script.look_vector(), expected)
+		camera.call("_apply")
+		var direction := Basis(Vector3.UP, -LocalRaceCamera.look_yaw_from_stick(expected)) * Vector3.FORWARD
+		direction = Basis(direction.cross(Vector3.UP).normalized(), -deg_to_rad(LocalRaceCamera.LOOK_AROUND_PITCH_DEG)) * direction
+		assert_true(camera.global_position.is_equal_approx(Vector3.UP * LocalRaceCamera.LOOK_AROUND_HEIGHT_M))
+		assert_true((-camera.global_basis.z).is_equal_approx(direction))
+		for key: Key in keys:
+			_look_key(key, false)
+	assert_eq(input_script.look_vector(), Vector2.ZERO)
+	camera.call("_apply")
+	var settings: Dictionary = LocalRaceCamera.VIEW_SETTINGS[LocalRaceCamera.View.DEFAULT]
+	assert_true(camera.global_position.is_equal_approx(Vector3(0.0, float(settings["height"]), float(settings["back"]))))
+	camera.call("_set_view", LocalRaceCamera.View.FIRST_PERSON)
+	var original_position := camera.global_position
+	_look_key(KEY_W, true)
+	camera.call("_apply")
+	assert_true(camera.global_position.is_equal_approx(original_position))
+	assert_true((-camera.global_basis.z).is_equal_approx(Vector3.BACK))
+	_look_key(KEY_W, false)
+	camera.call("_apply")
+	assert_true((-camera.global_basis.z).is_equal_approx(Vector3.FORWARD))
+
+
+func test_shift_suppresses_keyboard_look_and_keeps_adjustment() -> void:
+	var camera := Camera3D.new()
+	camera.set_script(LocalRaceCamera)
+	add_child_autofree(camera)
+	var input_script = load("res://scripts/input/race_controller_input.gd")
+	_look_key(KEY_SHIFT, true)
+	_look_key(KEY_W, true)
+	_look_key(KEY_A, true)
+	assert_eq(input_script.look_vector(), Vector2.ZERO)
+	camera.call("_process_keyboard_adjustment", 0.1)
+	assert_almost_eq(float(camera.get("_back_offset")), -camera.get("chase_adjust_speed") * 0.1, 0.0001)
+	assert_almost_eq(float(camera.get("_lateral_offset")), -camera.get("chase_adjust_speed") * 0.1, 0.0001)
+	_look_key(KEY_A, false)
+	_look_key(KEY_W, false)
+	_look_key(KEY_SHIFT, false)

@@ -66,13 +66,12 @@ static func is_face_pressed(event: InputEvent, button: JoyButton) -> bool:
 
 
 ## ブレーキ操作。押している間だけ制動し、ノッチ設定は変えない。
-## ゲームパッドはAボタンまたは左トリガー。キーボードは、Aに当たるキー（X）か、スペース。
+## ゲームパッドはAボタン。キーボードは、Aに当たるキー（X）か、スペース。
 static func brake_pressed() -> bool:
 	return (
 		Input.is_physical_key_pressed(KEY_SPACE)
 		or Input.is_physical_key_pressed(face_key(JOY_BUTTON_A))
 		or button_down(JOY_BUTTON_A)
-		or axis_value(JOY_AXIS_TRIGGER_LEFT) >= TRIGGER_THRESHOLD
 	)
 
 
@@ -90,10 +89,26 @@ static func _is_key_just_pressed(event: InputEvent, keycode: Key) -> bool:
 	return event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == keycode
 
 
-## 見回し（右スティック）。倒していなければゼロ。倒した向きと量を、そのまま返す。
+## 見回しのキー。W は後ろを見る。
+const LOOK_LEFT_KEY := KEY_A
+const LOOK_RIGHT_KEY := KEY_D
+const LOOK_BACK_KEY := KEY_W
+
+## 見回しは右スティックを優先し、倒していなければキーの向きを返す。
 static func look_vector() -> Vector2:
 	var stick := Vector2(axis_value(JOY_AXIS_RIGHT_X), axis_value(JOY_AXIS_RIGHT_Y))
-	return stick if stick.length() >= STICK_DEADZONE else Vector2.ZERO
+	if stick.length() >= STICK_DEADZONE:
+		return stick
+	if Input.is_key_pressed(KEY_SHIFT):
+		return Vector2.ZERO
+	var keys := Vector2.ZERO
+	if Input.is_physical_key_pressed(LOOK_LEFT_KEY):
+		keys.x -= 1.0
+	if Input.is_physical_key_pressed(LOOK_RIGHT_KEY):
+		keys.x += 1.0
+	if Input.is_physical_key_pressed(LOOK_BACK_KEY):
+		keys.y += 1.0
+	return keys.normalized()
 
 
 static func chase_yaw_axis() -> float:

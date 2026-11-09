@@ -333,7 +333,7 @@ func _ready() -> void:
 	_guide_label.text = "\n".join(PackedStringArray([
 		"←→／左スティック　ライン",
 		"↑↓／十字キー　ノッチ",
-		"Xキー・Space／A／LT　ブレーキ",
+		"Xキー・Space／A　ブレーキ",
 		"Cキー／B　ダッシュ",
 		"Zキー／X　ブースト",
 		"Sキー／Y　視点切替（通常・遠距離・上空・一人称）",

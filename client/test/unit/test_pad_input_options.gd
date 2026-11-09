@@ -59,7 +59,7 @@ func test_face_buttons_shoulders_select_and_stick_clicks() -> void:
 		var releases: Array = options.convert_event(button(pair[0], false), profile)
 		assert_false(releases[0].pressed)
 
-func test_digital_triggers_become_axes_for_brake_and_slot_move() -> void:
+func test_digital_triggers_become_axes_for_slot_move() -> void:
 	RaceInput._trigger_down.clear()
 	var left: Array = options.convert_event(button(6), profile)
 	assert_eq(left[0].axis, JOY_AXIS_TRIGGER_LEFT)
@@ -103,10 +103,12 @@ func test_runtime_pipeline_delivers_canonical_event_and_polls_corrected_state() 
 	Input.parse_input_event(axis(4, -0.9))
 	await get_tree().process_frame
 	assert_almost_eq(RaceInput.look_vector().y, -0.9, 0.001)
-	Input.parse_input_event(button(6))
-	await get_tree().process_frame
 	assert_true(RaceInput.brake_pressed())
 	Input.parse_input_event(button(2, false))
+	await get_tree().process_frame
+	Input.parse_input_event(button(6))
+	await get_tree().process_frame
+	assert_false(RaceInput.brake_pressed())
 	Input.parse_input_event(button(6, false))
 	Input.parse_input_event(axis(4, 0))
 	await get_tree().process_frame

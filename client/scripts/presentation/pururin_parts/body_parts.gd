@@ -9,7 +9,7 @@ const PartAssets := preload("res://scripts/presentation/pururin_parts/part_asset
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
 	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna"],
-	"side": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bat_wing", "hand", "bow", "butterfly", "star"],
+	"side": ["flipper", "rock", "flame", "leaf", "drop", "crystal", "bat_wing", "hand", "bow", "butterfly", "star"],
 	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft", "star", "heart", "devil", "spiky"],
 }
 ## 形ごとに、必ず要る数字。
@@ -24,6 +24,7 @@ const REQUIRED_PARAMS := {
 	"leaf": ["length", "width", "tilt_deg", "roll_deg", "sweep_deg", "feathers"],
 	"bubbles": ["size", "count", "spread", "seed"],
 	"bubble": ["size", "count", "seed"],
+	"drop": ["length", "width", "tilt_deg", "fan_deg"],
 	"crystals": ["length", "width", "count", "spread", "seed"],
 	"crystal": ["length", "width", "tilt_deg", "seed"],
 	"horns": ["length", "width", "spread_deg", "curve"],
@@ -56,6 +57,7 @@ const REQUIRED_COLORS := {
 	"leaf": ["color"],
 	"bubbles": ["color"],
 	"bubble": ["color"],
+	"drop": ["color"],
 	"crystals": ["color"],
 	"crystal": ["color"],
 	"horns": ["color"],
@@ -158,11 +160,8 @@ static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_mat
 		"rock": _add_side_rocks(bits, source)
 		"flame": _add_side_flame(bits, source)
 		"leaf": _add_leaves(bits, source)
-		"bubble":
-			if on_side:
-				_add_floating_bubbles(bits, source)
-			else:
-				_add_side_bubbles(bits, source)
+		"bubble": _add_side_bubbles(bits, source)
+		"drop": _add_drop_wing(bits, source)
 		"crystal": _add_side_crystal(bits, source)
 		"bat_wing": _add_bat_wing(bits, source)
 		"hand": _add_hand(bits, source)
@@ -449,24 +448,30 @@ static func _add_bubbles(bits: Bits, shape: Dictionary, source: Dictionary) -> v
 		_add_ellipsoid(bits, Vector3(cos(angle) * distance, drop + small * 0.85, sin(angle) * distance), Vector3.ONE * small, _tint(color, 0.8), Transform3D.IDENTITY)
 
 
-## 水の泡（左右）：体のそばから、斜め上へ浮かんでいく玉。玉どうしは離して、だんだん小さくする（つながった腕に見せない）。
-static func _add_floating_bubbles(bits: Bits, source: Dictionary) -> void:
-	var size := float(source["size"])
+## しずくの羽（左右）：水のしずくの形を3枚、扇のように広げる。とがった先が体のほう、丸い先が外。先へ行くほど明るい。
+static func _add_drop_wing(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
 	var color := Color(str(source["color"]))
-	var rng := RandomNumberGenerator.new()
-	rng.seed = int(source["seed"])
-	var count := int(source["count"])
-	var rise := Vector3(0.55, 1.0, 0.0).normalized()
-	var at := Vector3(size * 0.95, 0.0, 0.0)
-	var previous := 0.0
-	for index in count:
-		var radius := size * lerpf(0.85, 0.4, float(index) / float(maxi(count - 1, 1)))
-		if index > 0:
-			# 前の玉と、すき間をあけて置く。
-			at += rise * (previous + radius + size * 0.35)
-		var drift := Vector3(0.0, 0.0, size * rng.randf_range(-0.3, 0.3))
-		_add_ellipsoid(bits, at + drift, Vector3.ONE * radius, _tint(color, 0.8), Transform3D.IDENTITY)
-		previous = radius
+	var tilt := float(source["tilt_deg"])
+	var fan := float(source["fan_deg"])
+	var steps := 22
+	for index in 3:
+		var shrink := [1.0, 0.82, 0.66][index] as float
+		var angle := tilt + fan * (1.0 - float(index))
+		var centers: Array[Vector3] = []
+		var radii: Array[float] = []
+		var colors: Array[Color] = []
+		for step in steps + 1:
+			var t := float(step) / float(steps)
+			centers.append(Vector3(length * shrink * t, 0.0, 0.0))
+			# 体のほうは細くとがり、外の3割で丸く閉じる。
+			var round_end := sqrt(maxf(1.0 - pow((t - 0.68) / 0.32, 2.0), 0.0))
+			radii.append(width * shrink * (pow(t / 0.68, 1.1) if t < 0.68 else round_end))
+			colors.append(_tint(color.lerp(color.lightened(0.45), t), 0.85))
+		# 下の羽ほど、少し後ろへ流す。
+		var sweep := Basis(Vector3.UP, deg_to_rad(-12.0 * float(index)))
+		_add_tube(bits, centers, radii, 0.5, colors, Transform3D(Basis(Vector3.BACK, deg_to_rad(angle)) * sweep, Vector3(-0.02, 0.0, 0.01 * float(index))))
 
 
 ## 水の泡（尾）：外へ向かって、だんだん小さくなる玉を並べる。

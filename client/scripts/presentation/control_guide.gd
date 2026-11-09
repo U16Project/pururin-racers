@@ -3,6 +3,7 @@ extends Control
 
 signal closed
 
+const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const DIAGRAM_PATHS := [
@@ -17,11 +18,11 @@ const DEVICE_ROWS := [
 	[
 		"ライン左右 ｜ 左スティック／十字キー左右を倒す",
 		"ノッチ上下 ｜ 十字キー上下（長押しで連続変更）",
-		"ブレーキ ｜ A または LT を押し続ける",
+		"ブレーキ ｜ A を押し続ける",
 		"ダッシュ ｜ B を1回押す",
 		"ブースト ｜ X を1回押す",
 		"視点切替 ｜ Y を1回押す",
-		"見回す ｜ 右スティックを倒す。離すと元の向きへ",
+		"まわりを見る ｜ 右スティックを倒す。離すと元の向きへ",
 		"視点を戻す ｜ 右スティックを押し込む",
 		"一時停止 ｜ START",
 	],
@@ -32,6 +33,7 @@ const DEVICE_ROWS := [
 		"ダッシュ ｜ C を1回押す",
 		"ブースト ｜ Z を1回押す",
 		"視点切替 ｜ S を1回押す",
+		"左・右・後ろを見る ｜ A＝左、D＝右、W＝後ろ（押している間）",
 		"視点を戻す ｜ R",
 		"一時停止 ｜ Esc",
 		"画面ボタン ｜ F2で表示・非表示",
@@ -91,12 +93,11 @@ func _build_overlay() -> void:
 	var title := MenuStyle.label("レース操作ガイド", 26)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading.add_child(title)
-	_close_button = MenuStyle.button("閉じる", 18, MenuStyle.COLOR_BUTTON_QUIET)
+	_close_button = MenuStyle.guide_button(heading, "B", "閉じる")
 	_close_button.name = "GuideCloseButton"
 	_close_button.custom_minimum_size = Vector2(100.0, 44.0)
 	_close_button.pressed.connect(close_guide)
 	UIAudio.bind_button_sound(_close_button, "back")
-	heading.add_child(_close_button)
 	var tabs := HBoxContainer.new()
 	tabs.add_theme_constant_override("separation", 10)
 	column.add_child(tabs)
@@ -117,10 +118,20 @@ func _build_overlay() -> void:
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_content.add_theme_constant_override("separation", 14)
 	_scroll.add_child(_content)
-	var footer := MenuStyle.label("← →：機器を切替   ↑ ↓：スクロール   B／C／Esc：閉じる", 18, MenuStyle.COLOR_DIM)
+	var footer := VBoxContainer.new()
 	footer.name = "GuideFooter"
-	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	column.add_child(footer)
+	var pad_row := HBoxContainer.new()
+	pad_row.add_theme_constant_override("separation", 10)
+	footer.add_child(pad_row)
+	pad_row.add_child(MenuStyle.label("ゲームパッド", 14, MenuStyle.COLOR_DIM))
+	pad_row.add_child(MenuStyle.label("十字キー左右：機器を切替   十字キー上下：スクロール", 16, MenuStyle.COLOR_DIM))
+	MenuStyle.guide_item(pad_row, "B", "閉じる")
+	var keyboard_row := HBoxContainer.new()
+	keyboard_row.add_theme_constant_override("separation", 10)
+	footer.add_child(keyboard_row)
+	keyboard_row.add_child(MenuStyle.label("キーボード", 14, MenuStyle.COLOR_DIM))
+	keyboard_row.add_child(MenuStyle.label("← →：機器を切替   ↑ ↓：スクロール   Esc：閉じる", 16, MenuStyle.COLOR_DIM))
 
 
 func select_device(index: int) -> void:
@@ -130,8 +141,9 @@ func select_device(index: int) -> void:
 		child.queue_free()
 	for tab_index in _tabs.size():
 		MenuStyle.style_button(_tabs[tab_index], 18, MenuStyle.COLOR_BUTTON_ON if tab_index == _device_index else MenuStyle.COLOR_BUTTON_QUIET)
+	var notch_range := "%s〜%s" % [_config_number("drive_level_min"), _config_number("drive_level_max")]
 	_add_intro([
-		"左右で走る位置、上下で走る力（ノッチ0〜6）を調整します。",
+		"左右で走る位置、上下で走る力（ノッチ%s）を調整します。" % notch_range,
 		"心拍と残スタミナを見ながら加減しましょう。",
 	])
 	_diagram = TextureRect.new()
@@ -144,19 +156,19 @@ func select_device(index: int) -> void:
 	_diagram.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_content.add_child(_diagram)
 	_add_section(DEVICE_NAMES[_device_index] + "の操作", DEVICE_ROWS[_device_index])
-	_add_section("操作盤を見る", [
-		"ハート：心拍。200を超える走りが続くと、走る力が落ちていきます。",
-		"速さ・ノッチ：今の速度と指示している段階。体力：残スタミナ。",
-		"ノッチは希望速度ではなく、走る力の段階です。",
-		"空気抵抗の軽減：前のぷるりんから受けるドラフトの効果。",
-		"ダッシュ・ブースト：使える状態を確認してから仕掛けましょう。",
-	])
-	_add_section("オンライン対戦", [
-		"操作はオフラインと共通です。",
-		"一時停止メニューやこのガイドを開いても、オンラインのレースは進みます。",
+	var dash_button: String = ["B", "C", "DASH"][_device_index]
+	var boost_button: String = ["X", "Z", "BOOST"][_device_index]
+	_add_section("ダッシュとブースト", [
+		"ダッシュ（%s）：押すと%s秒間、ぐっと速くなる。何度でも使えるが、体力を多く使い、心拍も上がりやすい。" % [dash_button, _config_number("dash_duration_s")],
+		"ブースト（%s）：押すと%s秒間、走る力が大きく増える（体力が少ないと少し弱まる）。効いている間にもう一度押すと、重ねてさらに強く効く。1レース%s回まで。" % [boost_button, _config_number("boost_duration_s"), _config_number("boost_max_uses")],
 	])
 	_scroll.scroll_vertical = 0
 	_queue_fit_panel()
+
+
+func _config_number(key: String) -> String:
+	var value := LocalRaceMath.Config.number(key)
+	return str(int(value)) if value == floor(value) else str(value)
 
 
 func _add_section(heading_text: String, rows: Array) -> void:
