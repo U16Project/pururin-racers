@@ -221,7 +221,23 @@ var _window_focus := {}
 var _focus_guard := false
 
 
+## 場面に置いた部品と、あとで複製するひな形の選択表示をそろえる。
+func _unify_focus_styles(node: Node) -> void:
+	if node is Control and node.has_theme_stylebox_override("focus"):
+		var old := node.get_theme_stylebox("focus") as StyleBoxFlat
+		if old != null:
+			var focus := MenuStyle.focus_box(old.corner_radius_top_left, old.expand_margin_left)
+			focus.content_margin_left = old.content_margin_left
+			focus.content_margin_right = old.content_margin_right
+			focus.content_margin_top = old.content_margin_top
+			focus.content_margin_bottom = old.content_margin_bottom
+			node.add_theme_stylebox_override("focus", focus)
+	for child in node.get_children():
+		_unify_focus_styles(child)
+
+
 func _ready() -> void:
+	_unify_focus_styles(self)
 	OnlineSession.free_mode = true
 	OnlineSession.clear_free_wait()
 	_card_template.visible = false

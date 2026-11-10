@@ -3,6 +3,9 @@ extends Control
 
 signal closed
 
+## レース中に開くときだけ、従来の選択表示を使う。
+var race_focus := false
+
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
@@ -102,7 +105,7 @@ func _build_overlay() -> void:
 	tabs.add_theme_constant_override("separation", 10)
 	column.add_child(tabs)
 	for index in DEVICE_NAMES.size():
-		var button := MenuStyle.button(DEVICE_NAMES[index], 18)
+		var button := MenuStyle.button(DEVICE_NAMES[index], 18, MenuStyle.COLOR_BUTTON, race_focus)
 		button.name = "DeviceTab%d" % index
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.custom_minimum_size.y = 44.0
@@ -140,7 +143,7 @@ func select_device(index: int) -> void:
 		_content.remove_child(child)
 		child.queue_free()
 	for tab_index in _tabs.size():
-		MenuStyle.style_button(_tabs[tab_index], 18, MenuStyle.COLOR_BUTTON_ON if tab_index == _device_index else MenuStyle.COLOR_BUTTON_QUIET)
+		MenuStyle.style_button(_tabs[tab_index], 18, MenuStyle.COLOR_BUTTON_ON if tab_index == _device_index else MenuStyle.COLOR_BUTTON_QUIET, race_focus)
 	var notch_range := "%s〜%s" % [_config_number("drive_level_min"), _config_number("drive_level_max")]
 	_add_intro([
 		"左右で走る位置、上下で走る力（ノッチ%s）を調整します。" % notch_range,

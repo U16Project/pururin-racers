@@ -373,9 +373,7 @@ func _style_edit(edit: Control) -> void:
 	normal.content_margin_left = 12.0
 	normal.content_margin_right = 12.0
 	edit.add_theme_stylebox_override("normal", normal)
-	var focus := normal.duplicate() as StyleBoxFlat
-	focus.border_color = MenuStyle.COLOR_FOCUS
-	focus.set_border_width_all(3)
+	var focus := MenuStyle.focus_box(10, 0.0)
 	edit.add_theme_stylebox_override("focus", focus)
 
 

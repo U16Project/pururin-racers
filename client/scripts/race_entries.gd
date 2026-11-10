@@ -371,10 +371,11 @@ func _trainer_of(entry: Dictionary) -> Dictionary:
 func _link_focus() -> void:
 	for index in _rows.size():
 		var row := _rows[index]
-		row.focus_neighbor_top = row.get_path_to(_rows[maxi(index - 1, 0)])
-		row.focus_neighbor_bottom = row.get_path_to(_rows[index + 1] if index + 1 < _rows.size() else _back)
+		row.focus_neighbor_top = row.get_path_to(_rows[(index - 1 + _rows.size()) % _rows.size()])
+		row.focus_neighbor_bottom = row.get_path_to(_rows[(index + 1) % _rows.size()])
 		row.focus_neighbor_left = row.get_path_to(row)
-		row.focus_neighbor_right = row.get_path_to(row)
+		row.focus_neighbor_right = row.get_path_to(row if read_only else _back)
+		row.focus_entered.connect(func() -> void: _back.focus_neighbor_left = _back.get_path_to(row))
 	for button: Button in [_back, _start]:
 		button.focus_neighbor_top = button.get_path_to(_rows.back() if not _rows.is_empty() else _back)
 		button.focus_neighbor_bottom = button.get_path_to(button)
@@ -483,4 +484,3 @@ func _dim_label(text: String) -> Label:
 	var label := Style.label(text, 13, Style.COLOR_DIM)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label
-

@@ -30,7 +30,12 @@ const COLOR_BACKGROUND_DIM := Color(0.42, 0.45, 0.55, 1.0)
 const COLOR_PRIMARY := Color(0.24, 0.66, 0.4, 1.0)
 const COLOR_PRIMARY_TEXT := Color(0.97, 0.98, 1.0, 1.0)
 ## カーソルの枠の太さ。
-const FOCUS_WIDTH := 4
+const FOCUS_WIDTH := 5
+const COLOR_FOCUS_FILL := Color(1.0, 1.0, 1.0, 0.08)
+const COLOR_FOCUS_GLOW := Color(1.0, 0.86, 0.3, 0.28)
+const FOCUS_GLOW_SIZE := 6
+## レース中は、従来の透明な地と幅4の枠を使う。
+const RACE_FOCUS_WIDTH := 4
 const BAR_HEIGHT := 64.0
 const GUIDE_HEIGHT := 40.0
 const SCREEN_MARGIN := 28.0
@@ -49,12 +54,15 @@ static func box(color: Color, radius: int = 10, margin_x: float = 22.0, margin_y
 	return style
 
 
-## 選んでいる部品が分かるように、太い黄色の枠を付ける（ゲームパッドとキーボードの操作用）。
-static func focus_box(radius: int = 10, expand: float = 3.0) -> StyleBoxFlat:
+## 選んでいる部品に、うすい白・黄色の枠・外側の小さな光を重ねる。
+static func focus_box(radius: int = 10, expand: float = 3.0, race: bool = false) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+	style.bg_color = Color(0.0, 0.0, 0.0, 0.0) if race else COLOR_FOCUS_FILL
 	style.border_color = COLOR_FOCUS
-	style.set_border_width_all(FOCUS_WIDTH)
+	style.set_border_width_all(RACE_FOCUS_WIDTH if race else FOCUS_WIDTH)
+	if not race:
+		style.shadow_color = COLOR_FOCUS_GLOW
+		style.shadow_size = FOCUS_GLOW_SIZE
 	style.set_corner_radius_all(radius)
 	style.set_expand_margin_all(expand)
 	return style
@@ -70,7 +78,7 @@ static func label(text: String, font_size: int, color: Color = COLOR_TEXT) -> La
 	return node
 
 
-static func style_button(button: BaseButton, font_size: int, color: Color = COLOR_BUTTON) -> void:
+static func style_button(button: BaseButton, font_size: int, color: Color = COLOR_BUTTON, race: bool = false) -> void:
 	button.add_theme_font_size_override("font_size", font_size)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		button.add_theme_color_override(state, COLOR_TEXT)
@@ -81,13 +89,13 @@ static func style_button(button: BaseButton, font_size: int, color: Color = COLO
 	# 押せないときは、暗くする。
 	button.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT, 0.4))
 	button.add_theme_stylebox_override("disabled", box(Color(color.darkened(0.45), 0.8)))
-	button.add_theme_stylebox_override("focus", focus_box())
+	button.add_theme_stylebox_override("focus", focus_box(10, 3.0, race))
 
 
-static func button(text: String, font_size: int, color: Color = COLOR_BUTTON) -> Button:
+static func button(text: String, font_size: int, color: Color = COLOR_BUTTON, race: bool = false) -> Button:
 	var node := Button.new()
 	node.text = text
-	style_button(node, font_size, color)
+	style_button(node, font_size, color, race)
 	return node
 
 
@@ -286,7 +294,7 @@ static func background(parent: Control, path: String) -> TextureRect:
 ## フリー対戦の画面と同じ、丸いボタン。kind：
 ## "primary"（緑の地に白い文字。いちばんの操作）、"secondary"（暗い地に水色の文字）、"quiet"（暗い地に白い文字）、
 ## "tab"（暗い地に白い文字。選んでいる＝押してある間は、水色の地に暗い文字）。
-static func style_pill_button(button: BaseButton, kind: String, font_size: int, radius: int = 22) -> void:
+static func style_pill_button(button: BaseButton, kind: String, font_size: int, radius: int = 22, race: bool = false) -> void:
 	var base := Color(0.13, 0.18, 0.27, 0.92)
 	var text := COLOR_TEXT
 	var down_text := COLOR_TEXT
@@ -317,13 +325,13 @@ static func style_pill_button(button: BaseButton, kind: String, font_size: int, 
 	button.add_theme_stylebox_override("pressed", _pill(down, Color(1, 1, 1, 0.35), radius))
 	button.add_theme_stylebox_override("hover_pressed", _pill(down.lightened(0.08), Color(1, 1, 1, 0.45), radius))
 	button.add_theme_stylebox_override("disabled", _pill(Color(normal, normal.a * 0.35), Color(1, 1, 1, 0.08), radius))
-	button.add_theme_stylebox_override("focus", focus_box(radius + 2, 2.0))
+	button.add_theme_stylebox_override("focus", focus_box(radius + 2, 2.0, race))
 
 
-static func pill_button(text: String, kind: String, font_size: int = 20) -> Button:
+static func pill_button(text: String, kind: String, font_size: int = 20, race: bool = false) -> Button:
 	var node := Button.new()
 	node.text = text
-	style_pill_button(node, kind, font_size)
+	style_pill_button(node, kind, font_size, 22, race)
 	return node
 
 

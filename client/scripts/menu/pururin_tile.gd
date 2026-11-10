@@ -150,7 +150,7 @@ func _draw() -> void:
 		back = back.lightened(0.1)
 	draw_style_box(MenuStyle.box(back, 10, 0.0, 0.0), rect)
 	if _state == State.CURRENT:
-		var frame := MenuStyle.focus_box(10)
+		var frame := MenuStyle.focus_box(10, 0.0, true)
 		frame.border_color = COLOR_CURRENT
 		frame.set_border_width_all(2)
 		frame.set_expand_margin_all(0.0)

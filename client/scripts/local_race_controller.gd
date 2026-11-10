@@ -378,10 +378,10 @@ func _open_free_cancel() -> void:
 	var column := VBoxContainer.new()
 	panel.add_child(column)
 	column.add_child(MenuStyle.label("待つのをやめて、ロビーへ戻りますか？\nこのルームのエントリーは取り消されます。", 20))
-	var leave := MenuStyle.pill_button("戻る", "quiet", 20)
+	var leave := MenuStyle.pill_button("戻る", "quiet", 20, true)
 	column.add_child(leave)
 	leave.pressed.connect(_cancel_free_waiting)
-	_free_cancel_wait = MenuStyle.pill_button("待つ", "primary", 20)
+	_free_cancel_wait = MenuStyle.pill_button("待つ", "primary", 20, true)
 	column.add_child(_free_cancel_wait)
 	_free_cancel_wait.pressed.connect(_close_free_cancel)
 	for button: Button in [leave, _free_cancel_wait]:
@@ -1141,7 +1141,7 @@ func _build_free_after_choice() -> void:
 	choice.add_child(_free_notice_label)
 	if not _free_final:
 		_build_free_entry_choice(choice, room_name)
-	_result_stay_button = MenuStyle.pill_button("このルームに残る", "secondary", 20)
+	_result_stay_button = MenuStyle.pill_button("このルームに残る", "secondary", 20, true)
 	_result_stay_button.name = "ResultStayButton"
 	_result_stay_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_stay_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1161,7 +1161,7 @@ func _build_free_entry_choice(choice: VBoxContainer, room_name: String) -> void:
 	choice.add_child(row)
 	var group := ButtonGroup.new()
 	for option: Array in [[OnlineProtocol.FREE_AFTER_ON, "続けて呼ばれる"], [OnlineProtocol.FREE_AFTER_HOLD, "保留にする"], [OnlineProtocol.FREE_AFTER_OFF, "取り消す"]]:
-		var button := MenuStyle.pill_button(option[1], "tab", 17)
+		var button := MenuStyle.pill_button(option[1], "tab", 17, true)
 		button.toggle_mode = true
 		button.button_group = group
 		button.custom_minimum_size = Vector2(0.0, 44.0)
@@ -1984,7 +1984,7 @@ func _add_pause_marks() -> void:
 ## 一時停止の板から開く操作ガイド。閉じると板へ戻り、レースは一時停止のまま。
 func _add_pause_guide_button() -> void:
 	var box := _pause_panel.get_node("PauseBox") as VBoxContainer
-	_pause_guide_button = MenuStyle.pill_button("操作ガイド", "secondary", 20)
+	_pause_guide_button = MenuStyle.pill_button("操作ガイド", "secondary", 20, true)
 	_pause_guide_button.name = "PauseControlGuideButton"
 	_pause_guide_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_pause_guide_button.pressed.connect(_open_control_guide_from_pause)
@@ -2025,13 +2025,13 @@ func _build_quit_confirm() -> void:
 	note.add_theme_font_size_override("font_size", 16)
 	note.add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
 	_quit_confirm_box.add_child(note)
-	_quit_confirm_button = MenuStyle.pill_button("やめて%sへ" % online_return_place(), "quiet", 20)
+	_quit_confirm_button = MenuStyle.pill_button("やめて%sへ" % online_return_place(), "quiet", 20, true)
 	_quit_confirm_button.name = "QuitConfirmButton"
 	_quit_confirm_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_quit_confirm_button.pressed.connect(_return_to_race_select)
 	UIAudio.bind_button_sound(_quit_confirm_button, "back")
 	_quit_confirm_box.add_child(_quit_confirm_button)
-	_quit_cancel_button = MenuStyle.pill_button("やめない", "primary", 20)
+	_quit_cancel_button = MenuStyle.pill_button("やめない", "primary", 20, true)
 	_quit_cancel_button.name = "QuitCancelButton"
 	_quit_cancel_button.custom_minimum_size = Vector2(0.0, 44.0)
 	_quit_cancel_button.pressed.connect(_show_quit_confirm.bind(false))
@@ -2062,6 +2062,7 @@ func _open_control_guide_from_pause() -> void:
 	_touch_controls.set_process_input(false)
 	_pause_panel.visible = false
 	var guide := ControlGuide.new()
+	guide.race_focus = true
 	_control_guide = guide
 	$UI.add_child(guide)
 	guide.closed.connect(_on_control_guide_closed)
@@ -2106,7 +2107,7 @@ func _build_result_board() -> void:
 	buttons.name = "ResultButtons"
 	buttons.add_theme_constant_override("separation", 12)
 	box.add_child(buttons)
-	_result_retry_button = MenuStyle.pill_button("もう1回 同条件で", "primary", 20)
+	_result_retry_button = MenuStyle.pill_button("もう1回 同条件で", "primary", 20, true)
 	_result_retry_button.name = "ResultRetryButton"
 	_result_retry_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_retry_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2114,7 +2115,7 @@ func _build_result_board() -> void:
 	UIAudio.bind_button_sound(_result_retry_button, "confirmation")
 	buttons.add_child(_result_retry_button)
 	_result_return_button.reparent(buttons)
-	MenuStyle.style_pill_button(_result_return_button, "quiet", 20)
+	MenuStyle.style_pill_button(_result_return_button, "quiet", 20, 22, true)
 	_result_return_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_return_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_result_retry_button.focus_neighbor_right = _result_retry_button.get_path_to(_result_return_button)
@@ -2127,8 +2128,8 @@ func _style_boards() -> void:
 		panel.add_theme_stylebox_override("panel", MenuStyle.panel_box(24.0, 20.0))
 	for title: Label in [_pause_panel.get_node("PauseBox/PauseTitle") as Label, _result_panel.get_node("ResultBox/ResultTitle") as Label]:
 		title.add_theme_font_override("font", MenuStyle.bold_font())
-	MenuStyle.style_pill_button(_resume_button, "primary", 20)
-	MenuStyle.style_pill_button(_pause_return_button, "quiet", 20)
+	MenuStyle.style_pill_button(_resume_button, "primary", 20, 22, true)
+	MenuStyle.style_pill_button(_pause_return_button, "quiet", 20, 22, true)
 
 
 func _set_paused(paused: bool) -> void:

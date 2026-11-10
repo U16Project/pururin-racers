@@ -38,6 +38,23 @@ func test_entries_preserve_gate_and_show_selected_trainer_and_player() -> void:
 	# オフラインでは、誰が動かすかの札は出さない。
 	assert_null(screen.get("_rows")[1].find_child("Text", true, false))
 
+func test_rows_wrap_and_return_from_buttons_to_selected_row() -> void:
+	var screen: Control = EntriesScene.instantiate()
+	add_child_autofree(screen)
+	await get_tree().process_frame
+	var rows: Array = screen.get("_rows")
+	var back: Button = screen.get("_back")
+	var start: Button = screen.get("_start")
+	assert_eq(rows[0].get_node(rows[0].focus_neighbor_top), rows[1])
+	assert_eq(rows[1].get_node(rows[1].focus_neighbor_bottom), rows[0])
+	rows[1].grab_focus()
+	assert_eq(rows[1].get_node(rows[1].focus_neighbor_right), back)
+	assert_eq(back.get_node(back.focus_neighbor_left), rows[1])
+	assert_eq(back.get_node(back.focus_neighbor_right), start)
+	rows[0].grab_focus()
+	assert_eq(back.get_node(back.focus_neighbor_left), rows[0])
+
+
 func test_start_and_back_are_guarded_and_never_change_selection() -> void:
 	var screen := WithoutNavigation.new()
 	add_child_autofree(screen)
@@ -121,6 +138,9 @@ func test_online_paddock_overlay_only_shows_and_marks_only_me() -> void:
 	var rows: Array = screen.get("_rows")
 	assert_eq(screen.get("shown_gate"), 2)
 	assert_true(rows[2].has_focus())
+	assert_eq(rows[0].get_node(rows[0].focus_neighbor_top), rows[2])
+	assert_eq(rows[2].get_node(rows[2].focus_neighbor_bottom), rows[0])
+	assert_eq(rows[0].get_node(rows[0].focus_neighbor_right), rows[0])
 	# ほかの人の行を見ると、トレーナーの所は、その人の名前。CPUは、出走に書いてあるトレーナー。
 	rows[0].grab_focus()
 	assert_eq(screen.get("_trainer_name").text, "ほかの人")

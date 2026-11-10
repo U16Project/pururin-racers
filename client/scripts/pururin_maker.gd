@@ -847,7 +847,7 @@ func _tile(text: String, tile_size: Vector2 = TILE_SIZE) -> Button:
 	var tile := Button.new()
 	tile.toggle_mode = true
 	tile.custom_minimum_size = tile_size
-	tile.clip_contents = true
+	tile.clip_contents = false
 	tile.add_theme_stylebox_override("normal", MenuStyle.card_box(MenuStyle.COLOR_CARD, Color(1.0, 1.0, 1.0, 0.18), 10))
 	tile.add_theme_stylebox_override("hover", MenuStyle.card_box(MenuStyle.COLOR_CARD.lightened(0.08), Color(1.0, 1.0, 1.0, 0.4), 10))
 	var chosen := MenuStyle.card_box(Color(0.12, 0.3, 0.42, 0.95), COLOR_CHOSEN, 10)

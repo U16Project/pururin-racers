@@ -2791,7 +2791,10 @@ func _paddock_row(parent: VBoxContainer, index: int) -> Dictionary:
 	button.custom_minimum_size = Vector2(0.0, PADDOCK_ROW_HEIGHT)
 	MenuStyle.style_button(button, 14, COLOR_SEAT)
 	button.pressed.connect(open_paddock_dialog.bind(index))
-	button.focus_entered.connect(func() -> void: _selected_gate = index)
+	button.focus_entered.connect(func() -> void:
+		_selected_gate = index
+		_link_paddock_focus()
+	)
 	parent.add_child(button)
 	var line := HBoxContainer.new()
 	line.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -2911,7 +2914,7 @@ func _show_paddock() -> void:
 	_link_paddock_focus()
 
 
-## パドックの上下左右の行き先：枠（上から下）→ 枠順のボタン → 下のボタン。右は、チャット。
+## パドックの行は上下で回り、右からボタンへ移る。
 func _link_paddock_focus() -> void:
 	var rows: Array[Control] = []
 	for row: Dictionary in _paddock_rows:
@@ -2926,15 +2929,16 @@ func _link_paddock_focus() -> void:
 		if not button.disabled:
 			actions.append(button)
 	var below_rows: Control = gate_buttons[0] if not gate_buttons.is_empty() else (actions[0] if not actions.is_empty() else _paddock_back_button)
+	var selected_row: Control = rows[clampi(_selected_gate, 0, rows.size() - 1)] if not rows.is_empty() else below_rows
 	for index in rows.size():
-		_link(rows[index], rows[index], _paddock_chat_edit, rows[maxi(index - 1, 0)], rows[index + 1] if index < rows.size() - 1 else below_rows)
+		_link(rows[index], rows[index], below_rows, rows[(index - 1 + rows.size()) % rows.size()], rows[(index + 1) % rows.size()])
 	var last_row: Control = rows.back() if not rows.is_empty() else below_rows
 	var first_action: Control = actions[0] if not actions.is_empty() else _paddock_back_button
 	for index in gate_buttons.size():
-		_link(gate_buttons[index], gate_buttons[maxi(index - 1, 0)], gate_buttons[index + 1] if index < gate_buttons.size() - 1 else _paddock_chat_edit, last_row, first_action)
+		_link(gate_buttons[index], gate_buttons[index - 1] if index > 0 else selected_row, gate_buttons[index + 1] if index < gate_buttons.size() - 1 else _paddock_chat_edit, last_row, first_action)
 	var above_actions: Control = gate_buttons[0] if not gate_buttons.is_empty() else last_row
 	for index in actions.size():
-		_link(actions[index], actions[maxi(index - 1, 0)], actions[index + 1] if index < actions.size() - 1 else _paddock_chat_edit, above_actions, actions[index])
+		_link(actions[index], actions[index - 1] if index > 0 else selected_row, actions[index + 1] if index < actions.size() - 1 else _paddock_chat_edit, above_actions, actions[index])
 	_link_chat(_paddock_chat_edit, rows[0] if not rows.is_empty() else first_action)
 
 
