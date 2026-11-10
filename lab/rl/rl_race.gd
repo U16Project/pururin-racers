@@ -38,6 +38,8 @@ var _elapsed := 0.0
 var _next_decide_s := 0.0
 var _done := false
 var _first_finish_s := -1.0
+## 大逃げの確かめ用：1位が全体の75%を越えたときの、1位の枠と、2位との差（秒）。
+var _escape := {}
 ## 枠 → 席の記録（今の操作、進んだ距離、ダッシュ・ブーストの回数、性格の数え など）。
 var _seats := {}
 ## 人の席の枠（いなければ -1）。
@@ -180,6 +182,8 @@ func _process(delta: float) -> void:
 			_owe(_seats[gate], _heart_penalty(runner, delta))
 	if _first_finish_s < 0.0 and runners.any(func(r): return bool(r.call("is_finished"))):
 		_first_finish_s = _elapsed
+	if _escape.is_empty():
+		_note_escape(runners)
 	# 画面に出すレース（人が走る・観戦）は、打ち切らない（全員のゴールを待つ）。
 	var cut := not _on_screen() and _first_finish_s >= 0.0 and _elapsed - _first_finish_s > float(_settings["cut_after_winner_s"])
 	if bool(_race.call("is_race_over")) or cut or (not _on_screen() and _elapsed > float(_settings["time_limit_s"])):
@@ -300,6 +304,7 @@ func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 	var progress := minf(float(runner.call("get_race_progress")), distance)
 	var from := float(seat["fit_progress"])
 	seat["fit_progress"] = progress
+	_owe(seat, _gap_running_penalty(runner, runners, from, progress))
 	var fit: Dictionary = seat["fit"]
 	var reward: Dictionary = _settings["reward"]
 	if fit["stamina_at_last"] == null and 1.0 - progress / distance <= float(reward["stamina"]["last_ratio"]):
@@ -391,6 +396,54 @@ func _heart_penalty(runner: Node3D, delta: float) -> float:
 	return 0.0
 
 
+## 1位との差（秒）による引き点の大きさ：scale_s を超えた分は1秒ごとに per_s、far_from_s を超えた分は1秒ごとに far_per_s。max_points まで。
+static func _gap_shape(gap_s: float, scale_s: float, per_s: float, far_from_s: float, far_per_s: float, max_points: float) -> float:
+	var near := maxf(minf(gap_s, far_from_s) - scale_s, 0.0)
+	var far := maxf(gap_s - far_from_s, 0.0)
+	return minf(per_s * near + far_per_s * far, max_points)
+
+
+## 走っている間の、1位から離された引き点（reward.gap_running。減点だけ）：全体の from_ratio より先で、
+## 1位との差による引き点の大きさ（_gap_shape）× 進んだ距離 ÷ from_ratio からゴールまでの長さ を、その場で引く（差がずっと同じなら、合計はその大きさ）。
+func _gap_running_penalty(runner: Node3D, runners: Array, from: float, to: float) -> float:
+	var g: Dictionary = _settings["reward"].get("gap_running", {})
+	if float(g.get("per_s", 0.0)) <= 0.0:
+		return 0.0
+	var distance := float(_spec["distance_m"])
+	var start := distance * float(g["from_ratio"])
+	var span := maxf(to, start) - maxf(from, start)
+	if span <= 0.0:
+		return 0.0
+	var size := _gap_shape(_gap_to_leader_s(runner, runners), float(_settings["reward"]["gap_scale_s"]), float(g["per_s"]),
+			float(g["far_from_s"]), float(g["far_per_s"]), float(g["max"]))
+	return -size * span / (distance - start)
+
+
+## 1位との今の差（秒）：1位がまだ走っていれば、距離の差 ÷ 1位のここまでの平均の速さ。1位がゴールしていれば、ゴールからの時間＋残りの距離 ÷ 1位の平均の速さ。
+func _gap_to_leader_s(runner: Node3D, runners: Array) -> float:
+	var distance := float(_spec["distance_m"])
+	var mine := minf(float(runner.call("get_race_progress")), distance)
+	if _first_finish_s > 0.0:
+		return _elapsed - _first_finish_s + (distance - mine) / (distance / _first_finish_s)
+	var lead := 0.0
+	for other: Node3D in runners:
+		lead = maxf(lead, minf(float(other.call("get_race_progress")), distance))
+	return (lead - mine) / maxf(lead / maxf(_elapsed, 0.001), 0.1)
+
+
+## 1位が全体の75%を越えたその時に、1位の枠と、2位との差（秒。距離の差 ÷ 1位の平均の速さ）を覚える（大逃げの確かめ用。点には使わない）。
+func _note_escape(runners: Array) -> void:
+	if runners.size() < 2:
+		return
+	var order := runners.duplicate()
+	order.sort_custom(func(a, b): return float(a.call("get_race_progress")) > float(b.call("get_race_progress")))
+	var lead := float(order[0].call("get_race_progress"))
+	if lead < float(_spec["distance_m"]) * 0.75:
+		return
+	var speed := lead / maxf(_elapsed, 0.001)
+	_escape = {"gate": int(order[0].get("gate_index")), "gap_s": (lead - float(order[1].call("get_race_progress"))) / speed}
+
+
 ## 貯めた点を渡して、0に戻す。
 static func _take_owed(seat: Dictionary) -> float:
 	var points := float(seat["owed"])
@@ -445,7 +498,8 @@ func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 			var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
 			var scale_s := float(weights["gap_scale_s"])
 			reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / scale_s, 0.0, 1.0)
-			reward -= minf(float(weights["gap_penalty_per_s"]) * maxf(gap_s - scale_s, 0.0), float(weights["gap_penalty_max"]))
+			reward -= _gap_shape(gap_s, scale_s, float(weights["gap_penalty_per_s"]), float(weights.get("gap_penalty_far_from_s", INF)),
+					float(weights.get("gap_penalty_far_per_s", 0.0)), float(weights["gap_penalty_max"]))
 		else:
 			reward -= float(weights["gap_penalty_max"])
 	return reward + _take_owed(seat)
@@ -525,7 +579,7 @@ func _finish(runners: Array, cut: bool) -> void:
 		_write_log(runners)
 	_link.send({
 		"seats": reports, "over": true,
-		"race": {"seed": int(_spec["seed"]), "distance_m": float(_spec["distance_m"]), "race_s": _elapsed, "cut": cut, "results": results},
+		"race": {"seed": int(_spec["seed"]), "distance_m": float(_spec["distance_m"]), "race_s": _elapsed, "cut": cut, "results": results, "escape": _escape},
 	})
 	# 画面に出すレースは、結果の板を見せたまま待つ（「もう1回」で次へ）。
 	if not _on_screen():

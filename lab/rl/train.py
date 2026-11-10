@@ -38,7 +38,8 @@ from pool import Pool
 COLUMNS = ["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
            "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
            "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合",
-           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が目安より少ない割合", "線で体力が底の割合", "その場でもらった点"]
+           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が目安より少ない割合", "線で体力が底の割合", "その場でもらった点",
+           "大逃げの割合", "大逃げが決まった割合", "大逃げで縮めた秒", "1位との差（学ぶ子）"]
 
 
 class Progress(BaseCallback):
@@ -122,7 +123,7 @@ class Progress(BaseCallback):
                 round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2),
                 round(mean(seats, "opening_boosts"), 2), round(mean(seats, "spurt_misses"), 2),
                 round(sum(lines_st) / max(len(lines_st), 1), 2), round(share(lines_st, lambda x: x < keep), 2), round(share(lines_st, lambda x: x <= -0.95), 2),
-                round(mean(seats, "paid_now"), 2)]
+                round(mean(seats, "paid_now"), 2), *escape_columns(races, seats)]
         with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
             csv.writer(f).writerow(line)
         v = dict(zip(COLUMNS, line))
@@ -138,8 +139,29 @@ class Progress(BaseCallback):
             f"  脚質どおりの順位にいた {pct(v['性格の順位に合った割合'])}　風よけの使い方が脚質どおり {pct(v['風よけが性格に合った割合'])}",
             f"  前から風よけをもらっていた {pct(v['風よけをもらっていた割合'])}　後ろから押してもらっていた {pct(v['後方支援をもらっていた割合'])}",
             f"  その場でもらった点（1レース） {v['その場でもらった点']}",
+            f"  大逃げ（75%で2位に{ESCAPE_GAP_S:.0f}秒以上の差）：起きた {pct(v['大逃げの割合'])}・決まった {pct(v['大逃げが決まった割合'])}・"
+            f"ゴールまでに縮めた平均 {v['大逃げで縮めた秒']}秒　学ぶ子の1位との差 平均 {v['1位との差（学ぶ子）']}秒",
             f"  あなたのまね：記録 {v['お手本の本数']}本・寄せる強さ {v['お手本に寄せる力']}・あなたと同じ操作を選ぶ {pct(v['お手本と合う見込み'])}",
         ]), flush=True)
+
+
+## 大逃げ：1位が全体の75%を越えたとき、2位との差がこの秒数以上（2026-11-10 ユーザーの指示で3秒。5秒では育成のレースでほとんど起きなかったため）。
+ESCAPE_GAP_S = 3.0
+
+
+def escape_columns(races: list, seats: list) -> list:
+    """大逃げの確かめ（点には使わない）：起きた割合・決まった割合（逃げた子がそのまま1位）・75%からゴールまでに2位との差が縮んだ秒の平均・学ぶ子の1位との差の平均。"""
+    escapes = [race for race in races if float(race.get("escape", {}).get("gap_s", 0.0)) >= ESCAPE_GAP_S]
+    decided, shrunk = 0, []
+    for race in escapes:
+        by_place = sorted(race["results"], key=lambda r: r["place"])
+        if by_place[0]["gate"] == race["escape"]["gate"]:
+            decided += 1
+        if len(by_place) > 1 and by_place[0]["time"] > 0 and by_place[1]["time"] > 0:
+            shrunk.append(float(race["escape"]["gap_s"]) - (by_place[1]["time"] - by_place[0]["time"]))
+    gaps = [r["time"] - r["winner_time"] for r in seats if r["time"] > 0 and r["winner_time"] > 0]
+    return [round(len(escapes) / max(len(races), 1), 3), round(decided / max(len(escapes), 1), 3),
+            round(sum(shrunk) / max(len(shrunk), 1), 2), round(sum(gaps) / max(len(gaps), 1), 2)]
 
 
 def merge(base: dict, extra: dict) -> dict:
