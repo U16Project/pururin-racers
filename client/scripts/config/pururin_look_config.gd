@@ -93,7 +93,7 @@ static func reload() -> void:
 
 ## ユーザーが用意した部品を、組み込みの部品と同じ検査にかけて、通ったものだけ足す。
 ## 通らなかった部品は、理由を user_part_errors に入れる（作成コーナーに出す。黙って別の部品にはしない）。
-## 顔のセットは、中の部品が1つでも通らなければ、セットごと使わない。
+## 顔の部品は、中の絵が1つでも通らなければ、部品ごと使わない。
 static func _add_user_parts(result: Dictionary) -> void:
 	var scan := UserParts.scan(result["expression_names"])
 	var errors: Array = scan["errors"]
@@ -106,16 +106,17 @@ static func _add_user_parts(result: Dictionary) -> void:
 		else:
 			rejected[part_id] = true
 			errors.append_array(part_errors)
-	var face_sets := {}
-	for set_id: String in scan["face_sets"]:
-		var usable := true
-		for slots: Dictionary in scan["face_sets"][set_id]["expressions"].values():
-			for part_id: String in slots.values():
+	var face_parts := {}
+	for slot: String in scan["face_parts"]:
+		face_parts[slot] = {}
+		for family_id: String in scan["face_parts"][slot]:
+			var usable := true
+			for part_id: String in scan["face_parts"][slot][family_id]["expressions"].values():
 				usable = usable and not rejected.has(part_id)
-		if usable:
-			face_sets[set_id] = scan["face_sets"][set_id]
+			if usable:
+				face_parts[slot][family_id] = scan["face_parts"][slot][family_id]
 	result["user_labels"] = scan["labels"]
-	result["user_face_sets"] = face_sets
+	result["user_face_parts"] = face_parts
 	result["user_part_errors"] = errors
 
 

@@ -1,5 +1,5 @@
 extends GutTest
-## スタート前の見せ方（レース場を上から → パドック（周回と紹介）→ 本馬場入場（全員でゲートへ歩いて、枠に入る）→ ゲートイン）。
+## スタート前の見せ方（レース場 → パドック（周回と紹介）→ ゲートイン（全員でゲートへ歩いて、枠に入る））。場面の間は、少し暗くして移る。
 
 const RaceSession := preload("res://scripts/race_session.gd")
 const LocalRaceScene := preload("res://scenes/local_race.tscn")
@@ -43,7 +43,9 @@ func test_the_show_runs_in_order_and_holds_the_countdown_until_it_ends() -> void
 	# 見せ方の間は、入場の待ちもカウントダウンも進まない。
 	race.call("_update_before_start", 60.0)
 	assert_false(bool(race.get("_countdown_begun")))
-	_advance(show, PreRaceShow.OVERVIEW_S + 0.05)
+	_advance(show, PreRaceShow.overview_seconds() + 0.05)
+	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_OVERVIEW, "暗くし終えるまでは、レース場のまま")
+	_advance(show, PreRaceShow.fade_out_seconds() + 0.1)
 	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_PADDOCK)
 	# パドック：歩くのは体の写し。本物の走者は、ゲートの位置のまま隠しておく（会場を写す間から、ゲートは空）。
 	var runners: Array = race.get("_runners")
@@ -58,9 +60,9 @@ func test_the_show_runs_in_order_and_holds_the_countdown_until_it_ends() -> void
 	assert_eq(runner.global_position, at_gate)
 	assert_ne(copy.global_position, paddock_start, "パドックを周回している")
 	assert_true((show.get("_card") as Control).visible, "パドックで、紹介の札を出す")
-	_advance(show, paddock_s * 0.5)
+	_advance(show, paddock_s * 0.5 + PreRaceShow.fade_out_seconds() + 0.1)
 	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_INTRO)
-	# 本馬場入場：全員が、もうコースの上を歩いている（急に出てこない）。着いた順に、本物の走者が出る。
+	# ゲートイン：全員が、もうコースの上を歩いている（急に出てこない）。着いた順に、本物の走者が出る。
 	assert_eq((show.get("_entry") as Array).size(), runners.size(), "全員が一度に歩いている")
 	for walker: Node3D in show.get("_entry"):
 		assert_gt(walker.global_position.distance_to((walker.get_meta("runner") as Node3D).global_position), PreRaceShow.ENTRY_BACK_MIN_M - 3.0, "枠の後ろのほうから歩いてくる（入場が始まった同じコマで、少し進むことがある）")
@@ -73,7 +75,7 @@ func test_the_show_runs_in_order_and_holds_the_countdown_until_it_ends() -> void
 	for each: Node3D in runners:
 		assert_true(each.visible, "全員が並んでいる")
 	# カメラが前まで回り終えたら、終わる。
-	_advance(show, PreRaceShow.SWEEP_S + PreRaceShow.LINEUP_MIN_S)
+	_advance(show, PreRaceShow.gate_in_seconds() + PreRaceShow.LINEUP_MIN_S)
 	assert_false(is_instance_valid(show) and bool(show.call("is_running")), "並んで、カメラが回り終えたら終わる")
 	assert_null(race.get("_pre_race_show"))
 	assert_true(bool(player.get("pre_start_input")), "見せ方が終わったら、ノッチを選べる")
@@ -89,7 +91,10 @@ func test_skipping_goes_to_the_lineup_and_waits_for_the_preparation() -> void:
 	var prepared := {"done": false}
 	show.set("may_finish", func() -> bool: return bool(prepared["done"]))
 	show.call("skip")
-	assert_true(bool(show.call("is_at_lineup")), "飛ばすと、並んだ所へ")
+	_advance(show, PreRaceShow.fade_out_seconds() + 0.1)
+	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_PADDOCK, "レース場で飛ばすと、パドックへ")
+	show.call("skip")
+	assert_true(bool(show.call("is_at_lineup")), "パドックで飛ばすと、並んだ所へ")
 	show._process(0.1)
 	assert_true(bool(show.call("is_running")), "準備が終わるまでは、並んで待つ")
 	prepared["done"] = true
@@ -187,12 +192,24 @@ func test_a_free_race_that_fills_before_the_paddock_shows_one_list_only() -> voi
 		entries.append({"gate": gate, "id": ids[0] if mine else ids[(gate + 1) % ids.size()], "runner_id": ids[0] if mine else "%s#%d" % [ids[(gate + 1) % ids.size()], gate], "player": mine, "peer_id": 9 if mine else 0, "trainer_id": "kaede", "trainer_name": "自分" if mine else "カエデ"})
 	race.call("_start_free_race", {"t": "race_start", "distance_m": RaceSession.selected_distance_m(), "entries": entries, "free_room_id": ""})
 	assert_eq(_overlay_count(race), 0, "パドックに着くまでは、出走表を出さない")
-	_advance(show, PreRaceShow.OVERVIEW_S + 0.05)
+	_advance(show, PreRaceShow.overview_seconds() + PreRaceShow.fade_out_seconds() + 0.15)
 	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_PADDOCK)
 	assert_eq(_overlay_count(race), 1, "出走表は1枚だけ")
-	# パドックを出たら、出走表は残らない。
+	# パドックを出たら、パドックの出走表は片づけて、ゲートインの見るだけの出走表に替わる（1枚だけ）。
 	show.call("release_paddock")
-	show._process(0.1)
+	_advance(show, PreRaceShow.fade_out_seconds() + 0.1)
+	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_INTRO)
+	assert_eq(_overlay_count(race), 1, "ゲートインでも、出走表は1枚だけ")
+	var gate_in_list: Control = race.get("_gate_in_list")
+	assert_true(gate_in_list.visible, "ゲートインの出走表は、はじめは出しておく")
+	var y := InputEventJoypadButton.new()
+	y.button_index = JOY_BUTTON_Y
+	y.pressed = true
+	race._unhandled_input(y)
+	assert_false(gate_in_list.visible, "Y で隠す")
+	race._unhandled_input(y)
+	assert_true(gate_in_list.visible, "もう一度 Y で出す")
+	show.call("finish_now")
 	assert_eq(_overlay_count(race), 0, "レースまで残らない")
 	# パドックの途中で、サーバーがスタートした（見せ方を途中で終える）ときも、出走表は残らない。
 	var race2 := _race()

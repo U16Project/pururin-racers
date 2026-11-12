@@ -1,7 +1,8 @@
 extends Node
 ## スタート前の見せ方（画面のある所だけ。レースの中身には触らない）。
-## ① レース場を上から → ② パドック（スタンドの前の芝生で、体の写しが輪になってゆっくり歩く）→ ③ 1体ずつ紹介 → ④ ゲートに並ぶ。
-## ④ は、may_finish（準備が終わった・オンラインならサーバーが待つのをやめた）が真になるまで続け、そのあと finished を出す。
+## ① レース場（空から会場を見せて、レース名と距離を大きく出す）→ ② パドック（スタンドの前の芝生で、体の写しが輪になってゆっくり歩く）
+## → ③ ゲートイン（全員がゲートへ歩いて、自分の枠に入るまでを、止めずに続けて写す）。場面を変えるときは、少し暗くするだけ。
+## ③ は、may_finish（準備が終わった・オンラインならサーバーが待つのをやめた）が真になるまで続け、そのあと finished を出す。
 ## 見せている間は、専用のカメラと文字を出し、いつもの表示（操作盤など）は隠す。終わったら元に戻す。
 
 signal reached_lineup
@@ -11,6 +12,8 @@ signal paddock_entered
 signal paddock_left
 ## 場面の見出し（真ん中の大きな文字）を出し終えた。
 signal title_card_done
+## ゲートインの場面に入った（会場の画面が、見るだけの出走表を重ねる合図）。
+signal gate_in_entered
 signal finished
 
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
@@ -34,8 +37,7 @@ const STAGE_PADDOCK := 1
 const STAGE_INTRO := 2
 const STAGE_LINEUP := 3
 const STAGE_DONE := 4
-## 場面ごとの長さ（秒）。紹介は1体ぶん。
-const OVERVIEW_S := 3.0
+## 場面の番号（STAGE_INTRO はゲートインの前半＝歩いてくる間、STAGE_LINEUP は後半＝並んだあと。上の帯では、どちらも「ゲートイン」）。
 ## パドックの最初の、列を写す秒数と、そのあと1体ずつ紹介の札を出す秒数。
 const PADDOCK_LEAD_S := 2.0
 const PADDOCK_CARD_S := 1.4
@@ -50,16 +52,15 @@ const PADDOCK_PATH_WIDTH_M := 3.0
 const PADDOCK_FENCE_GAP_M := 2.6
 ## 周回の速さ（m/秒。平均）。
 const PADDOCK_WALK_MPS := 1.6
-## 本馬場入場：パドックのあと、全員がまとめて、コースの上をゲートのほうへ歩いてきて、そのまま自分の枠に入る。
+## ゲートイン：パドックのあと、全員がまとめて、コースの上をゲートのほうへ歩いてきて、そのまま自分の枠に入る。
 ## 歩き始める所（枠の後ろ、m。ばらばらに）と、歩く速さ（m/秒。平均。1体ごとに少し違う）。
 const ENTRY_BACK_MIN_M := 14.0
 const ENTRY_BACK_SPREAD_M := 10.0
 const ENTRY_SIDE_SPREAD_M := 2.5
 const ENTRY_WALK_MPS := 3.2
-## 本馬場入場からゲートインまでのカメラ：ゲートの斜め後ろ（コースの内側）から、内側を回って前へ出て、
+## ゲートインからゲートインまでのカメラ：ゲートの斜め後ろ（コースの内側）から、内側を回って前へ出て、
 ## 斜め前（コースの外側）まで、ゆっくり1本の動きで回り込む。回り終えるまでの秒数、回り込む向き（ラジアン。
 ## 0＝真後ろ、π/2＝内側の真横、π＝真正面）、ゲートからの距離と高さ（始め・終わり）。
-const SWEEP_S := 12.0
 const SWEEP_FROM_RAD := 0.45
 const SWEEP_TO_RAD := PI + 0.55
 const SWEEP_RADIUS_M := Vector2(26.0, 16.0)
@@ -82,14 +83,22 @@ const CRAWL_MIN_SHARE := 0.25
 const EXPRESSION_CHANGE_CHANCE := 0.6
 ## パドックで、前のぷるりんに近づきすぎない間（1周に対する割合で数える前の、m）。
 const PADDOCK_MIN_GAP_M := 4.0
-## 場面の道しるべ（上の帯）。
-const STEP_NAMES := ["レース場", "パドック", "本馬場入場", "ゲートイン"]
-## 場面が変わるときの見出し（真ん中に大きく）：見出しと、小さな説明。出しておく秒数と、薄く出し入れする秒数。
-const STAGE_TITLES := {
-	1: ["パドック", "出走するぷるりんたちの様子を見られます"],
-	2: ["本馬場入場", "ぷるりんたちがゲートへ向かいます"],
-	3: ["ゲートイン", "まもなくスタートです"],
-}
+## 場面の道しるべ（上の帯）。場面の番号から、帯の何番目かを引く。
+const STEP_NAMES := ["レース場", "パドック", "ゲートイン"]
+const STEP_OF_STAGE := {STAGE_OVERVIEW: 0, STAGE_PADDOCK: 1, STAGE_INTRO: 2, STAGE_LINEUP: 2}
+## レース場の画面で、空から会場へ降りてくるカメラ（会場の真ん中からの、始めの高さと後ろへの距離）。
+const OVERVIEW_START_HEIGHT_M := 85.0
+const OVERVIEW_START_BACK_M := 150.0
+## レース場の画面に出す、レースの札（左下）。字の大きさと、出てくるときに横へすべる長さ・秒数。
+const VENUE_CARD_KIND_SIZE := 16
+const VENUE_CARD_NAME_SIZE := 40
+const VENUE_CARD_DISTANCE_SIZE := 96
+const VENUE_CARD_INFO_SIZE := 20
+const VENUE_CARD_SLIDE_PX := 80.0
+const VENUE_CARD_SLIDE_S := 0.6
+## 暗くする幕の色。
+const COLOR_FADE := Color(0.0, 0.0, 0.0, 1.0)
+## オンラインの知らせ（「枠順抽選」など）を、真ん中に出すときの秒数と、薄く出し入れする秒数。
 const TITLE_CARD_S := 1.5
 const TITLE_FADE_S := 0.3
 const COLOR_STEP_NOW := Color(1.0, 0.8, 0.28)
@@ -115,6 +124,17 @@ var _right := Vector3.RIGHT
 var _stands_side := Vector3.RIGHT
 var _stage := STAGE_OVERVIEW
 var _stage_time := 0.0
+## 暗くしてから移る場面（-1 なら、暗くしている途中ではない）。暗くしてからの秒数、明るく戻す残りの秒数。
+var _next_stage := -1
+var _fade_time := 0.0
+var _fade_in_left := 0.0
+var _fade: ColorRect
+## 会場（コース）の真ん中。
+var _venue_center := Vector3.ZERO
+## レース場の画面の、レースの札。
+var _venue_card: Control
+## ゲートインの間の「Y 出走表」の案内。
+var _list_row: Control
 var _hidden_ui: Array[CanvasItem] = []
 var _copies: Array[Node3D] = []
 var _overlay: Control
@@ -157,7 +177,7 @@ var _title_total := 0.0
 var _skip_row: Control
 var _blend_from := Transform3D.IDENTITY
 var _blend_time := 0.0
-## 本馬場入場が始まってからの秒数（ゲートインの場面へ続けて数える。カメラの回り込みに使う）。
+## ゲートインが始まってからの秒数（ゲートインの場面へ続けて数える。カメラの回り込みに使う）。
 var _sweep_time := 0.0
 ## 終わってよいか（準備・サーバーの待ち）。止めている間か。
 var may_finish := Callable()
@@ -186,6 +206,7 @@ func begin(track: Path3D, route: Dictionary, runners: Array, ui: CanvasLayer, ra
 	for point in points:
 		venue += track.to_global(point)
 	venue /= maxf(float(points.size()), 1.0)
+	_venue_center = venue
 	var outward := _gate_center - venue
 	outward.y = 0.0
 	_stands_side = _right if _right.dot(outward) > 0.0 else -_right
@@ -204,6 +225,7 @@ func begin(track: Path3D, route: Dictionary, runners: Array, ui: CanvasLayer, ra
 	add_child(_camera)
 	_camera.make_current()
 	_build_overlay(label)
+	_build_venue_card(label)
 	for child in _ui.get_children():
 		if child is CanvasItem and (child as CanvasItem).visible and not str(child.name) in KEEP_SHOWN and child != _overlay:
 			(child as CanvasItem).visible = false
@@ -226,20 +248,53 @@ func is_at_lineup() -> bool:
 	return _stage >= STAGE_LINEUP
 
 
-## 飛ばす：④ へ進む（④ の最短の秒数も待たない。準備が終わっていれば、すぐ終わる）。
+## 飛ばす：レース場の画面なら、パドックへ。それより後なら、並んだ所へ進む（最短の秒数も待たない。準備が終わっていれば、すぐ終わる）。
 func skip() -> void:
+	if _stage == STAGE_OVERVIEW:
+		_go(STAGE_PADDOCK)
+		return
 	if _stage >= STAGE_LINEUP:
 		_stage_time = LINEUP_MIN_S
-		_sweep_time = SWEEP_S
+		_sweep_time = gate_in_seconds()
 		return
+	_next_stage = -1
 	_end_warmup()
 	_end_entry()
 	_enter(STAGE_LINEUP)
 	_stage_time = LINEUP_MIN_S
-	_sweep_time = SWEEP_S
+	_sweep_time = gate_in_seconds()
 	# 飛ばしたときは、見出しも出さない。
 	_title_left = 0.0
 	_title_card.visible = false
+
+
+## レース場の画面を見せる秒数・ゲートインを写す長さ・暗くする秒数・明るく戻す秒数（設定から）。
+static func overview_seconds() -> float:
+	return LocalRaceMath.Config.number("pre_race_venue_s")
+
+
+static func gate_in_seconds() -> float:
+	return LocalRaceMath.Config.number("pre_race_gate_in_s")
+
+
+static func fade_out_seconds() -> float:
+	return LocalRaceMath.Config.number("pre_race_fade_out_s")
+
+
+static func fade_in_seconds() -> float:
+	return LocalRaceMath.Config.number("pre_race_fade_in_s")
+
+
+## 場面を変える：少し暗くしてから移り、移ったら明るく戻す。暗くしている途中なら、何もしない。
+func _go(stage: int) -> void:
+	if _next_stage >= 0 or stage == _stage:
+		return
+	if fade_out_seconds() <= 0.0:
+		_enter(stage)
+		_fade_in_left = fade_in_seconds()
+		return
+	_next_stage = stage
+	_fade_time = 0.0
 
 
 ## パドックで待つのをやめて、先へ（紹介 → ゲートイン）進む。
@@ -247,7 +302,7 @@ func release_paddock() -> void:
 	hold_paddock = false
 	_focus_index = -1
 	if _stage == STAGE_PADDOCK:
-		_enter(STAGE_INTRO)
+		_go(STAGE_INTRO)
 
 
 ## パドックで、その枠のぷるりんにカメラを寄せる（-1 で、輪のまわりを回るのに戻す）。
@@ -270,7 +325,7 @@ func set_runners(runners: Array) -> void:
 		_end_warmup()
 	_runners = runners.duplicate()
 	_runners.sort_custom(func(a: Node3D, b: Node3D) -> bool: return int(a.get("gate_index")) < int(b.get("gate_index")))
-	# ゲートは、本馬場入場で並ぶまで空けておく。
+	# ゲートは、ゲートインで並ぶまで空けておく。
 	for runner: Node3D in _runners:
 		runner.visible = false
 	_gate_center = Vector3.ZERO
@@ -306,8 +361,10 @@ func _process(delta: float) -> void:
 	# 一時停止の間は、止めて、札と案内を隠す（一時停止の板と重ならないように）。
 	var paused := is_paused.is_valid() and bool(is_paused.call())
 	_overlay.visible = not paused
+	_fade.visible = not paused and _fade.color.a > 0.0
 	if paused:
 		return
+	_update_fade(delta)
 	# 見出しを出している間は、場面の時計を止める（パドックのぷるりんは歩き続ける）。
 	if _title_left > 0.0:
 		_title_left = maxf(_title_left - delta, 0.0)
@@ -323,12 +380,10 @@ func _process(delta: float) -> void:
 	_blend_time += delta
 	match _stage:
 		STAGE_OVERVIEW:
-			var t := _ease(_stage_time / OVERVIEW_S)
-			var from := _gate_center - _stands_side * 110.0 - _forward * 40.0 + Vector3.UP * 55.0
-			var to := _gate_center - _stands_side * 30.0 - _forward * 40.0 + Vector3.UP * 14.0
-			_aim(from.lerp(to, t), _gate_center)
-			if _stage_time >= OVERVIEW_S:
-				_enter(STAGE_PADDOCK)
+			_overview_camera(_stage_time / overview_seconds())
+			_slide_venue_card()
+			if _stage_time >= overview_seconds():
+				_go(STAGE_PADDOCK)
 		STAGE_PADDOCK:
 			var t := _stage_time / _paddock_seconds()
 			_move_copies(delta)
@@ -358,34 +413,41 @@ func _process(delta: float) -> void:
 				inward.y = 0.0
 				_aim(copy.global_position + ahead.normalized() * 4.0 + inward.normalized() * 2.2 + Vector3.UP * 0.9, copy.global_position + Vector3.UP * 0.4)
 			if _stage_time >= _paddock_seconds() and not hold_paddock:
-				_enter(STAGE_INTRO)
+				_go(STAGE_INTRO)
 		STAGE_INTRO:
 			_move_entry(delta)
 			_sweep(delta)
+			# 歩いてくる所から並び終えるまで、同じカメラで続けて写す（ここは暗くしない）。
 			if _entry.is_empty():
-				_enter(STAGE_LINEUP)
+				_enter(STAGE_LINEUP, false)
 		STAGE_LINEUP:
 			_sweep(delta)
 			_waiting.visible = show_waiting
 			# カメラが前まで回り終えてから、終わる。
-			if _stage_time >= LINEUP_MIN_S and _sweep_time >= SWEEP_S and (not may_finish.is_valid() or bool(may_finish.call())):
+			if _stage_time >= LINEUP_MIN_S and _sweep_time >= gate_in_seconds() and (not may_finish.is_valid() or bool(may_finish.call())):
 				_finish()
 
 
-func _enter(stage: int) -> void:
+## 場面に入る。blend が真なら、カメラを前の画からなめらかにつなぐ（暗くして移るときは、つながずに切り替える）。
+func _enter(stage: int, blend: bool = false) -> void:
+	var before := _stage
 	if _stage == STAGE_PADDOCK and stage != STAGE_PADDOCK:
 		_end_warmup()
 		paddock_left.emit()
 	_stage = stage
 	_stage_time = 0.0
 	_start_blend()
+	if not blend:
+		_blend_time = CAMERA_BLEND_S
 	_card.visible = false
 	_waiting.visible = false
+	_venue_card.visible = stage == STAGE_OVERVIEW
+	_list_row.visible = stage >= STAGE_INTRO
 	_refresh_steps()
 	if _skip_row != null:
 		_skip_row.visible = not (stage == STAGE_PADDOCK and hold_paddock)
-	if STAGE_TITLES.has(stage):
-		show_title_card(STAGE_TITLES[stage][0], STAGE_TITLES[stage][1])
+	if stage >= STAGE_INTRO and before < STAGE_INTRO:
+		gate_in_entered.emit()
 	match stage:
 		STAGE_PADDOCK:
 			_begin_warmup()
@@ -412,21 +474,54 @@ func _finish() -> void:
 			item.visible = true
 	_hidden_ui.clear()
 	_overlay.visible = false
+	_fade.visible = false
 	_race_camera.make_current()
 	finished.emit()
 	queue_free()
 
 
-## 本馬場入場からゲートインのカメラ：後ろ（内側）から、内側を回って、前（外側）へ。写す先も、歩いてくる群れからゲートへ。
+## ゲートインからゲートインのカメラ：後ろ（内側）から、内側を回って、前（外側）へ。写す先も、歩いてくる群れからゲートへ。
 func _sweep(delta: float) -> void:
 	_sweep_time += delta
-	var t := _ease(minf(_sweep_time / SWEEP_S, 1.0))
+	var t := _ease(minf(_sweep_time / gate_in_seconds(), 1.0))
 	var angle := lerpf(SWEEP_FROM_RAD, SWEEP_TO_RAD, t)
 	# 0＝真後ろ（-_forward）、π/2＝内側（-_stands_side）、π＝真正面（_forward）、その先は外側へ。
 	var direction := -_forward * cos(angle) - _stands_side * sin(angle)
 	var eye := _gate_center + direction * lerpf(SWEEP_RADIUS_M.x, SWEEP_RADIUS_M.y, t) + Vector3.UP * lerpf(SWEEP_HEIGHT_M.x, SWEEP_HEIGHT_M.y, t)
 	var look := (_gate_center - _forward * ENTRY_BACK_MIN_M * 0.6).lerp(_gate_center, t) + Vector3.UP * 0.4
 	_aim(eye, look)
+
+
+## 暗くする幕を進める：暗くし終えたら、次の場面へ移って、明るく戻す。
+func _update_fade(delta: float) -> void:
+	if _next_stage >= 0:
+		_fade_time += delta
+		var out_s := fade_out_seconds()
+		_fade.color.a = clampf(_fade_time / out_s, 0.0, 1.0) if out_s > 0.0 else 1.0
+		if _fade_time >= out_s:
+			var stage := _next_stage
+			_next_stage = -1
+			_enter(stage)
+			_fade_in_left = fade_in_seconds()
+	elif _fade_in_left > 0.0:
+		_fade_in_left = maxf(_fade_in_left - delta, 0.0)
+		_fade.color.a = _fade_in_left / maxf(fade_in_seconds(), 0.001)
+	else:
+		_fade.color.a = 0.0
+	_fade.visible = _fade.color.a > 0.0
+
+
+## レース場の画面のカメラ：会場の上の高い所から、コースの上をなめらかに下りながら、スタートのゲートのほうへ回り込む。
+## t は 0〜1（場面の進み）。
+func _overview_camera(t: float) -> void:
+	var e := _ease(t)
+	var p0 := _venue_center - _forward * OVERVIEW_START_BACK_M + Vector3.UP * OVERVIEW_START_HEIGHT_M
+	var p1 := _venue_center + _forward * 40.0 + Vector3.UP * 55.0
+	var p2 := _gate_center - _stands_side * 60.0 + _forward * 50.0 + Vector3.UP * 22.0
+	var p3 := _gate_center - _stands_side * 22.0 + _forward * 26.0 + Vector3.UP * 6.0
+	var u := 1.0 - e
+	var eye := p0 * u * u * u + p1 * 3.0 * u * u * e + p2 * 3.0 * u * e * e + p3 * e * e * e
+	_aim(eye, _venue_center.lerp(_gate_center, _ease(minf(t * 1.4, 1.0))))
 
 
 ## カメラを、その位置からその点へ向ける。場面が変わった直後は、前の画からなめらかにつなぐ。
@@ -604,7 +699,7 @@ func _end_warmup() -> void:
 	_copies.clear()
 
 
-## 本馬場入場：その走者の写しを、ゲートの後ろに出す（着いたら、写しを消して、本物の走者を出す）。
+## ゲートイン：その走者の写しを、ゲートの後ろに出す（着いたら、写しを消して、本物の走者を出す）。
 var _entry: Array[Node3D] = []
 
 
@@ -734,6 +829,25 @@ func _build_overlay(label: Dictionary) -> void:
 		var skip_text := MenuStyle.label("スキップ", 17, MenuStyle.COLOR_TEXT)
 		skip_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		skip_row.add_child(skip_text)
+	# ゲートインの間は、右下に「Y 出走表」（出走表の出し入れ）。オフラインでは「A スキップ」の左。
+	var list_row := HBoxContainer.new()
+	_list_row = list_row
+	list_row.name = "ListGuide"
+	list_row.add_theme_constant_override("separation", 8)
+	list_row.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	list_row.offset_right = -MenuStyle.SCREEN_MARGIN - (0.0 if online else 170.0)
+	list_row.offset_left = list_row.offset_right - 170.0
+	list_row.offset_top = -48.0
+	list_row.offset_bottom = -16.0
+	list_row.alignment = BoxContainer.ALIGNMENT_END
+	list_row.visible = false
+	_overlay.add_child(list_row)
+	var list_mark := MenuStyle.mark("Y", 24.0)
+	list_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	list_row.add_child(list_mark)
+	var list_text := MenuStyle.label("出走表", 17, MenuStyle.COLOR_TEXT)
+	list_text.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	list_row.add_child(list_text)
 	_build_card()
 	_title_card = ColorRect.new()
 	_title_card.name = "TitleCard"
@@ -777,17 +891,82 @@ func _build_overlay(label: Dictionary) -> void:
 	_waiting.offset_bottom = -60.0
 	_waiting.visible = false
 	_overlay.add_child(_waiting)
+	# 場面を変えるときに暗くする幕（いちばん上）。一時停止の板より下に置くため、文字の層の中で最後に足す。
+	_fade = ColorRect.new()
+	_fade.name = "Fade"
+	_fade.color = Color(COLOR_FADE, 0.0)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_fade.z_as_relative = false
+	_fade.z_index = 200
+	_fade.visible = false
+	_overlay.add_child(_fade)
+
+
+## レース場の画面の、レースの札（左下）：遊び方の札、レース名（ルーム名・距離の名前）、大きな距離、出走の数。
+func _build_venue_card(label: Dictionary) -> void:
+	var card := VBoxContainer.new()
+	card.name = "VenueCard"
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_theme_constant_override("separation", 0)
+	card.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	card.offset_left = MenuStyle.SCREEN_MARGIN + 12.0
+	card.offset_top = -300.0
+	card.offset_right = 900.0
+	card.offset_bottom = -44.0
+	card.alignment = BoxContainer.ALIGNMENT_END
+	_overlay.add_child(card)
+	_venue_card = card
+	var tags := HBoxContainer.new()
+	tags.add_theme_constant_override("separation", 6)
+	tags.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(tags)
+	var kind: Array = label.get("kind", ["", Color.WHITE])
+	for tag: Array in [kind] + (label.get("tags", []) as Array):
+		if not str(tag[0]).is_empty():
+			tags.add_child(MenuStyle.tag(str(tag[0]), tag[1], VENUE_CARD_KIND_SIZE))
+	# 上に出す文（「ルーム名　距離」）を、名前と距離に分ける。
+	var parts := str(label.get("title", "")).split("　", false)
+	var distance := str(parts[parts.size() - 1]) if parts.size() > 0 else ""
+	var name := "　".join(parts.slice(0, parts.size() - 1)) if parts.size() > 1 else ""
+	var name_label := MenuStyle.bold_label(name, VENUE_CARD_NAME_SIZE, MenuStyle.COLOR_TEXT, 10)
+	name_label.name = "VenueName"
+	name_label.visible = not name.is_empty()
+	card.add_child(name_label)
+	var distance_label := MenuStyle.bold_label(distance.replace("m", " m"), VENUE_CARD_DISTANCE_SIZE, MenuStyle.COLOR_FOCUS, 14)
+	distance_label.name = "VenueDistance"
+	card.add_child(distance_label)
+	# 下に、水色の細い線と、出走の数。
+	var line := ColorRect.new()
+	line.color = MenuStyle.COLOR_ACCENT
+	line.custom_minimum_size = Vector2(420.0, 3.0)
+	line.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(line)
+	# オンラインでは、この時点では出走の数が決まっていないことがあるので、出さない。
+	if not online:
+		var info := MenuStyle.bold_label("%d体が出走" % _runners.size(), VENUE_CARD_INFO_SIZE, MenuStyle.COLOR_TEXT, 6)
+		info.name = "VenueInfo"
+		card.add_child(info)
+
+
+## レースの札を、場面の始めに、左からすべらせながら出す。
+func _slide_venue_card() -> void:
+	var k := _ease(_stage_time / VENUE_CARD_SLIDE_S)
+	_venue_card.modulate.a = k
+	_venue_card.position.x = MenuStyle.SCREEN_MARGIN + 12.0 - VENUE_CARD_SLIDE_PX * (1.0 - k)
 
 
 ## 道しるべの色と印を、今の場面に合わせる。
 func _refresh_steps() -> void:
+	var now := int(STEP_OF_STAGE.get(_stage, STEP_NAMES.size()))
 	for index in _steps.size():
 		var step := _steps[index]
-		var done := index < _stage
+		var done := index < now
 		step.text = ("✓ " if done else "%d " % (index + 1)) + str(STEP_NAMES[index])
-		step.add_theme_color_override("font_color", COLOR_STEP_NOW if index == _stage else (COLOR_STEP_DONE if done else COLOR_STEP_LATER))
+		step.add_theme_color_override("font_color", COLOR_STEP_NOW if index == now else (COLOR_STEP_DONE if done else COLOR_STEP_LATER))
 		# 今の場面は、大きくする。
-		step.add_theme_font_size_override("font_size", 20 if index == _stage else 15)
+		step.add_theme_font_size_override("font_size", 20 if index == now else 15)
 
 
 ## 真ん中に、大きな見出しと小さな説明を出す（画面を少し暗くする）。出し終えたら title_card_done。

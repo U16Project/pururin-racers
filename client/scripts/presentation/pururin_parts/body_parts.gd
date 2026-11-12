@@ -8,8 +8,8 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna"],
-	"side": ["flipper", "rock", "flame", "leaf", "drop", "crystal", "bat_wing", "hand", "bow", "butterfly", "star"],
+	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna", "witch_hat", "mushroom", "propeller"],
+	"side": ["flipper", "rock", "flame", "leaf", "drop", "crystal", "bat_wing", "hand", "bow", "butterfly"],
 	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft", "star", "heart", "devil", "spiky"],
 }
 ## 形ごとに、必ず要る数字。
@@ -41,6 +41,9 @@ const REQUIRED_PARAMS := {
 	"horn": ["length", "width"],
 	"hat": ["radius", "height", "tilt_deg"],
 	"star_antenna": ["length", "thickness", "curve", "star_size"],
+	"witch_hat": ["radius", "height", "bend", "tilt_deg"],
+	"mushroom": ["radius", "height"],
+	"propeller": ["size", "blades"],
 	"butterfly": ["size", "tilt_deg"],
 	"star": ["size", "depth", "tilt_deg"],
 	"heart": ["size", "depth", "tilt_deg"],
@@ -72,6 +75,9 @@ const REQUIRED_COLORS := {
 	"horn": ["color"],
 	"hat": ["color", "band_color"],
 	"star_antenna": ["color"],
+	"witch_hat": ["color", "band_color"],
+	"mushroom": ["color", "spot_color", "stem_color"],
+	"propeller": ["color", "hub_color"],
 	"butterfly": ["color", "spot_color"],
 	"star": ["color"],
 	"heart": ["color"],
@@ -118,6 +124,9 @@ static func build_top(shape: Dictionary, source: Dictionary, body_material: Mate
 			"horn": _add_horn(bits, source)
 			"hat": _add_hat(bits, source)
 			"star_antenna": _add_star_antenna(bits, source)
+			"witch_hat": _add_witch_hat(bits, source)
+			"mushroom": _add_mushroom(bits, source)
+			"propeller": _add_propeller(bits, source)
 		node = _builtin_node(bits, body_material, str(source["shape"]) in ["rocks", "crystals"])
 	node.position = Vector3(0.0, float(shape["height"]), 0.0)
 	node.name = "Top"
@@ -801,6 +810,60 @@ static func _add_hat(bits: Bits, source: Dictionary) -> void:
 	_add_ellipsoid(bits, Vector3.ZERO, Vector3(radius * 1.55, radius * 0.1, radius * 1.55), color, tilt)
 	_add_cylinder(bits, 0.0, height, radius, color, tilt)
 	_add_cylinder(bits, height * 0.08, height * 0.3, radius * 1.04, _tint(Color(str(source["band_color"])), 1.0), tilt)
+
+
+## とんがり帽子（頭の上）：広いつばと、先が後ろへ折れる、とがった帽子。帽子の下に、帯。
+static func _add_witch_hat(bits: Bits, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var height := float(source["height"])
+	var bend := float(source["bend"])
+	var tilt := Transform3D(Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"]))), Vector3(0.0, -0.02, 0.0))
+	var color := _tint(Color(str(source["color"])), 1.0)
+	_add_ellipsoid(bits, Vector3.ZERO, Vector3(radius * 1.7, radius * 0.08, radius * 1.7), color, tilt)
+	var steps := 18
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		# 上のほうほど、後ろ（+Z）へ曲がる。
+		centers.append(Vector3(0.0, height * t, bend * pow(t, 2.5)))
+		radii.append(radius * (1.0 - t))
+		colors.append(color)
+	_add_tube(bits, centers, radii, 1.0, colors, tilt)
+	_add_cylinder(bits, 0.0, height * 0.14, radius * 0.92, _tint(Color(str(source["band_color"])), 1.0), tilt)
+
+
+## きのこ（頭の上）：短い柄と、丸いかさ。かさに白い水玉。
+static func _add_mushroom(bits: Bits, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var height := float(source["height"])
+	_add_cylinder(bits, -0.06, height, radius * 0.38, _tint(Color(str(source["stem_color"])), 1.0), Transform3D.IDENTITY)
+	var cap := _tint(Color(str(source["color"])), 1.0)
+	_add_ellipsoid(bits, Vector3(0.0, height, 0.0), Vector3(radius, radius * 0.72, radius), cap, Transform3D.IDENTITY)
+	var spot := _tint(Color(str(source["spot_color"])), 1.0)
+	for index in 6:
+		var angle := TAU * float(index) / 6.0 + 0.3
+		var up := 0.55 if index % 2 == 0 else 0.9
+		var direction := Vector3(cos(angle) * sin(up), cos(up) * 0.72, sin(angle) * sin(up)).normalized()
+		var point := Vector3(0.0, height, 0.0) + Vector3(direction.x * radius, direction.y * radius * 0.72 / 0.72, direction.z * radius) * 0.98
+		var lay := Basis(Quaternion(Vector3.UP, direction))
+		_add_ellipsoid(bits, Vector3.ZERO, Vector3(radius * 0.2, radius * 0.04, radius * 0.2), spot, Transform3D(lay, point))
+	_add_ellipsoid(bits, Vector3(0.0, height * 1.0 + radius * 0.72, 0.0), Vector3(radius * 0.22, radius * 0.05, radius * 0.22), spot, Transform3D.IDENTITY)
+
+
+## プロペラ（頭の上）：短い棒の先に、平たい羽根と、まん中の玉。
+static func _add_propeller(bits: Bits, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var color := _tint(Color(str(source["color"])), 1.0)
+	_add_cylinder(bits, -0.06, size * 0.55, size * 0.07, _plain(), Transform3D.IDENTITY)
+	var blades := int(source["blades"])
+	for index in blades:
+		var around := Basis(Vector3.UP, TAU * float(index) / float(blades))
+		# 羽根は少しひねる。
+		var twist := Basis(Vector3.RIGHT, deg_to_rad(18.0))
+		_add_ellipsoid(bits, Vector3.ZERO, Vector3(size * 0.16, size * 0.025, size * 0.5), color, Transform3D(around * twist, around * Vector3(0.0, size * 0.6, size * 0.48)))
+	_add_ellipsoid(bits, Vector3(0.0, size * 0.62, 0.0), Vector3(size * 0.13, size * 0.1, size * 0.13), _tint(Color(str(source["hub_color"])), 1.0), Transform3D.IDENTITY)
 
 
 ## 上下が閉じた筒（Y の向き）。

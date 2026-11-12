@@ -86,6 +86,13 @@ const NUMBER_RANGES := {
 	# 1周（2083.1m）より短くする。長いと、同じ場所に、1周目用と2周目用の標識が並ぶ。
 	"course_marker_sign_max_remaining_m": [100.0, 2000.0],
 	"course_marker_sign_visible_distance_m": [50.0, 3000.0],
+	# スタート前の見せ方：場面を変えるときに暗くする秒数・明るくする秒数、レース場を見せる秒数、ゲートインを映す長さ。
+	"pre_race_fade_out_s": [0.0, 3.0],
+	"pre_race_fade_in_s": [0.0, 3.0],
+	"pre_race_venue_s": [0.5, 30.0],
+	"pre_race_gate_in_s": [2.0, 60.0],
+	# ゴールのレッドカーペットを出すのは、いちばん後ろの走者の残りがこの距離を切ってから。
+	"goal_carpet_show_remaining_m": [0.0, 5000.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],

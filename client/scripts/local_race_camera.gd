@@ -52,6 +52,9 @@ func set_follow_target(node: Node3D) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# 写していない間（スタート前の見せ方の間など）は、視点の切り替えを受けない（Y は、ゲートインでは出走表の出し入れ）。
+	if not current:
+		return
 	if RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
 		_set_view(next_view(view))
 		get_viewport().set_input_as_handled()

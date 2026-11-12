@@ -209,10 +209,14 @@ func test_red_carpet_lies_past_the_goal_line_only_on_the_final_lap() -> void:
 		assert_almost_eq((edge.mesh as PlaneMesh).size.y, GoalVisual.CARPET_LENGTH_M, 0.001)
 		assert_almost_eq(absf(edge.position.x), (15.0 - GoalVisual.CARPET_EDGE_WIDTH_M) * 0.5, 0.001)
 	# 周回が残っているあいだは、市松の線と同じように、出さない。
+	visual.set_carpet_shown(true)
 	visual.set_laps_to_go(1)
 	assert_false(carpet.visible)
 	visual.set_laps_to_go(0)
 	assert_true(carpet.visible)
+	# 最後の周でも、いちばん後ろの走者の残りが長いうちは、出さない。
+	visual.set_carpet_shown(false)
+	assert_false(carpet.visible)
 
 
 func test_balloons_and_crown_decorate_the_gate_and_stay_on_every_lap() -> void:

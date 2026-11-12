@@ -107,7 +107,7 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	MenuStyle.add_mark(_back_button, "B")
 	buttons.add_child(_back_button)
-	_race_button = MenuStyle.pill_button("パドックへ", "primary", 22)
+	_race_button = MenuStyle.pill_button("レースへ進む", "primary", 22)
 	_race_button.name = "RaceButton"
 	_race_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_race_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -464,7 +464,7 @@ func go_to_title() -> void:
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
 
 
-## パドックへ。ふつうは、レース会場のパドック（レースの画面）へ。ラボから起動したときは、今までのパドックの画面へ
+## レースへ進む。ふつうは、レース会場のパドック（レースの画面）へ。ラボから起動したときは、今までのパドックの画面へ
 ## （ラボは、そこの「レース開始」から自分のレースを始めるため）。
 func go_to_race() -> void:
 	if RaceSession.race_start_problem().is_empty():

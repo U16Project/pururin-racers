@@ -24,6 +24,7 @@ config/custom_user_dir_name.linux="godot/app_userdata/ぷるりんレーサー�
 PadInputOptions="*res://scripts/input/pad_input_options.gd"
 UIAudio="*res://scripts/ui_audio.gd"
 RaceAudio="*res://scripts/race_audio.gd"
+ButtonFeel="*res://scripts/menu/button_feel.gd"
 
 [display]
 

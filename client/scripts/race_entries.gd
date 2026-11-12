@@ -17,8 +17,20 @@ const Hud := preload("res://scripts/presentation/race_hud.gd")
 ## パドックの行の、属性と脚質の印の大きさ。
 const MARK_SIZE := 15.0
 const CHEVRON_SCALE := 0.62
-## 会場の上に重ねるときの、ステータスの欄の高さ。
+## 会場の上に重ねるときの、ステータスの欄の高さ・右の列の幅。
 const DETAIL_HEIGHT_OVERLAY := 380.0
+const RIGHT_WIDTH_OVERLAY := 470.0
+## 会場の上に重ねるときの、一覧の行（幅・高さ・絵の大きさ・名前と2段目の字の大きさ・印の大きさ）。
+## 一覧は、上の帯の下から画面の下まで伸ばし、行はその高さに合わせて伸びる（高さは最小）。行は枠の線を付けず、うすい地だけにする。
+const ROW_WIDTH_OVERLAY := 400.0
+const ROW_HEIGHT_OVERLAY := 50.0
+const ROW_PORTRAIT_OVERLAY := 54.0
+const ROW_NAME_SIZE_OVERLAY := 20
+const ROW_SUB_SIZE_OVERLAY := 15
+const MARK_SIZE_OVERLAY := 18.0
+const CHEVRON_SCALE_OVERLAY := 0.75
+const COLOR_ROW_OVERLAY := Color(1.0, 1.0, 1.0, 0.06)
+const COLOR_ROW_HOVER_OVERLAY := Color(1.0, 1.0, 1.0, 0.12)
 var _entries: Array = []
 var _rows: Array[Button] = []
 var _detail: Control
@@ -39,6 +51,8 @@ var shown_gate := -1
 const LIST_TAG_FONT_SIZE := 10
 const DRAW_TICK_S := 0.08
 var _list: VBoxContainer
+## 会場の上に重ねるときの、右の列（ステータスの箱とボタン）。
+var _right_column: VBoxContainer
 ## 行ごとの、名前の文字（枠番の抽選で、枠番の所を書き換える）。
 var _names: Array[Label] = []
 ## レース会場のパドックの上に重ねて出すか（左に出走表、右にステータス。真ん中は会場が見えるように空ける）。
@@ -49,6 +63,10 @@ var read_only := false
 ## オンラインで出走者を待っている間：枠番はまだ決まっていない（「枠未定」と出す）。待っている枠の数だけ「待受中…」の行を足す。
 var gates_unknown := false
 var waiting_rows := 0
+## 見るだけのときに、下に「まもなくゲートイン」を出すか（ゲートインの間に出すときは出さない）。
+var show_soon := true
+## 見るだけのときに、A（決定）を受けずに、会場の画面へ通すか（ゲートインの間は、A でスキップするため）。
+var accept_passes := false
 ## 枠順の抽選を見せ終わった。
 signal draw_finished
 const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
@@ -98,14 +116,15 @@ func _ready() -> void:
 	body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	column.add_child(body)
 	var list := VBoxContainer.new()
-	list.custom_minimum_size.x = 286
+	list.custom_minimum_size.x = ROW_WIDTH_OVERLAY if overlay_mode else 286.0
 	list.add_theme_constant_override("separation", 8)
 	if overlay_mode:
-		# 左の箱：出走表。
+		# 左の箱：出走表（上の帯の下から、画面の下まで）。
 		var list_box := PanelContainer.new()
 		list_box.name = "ListBox"
 		list_box.add_theme_stylebox_override("panel", Style.panel_box(12.0, 12.0))
-		list_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		list_box.size_flags_vertical = Control.SIZE_FILL
+		list.add_theme_constant_override("separation", 6)
 		list_box.add_child(list)
 		body.add_child(list_box)
 	else:
@@ -118,8 +137,12 @@ func _ready() -> void:
 		var player := _is_me(entry)
 		var row := Button.new()
 		row.name = "Gate%d" % (gate + 1)
-		row.custom_minimum_size = Vector2(286, 46)
+		row.custom_minimum_size = Vector2(ROW_WIDTH_OVERLAY, ROW_HEIGHT_OVERLAY) if overlay_mode else Vector2(286, 46)
 		Style.style_card_button(row)
+		if overlay_mode:
+			for state: String in ["normal", "hover", "pressed", "hover_pressed"]:
+				row.add_theme_stylebox_override(state, Style.box(COLOR_ROW_OVERLAY if state == "normal" else COLOR_ROW_HOVER_OVERLAY, 12, 0.0, 0.0))
+			row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var content := HBoxContainer.new()
 		content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		content.offset_left = 8
@@ -128,16 +151,19 @@ func _ready() -> void:
 		content.add_theme_constant_override("separation", 8)
 		row.add_child(content)
 		var portrait: Control = Portrait.new()
-		portrait.custom_minimum_size = Vector2(40, 40)
+		portrait.custom_minimum_size = Vector2.ONE * (ROW_PORTRAIT_OVERLAY if overlay_mode else 40.0)
+		portrait.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(portrait)
 		portrait.call("set_pururin", pururin)
 		var names := VBoxContainer.new()
-		names.add_theme_constant_override("separation", 0)
+		names.add_theme_constant_override("separation", 2 if overlay_mode else 0)
+		names.alignment = BoxContainer.ALIGNMENT_CENTER
+		names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		names.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		content.add_child(names)
 		var gate_text := "枠未定" if gates_unknown else "%d枠" % (gate + 1)
-		var name := Style.label("%s %s%s" % [gate_text, str(pururin["display_name"]), "（自分）" if player else ""], 16)
+		var name := Style.label("%s %s%s" % [gate_text, str(pururin["display_name"]), "（自分）" if player else ""], ROW_NAME_SIZE_OVERLAY if overlay_mode else 16)
 		name.set_meta("rest", " %s%s" % [str(pururin["display_name"]), "（自分）" if player else ""])
 		_names.append(name)
 		name.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -162,24 +188,43 @@ func _ready() -> void:
 		summary.add_theme_constant_override("separation", 3)
 		summary.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		names.add_child(summary)
+		var mark_size := MARK_SIZE_OVERLAY if overlay_mode else MARK_SIZE
+		var chevron_scale := CHEVRON_SCALE_OVERLAY if overlay_mode else CHEVRON_SCALE
 		var attribute_mark := Control.new()
 		attribute_mark.name = "AttributeMark"
-		attribute_mark.custom_minimum_size = Vector2(MARK_SIZE, MARK_SIZE)
+		attribute_mark.custom_minimum_size = Vector2(mark_size, mark_size)
+		attribute_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		attribute_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		attribute_mark.draw.connect(func() -> void:
-			Detail.draw_attribute_mark(attribute_mark, attribute_mark.size * 0.5, MARK_SIZE, attribute_id, Color.from_string(str(Stats.values()["attributes"][attribute_id]["color"]), Color.WHITE)))
+			Detail.draw_attribute_mark(attribute_mark, attribute_mark.size * 0.5, mark_size, attribute_id, Color.from_string(str(Stats.values()["attributes"][attribute_id]["color"]), Color.WHITE)))
 		summary.add_child(attribute_mark)
-		summary.add_child(_dim_label("%s・" % ATTRIBUTE_NAMES.get(attribute_id, attribute_id)))
+		var driver := Session.driver_label_for_slot(gate)
 		var style_mark := Control.new()
 		style_mark.name = "StyleMark"
-		style_mark.custom_minimum_size = Vector2(Hud.STYLE_CHEVRON_STEP * CHEVRON_SCALE * StatsMath.rank_group_count() + 2.0, MARK_SIZE)
+		style_mark.custom_minimum_size = Vector2(Hud.STYLE_CHEVRON_STEP * chevron_scale * StatsMath.rank_group_count() + 2.0, mark_size)
+		style_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		style_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		style_mark.draw.connect(func() -> void:
-			Hud.draw_style_chevrons(style_mark, Vector2(1.0, style_mark.size.y * 0.5), Hud.COLOR_STYLE_MATCH, StatsMath.rank_group_count(), StatsMath.style_rank_group_index(style_id), CHEVRON_SCALE))
-		summary.add_child(style_mark)
-		# ラボから起動したときは、その枠を走らせるCPUの名前も添える。
-		var driver := Session.driver_label_for_slot(gate)
-		summary.add_child(_dim_label("%s　%s%s" % [STYLE_NAMES.get(style_id, ""), trainer_name, "［%s］" % driver if not driver.is_empty() else ""]))
+			Hud.draw_style_chevrons(style_mark, Vector2(1.0, style_mark.size.y * 0.5), Hud.COLOR_STYLE_MATCH, StatsMath.rank_group_count(), StatsMath.style_rank_group_index(style_id), chevron_scale))
+		if overlay_mode:
+			# 会場の上：属性と脚質を左に、トレーナー名を右寄せ（区切りの「・」は使わない）。
+			summary.add_theme_constant_override("separation", 5)
+			summary.add_child(_dim_label(str(ATTRIBUTE_NAMES.get(attribute_id, attribute_id)), ROW_SUB_SIZE_OVERLAY))
+			var gap_mark := Control.new()
+			gap_mark.custom_minimum_size.x = 8.0
+			gap_mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			summary.add_child(gap_mark)
+			summary.add_child(style_mark)
+			summary.add_child(_dim_label(str(STYLE_NAMES.get(style_id, "")), ROW_SUB_SIZE_OVERLAY))
+			var trainer_label := _dim_label("%s%s" % [trainer_name, "［%s］" % driver if not driver.is_empty() else ""], ROW_SUB_SIZE_OVERLAY)
+			trainer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			trainer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			summary.add_child(trainer_label)
+		else:
+			summary.add_child(_dim_label("%s・" % ATTRIBUTE_NAMES.get(attribute_id, attribute_id)))
+			summary.add_child(style_mark)
+			# ラボから起動したときは、その枠を走らせるCPUの名前も添える。
+			summary.add_child(_dim_label("%s　%s%s" % [STYLE_NAMES.get(style_id, ""), trainer_name, "［%s］" % driver if not driver.is_empty() else ""]))
 		row.focus_entered.connect(_show_entry.bind(entry))
 		# マウスを乗せている間だけ、その行を見せる。離れたら、カーソルが合っている行に戻す。
 		row.mouse_entered.connect(_show_entry.bind(entry))
@@ -218,11 +263,19 @@ func _ready() -> void:
 		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		body.add_child(gap)
+		# 右の列：上にトレーナーとステータスの箱、下にボタン（一覧を下まで伸ばすため、ボタンはこちらに置く）。
+		var right_column := VBoxContainer.new()
+		right_column.name = "RightColumn"
+		right_column.custom_minimum_size.x = RIGHT_WIDTH_OVERLAY
+		right_column.add_theme_constant_override("separation", 14)
+		right_column.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		body.add_child(right_column)
+		_right_column = right_column
 		var right_box := PanelContainer.new()
 		right_box.name = "RightBox"
 		right_box.add_theme_stylebox_override("panel", Style.panel_box(14.0, 12.0))
 		right_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-		body.add_child(right_box)
+		right_column.add_child(right_box)
 		var right := VBoxContainer.new()
 		right.add_theme_constant_override("separation", 8)
 		right_box.add_child(right)
@@ -250,28 +303,35 @@ func _ready() -> void:
 		_introduction.custom_minimum_size = Vector2(244, 96)
 		trainer_panel.add_child(_introduction)
 	var buttons := HBoxContainer.new()
-	buttons.add_theme_constant_override("separation", 20)
+	buttons.add_theme_constant_override("separation", 14 if overlay_mode else 20)
+	var button_parent: Container = column
 	if overlay_mode:
-		buttons.alignment = BoxContainer.ALIGNMENT_CENTER
-	column.add_child(buttons)
-	# 出走者を待っている間・枠順の抽選の間は、「まもなく本馬場入場」は出さない（下に、待っているようすを出すため）。
+		# 右の列の下の端に寄せる。
+		var push := Control.new()
+		push.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		push.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_right_column.add_child(push)
+		button_parent = _right_column
+	button_parent.add_child(buttons)
+	# 出走者を待っている間・枠順の抽選の間は、「まもなくゲートイン」は出さない（下に、待っているようすを出すため）。
 	if read_only:
 		buttons.visible = false
-	if read_only and not gates_unknown:
-		var soon := Style.bold_label("まもなく本馬場入場", 22)
+	if read_only and not gates_unknown and show_soon:
+		var soon := Style.bold_label("まもなくゲートイン", 22)
 		soon.name = "SoonLabel"
 		soon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		column.add_child(soon)
-	_back = Style.pill_button("選択に戻る", "quiet", 20)
+		button_parent.add_child(soon)
+	_back = Style.pill_button("戻る" if overlay_mode else "選択に戻る", "quiet", 20)
 	_back.name = "BackButton"
-	_back.custom_minimum_size = Vector2(286, 48)
+	_back.custom_minimum_size = Vector2(170 if overlay_mode else 286, 52 if overlay_mode else 48)
 	Style.add_mark(_back, "B")
 	_back.pressed.connect(back)
 	buttons.add_child(_back)
 	_start = Style.pill_button("レース開始", "primary", 22)
 	_start.name = "StartButton"
 	if overlay_mode:
-		_start.custom_minimum_size = Vector2(360, 48)
+		_start.custom_minimum_size = Vector2(0, 52)
+		_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	else:
 		_start.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	Style.add_mark(_start, "START")
@@ -415,6 +475,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
 	# 見るだけのとき：カーソルを動かして見るだけ。レース開始・戻るは無い。
 	if read_only:
+		if accept_passes:
+			return
 		if InputHelper.is_accept_pressed(event) and InputHelper.activate_focused_control(viewport):
 			viewport.set_input_as_handled()
 		return
@@ -432,7 +494,9 @@ func _unhandled_input(event: InputEvent) -> void:
 func _waiting_row() -> Control:
 	var row := PanelContainer.new()
 	row.name = "WaitingRow"
-	row.custom_minimum_size = Vector2(286, 46)
+	row.custom_minimum_size = Vector2(ROW_WIDTH_OVERLAY, ROW_HEIGHT_OVERLAY) if overlay_mode else Vector2(286, 46)
+	if overlay_mode:
+		row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	row.add_theme_stylebox_override("panel", Style.card_box(Color(Style.COLOR_CARD, 0.45), Color(Style.COLOR_CARD_BORDER, 0.25)))
 	var label := Style.label("枠未定　待受中…", 16, Style.COLOR_BAR_DIM)
 	label.add_theme_constant_override("outline_size", 0)
@@ -480,7 +544,7 @@ func play_draw(spin_s: float, each_s: float) -> void:
 
 
 ## 行の2段目の、小さい文字。
-func _dim_label(text: String) -> Label:
-	var label := Style.label(text, 13, Style.COLOR_DIM)
+func _dim_label(text: String, font_size: int = 13) -> Label:
+	var label := Style.label(text, font_size, Style.COLOR_DIM)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return label

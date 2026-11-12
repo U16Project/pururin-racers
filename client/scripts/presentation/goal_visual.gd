@@ -73,6 +73,9 @@ var _laps_to_go := 0
 var _goal_nodes: Array[Node3D] = []
 var _lap_nodes: Array[Node3D] = []
 var _lap_labels: Array[Label3D] = []
+## 赤いじゅうたん（最後の周で、しかも、いちばん後ろの走者の残りが短くなってから出す。門をくぐり終える前に出ないように）。
+var _carpet_nodes: Array[Node3D] = []
+var _carpet_shown := false
 
 
 func place(track: Path3D, path_distance: float, width_m: float) -> void:
@@ -96,6 +99,7 @@ func place(track: Path3D, path_distance: float, width_m: float) -> void:
 	_goal_nodes.clear()
 	_lap_nodes.clear()
 	_lap_labels.clear()
+	_carpet_nodes.clear()
 	_build_posts()
 	_build_cloth()
 	_build_carpet()
@@ -127,6 +131,14 @@ func set_laps_to_go(laps: int) -> void:
 	_show_for_laps()
 
 
+## 赤いじゅうたんを出してよいか（いちばん後ろの走者の残りの距離で決める）。
+func set_carpet_shown(shown: bool) -> void:
+	if shown == _carpet_shown:
+		return
+	_carpet_shown = shown
+	_show_for_laps()
+
+
 func laps_to_go_shown() -> int:
 	return _laps_to_go
 
@@ -134,6 +146,8 @@ func laps_to_go_shown() -> int:
 func _show_for_laps() -> void:
 	for node in _goal_nodes:
 		node.visible = _laps_to_go == 0
+	for node in _carpet_nodes:
+		node.visible = _laps_to_go == 0 and _carpet_shown
 	for node in _lap_nodes:
 		node.visible = _laps_to_go > 0
 	for label in _lap_labels:
@@ -183,7 +197,7 @@ func _build_cloth() -> void:
 		_lap_labels.append(lap_text)
 
 
-## ゴールの線の先に敷く、赤いじゅうたん（へりは金）。市松の線と同じく、最後の周だけ出す。
+## ゴールの線の先に敷く、赤いじゅうたん（へりは金）。最後の周で、set_carpet_shown で許されたときだけ出す。
 func _build_carpet() -> void:
 	var carpet := PlaneMesh.new()
 	carpet.size = Vector2(_width, CARPET_LENGTH_M)
@@ -191,14 +205,14 @@ func _build_carpet() -> void:
 	var center := Vector3(0.0, Parts.TRACK_TOP_Y_M + CARPET_LIFT_M, -CARPET_LENGTH_M * 0.5)
 	var node := Parts.mesh(_root, carpet, Parts.material(CARPET_COLOR, 0.9), center)
 	node.name = "Carpet"
-	_goal_nodes.append(node)
+	_carpet_nodes.append(node)
 	var edge := PlaneMesh.new()
 	edge.size = Vector2(CARPET_EDGE_WIDTH_M, CARPET_LENGTH_M)
 	for side: float in [-1.0, 1.0]:
 		var at := center + Vector3(side * (_width - CARPET_EDGE_WIDTH_M) * 0.5, 0.001, 0.0)
 		var line := Parts.mesh(_root, edge, Parts.material(Parts.COLOR_GOLD, 0.8), at)
 		line.name = "CarpetEdge%s" % ("L" if side < 0.0 else "R")
-		_goal_nodes.append(line)
+		_carpet_nodes.append(line)
 
 
 ## ゴールの札の上に載せる、金の王冠（1位を決める場所、という目印）。

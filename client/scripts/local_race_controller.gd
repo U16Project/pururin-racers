@@ -132,6 +132,8 @@ var _pre_race_show: Node
 ## 会場のパドックから始めるときの種類（RaceScenePreload.PADDOCK_*。空ならふつう）と、パドックに重ねる画面。
 var _paddock_mode := ""
 var _paddock_overlay: Control
+## ゲートインの間に重ねる、見るだけの出走表（Y で出し入れ）。
+var _gate_in_list: Control
 ## フリー対戦で、会場で出走者を待っている間か（自分のぷるりんだけ。レースはまだ無い）と、待ち始めた時刻（ミリ秒）。
 var _free_waiting := false
 ## オンラインのゲーム側：人（通信ごしの人と自分）が動かす走者と、そのうち、抜けてCPUが代わりに走っている走者（走者 → true）。
@@ -440,6 +442,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	# パドックで出走表などを重ねている間・会場で出走者を待っている間は、一時停止しない。
 	if _is_in_paddock_overlay() or _free_waiting:
 		return
+	# ゲートインの間は、Y で出走表を出し入れする。
+	if _is_showing_pre_race() and is_instance_valid(_gate_in_list) and not _paused and RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
+		viewport.set_input_as_handled()
+		_gate_in_list.visible = not _gate_in_list.visible
+		return
 	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
 	if _is_showing_pre_race() and not bool(_pre_race_show.get("hold_paddock")) and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
 		viewport.set_input_as_handled()
@@ -552,6 +559,7 @@ func _update_goal_gate() -> void:
 	for runner in _runners:
 		last_progress = minf(last_progress, float(runner.call("get_race_progress")))
 	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), last_progress))
+	_goal_visual.set_carpet_shown(_race_distance_m - last_progress < LocalRaceMath.Config.number("goal_carpet_show_remaining_m"))
 
 
 ## 先頭走者が残り400mへ入ったら、ゴールに近づくほど観客のざわめきを大きくする。
@@ -605,6 +613,8 @@ func _start_pre_race_show() -> void:
 		_player.set("pre_start_input", false)
 	show.finished.connect(func() -> void:
 		_pre_race_show = null
+		# レースの画面に替わったら、番号のゲートはすぐ片づける（スタートの前を、すっきり見せる）。
+		_start_gate.clear_after_start(0.0)
 		if _player != null:
 			_player.set("pre_start_input", true))
 	_pre_race_show = show
@@ -629,6 +639,8 @@ func _start_pre_race_show() -> void:
 		show.paddock_cards = false
 		show.paddock_entered.connect(_open_online_paddock)
 	show.paddock_left.connect(_close_paddock_overlay)
+	show.gate_in_entered.connect(_open_gate_in_list)
+	show.finished.connect(_close_gate_in_list)
 
 
 ## オフラインのパドック：会場のパドックの上に、出走表（左）とステータス（右）を重ねる。
@@ -687,7 +699,7 @@ func _open_free_waiting_paddock() -> void:
 
 
 ## 出走者がそろった（レースを始める知らせ）：画面はそのまま、届いた出走で走者を並べ直し、パドックに全員を加える。
-## 出走表を作り直して、枠順の抽選を見せてから、本馬場入場へ。
+## 出走表を作り直して、枠順の抽選を見せてから、ゲートインへ。
 func _start_free_race(data: Dictionary) -> void:
 	if _free_joining:
 		return
@@ -716,7 +728,7 @@ func _start_free_race(data: Dictionary) -> void:
 		if not _is_showing_pre_race():
 			return
 	_open_online_paddock({"gates_unknown": true})
-	# 1. そろった知らせ → 2. 枠順抽選の見出し → 3. 抽選（1枠から順に決まる）→ 4. 枠順決定 → 本馬場入場の見出しへ。
+	# 1. そろった知らせ → 2. 枠順抽選の見出し → 3. 抽選（1枠から順に決まる）→ 4. 枠順決定 → ゲートインの見出しへ。
 	_pre_race_show.call("show_title_card", "出走者がそろいました", "このあと、枠順を抽選します")
 	await _pre_race_show.title_card_done
 	if not _is_showing_pre_race():
@@ -762,6 +774,26 @@ func _open_online_paddock(options: Dictionary = {}) -> void:
 	overlay.connect("entry_shown", func(gate: int) -> void: _pre_race_show.call("focus_gate", gate))
 	_paddock_overlay = overlay
 	_pre_race_show.call("focus_gate", int(overlay.get("shown_gate")))
+
+
+## ゲートインの間：出走表とステータスを、見るだけで重ねる（はじめは出しておき、Y で出し入れ）。
+## オンラインでは、パドックでほかの人を待つ間に見られないことがあるので、ここでも見られるようにする。
+func _open_gate_in_list() -> void:
+	_close_gate_in_list()
+	var overlay: Control = RaceEntriesScene.instantiate()
+	overlay.set("overlay_mode", true)
+	overlay.set("read_only", true)
+	overlay.set("show_soon", false)
+	overlay.set("accept_passes", true)
+	overlay.name = "GateInList"
+	$UI.add_child(overlay)
+	_gate_in_list = overlay
+
+
+func _close_gate_in_list() -> void:
+	if is_instance_valid(_gate_in_list):
+		_gate_in_list.queue_free()
+	_gate_in_list = null
 
 
 ## パドックの場面が終わったら、重ねていた出走表を片づける。
@@ -1004,7 +1036,8 @@ func _send_online_input(delta: float) -> void:
 	if _player == null or _race_over:
 		return
 	var input := {"line": 0.0, "notch": 0.0, "brake": false}
-	if not _paused:
+	# スタート前の見せ方の間は、ノッチ・ブレーキなどを送らない（出走表のカーソルの上下が、ノッチに届かないように）。
+	if not _paused and not _is_showing_pre_race():
 		input = {
 			"line": float(_player.call("_read_steer_axis")),
 			"notch": float(_player.call("_read_drive_axis")),
@@ -1384,6 +1417,7 @@ func _place_markers() -> void:
 	)
 	_goal_visual.place(_track, goal_path, 15.0)
 	_goal_visual.set_laps_to_go(GoalVisual.laps_to_go(_race_distance_m, LocalRaceMath.lap_length_m(), 0.0))
+	_goal_visual.set_carpet_shown(_race_distance_m < LocalRaceMath.Config.number("goal_carpet_show_remaining_m"))
 	_place_route_marker(_start_marker, 0.0, Color(0.2, 0.85, 0.45))
 	_start_marker.visible = true
 	_course_markers.place(

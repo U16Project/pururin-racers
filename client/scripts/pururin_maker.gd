@@ -26,6 +26,13 @@ const TAB_WIDTH := 150.0
 const RIGHT_WIDTH := 540.0
 const GAP := 14.0
 const STRIP_HEIGHT := 48.0
+## 選んでいる場所の光る枠：まわりに空ける幅と、明るさが1回りする秒数。
+const FOCUS_RING_ROOM := 5.0
+const FOCUS_RING_SECONDS := 1.4
+## 自分のぷるりんの一覧の窓：大きさ、1行に並べる数、絵の大きさ。
+const LIST_WINDOW_SIZE := Vector2(900.0, 560.0)
+const LIST_COLUMNS := 6
+const LIST_TILE_SIZE := Vector2(124.0, 124.0)
 const ROW_TITLE_WIDTH := 56.0
 ## 色のページの、見本の大きさと、1行に並べる数。
 const COLOR_SWATCH := 46.0
@@ -46,6 +53,8 @@ const BODY_PART_SLOTS := {"top": "top", "sides": "side", "tail": "tail"}
 const THUMB_PX := 160
 const TILE_SIZE := Vector2(92.0, 108.0)
 const TILE_COLUMNS := 5
+## 顔のページの、場所の切り替え：[場所, 画面の名前]。
+const FACE_SLOT_TABS := [["eyes", "目"], ["brows", "まゆ"], ["mouth", "口"], ["cheeks", "ほっぺ"]]
 ## 1行に6つ並べるときのタイル（マーク・元にする）。
 const SMALL_TILE_SIZE := Vector2(76.0, 92.0)
 const THUMB_VIEWS := {
@@ -62,8 +71,6 @@ const THUMB_FRAMES := 20
 var _entry: Dictionary = {}
 ## 保存したことがあるか（消せるか）。
 var _saved := false
-## 選んだ顔のセットの番号（-1 は、元のままの顔）。
-var _face_index := -1
 var _expression_index := 0
 ## 消すボタンを1回押したか（2回目で消す）。
 var _delete_armed := false
@@ -74,10 +81,14 @@ var _selected_stat := "top_speed"
 ## マークのページで、いま直している場所の番号。
 var _mark_spot := 0
 var _tab := "basic"
-## 選べる顔のセット（読み直すたびに作り直す）。
-var _face_sets: Array[Dictionary] = []
+## 顔のページで、いま選んでいる場所（eyes・brows・mouth・cheeks）。
+var _face_slot := "eyes"
 
-var _list_box: HBoxContainer
+var _list_button: Button
+var _list_window: Control
+## ゲームパッドで、いま選んでいる場所に重ねる、光る枠。
+var _focus_ring: Panel
+var _ring_time := 0.0
 var _tab_buttons := {}
 var _page: VBoxContainer
 var _portrait: Control
@@ -133,12 +144,31 @@ func _ready() -> void:
 	l1_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	switch_item.add_child(l1_mark)
 	switch_item.move_child(l1_mark, 0)
+	# L2 と R2 も、1つの案内に並べる（まん中の下見の表情を、前後に切り替える）。
+	var face_item := MenuStyle.guide_item(guide, "R2", "表情切替え").get_parent()
+	var l2_mark := MenuStyle.mark("L2", 24.0)
+	l2_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	face_item.add_child(l2_mark)
+	face_item.move_child(l2_mark, 0)
 	var back := MenuStyle.guide_button(guide, "B", "戻る")
 	back.name = "BackButton"
 	back.pressed.connect(go_back)
 	UIAudio.bind_button_sound(back, "back")
+	_focus_ring = Panel.new()
+	_focus_ring.name = "FocusRing"
+	_focus_ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_focus_ring.top_level = true
+	_focus_ring.z_index = 100
+	var ring := StyleBoxFlat.new()
+	ring.draw_center = false
+	ring.border_color = MenuStyle.COLOR_FOCUS
+	ring.set_border_width_all(4)
+	ring.set_corner_radius_all(14)
+	ring.shadow_color = Color(MenuStyle.COLOR_FOCUS, 0.6)
+	ring.shadow_size = 10
+	_focus_ring.add_theme_stylebox_override("panel", ring)
+	add_child(_focus_ring)
 	var folder_error := UserParts.make_folders()
-	_reload_choices()
 	start_new()
 	if not folder_error.is_empty():
 		_show_message(folder_error, true)
@@ -153,28 +183,129 @@ func _build_strip() -> Control:
 	var title := MenuStyle.bold_label("自分のぷるりん", 17, MenuStyle.COLOR_TEXT, 6)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	strip.add_child(title)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.follow_focus = true
-	strip.add_child(scroll)
-	_list_box = HBoxContainer.new()
-	_list_box.name = "MyPururinList"
-	_list_box.add_theme_constant_override("separation", 8)
-	scroll.add_child(_list_box)
-	var save_button := MenuStyle.pill_button("保存する", "primary", 18)
+	# 上の帯のボタンは、ゲームパッドでは決まったボタンで押す（選ぶ場所は、左の項目と右のページだけにする）。
+	_list_button = _strip_button("", "tab", "X", open_list)
+	_list_button.name = "ListButton"
+	_list_button.custom_minimum_size.x = 360.0
+	strip.add_child(_list_button)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	strip.add_child(spacer)
+	var save_button := _strip_button("保存する", "primary", "Y", save)
 	save_button.name = "SaveButton"
-	save_button.custom_minimum_size.x = 130.0
-	save_button.pressed.connect(save)
-	UIAudio.bind_button_sound(save_button, "confirmation")
+	save_button.custom_minimum_size.x = 180.0
 	strip.add_child(save_button)
-	_delete_button = MenuStyle.pill_button("消す", "secondary", 18)
+	_delete_button = _strip_button("消す", "secondary", "SELECT", request_delete)
 	_delete_button.name = "DeleteButton"
-	_delete_button.custom_minimum_size.x = 100.0
-	_delete_button.pressed.connect(request_delete)
-	UIAudio.bind_button_sound(_delete_button, "confirmation")
+	_delete_button.custom_minimum_size.x = 200.0
 	strip.add_child(_delete_button)
 	return strip
+
+
+## 上の帯のボタン。左端に、ゲームパッドのボタンのマークを付ける。
+func _strip_button(text: String, kind: String, pad: String, action: Callable) -> Button:
+	var button := MenuStyle.pill_button(text, kind, 18)
+	button.focus_mode = Control.FOCUS_NONE
+	button.pressed.connect(action)
+	UIAudio.bind_button_sound(button, "confirmation")
+	var mark := MenuStyle.add_mark(button, pad, 24.0)
+	# 文字が、左端のマークに重ならないよう、左に空きを作る。
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		var style := button.get_theme_stylebox(state).duplicate() as StyleBox
+		style.content_margin_left = mark.offset_right + 10.0
+		button.add_theme_stylebox_override(state, style)
+	return button
+
+
+# ---------------------------------------------------------------- 自分のぷるりんの一覧（窓）
+
+## 自分のぷるりんを、絵つきで並べた窓を開く。何体あっても、上下に動かして選べる。
+func open_list() -> void:
+	close_list()
+	_list_window = Control.new()
+	_list_window.name = "ListWindow"
+	_list_window.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_list_window.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_list_window)
+	var shade := ColorRect.new()
+	shade.color = Color(0.0, 0.0, 0.0, 0.7)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shade.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed:
+			close_list())
+	_list_window.add_child(shade)
+	var panel := PanelContainer.new()
+	var box := MenuStyle.card_box(Color(0.07, 0.11, 0.2, 0.98), MenuStyle.COLOR_CARD_BORDER, 16)
+	box.set_content_margin_all(18.0)
+	panel.add_theme_stylebox_override("panel", box)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -LIST_WINDOW_SIZE.x * 0.5
+	panel.offset_right = LIST_WINDOW_SIZE.x * 0.5
+	panel.offset_top = -LIST_WINDOW_SIZE.y * 0.5
+	panel.offset_bottom = LIST_WINDOW_SIZE.y * 0.5
+	_list_window.add_child(panel)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 12)
+	panel.add_child(column)
+	var head := HBoxContainer.new()
+	column.add_child(head)
+	var title := MenuStyle.bold_label("自分のぷるりん（%d 体）" % MyPururins.ids().size(), 20, MenuStyle.COLOR_TEXT, 6)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var close := _strip_button("閉じる", "secondary", "B", close_list)
+	close.custom_minimum_size.x = 140.0
+	head.add_child(close)
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	column.add_child(scroll)
+	# 選んだときの枠が切れないよう、まわりにすき間を空ける。
+	var room := MarginContainer.new()
+	room.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for side in ["left", "right", "top", "bottom"]:
+		room.add_theme_constant_override("margin_" + side, 8)
+	scroll.add_child(room)
+	var grid := GridContainer.new()
+	grid.columns = LIST_COLUMNS
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	room.add_child(grid)
+	var new_tile := _tile("新しく作る", LIST_TILE_SIZE)
+	new_tile.name = "NewTile"
+	var plus := MenuStyle.bold_label("＋", 54, MenuStyle.COLOR_TEXT, 6)
+	plus.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	plus.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	plus.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plus.set_anchors_preset(Control.PRESET_FULL_RECT)
+	plus.offset_bottom = -20.0
+	new_tile.add_child(plus)
+	new_tile.pressed.connect(func() -> void:
+		close_list()
+		start_new())
+	grid.add_child(new_tile)
+	var first: Button = new_tile
+	for identifier in MyPururins.ids():
+		var tile := _tile(str(MyPururins.pururin_by_id(identifier)["display_name"]), LIST_TILE_SIZE)
+		tile.name = "Open_%s" % identifier
+		tile.toggle_mode = true
+		tile.button_pressed = identifier == str(_entry.get("id", ""))
+		if tile.button_pressed:
+			first = tile
+		_set_tile_picture(tile, PortraitCache.texture_for(identifier, get_tree()))
+		tile.pressed.connect(func() -> void:
+			close_list()
+			open_pururin(identifier))
+		grid.add_child(tile)
+	first.grab_focus.call_deferred()
+
+
+func close_list() -> void:
+	if _list_window == null:
+		return
+	_list_window.queue_free()
+	_list_window = null
+	_focus_page.call_deferred()
 
 
 ## 左：選ぶ種類と、部品の置き場所。
@@ -707,26 +838,64 @@ func _tab_label(key: String) -> String:
 # --- 顔
 
 func _build_face_page() -> void:
-	_heading("顔（目の場所と色は、そのセットの元のぷるりんのもの）")
+	_heading("顔（＊は自分で用意した部品。表情は、まん中の ◀ ▶ で確かめる）")
+	var slot_row := _row()
+	for item: Array in FACE_SLOT_TABS:
+		var slot := str(item[0])
+		var button := MenuStyle.pill_button(str(item[1]), "tab", 17)
+		button.toggle_mode = true
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(func() -> void:
+			_face_slot = slot
+			_build_page())
+		UIAudio.bind_button_sound(button, "confirmation")
+		slot_row.add_child(button)
+		_choices.append({"button": button, "chosen": func() -> bool: return _face_slot == slot})
 	var grid := _tile_grid(TILE_COLUMNS)
-	for index in _face_sets.size():
-		var tile := _tile(str(_face_sets[index]["label"]))
+	var families := _face_families(_face_slot)
+	for family_id: String in families:
+		var family: Dictionary = families[family_id]
+		var tile := _tile(str(family["label"]))
 		var look: Dictionary = _entry["look"].duplicate(true)
-		look["face"] = _face_from_set(index)
+		_put_face_family(look, _face_slot, family)
 		_thumbnail(tile, look, "face")
-		tile.pressed.connect(func() -> void: _apply(func() -> void:
-			_face_index = index
-			_entry["look"]["face"] = _face_from_set(index)))
+		var slot := _face_slot
+		tile.pressed.connect(func() -> void: _apply(func() -> void: _put_face_family(_entry["look"], slot, family)))
 		grid.add_child(tile)
-		_choices.append({"button": tile, "chosen": func() -> bool: return _face_index == index})
+		_choices.append({"button": tile, "chosen": func() -> bool: return _is_face_family(_entry["look"], slot, family)})
 
 
-## 顔のセットから、顔の設定を作る。目の置き方・大きさ・色は、そのセットの元の個体から借りる。
-func _face_from_set(index: int) -> Dictionary:
-	var face_set := _face_sets[index]
-	var face: Dictionary = PururinLookConfig.look_for(str(face_set["base"]))["face"].duplicate(true)
-	face["expressions"] = (face_set["expressions"] as Dictionary).duplicate(true)
-	return face
+## その場所で選べる顔の部品（組み込みのあとに、自分で用意したもの。名前に ＊）。
+func _face_families(slot: String) -> Dictionary:
+	var families: Dictionary = (MakerConfig.values()["face_parts"][slot] as Dictionary).duplicate()
+	var user_parts: Dictionary = PururinLookConfig.values().get("user_face_parts", {}).get(slot, {})
+	for family_id: String in user_parts:
+		var family: Dictionary = (user_parts[family_id] as Dictionary).duplicate()
+		family["label"] = "%s＊" % family["label"]
+		families[family_id] = family
+	return families
+
+
+## 見た目の顔の、その場所を、顔の部品に入れ替える。表情ごとに、部品の絵を入れる（絵の無い表情は書かず、ノーマルを出す）。
+func _put_face_family(look: Dictionary, slot: String, family: Dictionary) -> void:
+	var expressions: Dictionary = look["face"]["expressions"]
+	var pictures: Dictionary = family["expressions"]
+	for expression: String in PururinLookConfig.values()["expression_names"]:
+		if expressions.has(expression):
+			(expressions[expression] as Dictionary).erase(slot)
+		if pictures.get(expression) != null:
+			if not expressions.has(expression):
+				expressions[expression] = {}
+			expressions[expression][slot] = pictures[expression]
+
+
+## 見た目の顔の、その場所が、その顔の部品と同じか。
+func _is_face_family(look: Dictionary, slot: String, family: Dictionary) -> bool:
+	var expressions: Dictionary = look["face"]["expressions"]
+	for expression: String in PururinLookConfig.values()["expression_names"]:
+		if (expressions.get(expression, {}) as Dictionary).get(slot) != family["expressions"].get(expression):
+			return false
+	return true
 
 
 # --- マーク
@@ -908,23 +1077,6 @@ func _take_picture(viewport: SubViewport) -> void:
 
 # ---------------------------------------------------------------- 写す・一覧・開く
 
-## 部品・顔のセットを読み直す。
-func _reload_choices() -> void:
-	_face_sets.clear()
-	var looks: Dictionary = PururinLookConfig.values().get("looks", {})
-	for pururin: Dictionary in PururinRosterConfig.values().get("roster", []):
-		var id := str(pururin["id"])
-		_face_sets.append({"label": "%sの顔" % pururin["display_name"], "base": id, "expressions": looks[id]["face"]["expressions"]})
-	var sets: Dictionary = MakerConfig.values()["face_sets"]
-	for set_id: String in sets:
-		_face_sets.append(sets[set_id])
-	var user_sets: Dictionary = PururinLookConfig.values().get("user_face_sets", {})
-	for set_id: String in user_sets:
-		var face_set: Dictionary = user_sets[set_id].duplicate()
-		face_set["label"] = "%s＊" % face_set["label"]
-		_face_sets.append(face_set)
-
-
 ## 個体の能力と見た目を、今つくっているぷるりんに写す（名前とIDは、そのまま）。
 func _copy_from(pururin_id: String) -> void:
 	var pururin := PururinRosterConfig.pururin_by_id(pururin_id)
@@ -941,26 +1093,10 @@ func _copy_from(pururin_id: String) -> void:
 		look.erase("primary_color")
 		look.erase("outline_color")
 		_entry["look"] = look
-	_face_index = -1
 
 
 func _refresh_list() -> void:
-	for child in _list_box.get_children():
-		_list_box.remove_child(child)
-		child.queue_free()
-	var new_button := MenuStyle.pill_button("＋ 新しく作る", "secondary", 16)
-	new_button.name = "NewButton"
-	new_button.pressed.connect(start_new)
-	UIAudio.bind_button_sound(new_button, "confirmation")
-	_list_box.add_child(new_button)
-	for identifier in MyPururins.ids():
-		var button := MenuStyle.pill_button(str(MyPururins.pururin_by_id(identifier)["display_name"]), "tab", 16)
-		button.name = "Open_%s" % identifier
-		button.toggle_mode = true
-		button.button_pressed = identifier == str(_entry.get("id", ""))
-		button.pressed.connect(open_pururin.bind(identifier))
-		UIAudio.bind_button_sound(button, "confirmation")
-		_list_box.add_child(button)
+	_list_button.text = "一覧（%d 体）　いま：%s" % [MyPururins.ids().size(), str(_entry["display_name"]) if _saved else "新しいぷるりん"]
 	var count := _problems().size()
 	_problems_button.text = "使えない %d 件" % count
 	_problems_button.visible = count > 0
@@ -994,7 +1130,6 @@ func open_pururin(identifier: String) -> void:
 	if _entry.is_empty():
 		return
 	_saved = true
-	_face_index = -1
 	_open_entry()
 
 
@@ -1019,7 +1154,7 @@ func _refresh_page() -> void:
 
 func _refresh_preview() -> void:
 	_delete_button.disabled = not _saved
-	_delete_button.text = "もう一度押すと消えます" if _delete_armed else "消す"
+	_delete_button.text = "もう一度で消す" if _delete_armed else "消す"
 	var expressions: Array = PururinLookConfig.values()["expression_names"]
 	_portrait.set("fixed_expression", str(expressions[_expression_index]))
 	_portrait.call("set_pururin", {"id": str(_entry["id"]), "look": PururinLookConfig.resolved_look(_entry["look"], _primary_colors())})
@@ -1088,7 +1223,6 @@ func reload_parts() -> void:
 	var saved := _saved
 	PururinLookConfig.reload()
 	MyPururins.reload()
-	_reload_choices()
 	_entry = keep
 	_saved = saved
 	var errors := PururinLookConfig.validate_single_look(_entry["look"], _primary_colors())
@@ -1105,8 +1239,40 @@ func go_back() -> void:
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
 
 
+## いま選んでいる場所に、光る枠を重ねる（ゆっくり明るくなったり暗くなったりする）。
+func _update_focus_ring() -> void:
+	var owner := get_viewport().gui_get_focus_owner()
+	_focus_ring.visible = owner != null and owner.is_visible_in_tree() and not owner is LineEdit
+	if not _focus_ring.visible:
+		return
+	var rect := owner.get_global_rect().grow(FOCUS_RING_ROOM)
+	_focus_ring.position = rect.position
+	_focus_ring.size = rect.size
+	_focus_ring.modulate.a = 0.65 + 0.35 * sin(_ring_time * TAU / FOCUS_RING_SECONDS)
+
+
+func _process(delta: float) -> void:
+	_ring_time += delta
+	_update_focus_ring()
+	# 一覧の窓を開いている間は、選ぶ場所を窓の中だけにする。
+	if _list_window != null:
+		var owner := get_viewport().gui_get_focus_owner()
+		if owner == null or not _list_window.is_ancestor_of(owner):
+			var tile := _first_focusable(_list_window)
+			if tile != null:
+				tile.grab_focus()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
+	if _list_window != null:
+		if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+			viewport.set_input_as_handled()
+		elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event) or RaceControllerInput.is_face_pressed(event, JOY_BUTTON_X):
+			UIAudio.play_back()
+			close_list()
+			viewport.set_input_as_handled()
+		return
 	var step := RaceControllerInput.distance_step(event)
 	if step != 0:
 		var index := 0
@@ -1117,9 +1283,28 @@ func _unhandled_input(event: InputEvent) -> void:
 		UIAudio.play_selection_cycle()
 		viewport.set_input_as_handled()
 		return
+	# L2・R2（キーボードは PageUp・PageDown）で、表情を切り替える。
+	var face_step := RaceControllerInput.slot_move_direction(event)
+	if face_step != 0:
+		_step_expression(face_step, (PururinLookConfig.values()["expression_names"] as Array).size())
+		UIAudio.play_selection_cycle()
+		viewport.set_input_as_handled()
+		return
 	if viewport.gui_get_focus_owner() is LineEdit and not RaceControllerInput.is_cancel_pressed(event):
 		return
 	if RaceControllerInput.is_accept_pressed(event) and RaceControllerInput.activate_focused_control(viewport):
+		viewport.set_input_as_handled()
+	elif RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
+		UIAudio.play_confirmation()
+		save()
+		viewport.set_input_as_handled()
+	elif RaceControllerInput.is_face_pressed(event, JOY_BUTTON_X):
+		UIAudio.play_confirmation()
+		open_list()
+		viewport.set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK):
+		UIAudio.play_confirmation()
+		request_delete()
 		viewport.set_input_as_handled()
 	elif event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 		UIAudio.play_back()

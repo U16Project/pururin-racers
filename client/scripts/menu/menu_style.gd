@@ -8,7 +8,7 @@ const COLOR_PANEL := Color(0.05, 0.08, 0.14, 0.78)
 const COLOR_BUTTON := Color(0.18, 0.42, 0.58, 1.0)
 const COLOR_BUTTON_QUIET := Color(0.2, 0.25, 0.33, 1.0)
 const COLOR_BUTTON_ON := Color(0.2, 0.62, 0.42, 1.0)
-const COLOR_FOCUS := Color(1.0, 0.86, 0.3, 1.0)
+const COLOR_FOCUS := Color(1.0, 0.847, 0.302, 1.0)
 ## 「選択済み」（他のスロットで使っている）の色。
 const COLOR_TAKEN := Color(1.0, 0.6, 0.2, 1.0)
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
@@ -29,10 +29,17 @@ const COLOR_BACKGROUND_DIM := Color(0.42, 0.45, 0.55, 1.0)
 ## いちばんの操作のボタン（緑。カーソルの黄色い枠と見分けがつくように、黄色にはしない）と、その文字。
 const COLOR_PRIMARY := Color(0.24, 0.66, 0.4, 1.0)
 const COLOR_PRIMARY_TEXT := Color(0.97, 0.98, 1.0, 1.0)
-## カーソルの枠の太さ。
-const FOCUS_WIDTH := 5
-const COLOR_FOCUS_FILL := Color(1.0, 1.0, 1.0, 0.08)
-const COLOR_FOCUS_GLOW := Color(1.0, 0.86, 0.3, 0.28)
+## ボタンの見た目（2026-11-12、ボタンスタジオで決めた値）。ふつうのボタンは、枠の線なしの落ち着いた色。
+## 選んでいる値は水色の地に暗い字。カーソルは、黄色の枠・外側の光・中をうすく明るく・少し大きく。
+const COLOR_BUTTON_BASE := Color(0.122, 0.169, 0.259, 1.0)
+const COLOR_BUTTON_TEXT := Color(0.914, 0.933, 0.984, 1.0)
+const COLOR_SELECTED := Color(0.373, 0.839, 0.902, 1.0)
+const COLOR_SELECTED_TEXT := Color(0.043, 0.106, 0.165, 1.0)
+const BUTTON_RADIUS := 12
+## カーソルの枠の太さ・中の明るさ・外側の光。
+const FOCUS_WIDTH := 3
+const COLOR_FOCUS_FILL := Color(1.0, 1.0, 1.0, 0.04)
+const COLOR_FOCUS_GLOW := Color(1.0, 0.847, 0.302, 0.25)
 const FOCUS_GLOW_SIZE := 6
 ## レース中は、従来の透明な地と幅4の枠を使う。
 const RACE_FOCUS_WIDTH := 4
@@ -82,14 +89,15 @@ static func style_button(button: BaseButton, font_size: int, color: Color = COLO
 	button.add_theme_font_size_override("font_size", font_size)
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		button.add_theme_color_override(state, COLOR_TEXT)
-	button.add_theme_stylebox_override("normal", box(color))
-	button.add_theme_stylebox_override("hover", box(color.lightened(0.12)))
-	button.add_theme_stylebox_override("pressed", box(COLOR_BUTTON_ON))
-	button.add_theme_stylebox_override("hover_pressed", box(COLOR_BUTTON_ON.lightened(0.12)))
+	var radius := 10 if race else BUTTON_RADIUS
+	button.add_theme_stylebox_override("normal", box(color, radius))
+	button.add_theme_stylebox_override("hover", box(color.lightened(0.12), radius))
+	button.add_theme_stylebox_override("pressed", box(COLOR_BUTTON_ON, radius))
+	button.add_theme_stylebox_override("hover_pressed", box(COLOR_BUTTON_ON.lightened(0.12), radius))
 	# 押せないときは、暗くする。
 	button.add_theme_color_override("font_disabled_color", Color(COLOR_TEXT, 0.4))
-	button.add_theme_stylebox_override("disabled", box(Color(color.darkened(0.45), 0.8)))
-	button.add_theme_stylebox_override("focus", focus_box(10, 3.0, race))
+	button.add_theme_stylebox_override("disabled", box(Color(color.darkened(0.45), 0.8), radius))
+	button.add_theme_stylebox_override("focus", focus_box(radius, 3.0, race))
 
 
 static func button(text: String, font_size: int, color: Color = COLOR_BUTTON, race: bool = false) -> Button:
@@ -295,11 +303,16 @@ static func background(parent: Control, path: String) -> TextureRect:
 ## "primary"（緑の地に白い文字。いちばんの操作）、"secondary"（暗い地に水色の文字）、"quiet"（暗い地に白い文字）、
 ## "tab"（暗い地に白い文字。選んでいる＝押してある間は、水色の地に暗い文字）。
 static func style_pill_button(button: BaseButton, kind: String, font_size: int, radius: int = 22, race: bool = false) -> void:
-	var base := Color(0.13, 0.18, 0.27, 0.92)
-	var text := COLOR_TEXT
-	var down_text := COLOR_TEXT
+	# レース中は、前からの見た目（丸い・うすい縁）のまま。
+	var base := Color(0.13, 0.18, 0.27, 0.92) if race else COLOR_BUTTON_BASE
+	var text := COLOR_TEXT if race else COLOR_BUTTON_TEXT
+	var down_text := text
 	var normal := base
 	var down := base.darkened(0.15)
+	var selected := COLOR_ACCENT if race else COLOR_SELECTED
+	var border := 2 if race else 0
+	if not race:
+		radius = BUTTON_RADIUS
 	match kind:
 		"primary":
 			normal = COLOR_PRIMARY
@@ -307,11 +320,11 @@ static func style_pill_button(button: BaseButton, kind: String, font_size: int, 
 			text = COLOR_PRIMARY_TEXT
 			down_text = COLOR_PRIMARY_TEXT
 		"secondary":
-			text = COLOR_ACCENT
-			down_text = COLOR_ACCENT
+			text = COLOR_ACCENT if race else COLOR_SELECTED
+			down_text = text
 		"tab":
-			down = COLOR_ACCENT
-			down_text = COLOR_BAR
+			down = selected
+			down_text = COLOR_BAR if race else COLOR_SELECTED_TEXT
 	button.add_theme_font_size_override("font_size", font_size)
 	if button is Button:
 		(button as Button).add_theme_font_override("font", bold_font())
@@ -320,11 +333,11 @@ static func style_pill_button(button: BaseButton, kind: String, font_size: int, 
 	for state in ["font_pressed_color", "font_hover_pressed_color"]:
 		button.add_theme_color_override(state, down_text)
 	button.add_theme_color_override("font_disabled_color", Color(text, 0.35))
-	button.add_theme_stylebox_override("normal", _pill(normal, Color(1, 1, 1, 0.18), radius))
-	button.add_theme_stylebox_override("hover", _pill(normal.lightened(0.12), Color(1, 1, 1, 0.35), radius))
-	button.add_theme_stylebox_override("pressed", _pill(down, Color(1, 1, 1, 0.35), radius))
-	button.add_theme_stylebox_override("hover_pressed", _pill(down.lightened(0.08), Color(1, 1, 1, 0.45), radius))
-	button.add_theme_stylebox_override("disabled", _pill(Color(normal, normal.a * 0.35), Color(1, 1, 1, 0.08), radius))
+	button.add_theme_stylebox_override("normal", _pill(normal, Color(1, 1, 1, 0.18), radius, border))
+	button.add_theme_stylebox_override("hover", _pill(normal.lightened(0.12), Color(1, 1, 1, 0.35), radius, border))
+	button.add_theme_stylebox_override("pressed", _pill(down, Color(1, 1, 1, 0.35), radius, border))
+	button.add_theme_stylebox_override("hover_pressed", _pill(down.lightened(0.08), Color(1, 1, 1, 0.45), radius, border))
+	button.add_theme_stylebox_override("disabled", _pill(Color(normal, normal.a * 0.35), Color(1, 1, 1, 0.08), radius, border))
 	button.add_theme_stylebox_override("focus", focus_box(radius + 2, 2.0, race))
 
 
@@ -335,10 +348,10 @@ static func pill_button(text: String, kind: String, font_size: int = 20, race: b
 	return node
 
 
-static func _pill(color: Color, border: Color, radius: int) -> StyleBoxFlat:
+static func _pill(color: Color, border: Color, radius: int, width: int = 2) -> StyleBoxFlat:
 	var style := box(color, radius, 18.0, 6.0)
 	style.border_color = border
-	style.set_border_width_all(2)
+	style.set_border_width_all(width)
 	return style
 
 

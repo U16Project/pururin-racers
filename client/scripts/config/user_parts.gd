@@ -3,15 +3,15 @@ extends RefCounted
 ## 置き方（フォルダの中）：
 ##   top/・side/・tail/ … 立体のファイル（.glb など）。ファイル名が部品の名前。
 ##   mark/              … 画像（.png など）。ファイル名が部品の名前。
-##   face/<セットの名前>/ … 顔の画像。「表情_スロット.png」（例：normal_eyes.png、joy_mouth.png）。normal_eyes は必須。
-## どの部品も、同じ名前の .json を横に置くと、名前（label）や作り方（source）・動かし方（motions）を上書きできる。
-## 顔のセットは、フォルダの中の face.json で、名前（label）と画像の大きさ（image_sizes）を上書きできる。
+##   eyes/・brows/・mouth/・cheeks/<部品の名前>/ … 顔の部品1つ。表情ごとの画像「表情.png」（例：normal.png、joy.png）。normal は必須。
+## 頭・横・しっぽ・マークは、同じ名前の .json を横に置くと、名前（label）や作り方（source）・動かし方（motions）を上書きできる。
+## 顔の部品は、フォルダの中の part.json で、名前（label）と画像の大きさ（size：[横, 縦]）を上書きできる。
 ## ここでは集めるだけ。部品として正しいかは、呼ぶ側（PururinLookConfig）が、組み込みの部品と同じ検査で確かめる。
 
 const MakerConfig := preload("res://scripts/config/pururin_maker_config.gd")
 const PururinBody := preload("res://scripts/presentation/pururin_body.gd")
 const BODY_SLOTS := ["top", "side", "tail"]
-const FOLDERS := ["top", "side", "tail", "mark", "face"]
+const FOLDERS := ["top", "side", "tail", "mark", "eyes", "brows", "mouth", "cheeks"]
 ## 部品のIDの頭。組み込みの部品と、名前がぶつからないように。
 const ID_PREFIX := "user/"
 
@@ -37,9 +37,9 @@ static func folder() -> String:
 	return str(MakerConfig.values()["parts_folder"])
 
 
-## 探した結果：{"parts": {ID: 部品}, "labels": {ID: 名前}, "face_sets": {ID: {"label", "base", "expressions"}}, "errors": [読めなかった理由]}。
+## 探した結果：{"parts": {ID: 部品}, "labels": {ID: 名前}, "face_parts": {場所: {ID: {"label", "expressions"}}}, "errors": [読めなかった理由]}。
 static func scan(expression_names: Array) -> Dictionary:
-	var result := {"parts": {}, "labels": {}, "face_sets": {}, "errors": []}
+	var result := {"parts": {}, "labels": {}, "face_parts": {}, "errors": []}
 	var settings: Dictionary = MakerConfig.values()["user_parts"]
 	var root := folder()
 	for slot: String in BODY_SLOTS:
@@ -48,8 +48,13 @@ static func scan(expression_names: Array) -> Dictionary:
 			_add_part(result, "body_part", slot, root.path_join(slot), file, source)
 	for file: String in _files(root.path_join("mark"), settings["image_extensions"]):
 		_add_part(result, "decoration", "mark", root.path_join("mark"), file, {"type": "image", "path": root.path_join("mark").path_join(file)})
-	for set_name: String in DirAccess.get_directories_at(root.path_join("face")):
-		_add_face_set(result, root.path_join("face").path_join(set_name), set_name, settings, expression_names)
+	for slot: String in MakerConfig.IMAGE_FACE_SLOTS:
+		result["face_parts"][slot] = {}
+		var slot_folder := root.path_join(slot)
+		if not DirAccess.dir_exists_absolute(slot_folder):
+			continue
+		for name: String in DirAccess.get_directories_at(slot_folder):
+			_add_face_part(result, slot, slot_folder.path_join(name), name, settings, expression_names)
 	return result
 
 
@@ -76,43 +81,38 @@ static func _add_part(result: Dictionary, kind: String, slot: String, directory:
 	result["labels"][identifier] = label
 
 
-## 顔のセットを1つ足す。表情ごと・スロットごとに、画像を1つの部品にする。
-static func _add_face_set(result: Dictionary, directory: String, set_name: String, settings: Dictionary, expression_names: Array) -> void:
-	var label := set_name
-	var sizes: Dictionary = settings["image_sizes"].duplicate()
-	var extra_path := directory.path_join("face.json")
+## 顔の部品を1つ足す。表情ごとの画像を、それぞれ1つの絵の部品にする。
+static func _add_face_part(result: Dictionary, slot: String, directory: String, name: String, settings: Dictionary, expression_names: Array) -> void:
+	var label := name
+	var size: Variant = settings["image_sizes"][slot]
+	var extra_path := directory.path_join("part.json")
 	if FileAccess.file_exists(extra_path):
 		var extra: Variant = JSON.parse_string(FileAccess.get_file_as_string(extra_path))
 		if not extra is Dictionary:
 			result["errors"].append("%s: JSONとして読めません" % extra_path)
 			return
-		label = str(extra.get("label", set_name))
-		if extra.get("image_sizes") is Dictionary:
-			sizes.merge(extra["image_sizes"], true)
+		label = str(extra.get("label", name))
+		size = extra.get("size", size)
+	if not size is Array or size.size() != 2:
+		result["errors"].append("%s: size は [横, 縦] にします" % extra_path)
+		return
+	var family_id := "%s%s/%s" % [ID_PREFIX, slot, name]
 	var expressions := {}
 	var parts := {}
 	for file: String in _files(directory, settings["image_extensions"]):
-		var stem := file.get_basename()
-		var slot := stem.get_slice("_", stem.get_slice_count("_") - 1)
-		var expression := stem.trim_suffix("_" + slot)
-		if expression not in expression_names or slot not in MakerConfig.IMAGE_FACE_SLOTS:
-			result["errors"].append("%s: ファイル名は「表情_スロット」にします（表情は %s、スロットは %s）" % [directory.path_join(file), "・".join(expression_names), "・".join(MakerConfig.IMAGE_FACE_SLOTS)])
+		var expression := file.get_basename()
+		if expression not in expression_names:
+			result["errors"].append("%s: ファイル名は表情の名前にします（%s）" % [directory.path_join(file), "・".join(expression_names)])
 			continue
-		var size: Variant = sizes.get(slot)
-		if not size is Array or size.size() != 2:
-			result["errors"].append("%s: image_sizes.%s は [横, 縦] にします" % [extra_path, slot])
-			continue
-		var identifier := "%sface/%s/%s/%s" % [ID_PREFIX, set_name, expression, slot]
+		var identifier := "%s/%s" % [family_id, expression]
 		parts[identifier] = {"kind": "face", "slot": slot, "source": {"type": "image", "path": directory.path_join(file), "width": size[0], "height": size[1]}}
-		if not expressions.has(expression):
-			expressions[expression] = {}
-		expressions[expression][slot] = identifier
-	# ノーマルの目が無いセットは、使えない（ほかの表情で無い部品は、ノーマルを出すため）。
-	if not expressions.get(PururinBody.NORMAL, {}).has("eyes"):
-		result["errors"].append("%s: %s_eyes の画像が必要です" % [directory, PururinBody.NORMAL])
+		expressions[expression] = identifier
+	# ノーマルの絵が無い部品は、使えない（絵の無い表情では、ノーマルを出すため）。
+	if not expressions.has(PururinBody.NORMAL):
+		result["errors"].append("%s: %s の画像が必要です" % [directory, PururinBody.NORMAL])
 		return
 	result["parts"].merge(parts)
-	result["face_sets"]["%s%s" % [ID_PREFIX, set_name]] = {"label": label, "base": str(settings["face_base"]), "expressions": expressions}
+	result["face_parts"][slot][family_id] = {"label": label, "expressions": expressions}
 
 
 ## フォルダの中の、拡張子が合うファイル（名前の順）。フォルダが無ければ空。

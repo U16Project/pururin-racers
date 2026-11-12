@@ -31,8 +31,42 @@
     "#C9A3FF",
     "#2B2B3A"
   ],
-  "secondary_colors": ["#FFFFFF", "#FFF2BF", "#FFE9B8", "#EAF6FF", "#FFD8F0", "#FFC2D9", "#FF8FB8", "#FF9E80", "#FFE14D", "#B6F28A", "#8FE3C8", "#9FE3FF", "#5A6FE0", "#C9A3FF", "#9C6B33", "#2B2B3A"],
-  "secondary_heights": [{"label": "なし", "ratio": 0.0}, {"label": "少し", "ratio": 0.2}, {"label": "半分", "ratio": 0.4}, {"label": "多め", "ratio": 0.55}],
+  "secondary_colors": [
+    "#FFFFFF",
+    "#FFF2BF",
+    "#FFE9B8",
+    "#EAF6FF",
+    "#FFD8F0",
+    "#FFC2D9",
+    "#FF8FB8",
+    "#FF9E80",
+    "#FFE14D",
+    "#B6F28A",
+    "#8FE3C8",
+    "#9FE3FF",
+    "#5A6FE0",
+    "#C9A3FF",
+    "#9C6B33",
+    "#2B2B3A"
+  ],
+  "secondary_heights": [
+    {
+      "label": "なし",
+      "ratio": 0.0
+    },
+    {
+      "label": "少し",
+      "ratio": 0.2
+    },
+    {
+      "label": "半分",
+      "ratio": 0.4
+    },
+    {
+      "label": "多め",
+      "ratio": 0.55
+    }
+  ],
   "user_parts": {
     "mesh": {
       "scale": 1.0,
@@ -63,181 +97,709 @@
       "cheeks": [
         0.42,
         0.08
-      ],
-      "effect": [
-        0.34,
-        0.24
       ]
     },
-    "mark_size": 0.17,
-    "face_base": "player-1"
+    "mark_size": 0.17
   },
-  "face_sets": {
-    "star": {
-      "label": "星の目",
-      "base": "player-1",
-      "expressions": {
-        "normal": {
-          "eyes": "eyes_star",
-          "mouth": "mouth_smile",
-          "cheeks": "cheek_blush"
-        },
-        "joy": {
-          "eyes": "eyes_joy",
-          "mouth": "mouth_open"
-        },
-        "anger": {
-          "eyes": "eyes_anger",
-          "mouth": "mouth_frown"
-        },
-        "sorrow": {
-          "eyes": "eyes_sorrow",
-          "mouth": "mouth_wavy"
-        },
-        "relax": {
-          "eyes": "eyes_relax",
-          "mouth": "mouth_omega"
-        },
-        "first_place": {
-          "eyes": "eyes_star",
-          "mouth": "mouth_open",
-          "effect": "effect_sparkle"
-        },
-        "push_win": {
-          "eyes": "eyes_effort",
-          "brows": "brow_angry",
-          "mouth": "mouth_grit"
-        },
-        "push_lose": {
-          "eyes": "eyes_squeeze",
-          "mouth": "mouth_wavy",
-          "effect": "effect_sweat"
+  "face_parts": {
+    "eyes": {
+      "round": {
+        "label": "丸い目",
+        "expressions": {
+          "normal": "eyes_round",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_sparkle",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "calm": {
+        "label": "おだやかな目",
+        "expressions": {
+          "normal": "eyes_calm",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_round",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "star": {
+        "label": "星の目",
+        "expressions": {
+          "normal": "eyes_star",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_star",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "heart": {
+        "label": "ハートの目",
+        "expressions": {
+          "normal": "eyes_heart",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_heart",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "droopy": {
+        "label": "たれ目",
+        "expressions": {
+          "normal": "eyes_droopy",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_droopy",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "sharp": {
+        "label": "つり目",
+        "expressions": {
+          "normal": "eyes_sharp",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_sharp",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "half": {
+        "label": "ねむそうな目",
+        "expressions": {
+          "normal": "eyes_half",
+          "joy": "eyes_relax",
+          "anger": "eyes_half",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_line",
+          "first_place": "eyes_joy",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "dot": {
+        "label": "点の目",
+        "expressions": {
+          "normal": "eyes_dot",
+          "joy": "eyes_joy",
+          "anger": "eyes_dot",
+          "sorrow": "eyes_dot",
+          "relax": "eyes_line",
+          "first_place": "eyes_joy",
+          "push_win": "eyes_dot",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "big": {
+        "label": "ぱっちり目",
+        "expressions": {
+          "normal": "eyes_big",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_twinkle",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "twinkle": {
+        "label": "キラキラ目",
+        "expressions": {
+          "normal": "eyes_twinkle",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_twinkle",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "smiley": {
+        "label": "にっこり目",
+        "expressions": {
+          "normal": "eyes_joy",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_joy",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "wink": {
+        "label": "ウインク",
+        "expressions": {
+          "normal": "eyes_wink",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_wink",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "dizzy": {
+        "label": "ぐるぐる目",
+        "expressions": {
+          "normal": "eyes_dizzy",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_dizzy",
+          "relax": "eyes_relax",
+          "first_place": "eyes_joy",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_dizzy"
+        }
+      },
+      "cat": {
+        "label": "ねこ目",
+        "expressions": {
+          "normal": "eyes_cat",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_cat",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "jito": {
+        "label": "ジト目",
+        "expressions": {
+          "normal": "eyes_jito",
+          "joy": "eyes_relax",
+          "anger": "eyes_jito",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_line",
+          "first_place": "eyes_jito",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "dot_small": {
+        "label": "小さい点の目",
+        "expressions": {
+          "normal": "eyes_dot_small",
+          "joy": "eyes_joy",
+          "anger": "eyes_dot_small",
+          "sorrow": "eyes_dot_small",
+          "relax": "eyes_line",
+          "first_place": "eyes_dot_small",
+          "push_win": "eyes_dot_small",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "dot_big": {
+        "label": "つぶらな目",
+        "expressions": {
+          "normal": "eyes_dot_big",
+          "joy": "eyes_joy",
+          "anger": "eyes_dot_big",
+          "sorrow": "eyes_dot_big",
+          "relax": "eyes_relax",
+          "first_place": "eyes_dot_big",
+          "push_win": "eyes_dot_big",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "line": {
+        "label": "線の目",
+        "expressions": {
+          "normal": "eyes_line",
+          "joy": "eyes_joy",
+          "anger": "eyes_line",
+          "sorrow": "eyes_relax",
+          "relax": "eyes_relax",
+          "first_place": "eyes_joy",
+          "push_win": "eyes_line",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "ring": {
+        "label": "びっくり目",
+        "expressions": {
+          "normal": "eyes_ring",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_ring",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_ring"
+        }
+      },
+      "teary": {
+        "label": "うるうる目",
+        "expressions": {
+          "normal": "eyes_teary",
+          "joy": "eyes_joy",
+          "anger": "eyes_anger",
+          "sorrow": "eyes_teary",
+          "relax": "eyes_relax",
+          "first_place": "eyes_twinkle",
+          "push_win": "eyes_effort",
+          "push_lose": "eyes_squeeze"
         }
       }
     },
-    "heart": {
-      "label": "ハートの目",
-      "base": "player-1",
-      "expressions": {
-        "normal": {
-          "eyes": "eyes_heart",
-          "mouth": "mouth_omega",
-          "cheeks": "cheek_blush"
-        },
-        "joy": {
-          "eyes": "eyes_joy",
-          "mouth": "mouth_open"
-        },
-        "anger": {
-          "eyes": "eyes_anger",
-          "mouth": "mouth_frown"
-        },
-        "sorrow": {
-          "eyes": "eyes_sorrow",
-          "mouth": "mouth_wavy"
-        },
-        "relax": {
-          "eyes": "eyes_relax",
-          "mouth": "mouth_omega"
-        },
-        "first_place": {
-          "eyes": "eyes_heart",
-          "mouth": "mouth_open",
-          "effect": "effect_sparkle"
-        },
-        "push_win": {
-          "eyes": "eyes_effort",
-          "brows": "brow_angry",
-          "mouth": "mouth_grit"
-        },
-        "push_lose": {
-          "eyes": "eyes_squeeze",
-          "mouth": "mouth_wavy",
-          "effect": "effect_sweat"
+    "brows": {
+      "none": {
+        "label": "なし",
+        "expressions": {
+          "normal": null
+        }
+      },
+      "push_only": {
+        "label": "がんばるときだけ",
+        "expressions": {
+          "normal": null,
+          "push_win": "brow_angry"
+        }
+      },
+      "thin": {
+        "label": "細いまゆ",
+        "expressions": {
+          "normal": "brow_raise",
+          "anger": "brow_angry",
+          "sorrow": "brow_sad",
+          "push_win": "brow_angry",
+          "push_lose": "brow_sad"
+        }
+      },
+      "thick": {
+        "label": "太いまゆ",
+        "expressions": {
+          "normal": "brow_thick",
+          "anger": "brow_thick_angry",
+          "sorrow": "brow_thick_sad",
+          "push_win": "brow_thick_angry",
+          "push_lose": "brow_thick_sad"
+        }
+      },
+      "maro": {
+        "label": "まろまゆ",
+        "expressions": {
+          "normal": "brow_maro",
+          "anger": "brow_maro_angry",
+          "sorrow": "brow_maro_sad",
+          "push_win": "brow_maro_angry",
+          "push_lose": "brow_maro_sad"
+        }
+      },
+      "arch": {
+        "label": "山なりの太まゆ",
+        "expressions": {
+          "normal": "brow_arch",
+          "anger": "brow_arch_angry",
+          "sorrow": "brow_arch_sad",
+          "push_win": "brow_arch_angry",
+          "push_lose": "brow_arch_sad"
+        }
+      },
+      "long": {
+        "label": "長いまゆ",
+        "expressions": {
+          "normal": "brow_long",
+          "anger": "brow_long_angry",
+          "sorrow": "brow_long_sad",
+          "push_win": "brow_long_angry",
+          "push_lose": "brow_long_sad"
+        }
+      },
+      "short": {
+        "label": "短い太まゆ",
+        "expressions": {
+          "normal": "brow_short",
+          "anger": "brow_short_angry",
+          "sorrow": "brow_short_sad",
+          "push_win": "brow_short_angry",
+          "push_lose": "brow_short_sad"
+        }
+      },
+      "high": {
+        "label": "高いまゆ",
+        "expressions": {
+          "normal": "brow_high",
+          "anger": "brow_high_angry",
+          "sorrow": "brow_high_sad",
+          "push_win": "brow_high_angry",
+          "push_lose": "brow_high_sad"
+        }
+      },
+      "angry": {
+        "label": "いつも怒りまゆ",
+        "expressions": {
+          "normal": "brow_angry",
+          "anger": "brow_angry",
+          "sorrow": "brow_sad",
+          "push_win": "brow_angry",
+          "push_lose": "brow_sad"
+        }
+      },
+      "troubled": {
+        "label": "こまりまゆ",
+        "expressions": {
+          "normal": "brow_sad",
+          "anger": "brow_angry",
+          "sorrow": "brow_sad",
+          "push_win": "brow_angry",
+          "push_lose": "brow_sad"
+        }
+      },
+      "thick_troubled": {
+        "label": "太いこまりまゆ",
+        "expressions": {
+          "normal": "brow_thick_sad",
+          "anger": "brow_thick_angry",
+          "sorrow": "brow_thick_sad",
+          "push_win": "brow_thick_angry",
+          "push_lose": "brow_thick_sad"
         }
       }
     },
-    "droopy": {
-      "label": "たれ目",
-      "base": "cpu-2",
-      "expressions": {
-        "normal": {
-          "eyes": "eyes_droopy",
-          "mouth": "mouth_tongue",
-          "cheeks": "cheek_blush"
-        },
-        "joy": {
-          "eyes": "eyes_joy",
-          "mouth": "mouth_tongue"
-        },
-        "anger": {
-          "eyes": "eyes_anger",
-          "mouth": "mouth_frown"
-        },
-        "sorrow": {
-          "eyes": "eyes_sorrow",
-          "mouth": "mouth_wavy"
-        },
-        "relax": {
-          "eyes": "eyes_relax",
-          "mouth": "mouth_omega"
-        },
-        "first_place": {
-          "eyes": "eyes_droopy",
-          "mouth": "mouth_open",
-          "effect": "effect_sparkle"
-        },
-        "push_win": {
-          "eyes": "eyes_effort",
-          "brows": "brow_angry",
-          "mouth": "mouth_grit"
-        },
-        "push_lose": {
-          "eyes": "eyes_squeeze",
-          "mouth": "mouth_wavy",
-          "effect": "effect_sweat"
+    "mouth": {
+      "omega": {
+        "label": "ωの口",
+        "expressions": {
+          "normal": "mouth_omega",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "smile": {
+        "label": "にっこり口",
+        "expressions": {
+          "normal": "mouth_smile",
+          "joy": "mouth_smile",
+          "anger": "mouth_flat",
+          "sorrow": "mouth_flat",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_flat",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "fang": {
+        "label": "きばの口",
+        "expressions": {
+          "normal": "mouth_fang",
+          "joy": "mouth_open_fang",
+          "anger": "mouth_grit",
+          "sorrow": "mouth_frown",
+          "relax": "mouth_fang",
+          "first_place": "mouth_open_fang",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_grit"
+        }
+      },
+      "triangle": {
+        "label": "三角の口",
+        "expressions": {
+          "normal": "mouth_triangle",
+          "joy": "mouth_open_big",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_triangle",
+          "first_place": "mouth_open_big",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_o"
+        }
+      },
+      "flat": {
+        "label": "まっすぐの口",
+        "expressions": {
+          "normal": "mouth_flat",
+          "joy": "mouth_smile",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_o"
+        }
+      },
+      "tongue": {
+        "label": "べーの口",
+        "expressions": {
+          "normal": "mouth_tongue",
+          "joy": "mouth_tongue",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "grin": {
+        "label": "歯を見せる口",
+        "expressions": {
+          "normal": "mouth_grin",
+          "joy": "mouth_grin",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "open": {
+        "label": "あけた口",
+        "expressions": {
+          "normal": "mouth_open",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "open_big": {
+        "label": "大きくあけた口",
+        "expressions": {
+          "normal": "mouth_open_big",
+          "joy": "mouth_open_big",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open_big",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "o": {
+        "label": "ぽかん口",
+        "expressions": {
+          "normal": "mouth_o",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_o"
+        }
+      },
+      "wavy": {
+        "label": "もにょもにょ口",
+        "expressions": {
+          "normal": "mouth_wavy",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_wavy",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "frown": {
+        "label": "への字口",
+        "expressions": {
+          "normal": "mouth_frown",
+          "joy": "mouth_smile",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_flat",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "grit": {
+        "label": "いーっの口",
+        "expressions": {
+          "normal": "mouth_grit",
+          "joy": "mouth_grin",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_flat",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_grit"
+        }
+      },
+      "open_fang": {
+        "label": "きばを見せる口",
+        "expressions": {
+          "normal": "mouth_open_fang",
+          "joy": "mouth_open_fang",
+          "anger": "mouth_grit",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega",
+          "first_place": "mouth_open_fang",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "smile_small": {
+        "label": "小さいにっこり口",
+        "expressions": {
+          "normal": "mouth_smile_small",
+          "joy": "mouth_smile",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_smile_small",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "smile_wide": {
+        "label": "大きいにっこり口",
+        "expressions": {
+          "normal": "mouth_smile_wide",
+          "joy": "mouth_open_big",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_smile_wide",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "omega_wide": {
+        "label": "大きいωの口",
+        "expressions": {
+          "normal": "mouth_omega_wide",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_omega_wide",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "kiss": {
+        "label": "ちゅーの口",
+        "expressions": {
+          "normal": "mouth_kiss",
+          "joy": "mouth_open",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_o",
+          "relax": "mouth_kiss",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
+        }
+      },
+      "zigzag": {
+        "label": "ギザギザ口",
+        "expressions": {
+          "normal": "mouth_zigzag",
+          "joy": "mouth_open",
+          "anger": "mouth_zigzag",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_flat",
+          "first_place": "mouth_open",
+          "push_win": "mouth_zigzag",
+          "push_lose": "mouth_zigzag"
+        }
+      },
+      "smirk": {
+        "label": "ニヤリ口",
+        "expressions": {
+          "normal": "mouth_smirk",
+          "joy": "mouth_grin",
+          "anger": "mouth_frown",
+          "sorrow": "mouth_wavy",
+          "relax": "mouth_smirk",
+          "first_place": "mouth_open",
+          "push_win": "mouth_grit",
+          "push_lose": "mouth_wavy"
         }
       }
     },
-    "sharp": {
-      "label": "つり目",
-      "base": "cpu-1",
-      "expressions": {
-        "normal": {
-          "eyes": "eyes_sharp",
-          "mouth": "mouth_grin",
-          "cheeks": "cheek_blush"
-        },
-        "joy": {
-          "eyes": "eyes_joy",
-          "mouth": "mouth_grin"
-        },
-        "anger": {
-          "eyes": "eyes_anger",
-          "mouth": "mouth_frown"
-        },
-        "sorrow": {
-          "eyes": "eyes_sorrow",
-          "mouth": "mouth_wavy"
-        },
-        "relax": {
-          "eyes": "eyes_relax",
-          "mouth": "mouth_omega"
-        },
-        "first_place": {
-          "eyes": "eyes_sharp",
-          "mouth": "mouth_open",
-          "effect": "effect_sparkle"
-        },
-        "push_win": {
-          "eyes": "eyes_effort",
-          "brows": "brow_angry",
-          "mouth": "mouth_grit"
-        },
-        "push_lose": {
-          "eyes": "eyes_squeeze",
-          "mouth": "mouth_wavy",
-          "effect": "effect_sweat"
+    "cheeks": {
+      "none": {
+        "label": "なし",
+        "expressions": {
+          "normal": null
+        }
+      },
+      "blush": {
+        "label": "赤いほっぺ",
+        "expressions": {
+          "normal": "cheek_blush"
+        }
+      },
+      "lines": {
+        "label": "線のほっぺ",
+        "expressions": {
+          "normal": "cheek_lines"
+        }
+      },
+      "round": {
+        "label": "丸いほっぺ",
+        "expressions": {
+          "normal": "cheek_round"
+        }
+      },
+      "big": {
+        "label": "大きいほっぺ",
+        "expressions": {
+          "normal": "cheek_big"
+        }
+      },
+      "swirl": {
+        "label": "うずまきほっぺ",
+        "expressions": {
+          "normal": "cheek_swirl"
+        }
+      },
+      "star": {
+        "label": "星のほっぺ",
+        "expressions": {
+          "normal": "cheek_star"
+        }
+      },
+      "heart": {
+        "label": "ハートのほっぺ",
+        "expressions": {
+          "normal": "cheek_heart"
+        }
+      },
+      "freckles": {
+        "label": "そばかす",
+        "expressions": {
+          "normal": "cheek_freckles"
+        }
+      },
+      "bandage": {
+        "label": "ばんそうこう",
+        "expressions": {
+          "normal": "cheek_bandage"
         }
       }
     }
@@ -283,7 +845,6 @@
       "butterfly_wing": "ちょうちょの羽",
       "bird_wing": "鳥の羽",
       "dragon_wing": "ドラゴンの羽",
-      "star_hand": "星の手",
       "bow_side": "小さなリボン",
       "cat_tail": "ねこしっぽ",
       "devil_tail": "あくましっぽ",
@@ -301,7 +862,70 @@
       "mark_note": "音符",
       "mark_paw": "肉球",
       "mark_snow": "雪の結晶",
-      "mark_clover": "四つ葉"
+      "mark_clover": "四つ葉",
+      "fox_ears": "きつね耳",
+      "mouse_ears": "ねずみ耳",
+      "devil_horns": "小あくまの角",
+      "ox_horns": "大きな角",
+      "tiara": "ティアラ",
+      "witch_hat": "とんがり帽子",
+      "sunflower": "ひまわり",
+      "sakura": "さくら",
+      "big_ribbon": "大きいリボン",
+      "gold_halo": "金の輪",
+      "mushroom": "きのこ",
+      "propeller": "プロペラ",
+      "small_fin": "小さいヒレ",
+      "big_fin": "大きいヒレ",
+      "fairy_wing": "ようせいの羽",
+      "monarch_wing": "オレンジのちょうちょ",
+      "small_angel_wing": "小さい天使の羽",
+      "crow_wing": "黒い鳥の羽",
+      "phoenix_wing": "ほのおの鳥の羽",
+      "big_flame_fin": "大きいほのお",
+      "blue_flame_fin": "青いほのお",
+      "big_crystal_side": "大きい結晶",
+      "small_bat_wing": "小さいこうもりの羽",
+      "stone_side": "石",
+      "blue_bow_side": "青いリボン",
+      "pink_drop_wing": "ピンクのしずくの羽",
+      "thick_tail": "太いしっぽ",
+      "bunny_tail": "うさぎのしっぽ",
+      "pig_tail": "ぶたのしっぽ",
+      "mouse_tail": "ねずみのしっぽ",
+      "red_devil_tail": "赤いあくまのしっぽ",
+      "red_dragon_tail": "赤いドラゴンのしっぽ",
+      "blue_star_tail": "青い星しっぽ",
+      "small_heart_tail": "小さいハートしっぽ",
+      "blue_flame_tail": "青いほのおしっぽ",
+      "leaf_fan_tail": "葉っぱ3枚しっぽ",
+      "pink_crystal_tail": "ピンクの結晶しっぽ",
+      "pink_bubble_tail": "ピンクのあわしっぽ",
+      "blue_bow_tail": "青いリボンしっぽ",
+      "mermaid_tail": "人魚のしっぽ",
+      "stone_tail": "石のしっぽ",
+      "big_bubble_tail": "大きいあわしっぽ",
+      "mark_dot": "まる",
+      "mark_ring": "わっか",
+      "mark_sun": "たいよう",
+      "mark_plus": "プラス",
+      "mark_sparkle": "キラッ",
+      "mark_triangle": "さんかく",
+      "mark_hexagon": "六角形",
+      "mark_spade": "スペード",
+      "mark_cloud": "くも",
+      "mark_leaf": "葉っぱ",
+      "mark_fish": "さかな",
+      "mark_crown": "かんむり",
+      "mark_fire": "ほのお",
+      "mark_wave": "なみ",
+      "mark_bone": "ほね",
+      "mark_cherry": "さくらんぼ",
+      "mark_ribbon": "リボン",
+      "mark_cat": "ねこ",
+      "penguin_fin": "ペンギンのヒレ",
+      "small_hand": "小さい手",
+      "big_hand": "大きい手"
     },
     "finishes": {
       "gloss": "つやつや",
@@ -351,20 +975,22 @@
       "  mark/ …… .png（.jpg・.webp も可）。背景を透明にした、正方形の画像がおすすめです。",
       "",
       "■ 顔（画像）",
-      "  face/<セットの名前>/ に、「表情_場所.png」の名前で置きます。",
+      "  目・まゆ・口・ほっぺを、1つずつ部品にします。",
+      "  eyes/<部品の名前>/ …… 目　　brows/<部品の名前>/ …… まゆ",
+      "  mouth/<部品の名前>/ …… 口　　cheeks/<部品の名前>/ …… ほっぺ",
+      "  フォルダの中に、表情ごとの絵を「表情.png」の名前で置きます。",
       "    表情：normal（ノーマル）、joy（喜）、anger（怒）、sorrow（哀）、relax（楽）、",
       "          first_place（1位）、push_win（押し合い・勝ち）、push_lose（押し合い・負け）",
-      "    場所：eyes（目）、brows（まゆ）、mouth（口）、cheeks（ほっぺ）、effect（汗やキラキラ）",
-      "  例：normal_eyes.png、normal_mouth.png、joy_eyes.png",
-      "  normal_eyes.png は必ず要ります。ほかの表情で絵が無い場所は、ノーマルの絵を出します。",
+      "  例：eyes/しかく目/normal.png、eyes/しかく目/joy.png",
+      "  normal.png は必ず要ります。絵を置いていない表情では、normal.png の絵を出します。",
       "  目の画像は、両目を1枚に描きます（顔のまん中に貼ります）。",
       "",
       "■ 名前や大きさを変えたいとき（なくてもよい）",
       "  部品と同じ名前の .json を横に置きます。例：top/hat.glb の横に top/hat.json",
       "    {\"label\": \"とんがり帽子\", \"source\": {\"scale\": 1.2, \"material\": \"own\"}}",
       "  画像のマークは、大きさを作成コーナーの決まりで合わせます。",
-      "  顔のセットは、フォルダの中に face.json を置きます。",
-      "    {\"label\": \"しかく目\", \"image_sizes\": {\"eyes\": [0.4, 0.19], \"mouth\": [0.16, 0.1]}}",
+      "  顔の部品は、フォルダの中に part.json を置きます。",
+      "    {\"label\": \"しかく目\", \"size\": [0.4, 0.19]}",
       "  （大きさの単位はメートル。体の横幅は 1.5 です）",
       "",
       "■ 読めない部品",

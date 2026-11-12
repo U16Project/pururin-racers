@@ -4554,16 +4554,14 @@
         ]
       }
     },
-    "star_hand": {
+    "penguin_fin": {
       "kind": "body_part",
       "slot": "side",
       "source": {
         "type": "builtin",
-        "shape": "star",
-        "size": 0.16,
-        "depth": 0.05,
-        "tilt_deg": -15.0,
-        "color": "#FFE14D"
+        "shape": "flipper",
+        "length": 0.26,
+        "tilt_deg": -35.0
       },
       "motions": {
         "idle": [
@@ -5371,6 +5369,4947 @@
         "slope": -0.45,
         "lower": 0.0,
         "line": 1.0
+      }
+    },
+    "eyes_big": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_open",
+        "scale": 1.28,
+        "sparkle": 0
+      }
+    },
+    "eyes_twinkle": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_open",
+        "scale": 1.18,
+        "sparkle": 1
+      }
+    },
+    "eyes_wink": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_wink"
+      }
+    },
+    "eyes_cat": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_cat",
+        "scale": 1.1
+      }
+    },
+    "eyes_jito": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.15,
+        "slope": 0.0,
+        "lower": 0.3,
+        "line": 1.0
+      }
+    },
+    "eyes_dot_small": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dot",
+        "scale": 0.4
+      }
+    },
+    "eyes_dot_big": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dot",
+        "scale": 0.9
+      }
+    },
+    "eyes_ring": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_ring",
+        "scale": 1.05
+      }
+    },
+    "eyes_teary": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_teary",
+        "scale": 1.2
+      }
+    },
+    "brow_maro": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.4,
+        "thickness": 0.32,
+        "tilt_deg": 0.0,
+        "lift": 1.65,
+        "curve": 0.0
+      }
+    },
+    "brow_maro_angry": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.4,
+        "thickness": 0.32,
+        "tilt_deg": 22.0,
+        "lift": 1.5999999999999999,
+        "curve": 0.0
+      }
+    },
+    "brow_maro_sad": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.4,
+        "thickness": 0.32,
+        "tilt_deg": -18.0,
+        "lift": 1.65,
+        "curve": 0.0
+      }
+    },
+    "brow_arch": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.2,
+        "thickness": 0.26,
+        "tilt_deg": 0.0,
+        "lift": 1.5,
+        "curve": 0.3
+      }
+    },
+    "brow_arch_angry": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.2,
+        "thickness": 0.26,
+        "tilt_deg": 22.0,
+        "lift": 1.45,
+        "curve": 0.3
+      }
+    },
+    "brow_arch_sad": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.2,
+        "thickness": 0.26,
+        "tilt_deg": -18.0,
+        "lift": 1.5,
+        "curve": 0.3
+      }
+    },
+    "brow_long": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.5,
+        "thickness": 0.1,
+        "tilt_deg": 0.0,
+        "lift": 1.55,
+        "curve": 0.15
+      }
+    },
+    "brow_long_angry": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.5,
+        "thickness": 0.1,
+        "tilt_deg": 22.0,
+        "lift": 1.5,
+        "curve": 0.15
+      }
+    },
+    "brow_long_sad": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 1.5,
+        "thickness": 0.1,
+        "tilt_deg": -18.0,
+        "lift": 1.55,
+        "curve": 0.15
+      }
+    },
+    "brow_short": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.6,
+        "thickness": 0.28,
+        "tilt_deg": 0.0,
+        "lift": 1.55,
+        "curve": 0.0
+      }
+    },
+    "brow_short_angry": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.6,
+        "thickness": 0.28,
+        "tilt_deg": 22.0,
+        "lift": 1.5,
+        "curve": 0.0
+      }
+    },
+    "brow_short_sad": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.6,
+        "thickness": 0.28,
+        "tilt_deg": -18.0,
+        "lift": 1.55,
+        "curve": 0.0
+      }
+    },
+    "brow_high": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.8,
+        "thickness": 0.12,
+        "tilt_deg": 0.0,
+        "lift": 2.0,
+        "curve": 0.2
+      }
+    },
+    "brow_high_angry": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.8,
+        "thickness": 0.12,
+        "tilt_deg": 22.0,
+        "lift": 1.95,
+        "curve": 0.2
+      }
+    },
+    "brow_high_sad": {
+      "kind": "face",
+      "slot": "brows",
+      "source": {
+        "type": "builtin",
+        "shape": "brow",
+        "length": 0.8,
+        "thickness": 0.12,
+        "tilt_deg": -18.0,
+        "lift": 2.0,
+        "curve": 0.2
+      }
+    },
+    "mouth_smile_small": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.06,
+        "fang": 0,
+        "fang_color": "#FFFFFF"
+      }
+    },
+    "mouth_smile_wide": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.15,
+        "fang": 0,
+        "fang_color": "#FFFFFF"
+      }
+    },
+    "mouth_omega_wide": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.13
+      }
+    },
+    "mouth_kiss": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_kiss",
+        "width": 0.05
+      }
+    },
+    "mouth_zigzag": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1
+      }
+    },
+    "mouth_smirk": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smirk",
+        "width": 0.11
+      }
+    },
+    "cheek_round": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_ellipse",
+        "width": 0.05,
+        "height": 0.05
+      }
+    },
+    "cheek_big": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_ellipse",
+        "width": 0.085,
+        "height": 0.045
+      }
+    },
+    "cheek_swirl": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_swirl",
+        "width": 0.055,
+        "height": 0.05
+      }
+    },
+    "cheek_star": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_star",
+        "width": 0.06,
+        "height": 0.06
+      }
+    },
+    "cheek_heart": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_heart",
+        "width": 0.06,
+        "height": 0.058
+      }
+    },
+    "cheek_freckles": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_freckles",
+        "width": 0.06,
+        "height": 0.026
+      }
+    },
+    "cheek_bandage": {
+      "kind": "face",
+      "slot": "cheeks",
+      "source": {
+        "type": "builtin",
+        "shape": "cheek_bandage",
+        "width": 0.07,
+        "height": 0.026,
+        "color": "#F3D2A6"
+      }
+    },
+    "fox_ears": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "ears",
+        "length": 0.3,
+        "width": 0.12,
+        "spread": 0.2,
+        "tilt_deg": 16.0,
+        "point": 1.0,
+        "color": "#FFF2BF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.4
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 24.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "mouse_ears": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "ears",
+        "length": 0.2,
+        "width": 0.21,
+        "spread": 0.38,
+        "tilt_deg": 30.0,
+        "point": 0.0,
+        "color": "#FFC2D9"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.4
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 24.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "devil_horns": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "horns",
+        "length": 0.26,
+        "width": 0.075,
+        "spread_deg": 30.0,
+        "curve": 0.04,
+        "color": "#E2474B"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "ox_horns": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "horns",
+        "length": 0.44,
+        "width": 0.08,
+        "spread_deg": 48.0,
+        "curve": 0.22,
+        "color": "#F3E6C4"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "tiara": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "crown",
+        "radius": 0.19,
+        "height": 0.08,
+        "points": 7,
+        "color": "#DDE6F2",
+        "gem_color": "#6FC3FF"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "witch_hat": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "witch_hat",
+        "radius": 0.17,
+        "height": 0.42,
+        "bend": 0.12,
+        "tilt_deg": -8.0,
+        "color": "#5A3D7A",
+        "band_color": "#FFCF3D"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "sunflower": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "flower",
+        "size": 0.2,
+        "petals": 12,
+        "color": "#FFD23D",
+        "center_color": "#8A5A2B",
+        "stem_color": "#6CC46A"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.4
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 24.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "sakura": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "flower",
+        "size": 0.15,
+        "petals": 5,
+        "color": "#FFD8E6",
+        "center_color": "#FF8FB8",
+        "stem_color": "#8A6B45"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.4
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 24.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "big_ribbon": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "bow",
+        "size": 0.28,
+        "color": "#6FA8FF"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "gold_halo": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "ring",
+        "radius": 0.2,
+        "thickness": 0.026,
+        "height": 0.22,
+        "tilt_deg": 0.0,
+        "color": "#FFD23D"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 0.25
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 0.4
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 0.5
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 26.0,
+            "hz": 0.9
+          },
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.0
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.2,
+            "hz": 0.45
+          },
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 5.6
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 34.0,
+            "hz": 1.6
+          },
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 16.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 0.5
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 26.0,
+            "hz": 0.9
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 12.0,
+            "hz": 2.4
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 12.0,
+            "hz": 0.2
+          },
+          {
+            "type": "lean",
+            "axis": "z",
+            "angle_deg": 8.0
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 40.0,
+            "hz": 1.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 2.2
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 1.2
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 0.25
+          }
+        ]
+      }
+    },
+    "mushroom": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "mushroom",
+        "radius": 0.17,
+        "height": 0.08,
+        "color": "#FF5C5C",
+        "spot_color": "#FFFFFF",
+        "stem_color": "#FFF2DD"
+      },
+      "motions": {
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.8
+          }
+        ]
+      }
+    },
+    "propeller": {
+      "kind": "body_part",
+      "slot": "top",
+      "source": {
+        "type": "builtin",
+        "shape": "propeller",
+        "size": 0.32,
+        "blades": 3,
+        "color": "#FFCF3D",
+        "hub_color": "#FF5C5C"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 8.4
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 24.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 12.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.8
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "small_fin": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "flipper",
+        "length": 0.16,
+        "tilt_deg": -18.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.2,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -35.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 30.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 18.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "big_fin": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "flipper",
+        "length": 0.32,
+        "tilt_deg": -10.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.2,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -35.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 30.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 18.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "fairy_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "butterfly",
+        "size": 0.2,
+        "tilt_deg": 26.0,
+        "color": "#BDEBFF",
+        "spot_color": "#FFFFFF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "monarch_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "butterfly",
+        "size": 0.27,
+        "tilt_deg": 18.0,
+        "color": "#FF9E40",
+        "spot_color": "#2B2B3A"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "small_angel_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "leaf",
+        "length": 0.3,
+        "width": 0.1,
+        "tilt_deg": 30.0,
+        "roll_deg": 32.0,
+        "sweep_deg": 20.0,
+        "feathers": 2,
+        "color": "#FFFFFF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "crow_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "leaf",
+        "length": 0.44,
+        "width": 0.13,
+        "tilt_deg": 36.0,
+        "roll_deg": 32.0,
+        "sweep_deg": 30.0,
+        "feathers": 4,
+        "color": "#3A3A4A"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "phoenix_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "leaf",
+        "length": 0.5,
+        "width": 0.13,
+        "tilt_deg": 40.0,
+        "roll_deg": 32.0,
+        "sweep_deg": 34.0,
+        "feathers": 5,
+        "color": "#FF6A3D"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "big_flame_fin": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "flame",
+        "length": 0.48,
+        "width": 0.12,
+        "lean": 0.14,
+        "tilt_deg": 24.0,
+        "roll_deg": 25.0,
+        "tip_color": "#FFE066"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 1.76
+          },
+          {
+            "type": "pulse",
+            "amount": 0.024,
+            "hz": 3.04
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 12.0,
+            "hz": 2.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 4.0
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.3
+          },
+          {
+            "type": "pulse",
+            "amount": 0.042,
+            "hz": 2.0
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -30.0
+          },
+          {
+            "type": "grow",
+            "amount": 0.25
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 12.0,
+            "hz": 2.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 4.0
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.77
+          },
+          {
+            "type": "pulse",
+            "amount": 0.024,
+            "hz": 1.33
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 28.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.8,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ]
+      }
+    },
+    "blue_flame_fin": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "flame",
+        "length": 0.36,
+        "width": 0.1,
+        "lean": 0.1,
+        "tilt_deg": 18.0,
+        "roll_deg": 25.0,
+        "tip_color": "#9FE3FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 1.76
+          },
+          {
+            "type": "pulse",
+            "amount": 0.024,
+            "hz": 3.04
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 12.0,
+            "hz": 2.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 4.0
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.4,
+            "hz": 1.3
+          },
+          {
+            "type": "pulse",
+            "amount": 0.042,
+            "hz": 2.0
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -30.0
+          },
+          {
+            "type": "grow",
+            "amount": 0.25
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 12.0,
+            "hz": 2.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.06,
+            "hz": 4.0
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.6,
+            "hz": 0.77
+          },
+          {
+            "type": "pulse",
+            "amount": 0.024,
+            "hz": 1.33
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 28.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.8,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 1.1
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 1.9
+          }
+        ]
+      }
+    },
+    "big_crystal_side": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "crystal",
+        "length": 0.32,
+        "width": 0.07,
+        "tilt_deg": 24.0,
+        "seed": 29,
+        "color": "#C9A3FF"
+      },
+      "motions": {}
+    },
+    "small_hand": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "hand",
+        "size": 0.08,
+        "tilt_deg": -20.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.2,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -35.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 30.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 18.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "small_bat_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "bat_wing",
+        "length": 0.3,
+        "width": 0.08,
+        "count": 2,
+        "fan_deg": 26.0,
+        "tilt_deg": 30.0,
+        "roll_deg": 32.0,
+        "color": "#3A2B4A"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 1.44
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 14.0,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -32.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 20.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.2,
+            "hz": 0.63
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 32.0,
+            "hz": 2.6
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 19.2,
+            "hz": 2.6
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.0,
+            "hz": 0.9
+          }
+        ]
+      }
+    },
+    "stone_side": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "rock",
+        "size": 0.13,
+        "seed": 31,
+        "color": "#9A9AA6"
+      },
+      "motions": {}
+    },
+    "blue_bow_side": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "bow",
+        "size": 0.13,
+        "color": "#6FA8FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.2,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -35.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 30.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 18.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "pink_drop_wing": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "drop",
+        "length": 0.3,
+        "width": 0.075,
+        "tilt_deg": 20.0,
+        "fan_deg": 28.0,
+        "color": "#FFB3D1"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.7
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 0.5599999999999999
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5999999999999996,
+            "hz": 1.1199999999999999
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 10.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.800000000000001,
+            "hz": 2.0999999999999996
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 7.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.36,
+            "hz": 1.05
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 20.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 4.199999999999999
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.7
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.800000000000001,
+            "hz": 2.0999999999999996
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5999999999999996,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.5999999999999996,
+            "hz": 0.48999999999999994
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 13.200000000000001,
+            "hz": 1.8
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 2.4
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 7.800000000000001,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.0,
+            "hz": 0.7
+          }
+        ]
+      }
+    },
+    "big_hand": {
+      "kind": "body_part",
+      "slot": "side",
+      "source": {
+        "type": "builtin",
+        "shape": "hand",
+        "size": 0.15,
+        "tilt_deg": -20.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.2,
+            "hz": 1.2
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "y",
+            "angle_deg": -35.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 16.0,
+            "hz": 2.4
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.8,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 30.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 18.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 8.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "thick_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "curl",
+        "length": 0.4,
+        "thickness": 0.1,
+        "turns": 0.25
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "bunny_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "tuft",
+        "size": 0.07,
+        "count": 4,
+        "seed": 3,
+        "color": "#FFFFFF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "pig_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "curl",
+        "length": 0.26,
+        "thickness": 0.03,
+        "turns": 2.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "mouse_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "curl",
+        "length": 0.72,
+        "thickness": 0.03,
+        "turns": 0.3
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "red_devil_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "devil",
+        "length": 0.44,
+        "thickness": 0.04,
+        "tip_size": 0.13,
+        "color": "#E2474B"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "red_dragon_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "spiky",
+        "length": 0.52,
+        "thickness": 0.12,
+        "spikes": 4,
+        "color": "#E2474B"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.12
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 2.6
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 12.6,
+            "hz": 1.3
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 8.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 2.6
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.49
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 25.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 15.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ]
+      }
+    },
+    "blue_star_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "star",
+        "size": 0.19,
+        "depth": 0.06,
+        "tilt_deg": 10.0,
+        "color": "#6FC3FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "small_heart_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "heart",
+        "size": 0.13,
+        "depth": 0.05,
+        "tilt_deg": 10.0,
+        "color": "#FFB3D1"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "blue_flame_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "flame",
+        "length": 0.32,
+        "width": 0.09,
+        "lean": 0.05,
+        "tilt_deg": 62.0,
+        "roll_deg": 0.0,
+        "tip_color": "#9FE3FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 8.0,
+            "hz": 1.2
+          },
+          {
+            "type": "pulse",
+            "amount": 0.05,
+            "hz": 2.0
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 4.8,
+            "hz": 1.92
+          },
+          {
+            "type": "pulse",
+            "amount": 0.03,
+            "hz": 3.2
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.0,
+            "hz": 3.0
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 4.0
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 9.8,
+            "hz": 1.5
+          },
+          {
+            "type": "pulse",
+            "amount": 0.056,
+            "hz": 2.0
+          }
+        ],
+        "dash": [
+          {
+            "type": "grow",
+            "amount": 0.35
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 7.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 8.0,
+            "hz": 1.2
+          },
+          {
+            "type": "pulse",
+            "amount": 0.05,
+            "hz": 2.0
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.0,
+            "hz": 3.0
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 4.0
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 4.8,
+            "hz": 0.84
+          },
+          {
+            "type": "pulse",
+            "amount": 0.03,
+            "hz": 1.4
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 20.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 12.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 8.0,
+            "hz": 1.2
+          },
+          {
+            "type": "pulse",
+            "amount": 0.05,
+            "hz": 2.0
+          }
+        ]
+      }
+    },
+    "leaf_fan_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "leaf",
+        "length": 0.3,
+        "width": 0.085,
+        "tilt_deg": 42.0,
+        "roll_deg": 0.0,
+        "sweep_deg": 24.0,
+        "feathers": 3,
+        "color": "#7BD65A"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "pink_crystal_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "crystal",
+        "length": 0.24,
+        "width": 0.06,
+        "tilt_deg": 12.0,
+        "seed": 37,
+        "color": "#FFB3D1"
+      },
+      "motions": {}
+    },
+    "pink_bubble_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "bubble",
+        "size": 0.1,
+        "count": 4,
+        "seed": 19,
+        "color": "#FFB3D1"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 0.48
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 10.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 1.7999999999999998
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 7.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 2.8,
+            "hz": 0.9
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 20.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 3.5999999999999996
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 1.7999999999999998
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.0,
+            "hz": 1.8
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 2.4
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.5,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "blue_bow_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "bow",
+        "size": 0.18,
+        "color": "#6FA8FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.28
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 11.2,
+            "hz": 1.4
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 16.0,
+            "hz": 2.8
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.56
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 24.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 14.4,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.8
+          }
+        ]
+      }
+    },
+    "mermaid_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "flipper",
+        "length": 0.3,
+        "tilt_deg": 30.0
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 1.12
+          }
+        ],
+        "run": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 2.6
+          }
+        ],
+        "walk": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 12.6,
+            "hz": 1.3
+          }
+        ],
+        "dash": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 8.0,
+            "hz": 6.0
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 18.0,
+            "hz": 2.6
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 5.0,
+            "hz": 10.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 6.0,
+            "hz": 0.49
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 25.0,
+            "hz": 2.5
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 15.0,
+            "hz": 2.5
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "y",
+            "angle_deg": 10.0,
+            "hz": 0.7
+          }
+        ]
+      }
+    },
+    "stone_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "rock",
+        "size": 0.12,
+        "seed": 41,
+        "color": "#9A9AA6"
+      },
+      "motions": {}
+    },
+    "big_bubble_tail": {
+      "kind": "body_part",
+      "slot": "tail",
+      "source": {
+        "type": "builtin",
+        "shape": "bubble",
+        "size": 0.14,
+        "count": 3,
+        "seed": 23,
+        "color": "#9FE3FF"
+      },
+      "motions": {
+        "idle": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          },
+          {
+            "type": "pulse",
+            "amount": 0.04,
+            "hz": 0.48
+          }
+        ],
+        "ready": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 0.96
+          }
+        ],
+        "run": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 10.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 1.7999999999999998
+          }
+        ],
+        "walk": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 7.0
+          },
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 2.8,
+            "hz": 0.9
+          }
+        ],
+        "dash": [
+          {
+            "type": "lean",
+            "axis": "x",
+            "angle_deg": 20.0
+          },
+          {
+            "type": "sway",
+            "axis": "x",
+            "angle_deg": 3.0,
+            "hz": 3.5999999999999996
+          }
+        ],
+        "brake": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          }
+        ],
+        "contact": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 4.0,
+            "hz": 1.7999999999999998
+          }
+        ],
+        "push": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 9.0
+          }
+        ],
+        "tired": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 3.0,
+            "hz": 0.42
+          }
+        ],
+        "goal_win": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 11.0,
+            "hz": 1.8
+          },
+          {
+            "type": "pulse",
+            "amount": 0.08,
+            "hz": 2.4
+          }
+        ],
+        "goal_place": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 6.5,
+            "hz": 1.8
+          }
+        ],
+        "goal": [
+          {
+            "type": "sway",
+            "axis": "z",
+            "angle_deg": 5.0,
+            "hz": 0.6
+          }
+        ]
+      }
+    },
+    "mark_dot": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "dot"
+      }
+    },
+    "mark_ring": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "ring"
+      }
+    },
+    "mark_sun": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "sun"
+      }
+    },
+    "mark_plus": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "plus"
+      }
+    },
+    "mark_sparkle": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "sparkle"
+      }
+    },
+    "mark_triangle": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "triangle"
+      }
+    },
+    "mark_hexagon": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "hexagon"
+      }
+    },
+    "mark_spade": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "spade"
+      }
+    },
+    "mark_cloud": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "cloud"
+      }
+    },
+    "mark_leaf": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "leaf"
+      }
+    },
+    "mark_fish": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "fish"
+      }
+    },
+    "mark_crown": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "crown"
+      }
+    },
+    "mark_fire": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "fire"
+      }
+    },
+    "mark_wave": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "wave"
+      }
+    },
+    "mark_bone": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "bone"
+      }
+    },
+    "mark_cherry": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "cherry"
+      }
+    },
+    "mark_ribbon": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "ribbon"
+      }
+    },
+    "mark_cat": {
+      "kind": "decoration",
+      "slot": "mark",
+      "source": {
+        "type": "builtin",
+        "shape": "cat"
       }
     },
     "mouth_tongue": {

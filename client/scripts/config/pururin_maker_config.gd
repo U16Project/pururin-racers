@@ -1,13 +1,13 @@
 extends RefCounted
 ## ぷるりん作成コーナーの設定（data/config/pururin_maker.json）。
 ## 作ったぷるりんの保存場所、ユーザーが用意した部品の置き場所と、その初期の大きさ、
-## 新しく付ける部品の置き方、マークの色、下の色（色と高さ）、顔のセット、画面に出す名前。
+## 新しく付ける部品の置き方、マークの色、下の色（色と高さ）、顔の部品（目・まゆ・口・ほっぺ）、画面に出す名前。
 ## 誤りがあれば、読み込みを失敗にする（last_error に理由を入れ、values() は空を返す）。
 
 const PATH := "res://data/config/pururin_maker.json"
-const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "secondary_colors", "secondary_heights", "user_parts", "face_sets", "labels", "parts_readme"]
-## 顔のスロットのうち、ユーザーが画像で用意できるもの（ファイル名の「表情_スロット」のスロット）。
-const IMAGE_FACE_SLOTS := ["eyes", "brows", "mouth", "cheeks", "effect"]
+const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "secondary_colors", "secondary_heights", "user_parts", "face_parts", "labels", "parts_readme"]
+## 顔のうち、作成コーナーで部品ごとに選ぶ場所（ユーザーが画像で用意できる場所も同じ）。
+const IMAGE_FACE_SLOTS := ["eyes", "brows", "mouth", "cheeks"]
 
 static var _cached: Dictionary = {}
 static var _attempted := false
@@ -85,13 +85,7 @@ static func validate(data: Variant) -> PackedStringArray:
 			if not height is Dictionary or not height.get("label") is String or not _is_number(height.get("ratio")) or float(height["ratio"]) < 0.0 or float(height["ratio"]) > 1.0:
 				errors.append("secondary_heights[%d]: label（文字）と ratio（0〜1）が必要です" % index)
 	_validate_user_parts(data["user_parts"], errors)
-	if not data["face_sets"] is Dictionary:
-		errors.append("face_sets: オブジェクトが必要です")
-	else:
-		for set_id: String in data["face_sets"]:
-			var face_set: Variant = data["face_sets"][set_id]
-			if not face_set is Dictionary or not face_set.get("label") is String or not face_set.get("base") is String or not face_set.get("expressions") is Dictionary:
-				errors.append("face_sets.%s: label・base・expressions が必要です" % set_id)
+	_validate_face_parts(data["face_parts"], errors)
 	var readme: Variant = data["parts_readme"]
 	if not readme is Dictionary or not readme.get("file_name") is String or not readme.get("lines") is Array:
 		errors.append("parts_readme: file_name（置くときの名前）と lines（文の並び）が必要です")
@@ -120,8 +114,26 @@ static func _validate_user_parts(user_parts: Variant, errors: PackedStringArray)
 				errors.append("user_parts.image_sizes.%s: [横, 縦] の2つの数字が必要です" % slot)
 	if not _is_number(user_parts.get("mark_size")):
 		errors.append("user_parts.mark_size: 数字が必要です")
-	if not user_parts.get("face_base") is String:
-		errors.append("user_parts.face_base: 顔の置き方を借りる個体のIDが必要です")
+
+
+## 顔の部品（場所ごと）。1つの部品は、名前（label）と、表情ごとの絵の部品（expressions）を持つ。
+## expressions の normal は必ず書く（null なら、その場所に何も出さない）。書いていない表情では、normal を出す。
+static func _validate_face_parts(face_parts: Variant, errors: PackedStringArray) -> void:
+	if not face_parts is Dictionary:
+		errors.append("face_parts: オブジェクトが必要です")
+		return
+	for slot: String in IMAGE_FACE_SLOTS:
+		var families: Variant = face_parts.get(slot)
+		if not families is Dictionary or families.is_empty():
+			errors.append("face_parts.%s: 部品が1つ以上必要です" % slot)
+			continue
+		for family_id: String in families:
+			var family: Variant = families[family_id]
+			if not family is Dictionary or not family.get("label") is String or not family.get("expressions") is Dictionary or not family["expressions"].has("normal"):
+				errors.append("face_parts.%s.%s: label と、normal を含む expressions が必要です" % [slot, family_id])
+	for slot: String in face_parts:
+		if slot not in IMAGE_FACE_SLOTS:
+			errors.append("face_parts.%s: 場所は %s です" % [slot, "・".join(IMAGE_FACE_SLOTS)])
 
 
 ## 部品・質感・表情の、画面に出す名前。無ければ、IDのまま。

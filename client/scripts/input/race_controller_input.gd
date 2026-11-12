@@ -147,7 +147,7 @@ static func is_slot_lock_pressed(event: InputEvent) -> bool:
 	return is_button_pressed(event, JOY_BUTTON_BACK) or _is_key_just_pressed(event, KEY_L)
 
 
-## キャラ選択で、スロットを上の枠（-1）・下の枠（1）へ動かす。それ以外は 0。
+## L2（-1）・R2（1）を引いた瞬間。キャラ選択の枠の上下と、作成コーナーの表情切り替えで使う。それ以外は 0。
 ## ゲームパッドは L2・R2（引いた瞬間だけ数える）、キーボードは PageUp・PageDown。
 ## 引き金の状態を覚えるので、1つの入力につき1回だけ呼ぶ。
 static func slot_move_direction(event: InputEvent) -> int:
