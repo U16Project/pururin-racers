@@ -4527,7 +4527,7 @@ size_flags_vertical = 1
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-autowrap_mode = 1
+autowrap_mode = 3
 
 [node name="RoomResultsLog" type="RichTextLabel" parent="RoomView/Main" unique_id=104273579]
 unique_name_in_owner = true
@@ -5400,7 +5400,7 @@ theme_override_constants/line_spacing = -4
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-text = "番が来たら、どの画面にいても呼び出しが届きます"
+text = "出走の順番が来たら、どの画面にいても呼び出しが届きます"
 horizontal_alignment = 2
 vertical_alignment = 1
 text_overrun_behavior = 3

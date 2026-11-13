@@ -30,6 +30,8 @@ const HEART_HUD_UPDATES_PER_S := 10.0
 ## ウェブ版オフラインテストで、順位表の絵を描き直す回数（1秒あたり）。
 const RACE_HUD_UPDATES_PER_S := 4.0
 const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
+## オンラインフリー対戦の結果の板の、着順1行の高さ。
+const FREE_RESULT_ROW_HEIGHT := 34.0
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
@@ -1157,6 +1159,9 @@ static func online_return_place() -> String:
 func _build_free_after_choice() -> void:
 	var box: VBoxContainer = _result_panel.get_node("ResultBox")
 	var buttons: Control = box.get_node("ResultButtons")
+	# 選ぶ欄のぶん背が高くなるので、着順の行と間を詰めて、画面の上下にすき間を残す。
+	_result_board.set("row_height", FREE_RESULT_ROW_HEIGHT)
+	box.add_theme_constant_override("separation", 8)
 	var choice := VBoxContainer.new()
 	choice.name = "FreeAfter"
 	choice.add_theme_constant_override("separation", 8)

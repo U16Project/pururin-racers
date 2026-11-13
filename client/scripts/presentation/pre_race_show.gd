@@ -169,6 +169,8 @@ var _waiting: Label
 var _notice: Label
 ## 場面の見出し（暗くした画面の真ん中）。出している残りの秒数（0なら出していない）。
 var _title_card: Control
+## 見出しの帯の高さ。
+const TITLE_BAND_HEIGHT := 160.0
 var _title_card_main: Label
 var _title_card_sub: Label
 var _title_left := 0.0
@@ -859,11 +861,30 @@ func _build_overlay(label: Dictionary) -> void:
 	_title_card.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_title_card.visible = false
 	_overlay.add_child(_title_card)
+	# 見出しは、横いっぱいの帯の上に出す（後ろの出走表やステータスの字と、重なって読みにくくならないように）。
+	var band := ColorRect.new()
+	band.name = "Band"
+	band.color = Color(0.03, 0.05, 0.1, 0.92)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.set_anchors_preset(Control.PRESET_HCENTER_WIDE)
+	band.offset_top = -TITLE_BAND_HEIGHT / 2.0
+	band.offset_bottom = TITLE_BAND_HEIGHT / 2.0
+	_title_card.add_child(band)
+	for edge: float in [0.0, 1.0]:
+		var edge_line := ColorRect.new()
+		edge_line.color = MenuStyle.COLOR_ACCENT
+		edge_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		edge_line.anchor_right = 1.0
+		edge_line.anchor_top = edge
+		edge_line.anchor_bottom = edge
+		edge_line.offset_top = -3.0 * edge
+		edge_line.offset_bottom = 3.0 * (1.0 - edge)
+		band.add_child(edge_line)
 	var title_box := VBoxContainer.new()
 	title_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	title_box.set_anchors_preset(Control.PRESET_FULL_RECT)
 	title_box.add_theme_constant_override("separation", 6)
-	_title_card.add_child(title_box)
+	band.add_child(title_box)
 	_title_card_main = MenuStyle.bold_label("", 56, MenuStyle.COLOR_TEXT, 10)
 	_title_card_main.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_box.add_child(_title_card_main)
@@ -873,12 +894,13 @@ func _build_overlay(label: Dictionary) -> void:
 	_notice = MenuStyle.bold_label("", 22)
 	_notice.name = "Notice"
 	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 下の真ん中（出走表とステータスの箱に隠れない所）。
+	# 下の1行（「B・Esc：やめてロビーへ」と同じ行。出走表は、待っている間はこの行の上で止まる）。
 	_notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_notice.offset_left = -360.0
 	_notice.offset_right = 360.0
-	_notice.offset_top = -82.0
-	_notice.offset_bottom = -48.0
+	_notice.offset_top = -MenuStyle.GUIDE_HEIGHT
+	_notice.offset_bottom = 0.0
 	_notice.visible = false
 	_overlay.add_child(_notice)
 	_waiting = MenuStyle.bold_label("みんなの準備を待っています…", 24)

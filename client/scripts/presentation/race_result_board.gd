@@ -6,6 +6,8 @@ const RaceHud := preload("res://scripts/presentation/race_hud.gd")
 const FitText := preload("res://scripts/presentation/fit_text.gd")
 const BOARD_WIDTH := 500.0
 const ROW_HEIGHT := 40.0
+## 1行の高さ（下に選ぶ欄が増えるオンラインフリー対戦では、少し詰める）。
+var row_height := ROW_HEIGHT
 const RANK_CENTER_X := 30.0
 const DOT_X := 76.0
 const NAME_X := 96.0
@@ -35,7 +37,7 @@ func _ready() -> void:
 
 func set_rows(rows: Array) -> void:
 	_rows = rows
-	custom_minimum_size = Vector2(BOARD_WIDTH, ROW_HEIGHT * rows.size())
+	custom_minimum_size = Vector2(BOARD_WIDTH, row_height * rows.size())
 	queue_redraw()
 
 
@@ -53,11 +55,11 @@ func _draw() -> void:
 	_bold_font.base_font = font
 	for index in _rows.size():
 		var row: Dictionary = _rows[index]
-		var top := ROW_HEIGHT * index
-		var center_y := top + ROW_HEIGHT * 0.5
+		var top := row_height * index
+		var center_y := top + row_height * 0.5
 		var baseline := center_y + FONT_SIZE * 0.36
 		var is_player := bool(row["player"])
-		var band := Rect2(Vector2(0.0, top + 2.0), Vector2(size.x, ROW_HEIGHT - 4.0))
+		var band := Rect2(Vector2(0.0, top + 2.0), Vector2(size.x, row_height - 4.0))
 		if is_player:
 			draw_style_box(_band_box(Color(RaceHud.COLOR_PROGRESS, 0.24)), band)
 			draw_rect(Rect2(band.position, Vector2(5.0, band.size.y)), COLOR_PLAYER)

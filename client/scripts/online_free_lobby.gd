@@ -50,7 +50,7 @@ const ERROR_TEXTS := {
 const COLOR_CHAT_MINE := Color(1.0, 0.8, 0.28)
 const COLOR_CHAT_OTHER := Color(0.35, 0.86, 1.0)
 ## 下の帯に、ふだん出しておく案内。
-const HINT_TEXT := "番が来たら、どの画面にいても呼び出しが届きます"
+const HINT_TEXT := "出走の順番が来たら、どの画面にいても呼び出しが届きます"
 ## ロビーのタブ。
 const TAB_ROOMS := "rooms"
 const TAB_ENTRIES := "entries"
@@ -67,6 +67,8 @@ const COLOR_RESULT_CPU := Color(0.74, 0.8, 0.9)
 ## このPCのサーバーを起動してから、つながるまで待つ秒数と、つなぎ直す間（ともだち対戦の画面と同じ）。
 const LOCAL_SERVER_START_TIMEOUT_S := 12.0
 const LOCAL_SERVER_RETRY_S := 0.8
+## 真ん中に出す知らせを出しておく秒数。
+const CENTER_NOTICE_S := 2.5
 ## しぼりこみの「すべて」。
 const FILTER_ALL := "すべて"
 ## 下の帯のお知らせを、1行に収めるために小さくする、いちばん小さい文字。
@@ -625,11 +627,18 @@ func _apply_lobby(data: Dictionary) -> void:
 	if _status.text.begins_with("サーバーにつないで"):
 		_set_status("ロビーに入りました。ルームを選んで、くわしい条件を見てから、エントリーしてください。")
 	_rooms = data.get("rooms", [])
-	_entries = data.get("entries", [])
+	var had_entry := {}
 	for entry: Dictionary in _entries:
+		had_entry[str(entry["room_id"])] = true
+	_entries = data.get("entries", [])
+	for index in _entries.size():
+		var entry: Dictionary = _entries[index]
 		var id := str(entry["room_id"])
 		if _sending_entries.has(id) and str(_sending_entries[id]) == OnlineSession.local_id(str(entry["pururin_id"])):
 			_sending_entries.erase(id)
+			# 新しくエントリーできたら、ルームの画面の真ん中に、はっきり知らせる。
+			if not had_entry.has(id) and id == _open_room:
+				_show_entry_done(index + 1, pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))))
 	_answer_wait_s = float(data.get("answer_wait_s", 0.0))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
 	var rest_s := float(data.get("rest_s", 0.0))
@@ -1037,7 +1046,10 @@ func open_room(room_id: String) -> void:
 	_back_button.text = "ロビーへ戻る"
 	_refresh_room_view()
 	show_room_part(PART_CONDITIONS)
-	_entry_button.grab_focus()
+	# 下の帯のお知らせは、ロビーのものを残さず、このルームの案内にする。
+	_set_status("「%s」の条件を見て、出るぷるりんを選んでエントリーできます。" % str(room_by_id(room_id).get("name", room_id)))
+	# ルームを開いた A を続けて押しても、エントリーしないように、最初は「条件」タブに置く。
+	_conditions_tab.grab_focus()
 
 
 func close_room() -> void:
@@ -1050,6 +1062,7 @@ func close_room() -> void:
 	_lobby_view.visible = true
 	_guide_tabs.visible = true
 	_back_button.text = "戻る"
+	_set_status("ルームを選んで、くわしい条件を見てから、エントリーしてください。")
 	if _cards.has(room_id) and _rooms_page.visible and (_cards[room_id] as Control).visible:
 		(_cards[room_id] as Button).grab_focus()
 	else:
@@ -1179,7 +1192,7 @@ func _refresh_pick() -> void:
 		_entry_note.text = "このぷるりんは「%s」を持っていません。" % str(room_by_id(_open_room)["needs_ticket_name"])
 	elif entry.is_empty():
 		_entry_button.text = "エントリーする"
-		_entry_note.text = "エントリーすると、番が来たときに呼ばれます。呼ばれたら、入るか答えます。"
+		_entry_note.text = "エントリーすると、出走の順番が来たときに呼び出します。"
 	elif OnlineSession.local_id(str(entry["pururin_id"])) != pururin_id and (missing or closed):
 		# チケットが無い・受付の外なので、替えなかった。
 		_entry_button.text = "取り消す"
@@ -1222,9 +1235,48 @@ func _send_entry() -> void:
 	_sending_entries[_open_room] = selected_pururin_id()
 	_refresh_pick()
 	if entry.is_empty():
-		_set_status("「%s」にエントリーしました。番が来たら呼ばれます。" % room_name)
+		_set_status("「%s」にエントリーしました。出走の順番が来たら、呼び出します。" % room_name)
 	else:
 		_set_status("「%s」に出るぷるりんを、%sに替えました。" % [room_name, pururin_name(selected_pururin_id())])
+
+
+## エントリーできた知らせ：画面の真ん中に、少しのあいだ大きく出して、消える。
+func _show_entry_done(priority: int, pururin: String) -> void:
+	_show_center_notice("✓ エントリーしました", "第%d候補・%sで出ます　出走の順番が来たら、呼び出します" % [priority, pururin], Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
+
+
+## 画面の真ん中に出す、大きい知らせ（見出しと、その下の1行）。少しのあいだ出して、消える。前の知らせは消して出し直す。
+func _show_center_notice(title_text: String, sub_text: String, title_color: Color, border: Color, background: Color) -> void:
+	var old := get_node_or_null("CenterNotice")
+	if old != null:
+		old.free()
+	var box := PanelContainer.new()
+	box.name = "CenterNotice"
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := MenuStyle.panel_box(40.0, 22.0)
+	style.bg_color = background
+	style.border_color = border
+	style.set_border_width_all(3)
+	box.add_theme_stylebox_override("panel", style)
+	var column := VBoxContainer.new()
+	column.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_theme_constant_override("separation", 6)
+	box.add_child(column)
+	var title := MenuStyle.bold_label(title_text, 40, title_color)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	var sub := MenuStyle.bold_label(sub_text, 22)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(sub)
+	add_child(box)
+	box.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)
+	box.pivot_offset = box.get_combined_minimum_size() / 2.0
+	box.scale = Vector2.ONE * 0.85
+	var tween := box.create_tween()
+	tween.tween_property(box, "scale", Vector2.ONE, 0.15).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(CENTER_NOTICE_S)
+	tween.tween_property(box, "modulate:a", 0.0, 0.3)
+	tween.tween_callback(box.queue_free)
 
 
 ## プル選択の窓を開く（ほかの人と重なってもよいので、選べないプルは無い）。横に、カーソル（マウス）のプルのステータスを出す。
@@ -1379,6 +1431,10 @@ func _send_overlay_chat() -> void:
 
 ## 呼ばれた：どのルームか（画像・名前・距離・何番目の候補か・出るぷるりん）と、返事の残り秒を出して、答えを待つ。
 func _show_offer(data: Dictionary) -> void:
+	# エントリーの知らせが出ていたら、呼び出しの箱と重ならないように消す。
+	var entry_done := get_node_or_null("CenterNotice")
+	if entry_done != null:
+		entry_done.queue_free()
 	_remember_window_focus(_offer_panel)
 	_discard_confirm()
 	_server_dialog.visible = false
@@ -1737,9 +1793,12 @@ func _on_message(data: Dictionary) -> void:
 			OnlineSession.clear_free_wait()
 			_close_offer()
 			if str(data.get("reason", "")) == Protocol.FREE_OFFER_TIMEOUT:
-				_set_status("返事がなかったので、「%s」のエントリーを取り消しました。" % str(room_by_id(str(data.get("room_id", ""))).get("name", "")))
+				var timeout_room := str(room_by_id(str(data.get("room_id", ""))).get("name", ""))
+				_set_status("返事がなかったので、「%s」のエントリーを取り消しました。" % timeout_room)
+				_show_center_notice("エントリーを取り消しました", "呼び出しに返事がなかったため（%s）" % timeout_room, Color(1.0, 0.55, 0.5), Color(0.9, 0.35, 0.3), Color(0.22, 0.06, 0.06, 0.95))
 			else:
-				_set_status("待たずにレースが始まりました。次の番を待ちます。")
+				_set_status("返事の前にレースが始まり、今回は出られませんでした（エントリーは残っています）。")
+				_show_center_notice("今回は出られませんでした", "返事の前にレースが始まりました　エントリーは残っています", Color(1.0, 0.78, 0.35), MenuStyle.COLOR_TAKEN, Color(0.2, 0.12, 0.04, 0.95))
 		Protocol.ERROR:
 			var id := str(data.get("room_id", ""))
 			if not id.is_empty():

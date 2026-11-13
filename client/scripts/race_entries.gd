@@ -89,7 +89,8 @@ func _ready() -> void:
 		panel.offset_left = Style.SCREEN_MARGIN
 		panel.offset_right = -Style.SCREEN_MARGIN
 		panel.offset_top = Style.BAR_HEIGHT + 12.0
-		panel.offset_bottom = -14.0
+		# 下の1行（案内・「出走者を集めています」・「Y 出走表」）を空ける。パドックとゲートインで、高さをそろえる。
+		panel.offset_bottom = -(Style.GUIDE_HEIGHT + 6.0)
 	else:
 		# パドックにいる間に、レースの画面を裏で読み込んでおく（ラボから起動したときは、ラボが自分で始めるので読まない）。
 		if not Session.race_starter.is_valid():
