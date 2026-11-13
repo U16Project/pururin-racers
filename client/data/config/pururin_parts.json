@@ -1545,66 +1545,6 @@
         "sparkle": 1
       }
     },
-    "eyes_half": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.3,
-        "slope": 0.0,
-        "lower": 0.0,
-        "line": 1.0
-      }
-    },
-    "eyes_calm": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.55,
-        "slope": 0.0,
-        "lower": 0.0,
-        "line": 1.0
-      }
-    },
-    "eyes_anger": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.55,
-        "slope": -0.45,
-        "lower": 0.0,
-        "line": 1.0
-      }
-    },
-    "eyes_sorrow": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.12,
-        "slope": 0.18,
-        "lower": 0.0,
-        "line": 1.0
-      }
-    },
-    "eyes_effort": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.5,
-        "slope": -0.4,
-        "lower": 0.35,
-        "line": 1.2
-      }
-    },
     "eyes_dot": {
       "kind": "face",
       "slot": "eyes",
@@ -1620,7 +1560,8 @@
       "source": {
         "type": "builtin",
         "shape": "eyes_arc",
-        "bend": 1.0
+        "bend": 1.0,
+        "scale": 1.0
       }
     },
     "eyes_relax": {
@@ -1629,7 +1570,8 @@
       "source": {
         "type": "builtin",
         "shape": "eyes_arc",
-        "bend": -1.0
+        "bend": -1.0,
+        "scale": 1.0
       }
     },
     "eyes_line": {
@@ -1638,7 +1580,8 @@
       "source": {
         "type": "builtin",
         "shape": "eyes_arc",
-        "bend": 0.0
+        "bend": 0.0,
+        "scale": 1.0
       }
     },
     "eyes_squeeze": {
@@ -1733,133 +1676,6 @@
         "tilt_deg": 0.0,
         "lift": 1.6,
         "curve": 0.3
-      }
-    },
-    "mouth_omega": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_omega",
-        "width": 0.085
-      }
-    },
-    "mouth_smile": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_smile",
-        "width": 0.095,
-        "fang": 0,
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_fang": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_smile",
-        "width": 0.12,
-        "fang": 1,
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_open": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_open",
-        "width": 0.13,
-        "fang": 0,
-        "inside_color": "#6B1F2A",
-        "tongue_color": "#FF8FA0",
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_open_big": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_open",
-        "width": 0.18,
-        "fang": 0,
-        "inside_color": "#6B1F2A",
-        "tongue_color": "#FF8FA0",
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_open_fang": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_open",
-        "width": 0.14,
-        "fang": 1,
-        "inside_color": "#6B1F2A",
-        "tongue_color": "#FF8FA0",
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_flat": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_flat",
-        "width": 0.07
-      }
-    },
-    "mouth_frown": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_frown",
-        "width": 0.085
-      }
-    },
-    "mouth_wavy": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_wavy",
-        "width": 0.1
-      }
-    },
-    "mouth_o": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_o",
-        "width": 0.06,
-        "inside_color": "#6B1F2A"
-      }
-    },
-    "mouth_grit": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_grit",
-        "width": 0.13,
-        "teeth_color": "#FFFFFF"
-      }
-    },
-    "mouth_triangle": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_triangle",
-        "width": 0.075,
-        "inside_color": "#6B1F2A"
       }
     },
     "cheek_blush": {
@@ -5329,24 +5145,6 @@
         ]
       }
     },
-    "eyes_star": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_star",
-        "scale": 1.0
-      }
-    },
-    "eyes_heart": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_heart",
-        "scale": 1.0
-      }
-    },
     "eyes_droopy": {
       "kind": "face",
       "slot": "eyes",
@@ -5371,34 +5169,6 @@
         "line": 1.0
       }
     },
-    "eyes_big": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_open",
-        "scale": 1.28,
-        "sparkle": 0
-      }
-    },
-    "eyes_twinkle": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_open",
-        "scale": 1.18,
-        "sparkle": 1
-      }
-    },
-    "eyes_wink": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_wink"
-      }
-    },
     "eyes_cat": {
       "kind": "face",
       "slot": "eyes",
@@ -5408,36 +5178,6 @@
         "scale": 1.1
       }
     },
-    "eyes_jito": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_lidded",
-        "level": 0.15,
-        "slope": 0.0,
-        "lower": 0.3,
-        "line": 1.0
-      }
-    },
-    "eyes_dot_small": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_dot",
-        "scale": 0.4
-      }
-    },
-    "eyes_dot_big": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_dot",
-        "scale": 0.9
-      }
-    },
     "eyes_ring": {
       "kind": "face",
       "slot": "eyes",
@@ -5445,15 +5185,6 @@
         "type": "builtin",
         "shape": "eyes_ring",
         "scale": 1.05
-      }
-    },
-    "eyes_teary": {
-      "kind": "face",
-      "slot": "eyes",
-      "source": {
-        "type": "builtin",
-        "shape": "eyes_teary",
-        "scale": 1.2
       }
     },
     "brow_maro": {
@@ -5495,240 +5226,6 @@
         "curve": 0.0
       }
     },
-    "brow_arch": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.2,
-        "thickness": 0.26,
-        "tilt_deg": 0.0,
-        "lift": 1.5,
-        "curve": 0.3
-      }
-    },
-    "brow_arch_angry": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.2,
-        "thickness": 0.26,
-        "tilt_deg": 22.0,
-        "lift": 1.45,
-        "curve": 0.3
-      }
-    },
-    "brow_arch_sad": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.2,
-        "thickness": 0.26,
-        "tilt_deg": -18.0,
-        "lift": 1.5,
-        "curve": 0.3
-      }
-    },
-    "brow_long": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.5,
-        "thickness": 0.1,
-        "tilt_deg": 0.0,
-        "lift": 1.55,
-        "curve": 0.15
-      }
-    },
-    "brow_long_angry": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.5,
-        "thickness": 0.1,
-        "tilt_deg": 22.0,
-        "lift": 1.5,
-        "curve": 0.15
-      }
-    },
-    "brow_long_sad": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 1.5,
-        "thickness": 0.1,
-        "tilt_deg": -18.0,
-        "lift": 1.55,
-        "curve": 0.15
-      }
-    },
-    "brow_short": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.6,
-        "thickness": 0.28,
-        "tilt_deg": 0.0,
-        "lift": 1.55,
-        "curve": 0.0
-      }
-    },
-    "brow_short_angry": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.6,
-        "thickness": 0.28,
-        "tilt_deg": 22.0,
-        "lift": 1.5,
-        "curve": 0.0
-      }
-    },
-    "brow_short_sad": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.6,
-        "thickness": 0.28,
-        "tilt_deg": -18.0,
-        "lift": 1.55,
-        "curve": 0.0
-      }
-    },
-    "brow_high": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.8,
-        "thickness": 0.12,
-        "tilt_deg": 0.0,
-        "lift": 2.0,
-        "curve": 0.2
-      }
-    },
-    "brow_high_angry": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.8,
-        "thickness": 0.12,
-        "tilt_deg": 22.0,
-        "lift": 1.95,
-        "curve": 0.2
-      }
-    },
-    "brow_high_sad": {
-      "kind": "face",
-      "slot": "brows",
-      "source": {
-        "type": "builtin",
-        "shape": "brow",
-        "length": 0.8,
-        "thickness": 0.12,
-        "tilt_deg": -18.0,
-        "lift": 2.0,
-        "curve": 0.2
-      }
-    },
-    "mouth_smile_small": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_smile",
-        "width": 0.06,
-        "fang": 0,
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_smile_wide": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_smile",
-        "width": 0.15,
-        "fang": 0,
-        "fang_color": "#FFFFFF"
-      }
-    },
-    "mouth_omega_wide": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_omega",
-        "width": 0.13
-      }
-    },
-    "mouth_kiss": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_kiss",
-        "width": 0.05
-      }
-    },
-    "mouth_zigzag": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_zigzag",
-        "width": 0.1
-      }
-    },
-    "mouth_smirk": {
-      "kind": "face",
-      "slot": "mouth",
-      "source": {
-        "type": "builtin",
-        "shape": "mouth_smirk",
-        "width": 0.11
-      }
-    },
-    "cheek_round": {
-      "kind": "face",
-      "slot": "cheeks",
-      "source": {
-        "type": "builtin",
-        "shape": "cheek_ellipse",
-        "width": 0.05,
-        "height": 0.05
-      }
-    },
-    "cheek_big": {
-      "kind": "face",
-      "slot": "cheeks",
-      "source": {
-        "type": "builtin",
-        "shape": "cheek_ellipse",
-        "width": 0.085,
-        "height": 0.045
-      }
-    },
     "cheek_swirl": {
       "kind": "face",
       "slot": "cheeks",
@@ -5739,26 +5236,6 @@
         "height": 0.05
       }
     },
-    "cheek_star": {
-      "kind": "face",
-      "slot": "cheeks",
-      "source": {
-        "type": "builtin",
-        "shape": "cheek_star",
-        "width": 0.06,
-        "height": 0.06
-      }
-    },
-    "cheek_heart": {
-      "kind": "face",
-      "slot": "cheeks",
-      "source": {
-        "type": "builtin",
-        "shape": "cheek_heart",
-        "width": 0.06,
-        "height": 0.058
-      }
-    },
     "cheek_freckles": {
       "kind": "face",
       "slot": "cheeks",
@@ -5767,17 +5244,6 @@
         "shape": "cheek_freckles",
         "width": 0.06,
         "height": 0.026
-      }
-    },
-    "cheek_bandage": {
-      "kind": "face",
-      "slot": "cheeks",
-      "source": {
-        "type": "builtin",
-        "shape": "cheek_bandage",
-        "width": 0.07,
-        "height": 0.026,
-        "color": "#F3D2A6"
       }
     },
     "fox_ears": {
@@ -10312,25 +9778,336 @@
         "shape": "cat"
       }
     },
-    "mouth_tongue": {
+    "eyes_round_anger": {
       "kind": "face",
-      "slot": "mouth",
+      "slot": "eyes",
       "source": {
         "type": "builtin",
-        "shape": "mouth_tongue",
-        "width": 0.1,
-        "tongue_color": "#FF7A93"
+        "shape": "eyes_open",
+        "scale": 1.0,
+        "sparkle": 0,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
       }
     },
-    "mouth_grin": {
+    "eyes_round_sorrow": {
       "kind": "face",
-      "slot": "mouth",
+      "slot": "eyes",
       "source": {
         "type": "builtin",
-        "shape": "mouth_grin",
-        "width": 0.14,
-        "inside_color": "#7A1F2B",
-        "teeth_color": "#FFFFFF"
+        "shape": "eyes_open",
+        "scale": 1.0,
+        "sparkle": 0,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_round_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_open",
+        "scale": 1.0,
+        "sparkle": 0,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_dizzy_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dizzy",
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_dizzy_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dizzy",
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_dizzy_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dizzy",
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_cat_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_cat",
+        "scale": 1.1,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_cat_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_cat",
+        "scale": 1.1,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_cat_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_cat",
+        "scale": 1.1,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_ring_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_ring",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_ring_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_ring",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_ring_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_ring",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_dot_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dot",
+        "scale": 0.6,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_dot_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dot",
+        "scale": 0.6,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_dot_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_dot",
+        "scale": 0.6,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_joy_mid": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_arc",
+        "bend": 1.0,
+        "scale": 0.75
+      }
+    },
+    "eyes_relax_mid": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_arc",
+        "bend": -1.0,
+        "scale": 0.75
+      }
+    },
+    "eyes_droopy_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.55,
+        "slope": 0.35,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_droopy_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.55,
+        "slope": 0.35,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_droopy_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.55,
+        "slope": 0.35,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "eyes_sharp_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.6,
+        "slope": -0.45,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_sharp_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.6,
+        "slope": -0.45,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_sharp_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_lidded",
+        "level": 0.6,
+        "slope": -0.45,
+        "lower": 0.0,
+        "line": 1.0,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
       }
     },
     "mark_note": {
@@ -10363,6 +10140,1361 @@
       "source": {
         "type": "builtin",
         "shape": "clover"
+      }
+    },
+    "eyes_gloss": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_gloss",
+        "scale": 1.05
+      }
+    },
+    "eyes_gloss_anger": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_gloss",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.55,
+          "slope": -0.45,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_gloss_sorrow": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_gloss",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.35,
+          "slope": 0.3,
+          "lower": 0.0
+        }
+      }
+    },
+    "eyes_gloss_effort": {
+      "kind": "face",
+      "slot": "eyes",
+      "source": {
+        "type": "builtin",
+        "shape": "eyes_gloss",
+        "scale": 1.05,
+        "lid": {
+          "level": 0.5,
+          "slope": -0.4,
+          "lower": 0.35
+        }
+      }
+    },
+    "mouth_omega_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_omega_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_omega_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_omega_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_omega_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_omega_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_omega_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_omega_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_omega",
+        "width": 0.085,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_fang_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_fang_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_fang_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_fang_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_fang_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_fang_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_fang_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_fang_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_smile",
+        "width": 0.12,
+        "fang": 1,
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_triangle_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_triangle_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_triangle_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_triangle_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_triangle_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_triangle_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_triangle_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_triangle_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_triangle",
+        "width": 0.075,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_flat_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_flat_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_flat_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_flat_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_flat_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_flat_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_flat_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_flat_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_flat",
+        "width": 0.07,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_open_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_open_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_open_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_open_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_open_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_open_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_open_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_open_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_open",
+        "width": 0.13,
+        "fang": 0,
+        "inside_color": "#6B1F2A",
+        "tongue_color": "#FF8FA0",
+        "fang_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_o_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_o_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_o_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_o_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_o_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_o_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_o_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_o_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_o",
+        "width": 0.06,
+        "inside_color": "#6B1F2A",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_wavy_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_wavy_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_wavy_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_wavy_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_wavy_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_wavy_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_wavy_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_wavy_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_wavy",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_frown_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_frown_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_frown_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_frown_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_frown_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_frown_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_frown_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_frown_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_frown",
+        "width": 0.085,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_grit_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_grit_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_grit_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_grit_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_grit_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_grit_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_grit_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_grit_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_grit",
+        "width": 0.13,
+        "teeth_color": "#FFFFFF",
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_zigzag_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_zigzag_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_zigzag_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_zigzag_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_zigzag_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_zigzag_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_zigzag_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_zigzag_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_zigzag",
+        "width": 0.1,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
+      }
+    },
+    "mouth_bunny_normal": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_bunny_joy": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.625,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_bunny_anger": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.3,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_bunny_sorrow": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.105,
+          "squash": 0.7
+        }
+      }
+    },
+    "mouth_bunny_relax": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.17,
+          "squash": 0.75
+        }
+      }
+    },
+    "mouth_bunny_first_place": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.755,
+          "squash": 1.0
+        }
+      }
+    },
+    "mouth_bunny_push_win": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 0.0,
+          "scale": 1.3,
+          "squash": 0.5
+        }
+      }
+    },
+    "mouth_bunny_push_lose": {
+      "kind": "face",
+      "slot": "mouth",
+      "source": {
+        "type": "builtin",
+        "shape": "mouth_bunny",
+        "width": 0.08,
+        "mood": {
+          "flip": 1.0,
+          "scale": 1.17,
+          "squash": 0.55
+        }
       }
     }
   }

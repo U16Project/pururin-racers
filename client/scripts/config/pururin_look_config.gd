@@ -361,6 +361,19 @@ static func _validate_source(label: String, slot: String, kind: String, source: 
 					_require_number(source, key, "%s.source" % label, errors)
 				for key: String in FaceParts.REQUIRED_COLORS.get(shape, []):
 					_require_color(source, key, "%s.source" % label, errors)
+				# 目の気持ちのまぶた（あれば）。
+				if slot == "mouth" and source.has("mood"):
+					if source["mood"] is Dictionary:
+						for key: String in ["flip", "scale", "squash"]:
+							_require_number(source["mood"], key, "%s.source.mood" % label, errors)
+					else:
+						errors.append("%s.source.mood: オブジェクトが必要です" % label)
+				if slot == "eyes" and source.has("lid"):
+					if source["lid"] is Dictionary:
+						for key: String in ["level", "slope", "lower"]:
+							_require_number(source["lid"], key, "%s.source.lid" % label, errors)
+					else:
+						errors.append("%s.source.lid: オブジェクトが必要です" % label)
 		"mesh":
 			if kind != "body_part":
 				errors.append("%s.source.type: メッシュを使えるのは、体の一部（body_part）だけです" % label)
