@@ -962,21 +962,20 @@ func build_entries(room: int) -> Array:
 		var pururin := PururinRosterConfig.pururin_by_id(str(member["pururin_id"]))
 		used[str(member["pururin_id"])] = true
 		entries.append(_entry(entries.size(), pururin, int(member["peer_id"]), str(member["name"])))
-	# CPU：主が決めた個体は、そのまま。「おまかせ」の所は、まだ使われていない個体を、一覧の順に入れる。
+	# CPU：主が決めた個体は、そのまま。「おまかせ」の所は、まだ使われていない個体から、くじで選ぶ。
 	var cpus := room_cpus(room)
 	for cpu: Dictionary in cpus:
 		used[str(cpu["pururin_id"])] = true
+	var roster: Array = PururinRosterConfig.values()["roster"]
+	var pool: Array = roster.filter(func(candidate: Dictionary) -> bool: return not used.has(str(candidate["id"])))
+	pool.shuffle()
 	for cpu: Dictionary in cpus:
 		var pururin := PururinRosterConfig.pururin_by_id(str(cpu["pururin_id"]))
+		if pururin.is_empty() and not pool.is_empty():
+			pururin = pool.pop_back()
+		# 個体が足りなければ、一覧から、くじで重ねて使う。
 		if pururin.is_empty():
-			for candidate: Dictionary in PururinRosterConfig.values()["roster"]:
-				if not used.has(str(candidate["id"])):
-					pururin = candidate
-					used[str(candidate["id"])] = true
-					break
-		# 個体が足りなければ、一覧の最初から、重ねて使う。
-		if pururin.is_empty():
-			pururin = PururinRosterConfig.values()["roster"][entries.size() % (PururinRosterConfig.values()["roster"] as Array).size()]
+			pururin = roster.pick_random()
 		entries.append(_entry(entries.size(), pururin, 0, ""))
 	return _with_runner_ids(entries)
 
