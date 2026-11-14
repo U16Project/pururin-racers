@@ -4,7 +4,7 @@
 
 走るのはぷるりんで、トレーナーは指示を送る。紹介文の「得意な脚質」は人物設定・画面表示であり、その戦術がCPUに実装済みという意味ではない。（2026-10-25に、判断設定 `profile_id` と前のCPU判断処理は消した。CPUの席は育てたCPUが走らせ、性格は `cpu_trainers.json` の `frame` で伝える。）職業や正体による能力補正はない。
 
-実行時の紹介文・画像パス・得意脚質は `client/data/config/cpu_trainers.json` が管理する。画像は全員1024×1024。ハヤテ・イブキ・ツバキ・ヒナタ・ダイチ・ミナトは外見を区別した `client/assets/ui/cpu_trainers/{id}_v03.png`、他9人はv02を使う。旧v01と、差し替え前のv02は比較用として保持する。
+実行時の紹介文・画像パス・得意脚質は `client/data/config/cpu_trainers.json` が管理する。画像は全員1024×1024で、`client/assets/ui/cpu_trainers/{id}.png`。中身は `reference/characters/{id}/{id}_bust.png`（バストアップ）と同じ。
 
 **2026-11-08 の新しい案について：** 下の年齢・見た目・走らせ方は新しい案。ゲームの紹介文（`cpu_trainers.json` の `introduction`）と画像は、まだ前のままで、あとで合わせる。
 
@@ -29,7 +29,7 @@
 
 ## ミオ（主人公・比べるための項）
 
-レースには出ない。中身の正本は[世界観設定](世界観設定.md)。絵は `reference/characters/mio/`（画面左向き）。
+CPUのトレーナーとしても出る（2026-11-14から。担当はユメ、得意な脚質は先行。絵は `client/assets/ui/cpu_trainers/mio.png`）。中身の正本は[世界観設定](世界観設定.md)。絵は `reference/characters/mio/`（画面左向き）。
 
 - 人物：13歳・女・夢の中で迷い込んだ女の子
 - 髪：赤みのある深い栗色。あご下までのボブで、左の毛先が外にはねる。前髪は右へ流す
