@@ -32,6 +32,8 @@ const RACE_HUD_UPDATES_PER_S := 4.0
 const RaceResultBoard := preload("res://scripts/presentation/race_result_board.gd")
 ## オンラインフリー対戦の結果の板の、着順1行の高さ。
 const FREE_RESULT_ROW_HEIGHT := 34.0
+## 結果の板と、下の帯（見ている子の情報）とのすき間。
+const RESULT_BAR_GAP := 8.0
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
@@ -53,9 +55,13 @@ const FREE_DRAWN_S := 2.0
 const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RunnerScript := preload("res://scripts/runner_local_race.gd")
 const BrainDriver := preload("res://scripts/cpu_brain/brain_driver.gd")
+const LocalRaceCamera := preload("res://scripts/local_race_camera.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const TouchControls := preload("res://scripts/presentation/touch_controls.gd")
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
+const RaceInfoBox := preload("res://scripts/presentation/hud/race_info_box.gd")
+const WatchBar := preload("res://scripts/presentation/hud/watch_bar.gd")
+const WatchMarker := preload("res://scripts/presentation/watch_marker.gd")
 
 const PlayerGroundMarker := preload("res://scripts/presentation/player_ground_marker.gd")
 const RACE_SELECT_SCENE := "res://scenes/race_select.tscn"
@@ -103,8 +109,8 @@ var _finish_count: int = 0
 var _race_elapsed: float = 0.0
 var _results_pending: bool = false
 var _results_wait_remaining: float = 0.0
-## ユーザーがゴールした時点の、操作盤の表示（ゴール後は、これを出し続ける）。
-var _finish_hud_state: Dictionary = {}
+## 子ごとの、ゴールした時点の操作盤の表示（ゴール後は、これを出し続ける）。
+var _finish_hud_states: Dictionary = {}
 var _result_retry_button: Button
 ## オンラインフリー対戦の結果の板：このあと、走ったルームのエントリーをどうするか（続けて呼ばれる・保留・取り消す）と、
 ## 優先をいちばん前にするか、そのルームの画面に残るボタン。
@@ -119,6 +125,12 @@ var _free_final := false
 var _online_left := false
 ## ゴールした走者の、ゴールした時点の心拍と体力（順位表の、その行に出し続ける）。走者 → {heart_bpm, fuel_ratio}。
 var _finish_standing_values: Dictionary = {}
+## 自分以外を追っている間だけ出す札。
+var _watch_bar: PanelContainer
+## 右上の、レースの種類・区分と距離・時計の札。
+var _race_info_box: PanelContainer
+## ほかの子を見ているときに、その子の頭の上に出す目印。
+var _watch_marker: MeshInstance3D = WatchMarker.new()
 var _player: Node3D = null
 var _race_started: bool = false
 var _start_countdown_remaining: float = 0.0
@@ -206,6 +218,15 @@ var _hud_label_right: Label
 
 
 func _ready() -> void:
+	_camera.set("input_allowed", _camera_input_allowed)
+	_camera.connect("follow_step_requested", _follow_rank_neighbor)
+	_camera.connect("return_player_requested", func() -> void: _follow_runner(_player))
+	_race_info_box = RaceInfoBox.new()
+	$UI.add_child(_race_info_box)
+	_watch_bar = WatchBar.new()
+	_watch_bar.name = "CameraWatchBar"
+	_watch_bar.visible = false
+	$UI.add_child(_watch_bar)
 	print("ぷるりんレーサーズ — ローカル簡易レースを開始します")
 	_pause_panel.visible = false
 	_result_panel.visible = false
@@ -507,7 +528,46 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
+## カメラの操作は、スタート前の見せ方（ゲートインなど）が終わってから（カウントダウンの間から）。オフラインもオンラインも。
+## 自分のゴール後も、着順の結果が出たあとも選べる。
+func _camera_input_allowed() -> bool:
+	return not _runners.is_empty() and not _paused and not _is_showing_pre_race() and not _is_in_paddock_overlay() and not is_instance_valid(_control_guide)
+
+
+func _follow_rank_neighbor(step: int) -> void:
+	if not _camera_input_allowed():
+		return
+	var ordered := _runners.duplicate()
+	ordered.sort_custom(func(a: Node3D, b: Node3D) -> bool:
+		var a_place := _live_place(a)
+		var b_place := _live_place(b)
+		return a_place < b_place if a_place != b_place else _runners.find(a) < _runners.find(b))
+	_follow_runner(LocalRaceCamera.adjacent_target(ordered, _camera.get("_target"), step))
+
+
+## 操作する自分は変えず、カメラだけを替える。ゴール後の時間は、替えた子に合わせて渡す。
+func _follow_runner(runner: Node3D) -> void:
+	if not _camera_input_allowed() or runner == null or runner == _camera.get("_target"):
+		return
+	var goal_seconds := maxf(_race_elapsed - float(runner.call("get_finish_time")), 0.0) if bool(runner.call("is_finished")) else 0.0
+	_camera.call("set_follow_target", runner, goal_seconds)
+
+
 func _process(_delta: float) -> void:
+	# 右上の札は、カウントダウンから結果の板が出るまで。
+	_race_info_box.visible = not _runners.is_empty() and not _is_showing_pre_race() and not _is_in_paddock_overlay() and not _result_panel.visible
+	if _race_info_box.visible:
+		_race_info_box.call("show_race", race_label(), LocalRaceMath.format_race_time(_race_elapsed))
+	var watched := _camera.get("_target") as Node3D
+	_watch_bar.visible = _camera_input_allowed() and watched != null
+	if _watch_bar.visible:
+		_watch_bar.call("show_runner", watched, _live_place(watched), _runners.size(), _race_distance_m)
+	_watch_marker.call("attach_to", watched if _watch_bar.visible and watched != _player else null)
+	# 結果の板が下の帯にかかるときは（オンラインフリー対戦の板は、選ぶ欄のぶん背が高い）、板を上へずらす。
+	if _result_panel.visible and _watch_bar.visible:
+		var overlap := _result_panel.get_rect().end.y - (_watch_bar.position.y - RESULT_BAR_GAP)
+		if overlap > 0.0:
+			_result_panel.position.y = maxf(RESULT_BAR_GAP, _result_panel.position.y - overlap)
 	if _runners.is_empty():
 		return
 	_prepare_next_face()
@@ -1796,6 +1856,13 @@ func _place_heart_hud() -> void:
 func _update_race_hud() -> void:
 	if _race_hud == null:
 		return
+	# ゴールした子は、ゴールしたコマで操作盤の表示を取っておく（あとで誰を見ても、ゴールした時の表示を出すため）。
+	for runner in _runners:
+		if bool(runner.call("is_finished")) and not _finish_hud_states.has(runner):
+			var finish_state := _runner_hud_state(runner)
+			finish_state["time_text"] = LocalRaceMath.format_race_time(float(runner.call("get_finish_time")))
+			finish_state["time_s"] = float(runner.call("get_finish_time"))
+			_finish_hud_states[runner] = finish_state
 	# 操作盤に渡す値は、描き直すコマでだけ作る（順位表の値づくりなどが、毎コマだと重いため）。
 	# 順位表を画面にそのまま出しているとき（ウェブ版オフラインテスト以外）は、今までどおり毎コマ。
 	var now := Time.get_ticks_msec()
@@ -1803,64 +1870,12 @@ func _update_race_hud() -> void:
 	var heart_hud_due := float(now - _heart_hud_drawn_msec) >= 1000.0 / HEART_HUD_UPDATES_PER_S
 	if not race_hud_due and not heart_hud_due:
 		return
-	var air_breakdown: Dictionary = _player.call("get_air_reduction_breakdown")
-	var place := _live_place(_player) if _race_started else 0
-	var style_id := str(_player.call("get_running_style_id"))
-	var has_style := not style_id.is_empty()
-	var attribute_id := str(_player.call("get_attribute_id"))
-	var state := {
-		"place": place,
-		"player_name": str(_player.get("display_name")),
-		# その走者のトレーナー名（出走の一覧で決めたもの）。ふつうは、登録したユーザーの名前。
-		"trainer_name": str((_player.get("_pururin") as Dictionary).get("trainer_name", RaceSession.trainer_name_for(str(_player.call("get_snapshot")["id"]), true))),
-		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
-		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
-		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,
-		"attribute_id": attribute_id,
-		"attribute_color": Color.from_string(str(HudStatsConfig.values()["attributes"][attribute_id]["color"]), Color.WHITE) if not attribute_id.is_empty() else Color.WHITE,
-		"field_size": _runners.size(),
-		# ゴールしたら0（オンラインでは、届いた位置がゴールの少し手前のことがあるため）。
-		"remaining_m": 0.0 if bool(_player.call("is_finished")) else maxf(_race_distance_m - float(_player.call("get_race_progress")), 0.0),
-		"race_distance_m": _race_distance_m,
-		"dash_ratio": _player.call("get_dash_time_ratio"),
-		"boost_ratio": _player.call("get_boost_time_ratio"),
-		"boost_points": _player.call("get_boost_points"),
-		"boost_uses_left": _player.call("get_boost_uses_left"),
-		"boost_max_uses": int(LocalRaceMath.Config.number("boost_max_uses")),
-		"runners": _hud_runner_marks(),
-		"standings": _hud_standings(),
-		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
-		"time_s": _race_elapsed,
-		"speed_kmh": _player.call("get_actual_speed"),
-		"notch": int(roundi(_player.call("get_drive_level"))),
-		"notch_max": int(LocalRaceMath.DRIVE_LEVEL_MAX),
-		"braking": _player.call("is_braking"),
-		"fuel_ratio": _player.call("get_stamina_ratio"),
-		"heart_bpm": _player.call("get_heart_rate_bpm"),
-		# 鼓動の音が鳴っていないあいだ（スタート前・ゴール後）は、光らせない。
-		"heart_beat_phase": RaceAudio.heartbeat_phase(float(_player.call("get_heart_rate_bpm"))) if _race_started and not bool(_player.call("is_finished")) else 1.0,
-		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
-		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
-		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
-		"air_green": float(air_breakdown["aero_rear"]),
-		"air_blue": float(air_breakdown["draft"]),
-		# 操作盤（ハート型）の空力のゲージ：根本（黄）＝空力の能力の分、緑＝後方支援の分、青＝ドラフト。
-		"air_base": float(air_breakdown["base"]),
-		"air_rear": float(air_breakdown["rear"]),
-		# 押し合い中か（体力の削られた分を赤く残す）と、押し負けているか（ハートが赤く震える）。
-		"pushing": bool(_player.call("is_in_push_contest")),
-		"push_lost": bool(_player.call("is_losing_push")),
-		"countdown": not _race_started,
-	}
-	if bool(_player.call("is_finished")):
-		# 操作盤は、ゴールした時点の表示で止める（あとで見返せるように）。順位表だけは、動かし続ける。
-		if _finish_hud_state.is_empty():
-			state["time_text"] = LocalRaceMath.format_race_time(float(_player.call("get_finish_time")))
-			state["time_s"] = float(_player.call("get_finish_time"))
-			_finish_hud_state = state
-		var frozen := _finish_hud_state.duplicate()
-		frozen["standings"] = state["standings"]
-		state = frozen
+	# 操作盤は、カメラで見ている子（自分も含む）の値を出す。操作するのは、いつも自分。
+	var hud := _hud_runner()
+	# ゴールした子は、ゴールした時点の表示で止める（あとで見返せるように）。順位表だけは、動かし続ける。
+	var state: Dictionary = _finish_hud_states[hud].duplicate() if _finish_hud_states.has(hud) else _runner_hud_state(hud)
+	state["runners"] = _hud_runner_marks(hud)
+	state["standings"] = _hud_standings()
 	if _race_hud_viewport == null:
 		_race_hud.call("update_state", state)
 	elif race_hud_due:
@@ -1875,13 +1890,84 @@ func _update_race_hud() -> void:
 		_heart_hud_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 
-## 進行バーに出す全走者の位置（割合）・自分かどうか・色。
-func _hud_runner_marks() -> Array:
+## その子の操作盤の値（進行バーと順位表は除く）。
+func _runner_hud_state(hud: Node3D) -> Dictionary:
+	var air_breakdown: Dictionary = hud.call("get_air_reduction_breakdown")
+	var place := _live_place(hud) if _race_started else 0
+	var style_id := str(hud.call("get_running_style_id"))
+	var has_style := not style_id.is_empty()
+	var attribute_id := str(hud.call("get_attribute_id"))
+	var state := {
+		"place": place,
+		"player_name": str(hud.get("display_name")),
+		# その走者のトレーナー名（出走の一覧で決めたもの）。ふつうは、登録したユーザーの名前。
+		"trainer_name": str((hud.get("_pururin") as Dictionary).get("trainer_name", RaceSession.trainer_name_for(str(hud.call("get_snapshot")["id"]), true))),
+		"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
+		"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
+		"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and place > 0 else 0,
+		"attribute_id": attribute_id,
+		"attribute_color": Color.from_string(str(HudStatsConfig.values()["attributes"][attribute_id]["color"]), Color.WHITE) if not attribute_id.is_empty() else Color.WHITE,
+		"field_size": _runners.size(),
+		# ゴールしたら0（オンラインでは、届いた位置がゴールの少し手前のことがあるため）。
+		"remaining_m": 0.0 if bool(hud.call("is_finished")) else maxf(_race_distance_m - float(hud.call("get_race_progress")), 0.0),
+		"race_distance_m": _race_distance_m,
+		"dash_ratio": hud.call("get_dash_time_ratio"),
+		"boost_ratio": hud.call("get_boost_time_ratio"),
+		"boost_points": hud.call("get_boost_points"),
+		"boost_uses_left": hud.call("get_boost_uses_left"),
+		"boost_max_uses": int(LocalRaceMath.Config.number("boost_max_uses")),
+		"time_text": LocalRaceMath.format_race_time(_race_elapsed),
+		"time_s": _race_elapsed,
+		"speed_kmh": hud.call("get_actual_speed"),
+		"notch": int(roundi(hud.call("get_drive_level"))),
+		"notch_max": int(LocalRaceMath.DRIVE_LEVEL_MAX),
+		"braking": hud.call("is_braking"),
+		"fuel_ratio": hud.call("get_stamina_ratio"),
+		"heart_bpm": hud.call("get_heart_rate_bpm"),
+		# 鼓動の音が鳴っていないあいだ（スタート前・ゴール後）は、光らせない。
+		# ほかの子を見ているときは、その子の心拍の速さで光らせる（音は自分のまま）。
+		"heart_beat_phase": _hud_heart_phase(hud) if _race_started and not bool(hud.call("is_finished")) else 1.0,
+		"heart_min_bpm": LocalRaceMath.Config.number("heart_rate_min_bpm"),
+		"heart_normal_max_bpm": LocalRaceMath.Config.number("heart_rate_normal_max_bpm"),
+		"heart_max_bpm": LocalRaceMath.Config.number("heart_rate_overheat_max_bpm"),
+		"air_green": float(air_breakdown["aero_rear"]),
+		"air_blue": float(air_breakdown["draft"]),
+		# 操作盤（ハート型）の空力のゲージ：根本（黄）＝空力の能力の分、緑＝後方支援の分、青＝ドラフト。
+		"air_base": float(air_breakdown["base"]),
+		"air_rear": float(air_breakdown["rear"]),
+		# 押し合い中か（体力の削られた分を赤く残す）と、押し負けているか（ハートが赤く震える）。
+		"pushing": bool(hud.call("is_in_push_contest")),
+		"push_lost": bool(hud.call("is_losing_push")),
+		"countdown": not _race_started,
+	}
+	return state
+
+
+## 操作盤に出す子。カメラで見ている子（操作を受け付けていないときは自分）。
+func _hud_runner() -> Node3D:
+	if not _camera_input_allowed():
+		return _player
+	var watched := _camera.get("_target") as Node3D
+	if is_instance_valid(watched) and _runners.has(watched):
+		return watched
+	return _player
+
+
+## 操作盤のハートの光る時刻。自分は鼓動の音に合わせ、ほかの子はその子の心拍の速さで数える。
+func _hud_heart_phase(runner: Node3D) -> float:
+	var bpm := float(runner.call("get_heart_rate_bpm"))
+	if runner == _player:
+		return RaceAudio.heartbeat_phase(bpm)
+	return fposmod(Time.get_ticks_msec() / 1000.0 * bpm / 60.0, 1.0)
+
+
+## 進行バーに出す全走者の位置（割合）・操作盤に出している子かどうか・色。
+func _hud_runner_marks(hud: Node3D) -> Array:
 	var marks: Array = []
 	for runner in _runners:
 		marks.append({
 			"ratio": RaceHud.progress_ratio(float(runner.call("get_race_progress")), _race_distance_m),
-			"player": runner == _player,
+			"player": runner == hud,
 			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
 		})
 	return marks
@@ -1890,8 +1976,11 @@ func _hud_runner_marks() -> Array:
 ## 左上の順位表に出す全走者。今の順位の順（ゴール済みは着順で上）。
 func _hud_standings() -> Array:
 	var rows: Array = []
+	# カメラで見ている「ほかの子」の行に、黄色い枠を付ける（頭の上の目印と同じ色）。
+	var watched: Node3D = _camera.get("_target") as Node3D if _camera_input_allowed() else null
 	for runner in _runners:
-		var place := _live_place(runner)
+		# スタートまでは、枠順で並べる（順位の補正もまだ付けない）。
+		var place := _live_place(runner) if _race_started else int(runner.get("gate_index")) + 1
 		var style_id := str(runner.call("get_running_style_id"))
 		var has_style := not style_id.is_empty()
 		var finished := bool(runner.call("is_finished"))
@@ -1906,12 +1995,13 @@ func _hud_standings() -> Array:
 			"name": str(runner.get("display_name")),
 			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
 			"player": runner == _player,
+			"watched": runner == watched and runner != _player,
 			"kind": control_kind(runner),
 			"finished": finished,
 			"finish_time": float(runner.call("get_finish_time")),
 			"style_group_index": PururinStatsMath.style_rank_group_index(style_id) if has_style else -1,
 			"style_group_count": PururinStatsMath.rank_group_count() if has_style else 0,
-			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style else 0,
+			"style_rank_bonus": PururinStatsMath.rank_bonus(style_id, place, _runners.size()) if has_style and _race_started else 0,
 			"heart_bpm": float(condition["heart_bpm"]),
 			"fuel_ratio": float(condition["fuel_ratio"]),
 		})
@@ -1970,6 +2060,12 @@ func _show_results() -> void:
 	# 結果の板と重ならないように、仮想パッドは引っ込める。
 	_touch_controls.call("set_pad_shown", false)
 	_result_board.call("set_rows", _result_rows())
+	var label := race_label()
+	var head := PackedStringArray([str(label["kind"][0])])
+	for tag: Array in label["tags"]:
+		head.append(str(tag[0]))
+	head.append(str(label["title"]))
+	_set_result_title("　".join(head))
 	if _result_retry_button.visible:
 		_result_retry_button.grab_focus()
 	else:
@@ -2118,6 +2214,18 @@ func _on_control_guide_closed() -> void:
 		_pause_guide_button.grab_focus()
 
 
+## 結果の板の見出し（何のレースか）。1行に収まるよう、長いときは字を小さくする（24から16まで）。
+func _set_result_title(text: String) -> void:
+	var title: Label = _result_panel.get_node("ResultBox/ResultTitle")
+	title.text = text
+	var width := (_result_panel.get_node("ResultBox") as Control).size.x
+	var font := title.get_theme_font("font")
+	var font_size := 24
+	while font_size > 16 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > width:
+		font_size -= 1
+	title.add_theme_font_size_override("font_size", font_size)
+
+
 ## 結果の板の中身を組む：見出しの下に飾りの線、着順の表、戻るボタン。
 func _build_result_board() -> void:
 	var box: VBoxContainer = _result_panel.get_node("ResultBox")
@@ -2125,6 +2233,9 @@ func _build_result_board() -> void:
 	# 文字だけの着順（ResultLabel）は、この場面を土台にしているオンライン用の場面が使う。ローカルでは表を出すので隠す。
 	(box.get_node("ResultLabel") as Label).visible = false
 	title.add_theme_color_override("font_color", RaceHud.COLOR_GOLD)
+	# 見出しは「着順」でなく、何のレースか（遊び方・ルームの札・区分と距離）。中身は結果を出すときに入れる。
+	title.add_theme_font_size_override("font_size", 24)
+	title.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	var line := ColorRect.new()
 	line.color = Color(RaceHud.COLOR_GOLD, 0.7)
 	line.custom_minimum_size = Vector2(0.0, 2.0)
@@ -2173,6 +2284,7 @@ func _style_boards() -> void:
 
 func _set_paused(paused: bool) -> void:
 	_paused = paused
+	_camera.call("clear_pending_follow")
 	_show_quit_confirm(false, false)
 	# オンラインでは、レースはサーバーで進んでいるので、止めない（板を出すだけ）。
 	if not _online_view:
@@ -2188,6 +2300,9 @@ func _set_paused(paused: bool) -> void:
 
 ## 場面を抜けるときは、必ず速さをふつうに戻す（スローの最中にメニューへ戻っても、残さない）。
 func _exit_tree() -> void:
+	# 誰の上にも付いていない目印は、木に無いので、ここで片づける。
+	if not _watch_marker.is_inside_tree():
+		_watch_marker.free()
 	_celebration.stop()
 	RaceAudio.stop_final_stretch_ambience()
 	RaceAudio.stop_heartbeat()

@@ -489,7 +489,7 @@ outline_color = Color(0.02, 0.03, 0.06, 0.95)
 resource_local_to_scene = true
 resource_name = "Value"
 font = SubResource("FontVariation_slant")
-font_size = 85
+font_size = 107
 font_color = Color(1, 0.9, 0.12, 1)
 outline_color = Color(0.02, 0.03, 0.06, 0.95)
 
@@ -587,8 +587,8 @@ script = ExtResource("9_panel")
 layout_mode = 0
 offset_left = 22.0
 offset_top = 24.0
-offset_right = 842.0
-offset_bottom = 628.0
+offset_right = 846.0
+offset_bottom = 634.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_100um")
 
@@ -1017,14 +1017,15 @@ label_settings = SubResource("LabelSettings_Aero_AeroUnit")
 
 [node name="Icon" type="Control" parent="Aero" unique_id=1387753143]
 anchors_preset = 0
-offset_left = 118.0
-offset_top = 286.0
-offset_right = 162.0
-offset_bottom = 330.0
+offset_left = 26.0
+offset_top = 251.0
+offset_right = 70.0
+offset_bottom = 295.0
 mouse_filter = 2
 script = ExtResource("10_icon")
 kind = "aero"
 icon_color = Color(1, 0.86, 0.3, 1)
+icon_size = 80.0
 
 [node name="SpeedText" type="Control" parent="." unique_id=775819191]
 anchors_preset = 0
@@ -1065,13 +1066,14 @@ label_settings = SubResource("LabelSettings_SpeedText_SpeedUnit")
 
 [node name="Icon" type="Control" parent="SpeedText" unique_id=791702578]
 anchors_preset = 0
-offset_left = -32.0
-offset_top = 315.0
-offset_right = 12.0
-offset_bottom = 359.0
+offset_left = -43.0
+offset_top = 308.0
+offset_right = 1.0
+offset_bottom = 352.0
 mouse_filter = 2
 script = ExtResource("10_icon")
 icon_color = Color(0.45, 0.78, 1, 1)
+icon_size = 80.0
 
 [node name="StaminaText" type="Control" parent="." unique_id=338143617]
 anchors_preset = 0
@@ -1112,14 +1114,15 @@ label_settings = SubResource("LabelSettings_StaminaText_StaminaUnit")
 
 [node name="Icon" type="Control" parent="StaminaText" unique_id=743451612]
 anchors_preset = 0
-offset_left = 112.0
-offset_top = -273.0
-offset_right = 156.0
-offset_bottom = -229.0
+offset_left = 127.0
+offset_top = -278.0
+offset_right = 171.0
+offset_bottom = -234.0
 mouse_filter = 2
 script = ExtResource("10_icon")
 kind = "stamina"
 icon_color = Color(0.18, 0.91, 0.42, 1)
+icon_size = 80.0
 
 [node name="Notch" type="Control" parent="." unique_id=1322124683]
 anchors_preset = 0
@@ -1159,22 +1162,23 @@ label_settings = SubResource("LabelSettings_Notch_NotchWord")
 
 [node name="NotchValue" type="Label" parent="Notch" unique_id=459623784]
 layout_mode = 0
-offset_left = 42.0
-offset_top = -47.0
-offset_right = 94.0
-offset_bottom = 77.0
+offset_left = 56.0
+offset_top = -75.0
+offset_right = 121.0
+offset_bottom = 81.0
 text = "6"
 label_settings = SubResource("LabelSettings_Notch_NotchValue")
 
 [node name="Icon" type="Control" parent="Notch" unique_id=1323225544]
 anchors_preset = 0
-offset_left = 12.0
-offset_top = 33.0
+offset_left = 8.0
+offset_top = 20.0
 offset_right = 56.0
 offset_bottom = 77.0
 mouse_filter = 2
 script = ExtResource("10_icon")
 kind = "notch"
+icon_size = 80.0
 
 [node name="Boost" type="Control" parent="." unique_id=1183564837]
 anchors_preset = 0
@@ -1206,10 +1210,10 @@ label_settings = SubResource("LabelSettings_Boost_BoostWord")
 
 [node name="BoostCount" type="Label" parent="Boost" unique_id=220348003]
 layout_mode = 0
-offset_left = 187.0
-offset_top = 141.5
-offset_right = 202.0
-offset_bottom = 176.5
+offset_left = 190.0
+offset_top = 149.5
+offset_right = 205.0
+offset_bottom = 184.5
 text = "3"
 label_settings = SubResource("LabelSettings_Boost_BoostCount")
 
@@ -1228,32 +1232,33 @@ letter_font = SubResource("FontVariation_slant")
 
 [node name="BoostOpen" type="Label" parent="Boost" unique_id=1482815367]
 layout_mode = 0
-offset_left = 173.0
-offset_top = 140.5
-offset_right = 183.0
-offset_bottom = 175.5
+offset_left = 176.0
+offset_top = 148.5
+offset_right = 186.0
+offset_bottom = 183.5
 text = "("
 label_settings = SubResource("LabelSettings_Boost_BoostOpen")
 
 [node name="BoostClose" type="Label" parent="Boost" unique_id=414271939]
 layout_mode = 0
-offset_left = 208.0
-offset_top = 140.5
-offset_right = 218.0
-offset_bottom = 175.5
+offset_left = 211.0
+offset_top = 148.5
+offset_right = 221.0
+offset_bottom = 183.5
 text = ")"
 label_settings = SubResource("LabelSettings_Boost_BoostClose")
 
 [node name="Icon" type="Control" parent="Boost" unique_id=1204359059]
 anchors_preset = 0
-offset_left = 202.0
-offset_top = 109.5
-offset_right = 246.0
-offset_bottom = 153.5
+offset_left = 211.0
+offset_top = 102.5
+offset_right = 259.0
+offset_bottom = 143.5
 mouse_filter = 2
 script = ExtResource("10_icon")
 kind = "boost"
 icon_color = Color(1, 0.47, 0.06, 1)
+icon_size = 80.0
 
 [node name="Dash" type="Control" parent="." unique_id=591305241]
 anchors_preset = 0
@@ -1316,11 +1321,12 @@ letter_font = SubResource("FontVariation_slant")
 
 [node name="Icon" type="Control" parent="Dash" unique_id=827111973]
 anchors_preset = 0
-offset_left = 85.9925
-offset_top = -83.5843
-offset_right = 129.9925
-offset_bottom = -39.584305
+offset_left = 97.9925
+offset_top = -106.5843
+offset_right = 141.9925
+offset_bottom = -62.584305
 mouse_filter = 2
 script = ExtResource("10_icon")
 kind = "dash"
 icon_color = Color(0.1, 0.9, 1, 1)
+icon_size = 80.0

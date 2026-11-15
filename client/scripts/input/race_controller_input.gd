@@ -111,8 +111,22 @@ static func look_vector() -> Vector2:
 	return keys.normalized()
 
 
-static func chase_yaw_axis() -> float:
-	return _deadzone(axis_value(JOY_AXIS_RIGHT_X))
+## 追う子を、順位の前（-1）・後ろ（1）へ切り替える。
+static func camera_follow_step(event: InputEvent) -> int:
+	if is_button_pressed(event, JOY_BUTTON_LEFT_SHOULDER) or _is_key_just_pressed(event, KEY_COMMA):
+		return -1
+	if is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER) or _is_key_just_pressed(event, KEY_PERIOD):
+		return 1
+	return 0
+
+
+## 押している間の回転。引き金の深さを使い、Q・E は全押しと同じ。
+static func camera_turn() -> Vector2:
+	var left := maxf(0.0, axis_value(JOY_AXIS_TRIGGER_LEFT))
+	var right := maxf(0.0, axis_value(JOY_AXIS_TRIGGER_RIGHT))
+	left = left if left >= STICK_DEADZONE else 0.0
+	right = right if right >= STICK_DEADZONE else 0.0
+	return Vector2(maxf(left, float(Input.is_physical_key_pressed(KEY_Q))), maxf(right, float(Input.is_physical_key_pressed(KEY_E))))
 
 
 static func is_button_pressed(event: InputEvent, button: JoyButton) -> bool:

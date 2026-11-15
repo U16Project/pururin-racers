@@ -478,9 +478,14 @@ static func draw_style_chevrons(canvas: Object, center_left: Vector2, color: Col
 
 
 ## 順位表（左上の操作盤の下）。上から今の順位の順。ゴールして確定した行は、太く・大きく・明るくし、印を王冠・メダルにする。
+## カメラで見ている子の行の色（頭の上の目印 watch_marker.gd と同じ黄色）。
+const COLOR_WATCH := Color(1.0, 0.86, 0.25)
+
+
 func _draw_standings(font: Font) -> void:
 	var standings: Array = _state["standings"]
-	if int(_state["place"]) <= 0 or standings.is_empty():
+	# カウントダウン中（順位がまだ0）も出す。並びは controller が枠順にして渡す。
+	if (int(_state["place"]) <= 0 and not bool(_state.get("countdown", false))) or standings.is_empty():
 		return
 	var confirmed := confirmed_count(standings)
 	var table_top := standings_origin.y
@@ -492,6 +497,10 @@ func _draw_standings(font: Font) -> void:
 		var is_confirmed := index < confirmed
 		if bool(row["player"]):
 			_draw_rounded_rect(Rect2(Vector2(x - STANDINGS_ROW_PAD, top + 1.0), Vector2(STANDINGS_WIDTH + STANDINGS_ROW_PAD, STANDINGS_ROW_HEIGHT - 2.0)), Color(COLOR_PROGRESS, 0.22), 6.0)
+		if bool(row.get("watched", false)):
+			var watch_rect := Rect2(Vector2(x - STANDINGS_ROW_PAD, top + 1.0), Vector2(STANDINGS_WIDTH + STANDINGS_ROW_PAD, STANDINGS_ROW_HEIGHT - 2.0))
+			_draw_rounded_rect(watch_rect, Color(COLOR_WATCH, 0.22), 6.0)
+			_painter.draw_rect(watch_rect, COLOR_WATCH, false, 2.0)
 		var row_font: Font = _bold_font if is_confirmed else font
 		var text_color := COLOR_TEXT if is_confirmed else COLOR_DIM.lerp(COLOR_TEXT, 0.45)
 		var text_size := STANDINGS_CONFIRMED_FONT_SIZE if is_confirmed else STANDINGS_FONT_SIZE

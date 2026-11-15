@@ -1,21 +1,28 @@
 extends Camera3D
-## ローカルレースのカメラ。追う視点を4つ切り替える（デフォルト・遠距離・上空・一人称の順）。
+## ローカルレースのカメラ。追う視点を6つ切り替える（デフォルト・遠距離・前・横・上空・一人称の順）。
 ## ゲームパッドの右スティックかキーボードの A・D・W を押している間は「見回し」になり、倒した向きを見る。離すと元の視点に戻る。
 ## 追っている走者がゴールすると、少ししてから、前へ回り込んで、まわりをゆっくり回りながら映す
 ## （走者との距離と高さは、選んでいる視点のまま。視点の切り替えと見回しは、レース中と同じ。一人称は回り込まない）。
 
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
-enum View { DEFAULT, FAR, FIRST_PERSON, OVERHEAD }
+signal follow_step_requested(step: int)
+signal return_player_requested
+
+enum View { DEFAULT, FAR, FIRST_PERSON, OVERHEAD, FRONT, SIDE }
 
 ## 各視点の、後ろへの距離・高さ（m）と、見る先。look_ahead が true のときは、まっすぐ前を見る（傾きなし）。
 const VIEW_SETTINGS := {
 	View.DEFAULT: {"back": 6.0, "height": 3.0, "look_ahead": false},
 	View.FAR: {"back": 12.0, "height": 4.0, "look_ahead": false},
 	View.FIRST_PERSON: {"back": 0.0, "height": 1.55, "look_ahead": true},
-	View.OVERHEAD: {"back": 5.0, "height": 40.0, "look_ahead": false},
+	View.OVERHEAD: {"back": 27.0, "height": 13.0, "look_ahead": false},
+	View.FRONT: {"back": 6.0, "height": 2.0, "look_ahead": false, "angle": PI},
+	View.SIDE: {"back": 6.0, "height": 2.0, "look_ahead": false, "angle": PI * 0.5},
 }
-const VIEW_ORDER := [View.DEFAULT, View.FAR, View.OVERHEAD, View.FIRST_PERSON]
+const VIEW_ORDER := [View.DEFAULT, View.FAR, View.FRONT, View.SIDE, View.OVERHEAD, View.FIRST_PERSON]
+## オンラインでは、これまでの視点と操作を使う。
+const FOLLOW_CHORD_SECONDS := 0.15
 ## 追う視点で見る点の高さ（走者の足元から）。
 const LOOK_TARGET_HEIGHT_M := 0.6
 ## 見回し：カメラの高さ（地面から）と、見下ろす角度。
@@ -34,6 +41,11 @@ const LATERAL_MAX_M := 12.0
 
 var view: View = View.DEFAULT
 var _target: Node3D
+## レースの進行側が、操作を受けてよい場面かを答える。
+var input_allowed: Callable
+var _pending_follow_step := 0
+var _pending_follow_at := 0.0
+var _goal_orbit_origin := 0.0
 ## キーボードでの微調整（視点ごとの基準に足す）。
 var _back_offset := 0.0
 var _lateral_offset := 0.0
@@ -46,21 +58,64 @@ func _ready() -> void:
 	current = true
 
 
-func set_follow_target(node: Node3D) -> void:
+func set_follow_target(node: Node3D, seconds_since_goal: float = 0.0) -> void:
+	if is_instance_valid(_target):
+		_set_own_body_visible(true)
 	_target = node
+	_goal_seconds = maxf(seconds_since_goal, 0.0) if _target_finished() else 0.0
+	_goal_orbit_origin = 0.0
 	_apply()
+
+
+func accepts_input() -> bool:
+	return current and input_allowed.is_valid() and bool(input_allowed.call())
+
+
+## 順位表の隣の子を選ぶ。端は回り込む。
+static func adjacent_target(ordered: Array, target: Node3D, step: int) -> Node3D:
+	var index := ordered.find(target)
+	if ordered.is_empty() or index < 0:
+		return target
+	return ordered[posmod(index + step, ordered.size())]
+
+
+## 片方だけなら少し待つ。反対側が間に合えば、切り替えず自分へ戻す。
+func queue_follow_step(step: int, now: float) -> void:
+	if _pending_follow_step == -step and now - _pending_follow_at <= FOLLOW_CHORD_SECONDS:
+		_pending_follow_step = 0
+		return_player_requested.emit()
+		return
+	advance_follow_selection(now)
+	if _pending_follow_step == 0:
+		_pending_follow_step = step
+		_pending_follow_at = now
+
+
+func advance_follow_selection(now: float) -> void:
+	if _pending_follow_step != 0 and now - _pending_follow_at > FOLLOW_CHORD_SECONDS:
+		var step := _pending_follow_step
+		_pending_follow_step = 0
+		follow_step_requested.emit(step)
+
+
+func clear_pending_follow() -> void:
+	_pending_follow_step = 0
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	# 写していない間（スタート前の見せ方の間など）は、視点の切り替えを受けない（Y は、ゲートインでは出走表の出し入れ）。
-	if not current:
+	if not accepts_input():
+		clear_pending_follow()
 		return
 	if RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
 		_set_view(next_view(view))
 		get_viewport().set_input_as_handled()
 	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_STICK) or _is_key(event, KEY_R):
-		_reset_adjustment()
+		reset_view()
 		_set_view(View.DEFAULT)
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.camera_follow_step(event) != 0:
+		queue_follow_step(RaceControllerInput.camera_follow_step(event), Time.get_ticks_usec() / 1000000.0)
 		get_viewport().set_input_as_handled()
 
 
@@ -84,6 +139,12 @@ func _set_view(next: View) -> void:
 	_apply()
 
 
+## 今の視点の決まった角度へ戻す。ゴール後の回り込みも、ここを基準にする。
+func reset_view() -> void:
+	_goal_orbit_origin = goal_orbit_angle(_goal_seconds)
+	_reset_adjustment()
+
+
 func _reset_adjustment() -> void:
 	_back_offset = 0.0
 	_lateral_offset = 0.0
@@ -91,14 +152,28 @@ func _reset_adjustment() -> void:
 
 
 func _process(delta: float) -> void:
-	_process_keyboard_adjustment(delta)
-	advance_goal_view(delta)
+	if input_allowed.is_valid() and bool(input_allowed.call()):
+		advance_goal_view(delta)
+	if accepts_input():
+		_process_keyboard_adjustment(delta)
+		advance_follow_selection(Time.get_ticks_usec() / 1000000.0)
+		apply_turn(RaceControllerInput.camera_turn(), delta)
+	else:
+		clear_pending_follow()
 	_apply()
 
 
 ## ゴールしてからの秒数を進める（ゴール前は0に戻す）。
 func advance_goal_view(delta: float) -> void:
 	_goal_seconds = _goal_seconds + delta if _target_finished() else 0.0
+
+
+## 一人称は首を振り、それ以外は追う子を中心に回る。
+func apply_turn(turn: Vector2, delta: float) -> void:
+	if turn.x > 0.0 and turn.y > 0.0:
+		reset_view()
+	else:
+		_yaw_offset += (turn.x - turn.y) * chase_turn_speed * delta
 
 
 func _target_finished() -> bool:
@@ -116,7 +191,7 @@ static func goal_orbit_angle(seconds_since_goal: float) -> float:
 	return PI + deg_to_rad(GOAL_ORBIT_DEG_PER_S) * (swing - GOAL_SWING_SECONDS)
 
 
-## カメラの細かい調整（開発用）。Shift を押しながら、W・S＝前後、A・D＝左右、Q・E＝向き。Ctrl も押すと、速く動く。
+## カメラの細かい調整（開発用）。Shift を押しながら、W・S＝前後、A・D＝左右。Ctrl も押すと、速く動く。
 ## Shift を要るようにしてあるのは、S が視点の切り替え（Yボタンに当たるキー）に使われているため。
 func _process_keyboard_adjustment(delta: float) -> void:
 	if not Input.is_key_pressed(KEY_SHIFT):
@@ -131,10 +206,6 @@ func _process_keyboard_adjustment(delta: float) -> void:
 		_lateral_offset = maxf(-LATERAL_MAX_M, _lateral_offset - speed * delta)
 	if Input.is_key_pressed(KEY_D):
 		_lateral_offset = minf(LATERAL_MAX_M, _lateral_offset + speed * delta)
-	if Input.is_key_pressed(KEY_Q):
-		_yaw_offset += chase_turn_speed * delta * fast
-	if Input.is_key_pressed(KEY_E):
-		_yaw_offset -= chase_turn_speed * delta * fast
 
 
 func _apply() -> void:
@@ -143,7 +214,7 @@ func _apply() -> void:
 	var forward := -_target.global_transform.basis.z
 	forward.y = 0.0
 	forward = forward.normalized() if forward.length_squared() > 0.0001 else Vector3.FORWARD
-	var stick := RaceControllerInput.look_vector()
+	var stick := RaceControllerInput.look_vector() if accepts_input() else Vector2.ZERO
 	var looking_around := stick.length_squared() > 0.0
 	var first_person := view == View.FIRST_PERSON
 	_set_own_body_visible(not first_person)
@@ -166,7 +237,9 @@ func _apply_look_around(forward: Vector3, stick: Vector2) -> void:
 func _apply_view(forward: Vector3, look_yaw: float = 0.0) -> void:
 	var settings: Dictionary = VIEW_SETTINGS[view]
 	# ゴール後は、走者のまわりを回る（一人称は、そのまま）。
-	var orbit := 0.0 if bool(settings["look_ahead"]) else goal_orbit_angle(_goal_seconds)
+	var orbit := 0.0 if bool(settings["look_ahead"]) else goal_orbit_angle(_goal_seconds) - _goal_orbit_origin
+	if not bool(settings["look_ahead"]):
+		orbit += float(settings.get("angle", 0.0)) + _yaw_offset
 	if orbit != 0.0:
 		forward = (Basis(Vector3.UP, orbit) * forward).normalized()
 	var back := clampf(float(settings["back"]) + _back_offset, BACK_MIN_M, BACK_MAX_M)
@@ -177,7 +250,7 @@ func _apply_view(forward: Vector3, look_yaw: float = 0.0) -> void:
 	var direction := forward
 	if not bool(settings["look_ahead"]):
 		direction = (_target.global_position + Vector3.UP * LOOK_TARGET_HEIGHT_M - global_position).normalized()
-	var yaw := _yaw_offset + look_yaw
+	var yaw := (_yaw_offset if bool(settings["look_ahead"]) else 0.0) + look_yaw
 	if absf(yaw) > 0.0001:
 		direction = (Basis(Vector3.UP, yaw) * direction).normalized()
 	# 真下を見るとき（上空で真上に来たとき）でも、向きが決まるようにする。
