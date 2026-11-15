@@ -34,6 +34,23 @@ def load_settings() -> dict:
     return settings
 
 
+def require_model_version(model, version: int, label="CPU") -> None:
+    """版指定のない保存済みCPUは旧版1。学習にも相手役にも、別の版を混ぜない。"""
+    actual = int(getattr(model, "observation_version", 1))
+    if actual != version:
+        raise ValueError(f"{label}: 観測の版が合いません（頭 {actual}、育成 {version}）。新版は新規に育ててください")
+
+
+def validate_settings(settings: dict) -> None:
+    reward = settings["reward"]
+    removed = set(reward) & {"group", "stamina"}
+    removed_style = set(reward["style"]) & {"place", "draft", "mid_from", "mid_to", "draft_at_least"}
+    if removed or removed_style:
+        raise ValueError("旧報酬の設定は使えません: " + ", ".join(sorted(removed | removed_style)))
+    if settings["observation_version"] != load_settings()["observation_version"]:
+        raise ValueError("育成設定の観測の版が合いません")
+
+
 def roster_ids() -> list:
     with open(CLIENT / "data" / "config" / "pururin_roster.json", encoding="utf-8") as f:
         return [p["id"] for p in json.load(f)["roster"]]
@@ -94,6 +111,9 @@ class Godot:
         self._conn.settimeout(None if window else 600)
         self._file = self._conn.makefile("rwb")
         self.hello = self.read()
+        if int(self.hello["observation_version"]) != int(settings["observation_version"]):
+            self.close()
+            raise ValueError("GodotとPythonの観測の版が合いません")
 
     def send(self, message: dict) -> None:
         self._file.write((json.dumps(message) + "\n").encode("utf-8"))
@@ -133,6 +153,7 @@ class GodotVecEnv(VecEnv):
     """
 
     def __init__(self, settings: dict, workers: int, log_dir=None, seeds=None, rng_seed=0, pool=None, race_log_dir=None):
+        validate_settings(settings)
         self.settings = settings
         self.roster = roster_ids()
         self.field = settings["field"]
@@ -225,6 +246,7 @@ class GodotVecEnv(VecEnv):
         for gate, (obs, mask) in self._pool_obs[w].items():
             name = self._pool_gates[w].get(gate)
             model = (self.pool.model(name) if name else None) or self.main_model
+            require_model_version(model, self.settings["observation_version"], name or "本命")
             action, _ = model.predict(obs, action_masks=mask, deterministic=True)
             out[str(gate)] = [int(a) for a in action]
         return out
@@ -255,6 +277,8 @@ class GodotVecEnv(VecEnv):
                 # 相手役の成績に数えるのは、実際にその相手役が走った席だけ（読めずに本命が代わりに走った席は数えない）。
                 named = {gate: name for gate, name in self._pool_gates[w].items() if name and self.pool.model(name) is not None}
                 race["pool"] = {str(gate): name for gate, name in named.items()}
+                for result in race["results"]:
+                    result["learning"] = self._slot(w, int(result["gate"])) >= 0
                 self.races.append(race)
                 if self.pool is not None:
                     self.pool.record(race["results"], named)

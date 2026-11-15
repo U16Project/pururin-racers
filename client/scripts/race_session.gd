@@ -53,17 +53,10 @@ static var _online_view_peer_id := 0
 ## ラボ（lab/rl/play.py）から起動したときだけ使う：パドックの「レース開始」で、ふつうのレースの代わりにこれを呼ぶ。
 ## ふつうに遊ぶときは空（何もしない）。
 static var race_starter := Callable()
-## ラボ（lab/rl/play.py）から起動したときだけ使う：枠の番号 → その枠を走らせるCPUの名前（無ければ空）。
-## レース選択とパドックのトレーナー欄に、トレーナー名に添えて出す。ふつうに遊ぶときは空（何もしない）。
-static var slot_driver_label := Callable()
 ## ラボ（lab/rl/play.py）から起動したときだけ使う：レース選択の「戻る」で、ゲームのメニューの代わりにこれを呼ぶ。
 ## ふつうに遊ぶときは空（何もしない）。
 static var race_select_back := Callable()
 
-
-## その枠を走らせるCPUの名前（ラボから起動したときだけ。ふつうは空）。
-static func driver_label_for_slot(slot: int) -> String:
-	return str(slot_driver_label.call(slot)) if slot_driver_label.is_valid() else ""
 
 
 static func _empty_slots() -> Array[String]:

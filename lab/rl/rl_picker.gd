@@ -118,14 +118,6 @@ func _decide() -> void:
 	decided.emit({"me": str(_me.get_selected_metadata()), "others": others})
 
 
-## CPUの名前（トレーナー欄に出す）。
-func label_of(id: String) -> String:
-	for choice: Dictionary in _choices:
-		if str(choice["id"]) == id:
-			return str(choice["label"])
-	return id
-
-
 func _input(event: InputEvent) -> void:
 	# 選ぶ欄にいるときは、左右で、選ぶものを切り替える（行の移動に取られる前に受ける）。
 	var focused := get_viewport().gui_get_focus_owner()

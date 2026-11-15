@@ -19,18 +19,22 @@ import subprocess
 import numpy as np
 import torch
 
-from godot_env import CLIENT, GODOT, RL_DIR
+from godot_env import CLIENT, GODOT, RL_DIR, load_settings
 
-DEMO_DIR = RL_DIR / "runs" / "demos"
+def demo_dir(version: int) -> object:
+    # 旧いお手本の束を上書きせず、版ごとに保存する。
+    return RL_DIR / "runs" / f"demos_v{version}"
 
 
 def refresh(settings: dict) -> str:
     """新しい記録を、お手本の束に足す（ゴドーを画面なしで1回動かす）。"""
     done = subprocess.run(
         [str(GODOT), "--headless", "--path", str(CLIENT), "-s", str(RL_DIR / "rl_demos.gd"), "--",
-         f"out={DEMO_DIR}", f"since={settings['demo']['since']}"],
+         f"out={demo_dir(settings['observation_version'])}", f"since={settings['demo']['since']}"],
         capture_output=True, text=True, timeout=1800,
     )
+    if done.returncode:
+        raise RuntimeError("お手本を変換できません: " + done.stderr[-1000:] + done.stdout[-1000:])
     lines = [line for line in done.stdout.splitlines() if line.startswith("お手本")]
     return lines[-1] if lines else done.stdout[-500:]
 
@@ -39,6 +43,7 @@ class DemoBank:
     """お手本の束。obs・選べる操作・あなたの操作を、まとめて持つ。"""
 
     def __init__(self, settings: dict):
+        self.version = settings["observation_version"]
         self.settings = settings["demo"]
         self.obs = np.zeros((0, 0), dtype=np.float32)
         self.masks = np.zeros((0, 0), dtype=bool)
@@ -48,11 +53,13 @@ class DemoBank:
 
     def load(self):
         obs, masks, actions, weights = [], [], [], []
-        files = [p for p in sorted(glob.glob(str(DEMO_DIR / "*.json"))) if not p.endswith("_index.json")]
+        files = [p for p in sorted(glob.glob(str(demo_dir(self.version) / "*.json"))) if not p.endswith("_index.json")]
         table = self.settings["place_weight"]
         for path in files:
             with open(path, encoding="utf-8") as f:
                 d = json.load(f)
+            if int(d.get("observation_version", 1)) != self.version:
+                raise ValueError(f"お手本の観測の版が合いません: {path}")
             obs.append(np.asarray(d["obs"], dtype=np.float32))
             masks.append(np.asarray(d["mask"], dtype=bool))
             actions.append(np.asarray(d["action"], dtype=np.int64))
@@ -101,7 +108,7 @@ class DemoBank:
 
 def report():
     """使った・外した記録の表（rl_demos.gd が書いた _index.json から）。"""
-    path = DEMO_DIR / "_index.json"
+    path = demo_dir(load_settings()["observation_version"]) / "_index.json"
     if not path.exists():
         print("まだお手本を作っていません")
         return

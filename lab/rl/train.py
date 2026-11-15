@@ -30,16 +30,65 @@ from sb3_contrib import MaskablePPO
 from stable_baselines3.common.callbacks import BaseCallback
 
 import demos
-from godot_env import RL_DIR, GodotVecEnv, load_settings
+from godot_env import RL_DIR, GodotVecEnv, load_settings, require_model_version, validate_settings
 from pool import Pool
 
 
-## progress.csv の項目（増やすときは後ろに足す。前の形の見出しは、自動で今の形に書き直す）。
-COLUMNS = ["日時", "判断の数", "レース数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
-           "残り体力", "性格の順位に合った割合", "風よけが性格に合った割合", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み",
-           "ブーストの残り距離の平均", "スパートの範囲で押したブースト", "風よけをもらっていた割合", "後方支援をもらっていた割合",
-           "最序盤のブースト", "中ほどのブースト", "残り25%の線の体力", "線で体力が目安より少ない割合", "線で体力が底の割合", "その場でもらった点",
-           "大逃げの割合", "大逃げが決まった割合", "大逃げで縮めた秒", "1位との差（学ぶ子）"]
+# 点は学ぶ席の1走あたり。progress_total を使う設定でも内訳の合計を照合できるよう「前進」も記録する。
+POINTS = {"place": "着順", "gap_bonus": "タイム差", "gap_goal": "ゴール差", "gap_running": "走行中の差",
+          "heart": "心拍", "boost_timing": "ブースト時期", "stick": "こだわり", "draft": "ドラフト",
+          "rear": "後押し", "contact": "接触", "steady": "マイペース", "keep": "温存", "progress": "前進"}
+BEHAVIORS = {"stick": [("stick_share", "順位組の距離割合")], "draft": [("draft_share", "ドラフト距離割合")],
+             "rear": [("rear_share", "後押し距離割合")], "contact": [("contact_share", "接触距離割合")],
+             "steady": [("notch_changes", "ノッチ変更回数"), ("line_changes", "ライン変更回数")],
+             "keep": [("keep_25", "25%体力"), ("keep_50", "50%体力"), ("keep_75", "75%体力")]}
+BASE_COLUMNS = ["日時", "判断の数", "レース数", "学ぶ席の走数", "分", "1位のタイム", "ゴールしなかった割合", "ダッシュ", "ブースト",
+                "残り体力", "お手本の本数", "お手本に寄せる力", "お手本と合う見込み", "ブーストの残り距離の平均",
+                "スパートの範囲で押したブースト", "最序盤のブースト", "中ほどのブースト",
+                "大逃げの割合", "大逃げが決まった割合", "大逃げで縮めた秒", "1位との差（学ぶ子）"]
+COLUMNS = BASE_COLUMNS + [name + "点" for name in POINTS.values()] + ["合計点"]
+for _trait, _metrics in BEHAVIORS.items():
+    for _key, _label in _metrics:
+        COLUMNS += [_label, _label + "標本数"]
+        for _group in ("高", "低"):
+            COLUMNS += [POINTS[_trait] + _group + "・" + _label, POINTS[_trait] + _group + "・" + _label + "標本数"]
+
+
+def behavior_value(row, key):
+    if key.startswith("keep_"):
+        return row["keep_stamina"][("keep_25", "keep_50", "keep_75").index(key)]
+    return row[key]
+
+
+def average(values):
+    valid = [float(v) for v in values if v is not None]
+    return round(sum(valid) / len(valid), 5) if valid else ""
+
+
+def personality_summary(seats):
+    """欠測は空欄にし、各平均の分母も残す。高低は受け持つトレーナーの数字で分ける。"""
+    out = {}
+    for trait, metrics in BEHAVIORS.items():
+        high, low = (0.5, -0.3) if trait == "contact" else (0.6, 0.2)
+        groups = {"": seats,
+                  "高": [r for r in seats if r["frame"][trait] >= high],
+                  "低": [r for r in seats if r["frame"][trait] <= low]}
+        for key, label in metrics:
+            for group, rows in groups.items():
+                column = POINTS[trait] + group + "・" + label if group else label
+                values = [behavior_value(r, key) for r in rows]
+                out[column] = average(values)
+                out[column + "標本数"] = sum(v is not None for v in values)
+    return out
+
+
+def text_table(rows):
+    """全角の見出しもターミナルで列がそろうようにする。"""
+    from unicodedata import east_asian_width
+    width = lambda s: sum(2 if east_asian_width(c) in "WF" else 1 for c in s)
+    rows = [[str(c) for c in row] for row in rows]
+    widths = [max(width(row[i]) for row in rows) for i in range(len(rows[0]))]
+    return "\n".join(" | ".join(c + " " * (widths[i] - width(c)) for i, c in enumerate(row)) for row in rows)
 
 
 class Progress(BaseCallback):
@@ -62,14 +111,19 @@ class Progress(BaseCallback):
         self.started = self.last_save = self.last_latest = time.time()
         (run_dir / "versions").mkdir(exist_ok=True)
         self.csv_path = run_dir / "progress.csv"
-        # 前の形の progress.csv（項目が少ない）なら、見出しの行だけ、今の形に書き直す（項目は後ろに足していくので、前の行の値はそのまま）。
         if self.csv_path.exists():
-            lines = self.csv_path.read_text(encoding="utf-8").splitlines()
-            if lines and lines[0] != ",".join(COLUMNS) and ",".join(COLUMNS).startswith(lines[0]):
-                lines[0] = ",".join(COLUMNS)
-                self.csv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        if not self.csv_path.exists():
-            with open(self.csv_path, "w", newline="", encoding="utf-8") as f:
+            with self.csv_path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                previous_columns = reader.fieldnames
+                old_rows = list(reader)
+            if previous_columns != COLUMNS:
+                # 項目名で移し、削除した仕様の列は除く。過去に未計測の新項目は空欄。
+                with self.csv_path.open("w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, COLUMNS, extrasaction="ignore")
+                    writer.writeheader()
+                    writer.writerows(old_rows)
+        else:
+            with self.csv_path.open("w", newline="", encoding="utf-8") as f:
                 csv.writer(f).writerow(COLUMNS)
 
     def _on_rollout_end(self) -> None:
@@ -107,42 +161,42 @@ class Progress(BaseCallback):
             self.pool.save()
             self.pool.reload()
         races = list(self.recent)
-        seats = [r for race in races for r in race["results"] if r["seat"]]
-        mean = lambda rows, key: sum(float(r[key]) for r in rows) / max(len(rows), 1)
+        seats = [r for race in races for r in race["results"] if r["learning"]]
+        mean = lambda key: average(r[key] for r in seats)
         winners = [race["results"][0]["winner_time"] for race in races if race["results"][0]["winner_time"] > 0]
         boosts = [b for r in seats for b in r["boost_remaining_m"]]
-        lines_st = [float(r["line_stamina"]) for r in seats]
-        keep = float(self.settings["reward"]["stamina"]["keep"])
-        share = lambda rows, test: sum(1 for x in rows if test(x)) / max(len(rows), 1)
-        line = [datetime.now().strftime("%m/%d %H:%M"), self.num_timesteps, self.seen, round((time.time() - self.started) / 60, 1),
-                round(sum(winners) / max(len(winners), 1), 2), round(share(seats, lambda r: r["time"] < 0), 3),
-                round(mean(seats, "dash_uses"), 1), round(mean(seats, "boost_uses"), 2), round(mean(seats, "stamina_left"), 2),
-                round(mean(seats, "place_fit"), 2), round(mean(seats, "draft_fit"), 2),
-                self.bank.races if self.bank else 0, round(self.bank.keep_weight(self.num_timesteps), 4) if self.bank else 0.0, round(self.imitation, 3),
-                round(sum(boosts) / max(len(boosts), 1)),
-                round(mean(seats, "spurt_hits"), 2), round(mean(seats, "draft_share"), 2), round(mean(seats, "rear_share"), 2),
-                round(mean(seats, "opening_boosts"), 2), round(mean(seats, "spurt_misses"), 2),
-                round(sum(lines_st) / max(len(lines_st), 1), 2), round(share(lines_st, lambda x: x < keep), 2), round(share(lines_st, lambda x: x <= -0.95), 2),
-                round(mean(seats, "paid_now"), 2), *escape_columns(races, seats)]
-        with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
-            csv.writer(f).writerow(line)
-        v = dict(zip(COLUMNS, line))
-        pct = lambda x: f"{float(x) * 100:.0f}%"
-        print("\n".join([
-            f"■ {v['日時']}　ここまで {v['レース数']} レース（{v['分']}分）",
-            f"  1位のゴールタイム {v['1位のタイム']}秒　ゴールできなかった {pct(v['ゴールしなかった割合'])}",
-            f"  ブースト（1レース） {v['ブースト']}回：最序盤（10%まで） {v['最序盤のブースト']}回・中ほど {v['中ほどのブースト']}回・"
-            f"ラスト25% {v['スパートの範囲で押したブースト']}回（押した場所の平均：ゴールまで残り {v['ブーストの残り距離の平均']}m）",
-            f"  ダッシュ（1レース） {v['ダッシュ']}回",
-            f"  体力：残り25%の線で 平均 {pct(v['残り25%の線の体力'])}（目安 {pct(self.settings['reward']['stamina']['keep'])} より少ない子 {pct(v['線で体力が目安より少ない割合'])}・底の子 {pct(v['線で体力が底の割合'])}）"
-            f"　ゴールで 平均 {pct(v['残り体力'])}",
-            f"  脚質どおりの順位にいた {pct(v['性格の順位に合った割合'])}　風よけの使い方が脚質どおり {pct(v['風よけが性格に合った割合'])}",
-            f"  前から風よけをもらっていた {pct(v['風よけをもらっていた割合'])}　後ろから押してもらっていた {pct(v['後方支援をもらっていた割合'])}",
-            f"  その場でもらった点（1レース） {v['その場でもらった点']}",
-            f"  大逃げ（75%で2位に{ESCAPE_GAP_S:.0f}秒以上の差）：起きた {pct(v['大逃げの割合'])}・決まった {pct(v['大逃げが決まった割合'])}・"
-            f"ゴールまでに縮めた平均 {v['大逃げで縮めた秒']}秒　学ぶ子の1位との差 平均 {v['1位との差（学ぶ子）']}秒",
-            f"  あなたのまね：記録 {v['お手本の本数']}本・寄せる強さ {v['お手本に寄せる力']}・あなたと同じ操作を選ぶ {pct(v['お手本と合う見込み'])}",
-        ]), flush=True)
+        v = dict(zip(BASE_COLUMNS, [datetime.now().strftime("%m/%d %H:%M"), self.num_timesteps, self.seen, len(seats),
+                 round((time.time() - self.started) / 60, 1), average(winners),
+                 average(int(r["time"] < 0) for r in seats), mean("dash_uses"), mean("boost_uses"), mean("stamina_left"),
+                 self.bank.races if self.bank else 0, round(self.bank.keep_weight(self.num_timesteps), 4) if self.bank else 0.0,
+                 round(self.imitation, 3), average(boosts), mean("spurt_hits"), mean("opening_boosts"), mean("spurt_misses"),
+                 *escape_columns(races, seats)]))
+        v.update({label + "点": average(r["points"].get(key, 0.0) for r in seats) for key, label in POINTS.items()})
+        v["合計点"] = average(sum(r["points"].values()) for r in seats)
+        v.update(personality_summary(seats))
+        with self.csv_path.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, COLUMNS)
+            writer.writerow(v)
+        shown = lambda value: "—" if value == "" else f"{float(value):.3f}"
+        point_rows = [["点の内訳", "平均点／1走"]] + [[label, shown(v[label + "点"])] for label in POINTS.values()]
+        point_rows.append(["合計", shown(v["合計点"])])
+        behavior_rows = [["実際の走り", "全体", "高い組", "低い組", "標本 全/高/低"]]
+        for trait, metrics in BEHAVIORS.items():
+            for _, label in metrics:
+                high = POINTS[trait] + "高・" + label
+                low = POINTS[trait] + "低・" + label
+                counts = "/".join(str(v[k + "標本数"]) for k in (label, high, low))
+                behavior_rows.append([label, shown(v[label]), shown(v[high]), shown(v[low]), counts])
+        status_rows = [["途中経過", "値"], ["判断", self.num_timesteps], ["勝者 秒", shown(v["1位のタイム"])],
+                       ["未ゴール 割合", shown(v["ゴールしなかった割合"])], ["ダッシュ 回", shown(v["ダッシュ"])],
+                       ["ブースト 回", shown(v["ブースト"])], ["ゴール体力", shown(v["残り体力"])],
+                       ["大逃げ 割合", shown(v["大逃げの割合"])], ["大逃げ成功 割合", shown(v["大逃げが決まった割合"])],
+                       ["大逃げ短縮 秒", shown(v["大逃げで縮めた秒"])], ["1位との差 秒", shown(v["1位との差（学ぶ子）"])],
+                       ["お手本 本", v["お手本の本数"]], ["まねの強さ", v["お手本に寄せる力"]],
+                       ["操作一致 見込み", v["お手本と合う見込み"]]]
+        print(f"\n■ {v['日時']}　{self.seen}レース／{v['分']}分　今回の学ぶ席 {len(seats)}走\n"
+              + text_table(status_rows) + "\n\n" + text_table(point_rows) + "\n\n" + text_table(behavior_rows)
+              + "\n割合・体力は1=100%。高≥0.6／低≤0.2（接触のみ高≥0.5／低≤−0.3）。—は標本なし。", flush=True)
 
 
 ## 大逃げ：1位が全体の75%を越えたとき、2位との差がこの秒数以上（2026-11-10 ユーザーの指示で3秒。5秒では育成のレースでほとんど起きなかったため）。
@@ -194,6 +248,11 @@ def main():
         print(f"この育成だけの設定の上書き：{override_path}", flush=True)
     if len([k for k in settings["brains"] if not k.startswith("_")]) != 1:
         raise SystemExit("今は、育てるCPUを1つ（brains に1つ）だけ育てられます。分けて育てる仕組みは、まだ作っていません。")
+    validate_settings(settings)
+    resumed = None
+    if args.resume:
+        resumed = MaskablePPO.load(args.resume, device="cuda")
+        require_model_version(resumed, settings["observation_version"], args.resume)
     with open(run_dir / "settings.json", "w", encoding="utf-8") as f:
         json.dump(settings, f, ensure_ascii=False, indent=2)
     pool = Pool(settings, args.name)
@@ -201,7 +260,8 @@ def main():
                       race_log_dir=run_dir / "race_logs")
     ppo = settings["ppo"]
     if args.resume:
-        model = MaskablePPO.load(args.resume, env=env, device="cuda")
+        model = resumed
+        model.set_env(env)
     else:
         model = MaskablePPO(
             "MlpPolicy", env, device="cuda", verbose=0, seed=0,
@@ -209,6 +269,7 @@ def main():
             gamma=ppo["gamma"], gae_lambda=ppo["gae_lambda"], ent_coef=ppo["ent_coef"],
             policy_kwargs={"net_arch": {"pi": ppo["net"], "vf": ppo["net"]}},
         )
+    model.observation_version = settings["observation_version"]
     env.main_model = model
     bank = None
     if not args.no_demos:

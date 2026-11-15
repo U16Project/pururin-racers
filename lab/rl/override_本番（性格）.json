@@ -1,0 +1,72 @@
+{
+  "_note": "本番（性格）：2026-11-15 ブースト時期の点を、残り25%で1回+0.6→+0.2、途中で1回−0.2→0に下げた（ブーストを最後まで取っておきすぎるため。最初の10%の−2.0はそのまま）。同じ日、序盤の心拍の超えすぎの減点を2倍にした（スタート〜25%：1秒最大0.05→0.1、25〜50%：0.015→0.03）。同じ日、1位との差の減点を早く・強くした（始まる差 gap_scale_s 5→3秒、走っている間 1秒0.06→0.12）。マイペースは上限に届き続けていたので、1回0.01→0.002、上限0.1→0.3。大逃げ対策の共通点・ブースト時期・心拍・お手本設定を引き継ぎ、性格を6項目に変更。観測2専用。旧い頭からは再開不可。相手は同じ観測2の本番（性格）の古い版4席（まだ無ければ本命）。--resume を付けず新規に始める。",
+  "demo": {
+    "keep_start": 1.0,
+    "keep_half_life_steps": 1000000000000.0,
+    "keep_batches": 120
+  },
+  "reward": {
+    "place": [
+      2.0,
+      1.3,
+      0.9,
+      0.6,
+      0.3,
+      0.0,
+      -0.3,
+      -0.6
+    ],
+    "gap_bonus": 0.6,
+    "gap_penalty_per_s": 0.1,
+    "gap_penalty_max": 1.16,
+    "style": {
+      "spurt_per_boost": 0.2,
+      "outside_per_boost": 0.0,
+      "opening_per_boost": -2.0
+    },
+    "heart": {
+      "sections": [
+        {
+          "until": 0.25,
+          "per": 0.1
+        },
+        {
+          "until": 0.5,
+          "per": 0.03
+        }
+      ]
+    },
+    "progress_total": 0.0,
+    "gap_penalty_far_from_s": 13.0,
+    "gap_penalty_far_per_s": 0.03,
+    "gap_running": {
+      "from_ratio": 0.1,
+      "per_s": 0.12,
+      "far_from_s": 13.0,
+      "far_per_s": 0.04,
+      "max": 0.72
+    },
+    "personality": {
+      "stick": 0.15,
+      "draft": 0.45,
+      "rear": 0.35,
+      "contact": 0.1,
+      "steady_per_change": 0.002,
+      "steady_max": 0.3,
+      "keep": 0.15
+    },
+    "gap_scale_s": 3.0
+  },
+  "pool": {
+    "from_runs": [
+      "本番（性格）"
+    ],
+    "plan": [
+      "run:本番（性格）",
+      "run:本番（性格）",
+      "run:本番（性格）",
+      "run:本番（性格）"
+    ],
+    "always_run": ""
+  }
+}

@@ -199,7 +199,6 @@ func _ready() -> void:
 		attribute_mark.draw.connect(func() -> void:
 			Detail.draw_attribute_mark(attribute_mark, attribute_mark.size * 0.5, mark_size, attribute_id, Color.from_string(str(Stats.values()["attributes"][attribute_id]["color"]), Color.WHITE)))
 		summary.add_child(attribute_mark)
-		var driver := Session.driver_label_for_slot(gate)
 		var style_mark := Control.new()
 		style_mark.name = "StyleMark"
 		style_mark.custom_minimum_size = Vector2(Hud.STYLE_CHEVRON_STEP * chevron_scale * StatsMath.rank_group_count() + 2.0, mark_size)
@@ -217,7 +216,7 @@ func _ready() -> void:
 			summary.add_child(gap_mark)
 			summary.add_child(style_mark)
 			summary.add_child(_dim_label(str(STYLE_NAMES.get(style_id, "")), ROW_SUB_SIZE_OVERLAY))
-			var trainer_label := _dim_label("%s%s" % [trainer_name, "［%s］" % driver if not driver.is_empty() else ""], ROW_SUB_SIZE_OVERLAY)
+			var trainer_label := _dim_label(trainer_name, ROW_SUB_SIZE_OVERLAY)
 			trainer_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			trainer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			summary.add_child(trainer_label)
@@ -225,7 +224,7 @@ func _ready() -> void:
 			summary.add_child(_dim_label("%s・" % ATTRIBUTE_NAMES.get(attribute_id, attribute_id)))
 			summary.add_child(style_mark)
 			# ラボから起動したときは、その枠を走らせるCPUの名前も添える。
-			summary.add_child(_dim_label("%s　%s%s" % [STYLE_NAMES.get(style_id, ""), trainer_name, "［%s］" % driver if not driver.is_empty() else ""]))
+			summary.add_child(_dim_label("%s　%s" % [STYLE_NAMES.get(style_id, ""), trainer_name]))
 		row.focus_entered.connect(_show_entry.bind(entry))
 		# マウスを乗せている間だけ、その行を見せる。離れたら、カーソルが合っている行に戻す。
 		row.mouse_entered.connect(_show_entry.bind(entry))
@@ -391,11 +390,6 @@ func _show_entry(entry: Dictionary) -> void:
 		_trainer_name.add_theme_color_override("font_color", Color(0.5, 1, 0.6) if Session.is_default_trainer(shown_gate, str(trainer.get("id", ""))) else Style.COLOR_TEXT)
 		_favorite.text = "得意脚質：" + str(STYLE_NAMES.get(str(trainer.get("favorite_running_style", "")), ""))
 		_introduction.text = str(trainer.get("introduction", ""))
-
-	# ラボから起動したときは、その枠を走らせるCPUの名前を、トレーナー名の下に出す。
-	var driver := Session.driver_label_for_slot(shown_gate)
-	if not driver.is_empty():
-		_trainer_name.text += "\n［%s］" % driver
 
 
 ## オンラインで、その走者を誰が動かすか（Hud の KIND_PLAYER・KIND_CPU）。オフラインは空（札を出さない）。

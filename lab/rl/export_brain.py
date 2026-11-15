@@ -20,7 +20,8 @@ from pathlib import Path
 import numpy as np
 from sb3_contrib import MaskablePPO
 
-from godot_env import CLIENT, RL_DIR
+from godot_env import CLIENT, RL_DIR, load_settings
+from demos import demo_dir
 
 
 def b64(array) -> str:
@@ -37,6 +38,9 @@ def main():
     path = Path(args.file).resolve() if args.file else RL_DIR / "runs" / args.run / "latest.zip"
     run = path.stem if args.file else args.run
     model = MaskablePPO.load(path, device="cpu")
+    version = int(getattr(model, "observation_version", 1))
+    if version != load_settings()["observation_version"]:
+        raise ValueError(f"未対応の観測の版: {version}")
     policy = model.policy
     linears = [m for m in policy.mlp_extractor.policy_net if hasattr(m, "weight")] + [policy.action_net]
     layers = []
@@ -46,7 +50,7 @@ def main():
                        "act": "tanh" if i < len(linears) - 1 else "none"})
     saved = time.strftime("%Y-%m-%d %H:%M", time.localtime(path.stat().st_mtime))
     brain = {
-        "format": 1, "label": f"{run}（{saved}）", "source": str(path.relative_to(RL_DIR.parent.parent)),
+        "format": 1, "observation_version": version, "label": f"{run}（{saved}）", "source": str(path.relative_to(RL_DIR.parent.parent)),
         "obs_size": int(layers[0]["in"]), "action_sizes": [int(n) for n in model.action_space.nvec], "layers": layers,
     }
     out_dir = CLIENT / "data" / "cpu_brains"
@@ -58,8 +62,10 @@ def main():
     # 確かめ用：あなたの記録の場面から、見たもの・選べる操作・Python が選んだ操作。
     rng = np.random.default_rng(0)
     obs_all, mask_all = [], []
-    for f in sorted(glob.glob(str(RL_DIR / "runs" / "demos" / "2*.json"))):
+    for f in sorted(glob.glob(str((RL_DIR / "runs" / "demos" if version == 1 else demo_dir(version)) / "2*.json"))):
         d = json.loads(open(f, encoding="utf-8").read())
+        if int(d.get("observation_version", 1)) != version:
+            raise ValueError(f"お手本の観測の版が合いません: {f}")
         obs_all += d["obs"]
         mask_all += d["mask"]
     pick = rng.choice(len(obs_all), size=min(args.checks, len(obs_all)), replace=False)

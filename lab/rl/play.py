@@ -4,7 +4,8 @@
   いちばん上の行は、あなたの枠（レース選択で自分にした枠）。最初は「あなた」。CPUにすると観戦。
   その下の相手1〜7の行は、レース選択で決まった相手の枠に、枠の順に当てはめる。最初は7枠とも、rl_settings.json の play_run の育成の最新（まだ版が無ければ本採用）。
   選べるCPU：runs/保存/ の本採用（本採用_名前.zip。ゲームのCPUと同じ）と、控え（控え_名前.zip）と、
-  育成中の最新（runs/育成の名前/versions/ のいちばん新しい版。レースを始めるたびに読み直す）。
+  育成ごとの「最新」（runs/育成の名前/versions/ のいちばん新しい版。レースを始めるたびに読み直す）と、その下に保存された版（新しい順に play_versions 個）。
+  出すのは、今の観測の版（rl_settings.json の observation_version）で走れるものだけ。名前に、保存した日時を付ける。
 決定すると、ゲームのレース選択の画面（ふつうのオフラインと同じ）→ 出走表の「レース開始」でレース。
 レース中・結果の板のトレーナー欄には、その枠を走らせているCPUの名前が出る。
 結果の板の「もう1回」で同じ内容の次のレース、「戻る」でCPUを選ぶ画面へ。画面を閉じると終わる。
@@ -16,11 +17,13 @@
 
 import argparse
 import json
+import time
+import zipfile
 from pathlib import Path
 
 from sb3_contrib import MaskablePPO
 
-from godot_env import CLIENT, RL_DIR, Godot, load_settings
+from godot_env import require_model_version, validate_settings, CLIENT, RL_DIR, Godot, load_settings
 
 RUNS = RL_DIR / "runs"
 
@@ -35,18 +38,35 @@ SAVED = RUNS / "保存"
 OPPONENTS = 7
 
 
-def choices() -> list:
-    """選べるCPUの一覧：本採用（いちばん上）と、控え（名前の順）と、育成中の最新（育成の名前の順）。
-    id は「saved:名前」「latest:育成の名前」。path は、保存の版ならそのファイル、育成中なら versions/ の場所。"""
+def _zip_version(path: Path) -> int:
+    """保存したCPUの観測の版（印の無い古い頭は1）。"""
+    with zipfile.ZipFile(path) as z:
+        return int(json.loads(z.read("data")).get("observation_version", 1))
+
+
+def _stamp(path: Path) -> str:
+    return time.strftime("%m/%d %H:%M", time.localtime(path.stat().st_mtime))
+
+
+def choices(version: int, keep_versions: int) -> list:
+    """選べるCPUの一覧：本採用（いちばん上）と、控え（名前の順）と、育成ごとの「最新」とその下に保存された版（新しい順に keep_versions 個）。
+    今の観測の版（version）で走れるものだけを出す。保存の版の名前には、保存した日時を付ける。
+    id は「saved:名前」「latest:育成の名前」「version:育成の名前:版」。path は、そのファイル（最新は versions/ の場所）。"""
     items = []
     for kind in ("本採用", "控え"):
         for p in sorted(SAVED.glob(f"{kind}_*.zip")):
+            if _zip_version(p) != version:
+                continue
             name = p.stem.split("_", 1)[1]
-            items.append({"id": f"saved:{name}", "label": f"{name}（{kind}）", "path": str(p)})
+            items.append({"id": f"saved:{name}", "label": f"{name}（{kind} {_stamp(p)}）", "path": str(p)})
     for versions in sorted(RUNS.glob("*/versions")):
-        if any(versions.glob("*.zip")):
-            run = versions.parent.name
-            items.append({"id": f"latest:{run}", "label": f"{run}（育成中・最新）", "path": str(versions)})
+        files = [p for p in sorted(versions.glob("*.zip"), reverse=True) if _zip_version(p) == version]
+        if not files:
+            continue
+        run = versions.parent.name
+        items.append({"id": f"latest:{run}", "label": f"{run}（最新）", "path": str(versions)})
+        for p in files[:keep_versions]:
+            items.append({"id": f"version:{run}:{p.stem}", "label": f"{run} {_stamp(p)}", "path": str(p)})
     return items
 
 
@@ -81,9 +101,10 @@ def main():
     parser.add_argument("--shot", default="", help="確かめ用：この秒数で画面を撮って閉じる（秒,ファイル）")
     args = parser.parse_args()
     settings = load_settings()
-    items = choices()
+    validate_settings(settings)
+    items = choices(int(settings["observation_version"]), int(settings["play_versions"]))
     if not items:
-        raise SystemExit("runs/保存/ に、本採用・控えのCPUがありません")
+        raise SystemExit("今の版で走れるCPUがありません。まず育成を始めてください")
     ids = [i["id"] for i in items]
     first = f"latest:{settings['play_run']}"
     defaults = [first if first in ids else ids[0]] * OPPONENTS
@@ -98,17 +119,20 @@ def main():
     race_no = 0
     by_gate = {}
     labels = {}
+    label_by_id = {i["id"]: i["label"] for i in items}
     try:
         while True:
             message = godot.read()
             if "start" in message:
                 spec = message["start"]
                 by_gate = {int(g): d for g, d in spec.get("drivers", {}).items()}
-                labels = {int(g): l for g, l in spec.get("labels", {}).items()}
+                # ターミナルに出す、その枠を走らせるCPUの名前（選択画面と同じ名前）。
+                labels = {g: label_by_id.get(d, d) for g, d in by_gate.items()}
                 for d in sorted(set(by_gate.values())):
                     file = drivers.refresh(d)
+                    require_model_version(drivers.get(d), settings["observation_version"], d)
                     if d.startswith("latest:"):
-                        print(f"  {d.split(':', 1)[1]}（育成中・最新）は {Path(file).name} の版", flush=True)
+                        print(f"  {d.split(':', 1)[1]}（最新）は {Path(file).name} の版", flush=True)
                 race_no += 1
                 who = "あなたは %d 枠" % (spec["human_gate"] + 1) if spec["human_gate"] >= 0 else "観戦（%d 枠を追う）" % (spec["watch_gate"] + 1)
                 print(f"レース {race_no}：{int(spec['distance_m'])}m、{who}", flush=True)

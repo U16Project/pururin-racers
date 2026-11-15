@@ -50,13 +50,12 @@ func _initialize() -> void:
 		push_error("Python につながりませんでした")
 		quit(1)
 		return
-	_link.send({"obs_size": RlObserve.size(int(args.get("field", "8"))), "action_sizes": RlObserve.ACTION_SIZES})
+	_link.send({"obs_size": RlObserve.size(int(args.get("field", "8"))), "action_sizes": RlObserve.ACTION_SIZES, "observation_version": RlObserve.VERSION})
 	if args.get("select", "") == "1":
 		var choices: Dictionary = _link.receive()
 		_choices = choices.get("items", [])
 		_defaults = choices.get("defaults", [])
 		RaceSession.race_starter = _start_from_select
-		RaceSession.slot_driver_label = _driver_label_for_slot
 		# レース選択の「戻る」は、ゲームのメニューではなく、CPUを選ぶ画面へ。
 		RaceSession.race_select_back = func(): _show_picker.call_deferred()
 		_show_picker.call_deferred()
@@ -87,8 +86,6 @@ func _start_from_select() -> void:
 	var seats: Array = []
 	var trainers := {}
 	var drivers := {}
-	var labels := {}
-	var shorts := {}
 	var others: Array = _selection.get("others", [])
 	var me := str(_selection.get("me", RlPicker.HUMAN))
 	var human_gate := -1
@@ -110,43 +107,12 @@ func _start_from_select() -> void:
 			index += 1
 		seats.append(gate)
 		drivers[str(gate)] = driver
-		labels[str(gate)] = _label_of(driver)
-		shorts[str(gate)] = _short_of(driver)
 	_play_spec = {
 		"distance_m": RaceSession.selected_distance_m(), "lineup": lineup, "seats": seats, "trainers": trainers,
-		"human_gate": human_gate, "watch_gate": watch_gate, "drivers": drivers, "labels": labels, "shorts": shorts,
+		"human_gate": human_gate, "watch_gate": watch_gate, "drivers": drivers, 
 	}
 	current_scene.queue_free()
 	_play()
-
-
-## レース選択と出走表のトレーナー欄に出す、その枠を走らせるCPUの名前（あなたが走る枠は空）。
-## 相手の枠は、空きの枠を除いて、枠の順に相手1〜7。
-func _driver_label_for_slot(slot: int) -> String:
-	var me := str(_selection.get("me", RlPicker.HUMAN))
-	if RaceSession.is_user_slot(slot):
-		return "" if me == RlPicker.HUMAN else _short_of(me)
-	var others: Array = _selection.get("others", [])
-	var index := 0
-	for gate in RaceSession.SLOT_COUNT:
-		if RaceSession.is_user_slot(gate) or RaceSession.slot_pururin_id(gate).is_empty():
-			continue
-		if gate == slot:
-			return _short_of(str(others[index])) if index < others.size() else ""
-		index += 1
-	return ""
-
-
-## 順位表に出す、短いCPUの名前（例：「saved:末脚」は「末脚」）。
-static func _short_of(id: String) -> String:
-	return id.get_slice(":", 1)
-
-
-func _label_of(id: String) -> String:
-	for choice: Dictionary in _choices:
-		if str(choice["id"]) == id:
-			return str(choice["label"])
-	return id
 
 
 ## 人と走るレースを1本始める（くじの番号だけ毎回変える）。
@@ -180,6 +146,10 @@ func _next() -> void:
 		return
 	if str(message["cmd"]) != "reset":
 		push_error("レースの外で、reset 以外の指示が来ました: " + str(message["cmd"]))
+		quit(1)
+		return
+	if int(message["settings"].get("observation_version", 1)) != RlObserve.VERSION:
+		push_error("育成設定の観測の版が合いません")
 		quit(1)
 		return
 	_current = RlRace.new()

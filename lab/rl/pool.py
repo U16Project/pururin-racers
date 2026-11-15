@@ -19,7 +19,7 @@ import json
 import random
 from pathlib import Path
 
-from godot_env import RL_DIR, load_settings
+from godot_env import RL_DIR, load_settings, require_model_version
 
 FIXED = "固定_"
 ## pool.plan で「その育成の古い版からくじ」を表す頭。
@@ -28,6 +28,7 @@ RUN = "run:"
 
 class Pool:
     def __init__(self, settings: dict, run: str = ""):
+        self.observation_version = settings["observation_version"]
         self.settings = settings["pool"]
         self.dir = RL_DIR / "runs" / self.settings["dir"]
         self.dir.mkdir(parents=True, exist_ok=True)
@@ -113,6 +114,8 @@ class Pool:
             except Exception:
                 # 育成が書き込んでいる途中だったなど（読み方によって、いろいろな失敗の形になる）。前に読んだものを使い続ける。
                 pass
+        if self._always_model is not None:
+            require_model_version(self._always_model, self.observation_version, str(path))
         return self._always_model
 
     def model(self, name: str):
@@ -127,6 +130,7 @@ class Pool:
             except Exception:
                 # 外された・書き込みの途中など。読めなければ、その席は本命が走る。
                 return None
+        require_model_version(self._models[name], self.observation_version, name)
         return self._models[name]
 
     # ------------------------------------------------------------ 成績

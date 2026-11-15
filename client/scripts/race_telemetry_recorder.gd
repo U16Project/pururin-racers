@@ -1,7 +1,8 @@
 extends RefCounted
 ## ローカル実機レースの再検証用テレメトリを user:// に保存する。
+## 取るのは手元で動かすときだけ（書き出した版では取らない）。場所と取っておく本数は data/config/race_logs.json。
 
-const LOG_DIRECTORY := "user://pururin_race_logs"
+const CONFIG_PATH := "res://data/config/race_logs.json"
 const FORMAT_VERSION := 1
 
 var sample_interval_s: float = 0.5
@@ -13,7 +14,19 @@ var _samples: Array = []
 var _last_file_path := ""
 
 
+## 記録の設定（場所 folder・取っておく本数 keep_max）。
+static func config() -> Dictionary:
+	return JSON.parse_string(FileAccess.get_file_as_string(CONFIG_PATH))
+
+
+## 書き出した版（Web版・配る版）では取らない。
+static func enabled() -> bool:
+	return not OS.has_feature("template")
+
+
 func start(race_distance_m: float, interval_s: float = 0.5) -> void:
+	if not enabled():
+		return
 	_race_distance_m = race_distance_m
 	sample_interval_s = maxf(interval_s, 0.1)
 	_started_at = Time.get_datetime_string_from_system(true)
@@ -50,14 +63,16 @@ func finalize(elapsed_s: float, runners: Array) -> String:
 		"samples": _samples,
 		"final_results": _final_results(runners),
 	}
-	var directory_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(LOG_DIRECTORY))
+	var settings := config()
+	var log_directory := str(settings["folder"])
+	var directory_error := DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(log_directory))
 	if directory_error != OK and directory_error != ERR_ALREADY_EXISTS:
 		push_error("レーステレメトリの保存先を作成できません: %s" % error_string(directory_error))
 		_active = false
 		return ""
 	var stamp := _started_at.replace("-", "").replace(":", "").replace("T", "_")
 	var filename := "%s_%dm.json" % [stamp, int(roundi(_race_distance_m))]
-	_last_file_path = "%s/%s" % [LOG_DIRECTORY, filename]
+	_last_file_path = "%s/%s" % [log_directory, filename]
 	var file := FileAccess.open(_last_file_path, FileAccess.WRITE)
 	if file == null:
 		push_error("レーステレメトリを保存できません: %s" % _last_file_path)
@@ -67,7 +82,16 @@ func finalize(elapsed_s: float, runners: Array) -> String:
 	file.close()
 	_active = false
 	print("レーステレメトリ保存: %s（%dサンプル）" % [_last_file_path, _samples.size()])
+	prune(log_directory, int(settings["keep_max"]))
 	return _last_file_path
+
+
+## 記録が keep_max 本を超えたら、古いもの（名前が日時なので、名前の順で前のもの）から消す。
+static func prune(directory: String, keep_max: int) -> void:
+	var names: Array = Array(DirAccess.get_files_at(directory)).filter(func(n: String) -> bool: return n.ends_with(".json"))
+	names.sort()
+	for i in maxi(names.size() - keep_max, 0):
+		DirAccess.remove_absolute(directory.path_join(str(names[i])))
 
 
 func is_recording() -> bool:

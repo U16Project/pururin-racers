@@ -74,6 +74,60 @@
       "allocation": {"top_speed": 5, "acceleration": 4, "stamina": 7, "cardio": 5, "aero": 6, "pack": 4, "contact_resistance": 6, "handling": 3}
     }
     ,{"id":"cpu-8","display_name":"ルリ","trainer_id":"kaede","control_kind":"cpu","attribute":"water","running_style":"stalk","allocation":{"top_speed":6,"acceleration":4,"stamina":6,"cardio":5,"aero":5,"pack":6,"contact_resistance":4,"handling":4}}
-    ,{"id":"cpu-9","display_name":"ワカバ","trainer_id":"ibuki","control_kind":"cpu","attribute":"wind","running_style":"closer","allocation":{"top_speed":6,"acceleration":7,"stamina":4,"cardio":3,"aero":8,"pack":3,"contact_resistance":3,"handling":6}}
+    ,{"id":"cpu-9","display_name":"ワカバ","trainer_id":"ibuki","control_kind":"cpu","attribute":"wind","running_style":"closer","allocation":{"top_speed":6,"acceleration":7,"stamina":4,"cardio":3,"aero":8,"pack":3,"contact_resistance":3,"handling":6}},
+    {
+      "id": "cpu-10",
+      "display_name": "ミカン",
+      "trainer_id": "hinata",
+      "control_kind": "cpu",
+      "attribute": "fire",
+      "running_style": "pace",
+      "allocation": {"top_speed": 5, "acceleration": 5, "stamina": 5, "cardio": 4, "aero": 4, "pack": 7, "contact_resistance": 3, "handling": 7}
+    },
+    {
+      "id": "cpu-11",
+      "display_name": "サラ",
+      "trainer_id": "ren",
+      "control_kind": "cpu",
+      "attribute": "earth",
+      "running_style": "pace",
+      "allocation": {"top_speed": 4, "acceleration": 4, "stamina": 6, "cardio": 5, "aero": 3, "pack": 4, "contact_resistance": 9, "handling": 5}
+    },
+    {
+      "id": "cpu-12",
+      "display_name": "ツムジ",
+      "trainer_id": "tsubaki",
+      "control_kind": "cpu",
+      "attribute": "wind",
+      "running_style": "stalk",
+      "allocation": {"top_speed": 6, "acceleration": 5, "stamina": 4, "cardio": 4, "aero": 9, "pack": 4, "contact_resistance": 3, "handling": 5}
+    },
+    {
+      "id": "cpu-13",
+      "display_name": "シオ",
+      "trainer_id": "lotta",
+      "control_kind": "cpu",
+      "attribute": "water",
+      "running_style": "escape",
+      "allocation": {"top_speed": 6, "acceleration": 3, "stamina": 9, "cardio": 7, "aero": 5, "pack": 2, "contact_resistance": 4, "handling": 4}
+    },
+    {
+      "id": "cpu-14",
+      "display_name": "クルミ",
+      "trainer_id": "ordo",
+      "control_kind": "cpu",
+      "attribute": "earth",
+      "running_style": "stalk",
+      "allocation": {"top_speed": 3, "acceleration": 6, "stamina": 5, "cardio": 8, "aero": 4, "pack": 7, "contact_resistance": 4, "handling": 3}
+    },
+    {
+      "id": "cpu-15",
+      "display_name": "ユメ",
+      "trainer_id": "mio",
+      "control_kind": "cpu",
+      "attribute": "fire",
+      "running_style": "pace",
+      "allocation": {"top_speed": 8, "acceleration": 3, "stamina": 4, "cardio": 5, "aero": 6, "pack": 5, "contact_resistance": 2, "handling": 7}
+    }
   ]
 }

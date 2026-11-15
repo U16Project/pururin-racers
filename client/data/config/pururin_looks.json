@@ -1040,6 +1040,624 @@
           "color": "#F2EEE6"
         }
       ]
+    },
+    "cpu-10": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 0.98,
+        "base_height": 0.2
+      },
+      "body_texture": null,
+      "finish": "ember",
+      "body_motion": {
+        "set": "standard",
+        "amount": 1.1,
+        "speed": 1.15
+      },
+      "primary_color_index": 1,
+      "secondary_color": "#FFE9B8",
+      "secondary_top_ratio": 0.25,
+      "outline_width": 0.014,
+      "top": {
+        "part": "sunflower",
+        "params": {}
+      },
+      "sides": {
+        "part": "bird_wing",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "tuft_tail",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 19.0,
+        "eye_height_ratio": 0.44,
+        "eye_size": [
+          0.066,
+          0.112
+        ],
+        "eye_tilt_deg": 12.0,
+        "eye_lashes": 0,
+        "eye_colors": [
+          "#5A2A08",
+          "#FFB060"
+        ],
+        "mouth_height_ratio": 0.31,
+        "cheek_yaw_deg": 35.0,
+        "cheek_height_ratio": 0.31,
+        "cheek_color": "#FFD0A099",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_round",
+            "brows": "brow_maro",
+            "mouth": "mouth_open_normal",
+            "cheeks": "cheek_blush"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_open_joy"
+          },
+          "anger": {
+            "effect": "effect_anger_white",
+            "eyes": "eyes_round_anger",
+            "brows": "brow_maro_angry",
+            "mouth": "mouth_open_anger"
+          },
+          "sorrow": {
+            "eyes": "eyes_round_sorrow",
+            "brows": "brow_maro_sad",
+            "mouth": "mouth_open_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_open_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_sparkle",
+            "mouth": "mouth_open_first_place"
+          },
+          "push_win": {
+            "effect": "effect_anger_white",
+            "eyes": "eyes_round_effort",
+            "brows": "brow_maro_angry",
+            "mouth": "mouth_open_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "brows": "brow_maro_sad",
+            "mouth": "mouth_open_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_sun",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFE14D"
+        }
+      ]
+    },
+    "cpu-11": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 1.12,
+        "base_height": 0.24
+      },
+      "body_texture": null,
+      "finish": "matte",
+      "body_motion": {
+        "set": "standard",
+        "amount": 0.7,
+        "speed": 0.85
+      },
+      "primary_color_index": 2,
+      "secondary_color": "#5A6FE0",
+      "secondary_top_ratio": 0.2,
+      "outline_width": 0.014,
+      "top": {
+        "part": "unicorn_horn",
+        "params": {}
+      },
+      "sides": {
+        "part": "crystal_side",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "crystal_tail",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 21.0,
+        "eye_height_ratio": 0.43,
+        "eye_size": [
+          0.07,
+          0.112
+        ],
+        "eye_tilt_deg": -6.0,
+        "eye_lashes": 0,
+        "eye_colors": [
+          "#1E2A5A",
+          "#7A8CFF"
+        ],
+        "mouth_height_ratio": 0.31,
+        "cheek_yaw_deg": 36.0,
+        "cheek_height_ratio": 0.31,
+        "cheek_color": "#F08A6E99",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_sharp",
+            "brows": "brow_raise",
+            "mouth": "mouth_flat_normal"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_flat_joy"
+          },
+          "anger": {
+            "eyes": "eyes_sharp_anger",
+            "brows": "brow_angry",
+            "mouth": "mouth_flat_anger"
+          },
+          "sorrow": {
+            "eyes": "eyes_sharp_sorrow",
+            "brows": "brow_sad",
+            "mouth": "mouth_flat_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_flat_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_sharp",
+            "mouth": "mouth_flat_first_place"
+          },
+          "push_win": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_sharp_effort",
+            "brows": "brow_angry",
+            "mouth": "mouth_flat_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "brows": "brow_sad",
+            "mouth": "mouth_flat_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_crown",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFE14D"
+        }
+      ]
+    },
+    "cpu-12": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 1.1,
+        "base_height": 0.18
+      },
+      "body_texture": null,
+      "finish": "sheer",
+      "body_motion": {
+        "set": "standard",
+        "amount": 1.2,
+        "speed": 1.1
+      },
+      "primary_color_index": 0,
+      "secondary_color": "#FFFFFF",
+      "secondary_top_ratio": 0.0,
+      "outline_width": 0.014,
+      "top": {
+        "part": "fox_ears",
+        "params": {}
+      },
+      "sides": {
+        "part": "dragon_wing",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "dragon_tail",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 24.0,
+        "eye_height_ratio": 0.42,
+        "eye_size": [
+          0.084,
+          0.122
+        ],
+        "eye_tilt_deg": -10.0,
+        "eye_lashes": 2,
+        "eye_colors": [
+          "#0E3D3A",
+          "#4FD6C4"
+        ],
+        "mouth_height_ratio": 0.3,
+        "cheek_yaw_deg": 38.0,
+        "cheek_height_ratio": 0.3,
+        "cheek_color": "#FF99B899",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_line",
+            "brows": "brow_raise",
+            "mouth": "mouth_frown_normal"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_frown_joy"
+          },
+          "anger": {
+            "eyes": "eyes_line",
+            "brows": "brow_angry",
+            "mouth": "mouth_frown_anger"
+          },
+          "sorrow": {
+            "effect": "effect_tears",
+            "eyes": "eyes_relax",
+            "brows": "brow_sad",
+            "mouth": "mouth_frown_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_frown_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_joy",
+            "mouth": "mouth_frown_first_place"
+          },
+          "push_win": {
+            "eyes": "eyes_line",
+            "brows": "brow_angry",
+            "mouth": "mouth_frown_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "brows": "brow_sad",
+            "mouth": "mouth_frown_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_leaf",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFFFFF"
+        }
+      ]
+    },
+    "cpu-13": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 0.84,
+        "base_height": 0.2
+      },
+      "body_texture": null,
+      "finish": "gloss",
+      "body_motion": {
+        "set": "standard",
+        "amount": 1.0,
+        "speed": 1.0
+      },
+      "primary_color_index": 0,
+      "secondary_color": "#FFFFFF",
+      "secondary_top_ratio": 0.3,
+      "outline_width": 0.014,
+      "top": {
+        "part": "bubble_crown",
+        "params": {}
+      },
+      "sides": {
+        "part": "fin_flipper",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "tail_flipper",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 21.0,
+        "eye_height_ratio": 0.43,
+        "eye_size": [
+          0.07,
+          0.112
+        ],
+        "eye_tilt_deg": 0.0,
+        "eye_lashes": 0,
+        "eye_colors": [
+          "#0A2A5A",
+          "#6BB8FA"
+        ],
+        "mouth_height_ratio": 0.31,
+        "cheek_yaw_deg": 36.0,
+        "cheek_height_ratio": 0.31,
+        "cheek_color": "#FF99B899",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_joy",
+            "brows": "brow_thick",
+            "mouth": "mouth_fang_normal",
+            "cheeks": "cheek_freckles"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_fang_joy"
+          },
+          "anger": {
+            "eyes": "eyes_squeeze",
+            "brows": "brow_thick_angry",
+            "mouth": "mouth_fang_anger"
+          },
+          "sorrow": {
+            "effect": "effect_tears",
+            "eyes": "eyes_relax",
+            "brows": "brow_thick_sad",
+            "mouth": "mouth_fang_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_fang_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_joy",
+            "mouth": "mouth_fang_first_place"
+          },
+          "push_win": {
+            "eyes": "eyes_squeeze",
+            "brows": "brow_thick_angry",
+            "mouth": "mouth_fang_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "brows": "brow_thick_sad",
+            "mouth": "mouth_fang_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_fish",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFFFFF"
+        }
+      ]
+    },
+    "cpu-14": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 0.82,
+        "base_height": 0.24
+      },
+      "body_texture": null,
+      "finish": "matte",
+      "body_motion": {
+        "set": "standard",
+        "amount": 0.7,
+        "speed": 0.85
+      },
+      "primary_color_index": 1,
+      "secondary_color": "#FFFFFF",
+      "secondary_top_ratio": 0.0,
+      "outline_width": 0.014,
+      "top": {
+        "part": "sakura",
+        "params": {}
+      },
+      "sides": {
+        "part": "butterfly_wing",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "curl_tail",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 21.0,
+        "eye_height_ratio": 0.43,
+        "eye_size": [
+          0.07,
+          0.112
+        ],
+        "eye_tilt_deg": -6.0,
+        "eye_lashes": 0,
+        "eye_colors": [
+          "#3A1E08",
+          "#D99A50"
+        ],
+        "mouth_height_ratio": 0.31,
+        "cheek_yaw_deg": 36.0,
+        "cheek_height_ratio": 0.31,
+        "cheek_color": "#F08A6E99",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_cat",
+            "brows": "brow_thick",
+            "mouth": "mouth_omega_normal"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_omega_joy"
+          },
+          "anger": {
+            "eyes": "eyes_cat_anger",
+            "brows": "brow_thick_angry",
+            "mouth": "mouth_omega_anger"
+          },
+          "sorrow": {
+            "eyes": "eyes_cat_sorrow",
+            "brows": "brow_thick_sad",
+            "mouth": "mouth_omega_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_omega_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_cat",
+            "mouth": "mouth_omega_first_place"
+          },
+          "push_win": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_cat_effort",
+            "brows": "brow_thick_angry",
+            "mouth": "mouth_omega_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "brows": "brow_thick_sad",
+            "mouth": "mouth_omega_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_flower",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFC2D9"
+        }
+      ]
+    },
+    "cpu-15": {
+      "body": {
+        "type": "builtin",
+        "shape": "dome",
+        "height": 1.14,
+        "base_height": 0.2
+      },
+      "body_texture": null,
+      "finish": "ember",
+      "body_motion": {
+        "set": "standard",
+        "amount": 1.1,
+        "speed": 1.15
+      },
+      "primary_color_index": 3,
+      "secondary_color": "#FFFFFF",
+      "secondary_top_ratio": 0.2,
+      "outline_width": 0.014,
+      "top": {
+        "part": "star_antenna",
+        "params": {}
+      },
+      "sides": {
+        "part": "small_angel_wing",
+        "yaw_deg": 84,
+        "height_ratio": 0.34,
+        "params": {}
+      },
+      "tail": {
+        "part": "star_tail",
+        "height_ratio": 0.3,
+        "params": {}
+      },
+      "face": {
+        "eye_yaw_deg": 19.0,
+        "eye_height_ratio": 0.44,
+        "eye_size": [
+          0.066,
+          0.112
+        ],
+        "eye_tilt_deg": 12.0,
+        "eye_lashes": 0,
+        "eye_colors": [
+          "#3A2A08",
+          "#C8901E"
+        ],
+        "mouth_height_ratio": 0.31,
+        "cheek_yaw_deg": 35.0,
+        "cheek_height_ratio": 0.31,
+        "cheek_color": "#FFD0A099",
+        "expressions": {
+          "normal": {
+            "eyes": "eyes_gloss",
+            "mouth": "mouth_o_normal",
+            "cheeks": "cheek_blush"
+          },
+          "joy": {
+            "eyes": "eyes_joy",
+            "mouth": "mouth_o_joy"
+          },
+          "anger": {
+            "effect": "effect_anger_white",
+            "eyes": "eyes_gloss_anger",
+            "mouth": "mouth_o_anger"
+          },
+          "sorrow": {
+            "eyes": "eyes_gloss_sorrow",
+            "mouth": "mouth_o_sorrow"
+          },
+          "relax": {
+            "eyes": "eyes_relax",
+            "mouth": "mouth_o_relax"
+          },
+          "first_place": {
+            "effect": "effect_sparkle",
+            "eyes": "eyes_gloss",
+            "mouth": "mouth_o_first_place"
+          },
+          "push_win": {
+            "effect": "effect_anger_white",
+            "eyes": "eyes_gloss_effort",
+            "mouth": "mouth_o_push_win"
+          },
+          "push_lose": {
+            "effect": "effect_sweat",
+            "eyes": "eyes_squeeze",
+            "mouth": "mouth_o_push_lose"
+          }
+        }
+      },
+      "marks": [
+        {
+          "part": "mark_note",
+          "yaw_deg": 180,
+          "height_ratio": 0.58,
+          "size": 0.2,
+          "color": "#FFFFFF"
+        }
+      ]
     }
   }
 }

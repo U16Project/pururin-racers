@@ -22,9 +22,9 @@ const DISTANCE_SCALE_M := 3000.0
 const COURSE_LOOK_M := 300.0
 const FINAL_STRAIGHT_SCALE_M := 500.0
 const SECONDS_SCALE := 20.0
-## トレーナーの性格の数字（trainer_styles.json の frame）。並べる順と、割る数。範囲の数字は [下, 上] の2つ。
-const FRAME_KEYS := [["place", 8.0], ["late_place", 8.0], ["retake", 1.0], ["hold", 1.0], ["save_after_s", SECONDS_SCALE],
-	["follow_m", SECONDS_SCALE], ["follow_only_within_place", 8.0], ["spurt_m_2000", 2000.0]]
+## 観測の版。頭とお手本に保存し、合わない組合せは使わない。
+const VERSION := 2
+const FRAME_KEYS := ["stick", "draft", "rear", "contact", "steady", "keep"]
 ## 集団の位置：前・中・後ろ・ひとり。
 const GROUP_SLOTS := 4
 
@@ -38,20 +38,13 @@ static func size(field: int) -> int:
 	var attrs := (StatsConfig.values()["attributes"] as Dictionary).size()
 	var styles := StatsMath.rank_group_count()
 	var race := 12 + 5 + 3 + GROUP_SLOTS
-	var me := 17 + stats * 2 + attrs + styles + _frame_size()
+	var me := 17 + stats * 2 + attrs + styles + FRAME_KEYS.size()
 	return race + me + (field - 1) * _other_size()
 
 
 static func _other_size() -> int:
 	var stats := (StatsConfig.values()["stat_ids"] as Array).size()
 	return 14 + stats * 2 + (StatsConfig.values()["attributes"] as Dictionary).size() + StatsMath.rank_group_count()
-
-
-static func _frame_size() -> int:
-	var n := 0
-	for key: Array in FRAME_KEYS:
-		n += 1 if str(key[0]) in ["retake", "hold", "follow_only_within_place"] else 2
-	return n
 
 
 ## ctx：{distance_m, elapsed_s, curve, route, inside, field, trainer_id（無くてよい）}。大きさをそろえる数は cpu_brain.json の observe。
@@ -289,18 +282,10 @@ static func trainer_frame(trainer_id: String) -> Dictionary:
 static func _frame(trainer_id: String) -> PackedFloat32Array:
 	if _frames.has(trainer_id):
 		return _frames[trainer_id]
-	var frame := trainer_frame(trainer_id)
 	var out := PackedFloat32Array()
-	for key: Array in FRAME_KEYS:
-		var name := str(key[0])
-		var scale := float(key[1])
-		var value: Variant = frame.get(name, frame.get("place", [0, 0]) if name == "late_place" else null)
-		if name in ["retake", "hold", "follow_only_within_place"]:
-			out.append(float(value) / scale if value != null else 0.0)
-		else:
-			var pair: Array = value if value is Array else [0, 0]
-			out.append(float(pair[0]) / scale)
-			out.append(float(pair[1]) / scale)
+	var current := trainer_frame(trainer_id)
+	for key: String in FRAME_KEYS:
+		out.append(float(current.get(key, 0.0)))
 	_frames[trainer_id] = out
 	return out
 

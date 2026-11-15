@@ -18,6 +18,7 @@ const ONLINE_SERVER_SCRIPT := "res://scripts/online/online_server.gd"
 const RaceSession := preload("res://scripts/race_session.gd")
 const PururinRosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const BrainSituation := preload("res://scripts/cpu_brain/brain_situation.gd")
+const CpuTrainers := preload("res://scripts/config/cpu_trainers_config.gd")
 const RlObserve := preload("res://scripts/cpu_brain/brain_observe.gd")
 const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
@@ -58,8 +59,6 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 	var seat_gates: Array = (spec.get("seats", []) as Array).map(func(g): return int(g))
 	_human_gate = int(spec.get("human_gate", -1))
 	_watch_gate = int(spec.get("watch_gate", -1))
-	# 枠ごとの、走らせているCPUの名前（人と走るとき、トレーナー欄に出す）。
-	var labels: Dictionary = spec.get("labels", {})
 	var OnlineServerScript: GDScript = load(ONLINE_SERVER_SCRIPT)
 	var entries: Array = []
 	# 席ごとのトレーナー（レース選択で選んだもの）。無ければ、その子のふだんのトレーナー。
@@ -71,7 +70,10 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 		var pururin := PururinRosterConfig.pururin_by_id(str(spec["lineup"][gate]))
 		var trainer_id := str(trainers.get(str(gate), RlObserve.default_trainer(str(pururin["id"]))))
 		var peer := PEER_BASE + gate + 1 if seat_gates.has(gate) else 0
-		var entry: Dictionary = OnlineServerScript._entry(gate, pururin, peer, str(labels.get(str(gate), TRAINEE_NAME)) if peer != 0 else "")
+		var entry: Dictionary = OnlineServerScript._entry(gate, pururin, peer, TRAINEE_NAME if peer != 0 else "")
+		# CPUの席も、トレーナー欄はその席のトレーナーの名前（どのCPUかは、最初の選択画面で分かる）。
+		if peer != 0:
+			entry["trainer_name"] = str(CpuTrainers.by_id(trainer_id).get("name", ""))
 		# 人の席：この画面の「自分」。名前は、トレーナーの名前。
 		if gate == _human_gate:
 			entry["player"] = true
@@ -80,8 +82,9 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 		if peer != 0:
 			_seats[gate] = {
 				"peer": peer, "steer": 0.0, "brake": false, "last_progress": 0.0, "mid_place": 0, "dash": 0, "boost": 0,
-				"steps": 0, "paid": false, "owed": 0.0, "paid_now": 0.0, "fit_progress": 0.0, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id),
-				"fit": {"place_hit": 0, "place_n": 0, "draft_hit": 0, "draft_n": 0, "spurt_hits": 0, "spurt_misses": 0, "opening": 0, "stamina_at_last": null, "drafting": 0, "rearing": 0, "running": 0},
+				"steps": 0, "paid": false, "owed": 0.0, "fit_progress": 0.0, "queue": [], "dash_at": [], "boost_at": [], "notch": 0.0, "trainer_id": trainer_id, "frame": RlObserve.trainer_frame(trainer_id), "running_style": str(pururin["running_style"]),
+				"points": {}, "previous_notch": null, "line_pending": false,
+				"fit": {"spurt_hits": 0, "spurt_misses": 0, "opening": 0, "stick_m": 0.0, "draft_m": 0.0, "rear_m": 0.0, "contact_m": 0.0, "notch_changes": 0, "line_changes": 0, "keep_stamina": [null, null, null]},
 				"boost_remaining": [],
 			}
 	entries = OnlineServerScript._with_runner_ids(entries)
@@ -97,20 +100,10 @@ func start(link, spec: Dictionary, settings: Dictionary) -> void:
 	RaceSession.set_online_entries([])
 	if _on_screen():
 		_show_for_human()
-		_name_runners(spec.get("shorts", {}))
 	elif spec.has("log_path"):
 		_recorder = RaceTelemetryRecorder.new()
-		_name_runners(spec.get("shorts", {}))
 	var track: Path3D = _race.get("_track")
 	_inside = BrainSituation.inside_sign(track.curve)
-
-
-## 順位表で、どのCPUが走らせているか分かるように、名前の後ろにCPUの短い名前を付ける（例：「ミント［脚質1 20:27］」）。
-func _name_runners(shorts: Dictionary) -> void:
-	for runner: Node3D in _race.call("get_runners_for_simulation"):
-		var short := str(shorts.get(str(int(runner.get("gate_index"))), ""))
-		if not short.is_empty():
-			runner.set("display_name", "%s［%s］" % [str(runner.get("display_name")), short])
 
 
 ## 画面に出すレースか（人が走る、または観戦する）。
@@ -178,8 +171,10 @@ func _process(delta: float) -> void:
 		var gate := int(runner.get("gate_index"))
 		if _seats.has(gate) and int(_seats[gate]["mid_place"]) == 0 and float(runner.call("get_race_progress")) >= float(_spec["distance_m"]) * 0.5:
 			_seats[gate]["mid_place"] = _place_of(runner, runners)
-		if _seats.has(gate) and not bool(runner.call("is_finished")):
-			_owe(_seats[gate], _heart_penalty(runner, delta))
+		if _seats.has(gate) and not bool(_seats[gate]["paid"]):
+			_count_fit(runner, runners, _seats[gate])
+			if not bool(runner.call("is_finished")):
+				_owe(_seats[gate], _heart_penalty(runner, delta), "heart")
 	if _first_finish_s < 0.0 and runners.any(func(r): return bool(r.call("is_finished"))):
 		_first_finish_s = _elapsed
 	if _escape.is_empty():
@@ -231,7 +226,6 @@ func _report(runner: Node3D, runners: Array, seat: Dictionary) -> Dictionary:
 	var reward := 0.0
 	var mask: Array = IDLE_MASK
 	if not finished:
-		_count_fit(runner, runners, seat)
 		reward = _progress_reward(runner, seat) + _take_owed(seat)
 		mask = Array(RlObserve.mask_from(me, float(runner.call("get_drive_level")), _inside))
 	elif not bool(seat["paid"]):
@@ -253,6 +247,7 @@ func _apply(gate: int, seat: Dictionary, action: Array) -> void:
 	seat["notch"] = float(int(action[0]) - 1)
 	# ラインの「内」は、offset では _inside の向き。
 	seat["steer"] = float(int(action[1]) - 1) * -_inside
+	seat["line_pending"] = int(action[1]) != 1
 	seat["brake"] = int(action[2]) == 1
 	if int(action[3]) == 1 and bool(_race.call("trigger_remote_action", int(seat["peer"]), "dash")):
 		seat["dash"] = int(seat["dash"]) + 1
@@ -291,66 +286,56 @@ func _place_of(runner: Node3D, runners: Array) -> int:
 	return better + 1
 
 
-## 性格に合った走り・集団の得・体力温存の点を、その場で渡す分として貯める（次に送るときに渡す。_take_owed）。
-## 点の合計の最大は、ゴールでまとめて渡していたときと同じ。続けている間ずっと関係する点は、その区間を進んだ距離の割合で少しずつ渡す。
-## - 脚質どおりの順位：中ほど（style.mid_from〜mid_to の割合）は「いたい順位」、終盤（mid_to より後）は、終盤にいたい順位（late_place）があるトレーナーだけ、その順位。
-##   いたい順位にいた間に進んだ距離 ÷ 数える区間の長さ × style.place。
-## - 風よけの使い方：中ほどで、後ろにつく性格は風よけをもらっていた間、つかない性格はもらっていなかった間に進んだ距離 ÷ 中ほどの長さ × style.draft。
-## - 集団の得：前からの風よけ・後ろからの後方支援をもらっていた間に進んだ距離 ÷ レースの距離 × group.draft・group.rear。
-## - 体力温存：残りの距離が reward.stamina.last_ratio に入ったその時に渡す（_stamina_penalty）。
-## 記録用の数え（place_hit など）は、0.5秒ごとの回数のまま。
+## 毎こま、進んだ距離に応じて性格の点を渡す。地点の通過と実際に変わった操作もここで数える。
 func _count_fit(runner: Node3D, runners: Array, seat: Dictionary) -> void:
 	var distance := float(_spec["distance_m"])
-	var progress := minf(float(runner.call("get_race_progress")), distance)
+	var progress := clampf(float(runner.call("get_race_progress")), 0.0, distance)
 	var from := float(seat["fit_progress"])
 	seat["fit_progress"] = progress
-	_owe(seat, _gap_running_penalty(runner, runners, from, progress))
+	_owe(seat, _gap_running_penalty(runner, runners, from, progress), "gap_running")
 	var fit: Dictionary = seat["fit"]
-	var reward: Dictionary = _settings["reward"]
-	if fit["stamina_at_last"] == null and 1.0 - progress / distance <= float(reward["stamina"]["last_ratio"]):
-		fit["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
-		_owe(seat, _stamina_penalty(float(fit["stamina_at_last"])))
-	var style: Dictionary = reward["style"]
-	var group: Dictionary = reward.get("group", {})
-	var draft: Dictionary = runner.call("get_telemetry_snapshot")["draft"]
-	var drafting := float(draft["received_draft_p"]) >= float(style["draft_at_least"])
-	var rearing := float(draft.get("rear_assist_air_factor", 0.0)) > 0.0
-	# 集団の得（性格とは別。全部の子）。
-	fit["running"] = int(fit["running"]) + 1
-	if drafting:
-		fit["drafting"] = int(fit["drafting"]) + 1
-		_owe(seat, float(group.get("draft", 0.0)) * (progress - from) / distance)
-	if rearing:
-		fit["rearing"] = int(fit["rearing"]) + 1
-		_owe(seat, float(group.get("rear", 0.0)) * (progress - from) / distance)
+	var weights: Dictionary = _settings["reward"]["personality"]
 	var frame: Dictionary = seat["frame"]
-	if frame.is_empty():
-		return
-	var mid_from := distance * float(style["mid_from"])
-	var mid_to := distance * float(style["mid_to"])
-	var mid_len := mid_to - mid_from
-	var place := _place_of(runner, runners)
-	var late: Array = frame.get("late_place", [])
-	# 脚質どおりの順位を数える区間の長さ（中ほど＋、終盤にいたい順位があれば終盤）。
-	var place_len := mid_len + (distance - mid_to if late.size() == 2 else 0.0)
-	var in_mid := _overlap(from, progress, mid_from, mid_to)
-	var in_late := _overlap(from, progress, mid_to, distance) if late.size() == 2 else 0.0
-	var follows := float((frame.get("follow_m", [0, 0]) as Array)[1]) > 0.0
-	var ratio := progress / distance
-	if ratio >= float(style["mid_from"]) and ratio < float(style["mid_to"]):
-		fit["draft_n"] = int(fit["draft_n"]) + 1
-		if drafting == follows:
-			fit["draft_hit"] = int(fit["draft_hit"]) + 1
-		_count_place(fit, place, frame.get("place", []))
-	elif ratio >= float(style["mid_to"]) and late.size() == 2:
-		_count_place(fit, place, late)
-	if in_mid > 0.0:
-		if drafting == follows:
-			_owe(seat, float(style["draft"]) * in_mid / mid_len)
-		if _in_range(place, frame.get("place", [])):
-			_owe(seat, float(style["place"]) * in_mid / place_len)
-	if in_late > 0.0 and _in_range(place, late):
-		_owe(seat, float(style["place"]) * in_late / place_len)
+	var span := maxf(progress - from, 0.0)
+	var stick_end := distance * float(weights["stick_until"])
+	var stick_span := _overlap(from, progress, 0.0, stick_end)
+	var wanted: Array = weights["place_by_style"][str(seat["running_style"])]
+	var in_place := _in_range(_place_of(runner, runners), wanted)
+	if in_place:
+		fit["stick_m"] = float(fit["stick_m"]) + stick_span
+	_owe(seat, (1.0 if in_place else -1.0) * stick_span / stick_end * float(weights["stick"]) * float(frame.get("stick", 0.0)), "stick")
+	var draft: Dictionary = runner.call("get_draft_status")
+	var active := {
+		"draft": float(draft["received_draft_p"]) >= float(weights["draft_at_least"]),
+		"rear": float(draft["rear_assist_air_factor"]) > 0.0,
+		"contact": int(runner.call("get_contact_count")) > 0,
+	}
+	for key: String in active:
+		if bool(active[key]):
+			fit[key + "_m"] = float(fit[key + "_m"]) + span
+			_owe(seat, span / distance * float(weights[key]) * float(frame.get(key, 0.0)), key)
+	var notch := float(runner.call("get_drive_level"))
+	var changes := 0
+	if seat["previous_notch"] != null:
+		changes = absi(roundi(notch - float(seat["previous_notch"])))
+	seat["previous_notch"] = notch
+	fit["notch_changes"] = int(fit["notch_changes"]) + changes
+	# _lateral_move_m は自分の操作で実際に動いた距離。押し出しと、端で動けなかった操作は含まない。
+	var line_changed := bool(seat["line_pending"]) and float(runner.get("_lateral_move_m")) > 0.0
+	if line_changed:
+		seat["line_pending"] = false
+		fit["line_changes"] = int(fit["line_changes"]) + 1
+	var old_changes := int(fit["notch_changes"]) + int(fit["line_changes"]) - changes - (1 if line_changed else 0)
+	var total_changes := int(fit["notch_changes"]) + int(fit["line_changes"])
+	var per := float(weights["steady_per_change"])
+	var cap := float(weights["steady_max"])
+	_owe(seat, -(minf(total_changes * per, cap) - minf(old_changes * per, cap)) * float(frame.get("steady", 0.0)), "steady")
+	var checkpoints: Array = weights["keep_at"]
+	for i in checkpoints.size():
+		if fit["keep_stamina"][i] == null and progress >= distance * float(checkpoints[i]):
+			var stamina := float(runner.call("get_stamina_ratio"))
+			fit["keep_stamina"][i] = stamina
+			_owe(seat, maxf(stamina, 0.0) * float(weights["keep"]) / checkpoints.size() * float(frame.get("keep", 0.0)), "keep")
 
 
 ## 区間 [from, to] のうち、[a, b] に入っている長さ。
@@ -362,19 +347,11 @@ static func _in_range(place: int, wanted: Array) -> bool:
 	return wanted.size() == 2 and place >= int(wanted[0]) and place <= int(wanted[1])
 
 
-## 記録用：いたい順位にいた回数を数える。
-static func _count_place(fit: Dictionary, place: int, wanted: Array) -> void:
-	if wanted.size() != 2:
-		return
-	fit["place_n"] = int(fit["place_n"]) + 1
-	if _in_range(place, wanted):
-		fit["place_hit"] = int(fit["place_hit"]) + 1
-
-
-## その場で渡す点を貯める（記録用に、渡した合計も覚える）。
-static func _owe(seat: Dictionary, points: float) -> void:
+## 次に送る点と、レース全体の内訳を同時に記録する。
+static func _owe(seat: Dictionary, points: float, category: String) -> void:
 	seat["owed"] = float(seat["owed"]) + points
-	seat["paid_now"] = float(seat["paid_now"]) + points
+	var ledger: Dictionary = seat["points"]
+	ledger[category] = float(ledger.get(category, 0.0)) + points
 
 
 ## 心拍の超えすぎ（減点だけ）：心拍が通常の上限（ゲームの heart_rate_normal_max_bpm）を超えている間、毎こま、
@@ -464,45 +441,34 @@ func _count_spurt(seat: Dictionary) -> void:
 	(seat["boost_remaining"] as Array).append(roundf(remaining))
 	if progress < distance * float(style["opening_ratio"]):
 		seat["fit"]["opening"] = int(seat["fit"]["opening"]) + 1
-		_owe(seat, float(style["opening_per_boost"]))
+		_owe(seat, float(style["opening_per_boost"]), "boost_timing")
 	elif remaining <= distance * float(style["spurt_last_ratio"]):
 		seat["fit"]["spurt_hits"] = int(seat["fit"]["spurt_hits"]) + 1
-		_owe(seat, float(style["spurt_per_boost"]))
+		_owe(seat, float(style["spurt_per_boost"]), "boost_timing")
 	else:
 		seat["fit"]["spurt_misses"] = int(seat["fit"]["spurt_misses"]) + 1
-		_owe(seat, float(style["outside_per_boost"]))
+		_owe(seat, float(style["outside_per_boost"]), "boost_timing")
 
 
-## 体力温存の点（減点だけ）：体力（1＝満タン、0＝0%、−1＝−100%）が keep より少なければ、足りない分 × per_short を引く。
-func _stamina_penalty(ratio: float) -> float:
-	var stamina: Dictionary = _settings["reward"]["stamina"]
-	return -float(stamina["per_short"]) * maxf(float(stamina["keep"]) - ratio, 0.0)
-
-
-## ゴール（または打ち切り）の点：着順の点＋1位とのタイム差の点＋まだ渡していない、その場の点。
-## 最後の判断からゴールまでに進んだ分の、その場の点もここで数える。
-## 残りの距離が体力温存の線に来ないうちに打ち切られた子は、ここで、打ち切りのときの体力で体力温存の点を渡す。
+## ゴール（または打ち切り）の点。未到達の温存地点には点を付けない。
 func _goal_reward(runner: Node3D, runners: Array, seat: Dictionary) -> float:
 	_count_fit(runner, runners, seat)
-	if seat["fit"]["stamina_at_last"] == null:
-		seat["fit"]["stamina_at_last"] = float(runner.call("get_stamina_ratio"))
-		_owe(seat, _stamina_penalty(float(seat["fit"]["stamina_at_last"])))
 	var place := _place_of(runner, runners)
 	var weights: Dictionary = _settings["reward"]
 	var table: Array = weights["place"]
-	var reward := float(table[mini(place, table.size()) - 1])
+	_owe(seat, float(table[mini(place, table.size()) - 1]), "place")
 	# 1位でなかったときは、1位とのタイム差が小さいほど少し足す（2位の点＋この点が、1位の点を越えないようにしておく）。
 	# gap_scale_s より離されたら、離れた1秒ごとに gap_penalty_per_s を引く（gap_penalty_max まで。ゴールできなかった子は最大）。
 	if place > 1:
 		if bool(runner.call("is_finished")):
 			var gap_s := float(runner.call("get_finish_time")) - _winner_time(runners)
 			var scale_s := float(weights["gap_scale_s"])
-			reward += float(weights["gap_bonus"]) * clampf(1.0 - gap_s / scale_s, 0.0, 1.0)
-			reward -= _gap_shape(gap_s, scale_s, float(weights["gap_penalty_per_s"]), float(weights.get("gap_penalty_far_from_s", INF)),
-					float(weights.get("gap_penalty_far_per_s", 0.0)), float(weights["gap_penalty_max"]))
+			_owe(seat, float(weights["gap_bonus"]) * clampf(1.0 - gap_s / scale_s, 0.0, 1.0), "gap_bonus")
+			_owe(seat, -_gap_shape(gap_s, scale_s, float(weights["gap_penalty_per_s"]), float(weights.get("gap_penalty_far_from_s", INF)),
+					float(weights.get("gap_penalty_far_per_s", 0.0)), float(weights["gap_penalty_max"])), "gap_goal")
 		else:
-			reward -= float(weights["gap_penalty_max"])
-	return reward + _take_owed(seat)
+			_owe(seat, -float(weights["gap_penalty_max"]), "gap_goal")
+	return _take_owed(seat)
 
 
 ## 育成のレースの記録を、spec.log_path に書く（ゲームの記録と同じ中身。ゲームの記録の置き場所には書かない：お手本に混ざらないように）。
@@ -535,7 +501,8 @@ func _progress_reward(runner: Node3D, seat: Dictionary) -> float:
 	var progress := minf(float(runner.call("get_race_progress")), float(_spec["distance_m"]))
 	var gained := progress - float(seat["last_progress"])
 	seat["last_progress"] = progress
-	return gained / float(_spec["distance_m"]) * float(_settings["reward"]["progress_total"])
+	_owe(seat, gained / float(_spec["distance_m"]) * float(_settings["reward"]["progress_total"]), "progress")
+	return 0.0
 
 
 ## レースが終わった：全部の席（席がなければ、全員）の結果を送る。ゴールしていない席には、ここで着順の点を渡す。
@@ -564,12 +531,14 @@ func _finish(runners: Array, cut: bool) -> void:
 				"mid_place": int(seat["mid_place"]) if int(seat["mid_place"]) > 0 else int(result["place"]),
 				"dash_uses": seat["dash"], "boost_uses": seat["boost"], "steps": seat["steps"],
 				"dash_at_s": seat["dash_at"], "boost_at_s": seat["boost_at"],
-				"paid_now": float(seat["paid_now"]), "opening_boosts": int(fit["opening"]), "line_stamina": float(fit["stamina_at_last"]),
-				"place_fit": float(fit["place_hit"]) / maxf(float(fit["place_n"]), 1.0),
-				"draft_fit": float(fit["draft_hit"]) / maxf(float(fit["draft_n"]), 1.0),
+				"trainer_id": seat["trainer_id"], "frame": seat["frame"], "points": seat["points"],
+				"opening_boosts": int(fit["opening"]),
 				"spurt_hits": int(fit["spurt_hits"]), "spurt_misses": int(fit["spurt_misses"]), "boost_remaining_m": seat["boost_remaining"],
-				"draft_share": float(fit["drafting"]) / maxf(float(fit["running"]), 1.0),
-				"rear_share": float(fit["rearing"]) / maxf(float(fit["running"]), 1.0),
+				"stick_share": float(fit["stick_m"]) / (float(_spec["distance_m"]) * float(_settings["reward"]["personality"]["stick_until"])),
+				"draft_share": float(fit["draft_m"]) / float(_spec["distance_m"]),
+				"rear_share": float(fit["rear_m"]) / float(_spec["distance_m"]),
+				"contact_share": float(fit["contact_m"]) / float(_spec["distance_m"]),
+				"notch_changes": fit["notch_changes"], "line_changes": fit["line_changes"], "keep_stamina": fit["keep_stamina"],
 			})
 			var report := _report(runner, runners, seat)
 			report["reward"] = reward

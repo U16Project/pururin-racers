@@ -1,0 +1,5 @@
+{
+  "_note": "レースの記録（走るたびに1本、約7MB）。取るのは手元で動かすときだけ（書き出したWeb版・配る版では取らない）。keep_max：取っておく本数。超えたら古いものから消す。お手本に使う記録は、育成を始めるときに lab/rl/runs/race_logs/ へ写す（lab/rl/rl_demos.gd）",
+  "folder": "user://pururin_race_logs",
+  "keep_max": 50
+}

@@ -4,6 +4,7 @@ extends SceneTree
 ## 記録1本ごとに、1つのファイルに書く（作ったものは作り直さない。新しい記録だけ足す）。
 ## 起動（client/ で）：godot --headless --path . -s ../lab/rl/rl_demos.gd -- out=<書く場所> since=<この日時より後の記録>
 ## 使う記録：since より後に保存され、あなたが操作して、ゴールまで走ったレース（ぷるりん・距離は問わない）。
+## ゲームの記録の場所（race_logs.json の folder）は古いものから消えるので、使える記録は KEEP_DIR へ写し、そこから作る。
 ## ふつうのオフラインのレースも、ラボで育てるCPUと走ったレース（play.py）も、同じ置き場に記録が残るので、どちらも使う。
 ## 育てるCPUの席は、記録の remote_controlled（通信ごしに操作）で見分けて外す。
 ## こわれた記録・古い形の記録・途中でやめたレースは外す。使った・外した記録の一覧を <書く場所>/_index.json に書く。
@@ -14,7 +15,9 @@ const CpuBrainConfig := preload("res://scripts/config/cpu_brain_config.gd")
 const LocalRaceMath := preload("res://scripts/local_race_math.gd")
 const CourseBuilder := preload("res://scripts/course_builder.gd")
 
-const LOG_DIR := "user://pururin_race_logs"
+const RaceTelemetryRecorder := preload("res://scripts/race_telemetry_recorder.gd")
+## お手本に使う記録の取っておき場所（git に入らない）。ゲームの記録の場所は、古いものから消えるので、使える記録はここへ写す。
+const KEEP_DIR := "../lab/rl/runs/race_logs"
 ## 記録の1体ぶんに、これが全部ないと使わない（古い形の記録）。
 const NEEDED := ["race_progress", "offset", "speed", "actual_speed_kmh", "heart_rate_bpm", "stamina_ratio", "drive_level", "boost_uses_left",
 	"dash_active", "boost_points", "draft", "in_push_contest", "contact_heart_load_bpm_per_s", "overheat_ratio",
@@ -33,22 +36,26 @@ func _initialize() -> void:
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	# since は、このPCの時刻で書く。ファイルの時刻（世界共通の秒）と比べるため、時差を引く。
 	var since_unix := Time.get_unix_time_from_datetime_string(str(args["since"])) - int(Time.get_time_zone_from_system()["bias"]) * 60
-	var dir := ProjectSettings.globalize_path(LOG_DIR)
+	var dir := ProjectSettings.globalize_path("res://").path_join(KEEP_DIR)
+	_copy_new_logs(ProjectSettings.globalize_path(str(RaceTelemetryRecorder.config()["folder"])), dir, since_unix)
 	var made := 0
 	var kept := 0
 	# どの記録を使ったか・外したか（報告の表に使う）。記録の名前 → {使ったか, 外した理由, ぷるりん, 距離, 着順}。
 	var index := {}
 	for name in DirAccess.get_files_at(dir):
 		var path := dir.path_join(name)
-		if not name.ends_with(".json") or FileAccess.get_modified_time(path) < since_unix:
+		if not name.ends_with(".json"):
 			continue
 		var target := out_dir.path_join(name)
 		if FileAccess.file_exists(target):
 			var old: Variant = JSON.parse_string(FileAccess.get_file_as_string(target))
-			if old is Dictionary:
+			if old is Dictionary and int(old.get("observation_version", 1)) == RlObserve.VERSION:
 				index[name] = {"used": true, "reason": "", "pururin": old["pururin"], "distance_m": old["distance_m"], "place": old.get("place", 0)}
 				kept += 1
 				continue
+			push_error("お手本の観測の版が合いません: " + target)
+			quit(1)
+			return
 		var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 		var checked := _check(data)
 		if not str(checked["reason"]).is_empty():
@@ -70,6 +77,17 @@ func _initialize() -> void:
 	index_file.close()
 	print("あなたの走りの記録（お手本）：使う %d 本（今回増えた %d 本）、使わない %d 本" % [made + kept, made, index.size() - made - kept])
 	quit()
+
+
+## ゲームの記録のうち、since より後で、お手本に使えるもの（_check を通るもの）を、取っておき場所へ写す（まだ無いものだけ）。
+func _copy_new_logs(from_dir: String, to_dir: String, since_unix: int) -> void:
+	DirAccess.make_dir_recursive_absolute(to_dir)
+	for name in DirAccess.get_files_at(from_dir):
+		var path := from_dir.path_join(name)
+		if not name.ends_with(".json") or FileAccess.get_modified_time(path) < since_unix or FileAccess.file_exists(to_dir.path_join(name)):
+			continue
+		if str(_check(JSON.parse_string(FileAccess.get_file_as_string(path)))["reason"]).is_empty():
+			DirAccess.copy_absolute(path, to_dir.path_join(name))
 
 
 ## 記録を使えるか。使えなければ reason に外す理由（こわれた・古い形・人が操作していない・途中でやめた）。
@@ -147,7 +165,7 @@ func _demo(data: Dictionary, settings: Dictionary, player_id: String) -> Diction
 	path3d.free()
 	if obs.is_empty():
 		return {}
-	return {"pururin": player_id.split("#")[0], "distance_m": distance, "started_at": str(data.get("started_at", "")), "obs": obs, "mask": masks, "action": actions}
+	return {"observation_version": RlObserve.VERSION, "pururin": player_id.split("#")[0], "distance_m": distance, "started_at": str(data.get("started_at", "")), "obs": obs, "mask": masks, "action": actions}
 
 
 static func _find(sample: Dictionary, runner_id: String) -> Dictionary:

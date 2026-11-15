@@ -16,7 +16,7 @@
     "共通": "all"
   },
   "trainer_swap": {
-    "_note": "育成のレースで、席ごとに、この割合でトレーナーを15人からくじで選び直す（いつものトレーナーでない性格でも走れるように。レース選択でトレーナーを変えたときに備える）",
+    "_note": "育成のレースで、席ごとに、この割合でトレーナーを16人からくじで選び直す（いつものトレーナーでない性格でも走れるように。レース選択でトレーナーを変えたときに備える）",
     "rate": 0.3
   },
   "train": {
@@ -28,7 +28,9 @@
     "race_log_keep": 30
   },
   "_note_play_run": "play.py（ラボのレース）で、相手7枠に最初から入れるCPU：この育成の最新の版（runs/<名前>/versions/ のいちばん新しい版）。まだ版が無ければ本採用",
-  "play_run": "本番（大逃げ対策）",
+  "play_run": "本番（性格）",
+  "_note_play_versions": "play.py（ラボのレース）のCPU選択で、育成ごとに「最新」の下へ並べる、保存された版の数（新しい順）",
+  "play_versions": 10,
   "pool": {
     "_note": "相手の控え室（lab/rl/runs/<dir>/）。1レースのうち seats 席を、控え室からくじで選んだCPUが走らせる（学ばない）。置くのは max 体まで（超えたら、自動で入れた古いものから外す。名前の頭が「固定_」のものは外さない）。育成の1時間ごとの版は自動で入る。always_run：どのレースにも1席、この育成のいちばん新しいCPU（runs/<always_run>/latest.zip）を必ず入れる（その育成自身のレースでは入れない。空にすると、この枠は無し）",
     "dir": "控え室",
@@ -58,28 +60,12 @@
     "gap_penalty_max": 0.0,
     "progress_total": 0.2,
     "style": {
-      "_note": "性格に合った走りの点（2026-10-24・10-25 ユーザー確認済み）。点は、その場で渡す（2026-10-27。合計の最大はゴールでまとめて渡していたときと同じ）。中ほど（mid_from〜mid_to の割合）で性格の「いたい順位」にいた間に進んだ距離の割合 × place（終盤にいたい順位があるトレーナーは、終盤も数える）。後ろにつく性格は、中ほどで風よけ（received_draft_p が draft_at_least 以上）をもらっていた間、つかない性格はもらっていなかった間に進んだ距離の割合 × draft。ブーストは押したその時：スタートから全体の opening_ratio までに押したら opening_per_boost、残りの距離が全体の spurt_last_ratio（0.25＝ラスト25%）に入ってから押したら spurt_per_boost、そのあいだは outside_per_boost（ふつうは0。本番1・本番2は override で −0.1）。opening_per_boost：最序盤のブースト1回ごとの点（ふつうは0。本番4は override で −1.0。2026-10-27 ユーザー確認済み）",
-      "place": 0.05,
-      "draft": 0.08,
-      "mid_from": 0.25,
-      "mid_to": 0.75,
-      "draft_at_least": 0.05,
+      "_note": "ブーストを押したその場の共通点。opening_ratio まで opening_per_boost、残り spurt_last_ratio 以内は spurt_per_boost、それ以外は outside_per_boost。",
       "spurt_per_boost": 0.03,
       "outside_per_boost": 0.0,
       "opening_ratio": 0.1,
       "opening_per_boost": 0.0,
       "spurt_last_ratio": 0.25
-    },
-    "group": {
-      "_note": "集団の得の点（性格とは別。全部の子）：前からの風よけ（received_draft_p が style.draft_at_least 以上）をもらっていた間に進んだ距離の割合 × draft ＋ 後ろからの後方支援をもらっていた間に進んだ距離の割合 × rear。その場で少しずつ渡す。ここでは0（使わない）",
-      "draft": 0.0,
-      "rear": 0.0
-    },
-    "stamina": {
-      "_note": "体力温存の点（減点だけ。2026-10-26 ユーザー確認済み）：残りの距離が全体の last_ratio に入ったその時に、体力（1＝満タン、0＝0%、−1＝−100%）が keep より少なければ、足りない分 × per_short を引く。そこまで来ないうちに打ち切られた子は、打ち切りのときの体力で見る。ふつうは per_short 0（使わない）。本番1・本番2は 1.0、本番3は 2.0（目安20%）。本番4は override で目安0%（keep 0）",
-      "last_ratio": 0.25,
-      "keep": 0.2,
-      "per_short": 0.0
     },
     "gap_running": {
       "_note": "走っている間の、1位から離された引き点（減点だけ。2026-11-10 ユーザー確認済み）：全体の from_ratio より先で、1位との差（秒。1位のここまでの平均の速さで割る）が gap_scale_s を超えた分は1秒ごとに per_s、far_from_s を超えた分は1秒ごとに far_per_s（max まで）を、進んだ距離の割合で少しずつその場で引く（差がずっと同じなら、from_ratio からゴールまでの合計がその大きさ）。ふつうは per_s 0（使わない）。ゴールのときの引き点（gap_penalty_*）も、gap_penalty_far_from_s・gap_penalty_far_per_s があれば同じ形（無ければ、gap_penalty_per_s のまま）",
@@ -92,6 +78,41 @@
     "heart": {
       "_note": "心拍の超えすぎの点（減点だけ。2026-11-09 ユーザー確認済み）：心拍が通常の上限（ゲームの heart_rate_normal_max_bpm＝200）を超えている間、毎こま、超えた割合（頭打ち heart_rate_overheat_max_bpm＝230 で1）× 過ぎた秒数 × per を、その場で引く（230で1秒続けると per だけ引く）。区間は sections の並びで、進んだ割合が until より前の最初の区間の per を使う。どの区間にも入らない所（ここでは全部）は引かない。上限は無し。本番（抑え気味）は override で序盤25% 0.05・次の25% 0.015",
       "sections": []
+    },
+    "personality": {
+      "_note": "各点は frame の同名の数字を掛け、その場で渡す。stick は0〜stick_untilの距離で正規化し範囲内は加点・外は減点。他の継続点はレース全距離で正規化。steady は実際に変わったノッチ1段・移動できたライン操作1回ごと（押し出し・端で不動は除く）。keep は keep_at の各地点で max(体力割合,0) を使い均等配分。",
+      "stick": 0.15,
+      "draft": 0.45,
+      "rear": 0.35,
+      "contact": 0.1,
+      "steady_per_change": 0.01,
+      "steady_max": 0.1,
+      "keep": 0.15,
+      "stick_until": 0.8,
+      "place_by_style": {
+        "escape": [
+          1,
+          2
+        ],
+        "pace": [
+          3,
+          4
+        ],
+        "stalk": [
+          5,
+          6
+        ],
+        "closer": [
+          7,
+          8
+        ]
+      },
+      "draft_at_least": 0.05,
+      "keep_at": [
+        0.25,
+        0.5,
+        0.75
+      ]
     }
   },
   "seeds": {
@@ -149,5 +170,6 @@
       0.2,
       0.2
     ]
-  }
+  },
+  "observation_version": 2
 }

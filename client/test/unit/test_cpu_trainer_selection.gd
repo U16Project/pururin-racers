@@ -14,8 +14,12 @@ func after_each() -> void:
 	Session.clear_slots()
 
 func test_trainer_choices_and_new_pururins() -> void:
-	assert_eq(Trainers.values().size(), 15)
-	assert_eq(Session.roster_ids().size(), 10)
+	# トレーナー1人に、既定のぷるりん1体。どのぷるりんの担当も、トレーナーの一覧にいる。
+	var roster: Array = JSON.parse_string(FileAccess.get_file_as_string("res://data/config/pururin_roster.json"))["roster"]
+	assert_eq(Trainers.values().size(), roster.size())
+	for pururin: Dictionary in roster:
+		assert_false(Trainers.by_id(str(pururin["trainer_id"])).is_empty(), "%s の担当がいない" % pururin["id"])
+	assert_eq(Session.roster_ids().size(), roster.size())
 	assert_false(Looks.look_for("cpu-8").is_empty())
 	assert_false(Looks.look_for("cpu-9").is_empty())
 	var invalid := {"schema_version": 1, "trainers": [{"id": "invalid", "name": ""}]}

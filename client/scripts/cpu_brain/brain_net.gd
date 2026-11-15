@@ -7,6 +7,7 @@ extends RefCounted
 
 var label := ""
 var obs_size := 0
+var observation_version := 0
 var action_sizes: Array = []
 ## 層ごと：{"rows": [出力ごとの Array[Vector4]], "bias": PackedFloat32Array, "tanh": bool, "in": 入力の数}
 var _layers: Array = []
@@ -21,6 +22,12 @@ static func load_file(path: String) -> RefCounted:
 		return null
 	var net: RefCounted = load("res://scripts/cpu_brain/brain_net.gd").new()
 	net.label = str(data.get("label", ""))
+	net.observation_version = int(data.get("observation_version", 0))
+	var observe := preload("res://scripts/cpu_brain/brain_observe.gd")
+	var config := preload("res://scripts/config/cpu_brain_config.gd")
+	if net.observation_version != observe.VERSION or int(data["obs_size"]) != observe.size(int(config.values()["field"])):
+		push_error("頭の観測の版・入力数が合いません: " + path)
+		return null
 	net.obs_size = int(data["obs_size"])
 	net.action_sizes = data["action_sizes"]
 	for layer: Dictionary in data["layers"]:
