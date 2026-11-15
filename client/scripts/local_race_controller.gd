@@ -1239,7 +1239,7 @@ func _build_free_after_choice() -> void:
 	choice.add_child(_free_notice_label)
 	if not _free_final:
 		_build_free_entry_choice(choice, room_name)
-	_result_stay_button = MenuStyle.pill_button("このルームに残る", "secondary", 20, true)
+	_result_stay_button = MenuStyle.pill_button("このルームに残る", "quiet", 20, true)
 	_result_stay_button.name = "ResultStayButton"
 	_result_stay_button.custom_minimum_size = Vector2(0.0, 56.0)
 	_result_stay_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2068,6 +2068,9 @@ func _show_results() -> void:
 	_set_result_title("　".join(head))
 	if _result_retry_button.visible:
 		_result_retry_button.grab_focus()
+	elif is_instance_valid(_result_stay_button) and _result_stay_button.visible:
+		# オンラインフリー対戦：A を続けて押しても、ロビーへ飛ばず、ルームに残る側にする（ロビーへは B）。
+		_result_stay_button.grab_focus()
 	else:
 		_result_return_button.grab_focus()
 	RaceAudio.play_result_applause()
