@@ -29,6 +29,7 @@ var _slot := -1
 var _custom := false
 var _custom_current := ""
 var _custom_taken := {}
+var _custom_only: Array = []
 ## マウスを乗せてカーソルを移している途中か（そのときは、一覧を動かさない）。
 var _hover_focus := false
 
@@ -126,8 +127,10 @@ func open(slot_index: int, title_text: String) -> void:
 
 ## スロットを使わずに開く（オンラインの部屋など）。current_id＝今選んでいる個体（まだなら空）、
 ## taken＝ほかの人が使っている個体（個体 → その人の番目。0から）。「未選択」のタイルと、強制選択は無い。
-func open_choices(title_text: String, current_id: String, taken: Dictionary) -> void:
+## only＝並べる個体（空なら、全部）。チケットが要るルームで、持っている子だけを出すときに使う。
+func open_choices(title_text: String, current_id: String, taken: Dictionary, only: Array = []) -> void:
 	_custom = true
+	_custom_only = only
 	_custom_current = current_id
 	_custom_taken = taken
 	_slot = -1
@@ -169,7 +172,9 @@ func _rebuild() -> void:
 	var ids: Array[String] = []
 	if not _custom:
 		ids.append(RaceSession.EMPTY)
-	ids.append_array(RaceSession.choice_ids())
+	for identifier in RaceSession.choice_ids():
+		if not _custom or _custom_only.is_empty() or _custom_only.has(identifier):
+			ids.append(identifier)
 	for identifier in ids:
 		var tile: Button = Tile.new()
 		tile.call("setup", identifier)

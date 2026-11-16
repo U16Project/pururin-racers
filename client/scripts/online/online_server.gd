@@ -76,6 +76,8 @@ var fill_wait_s := -1.0
 var answer_wait_s := -1.0
 ## レースのあと休ませる秒数（0より小さければ、設定 online.json の値）。テストで、短くするため。
 var rest_after_race_s := -1.0
+## エントリーしてから呼ぶまでに置く秒数（0より小さければ、設定 online.json の値）。テストで、短くするため。
+var entry_call_delay_s := -1.0
 
 
 func _ready() -> void:
@@ -1163,6 +1165,11 @@ func _answer_wait_s() -> float:
 	return answer_wait_s if answer_wait_s >= 0.0 else OnlineConfig.free_answer_wait_s()
 
 
+## エントリーしてから、そのルームで呼ぶまでに置く秒数。
+func _entry_call_delay_s() -> float:
+	return entry_call_delay_s if entry_call_delay_s >= 0.0 else OnlineConfig.free_entry_call_delay_s()
+
+
 ## 設定の free_rooms から、フリーのルームを作る（サーバーを起動したときに1回）。並びは、設定の順。
 ## 画像は、FREE_ROOM_IMAGE_DIR から読んで、送る形（base64）にしておく。読めない・大きすぎる画像は、画像なし。
 func _make_free_rooms() -> void:
@@ -1263,6 +1270,26 @@ func _free_racing_count(free_id: String) -> int:
 	return (data["races"] as Array).size() - (1 if int(data["calling"]) != 0 else 0)
 
 
+## そのルームで、入ると答えた・走っている人の数（人だけ。CPUは数えない）。
+func _free_racing_players(free_id: String) -> int:
+	var count := 0
+	for peer_id: int in _peers:
+		var active_room := int(_peers[peer_id]["free_room"])
+		if active_room != 0 and _rooms.has(active_room) and str(_rooms[active_room].get("free_id", "")) == free_id:
+			count += 1
+	return count
+
+
+## そのルームで、順番を待っている人の数（保留中・呼ばれている人も入る。入ると答えた・走っている人は入らない）。
+func _free_waiting_count(free_id: String) -> int:
+	var waiting := 0
+	for peer_id: int in free_line(free_id):
+		var active_room := int(_peers[peer_id]["free_room"])
+		if active_room == 0 or not _rooms.has(active_room) or str(_rooms[active_room].get("free_id", "")) != free_id:
+			waiting += 1
+	return waiting
+
+
 ## フリーのルームの一覧（設定の順）。
 func free_room_list() -> Array:
 	var list: Array = []
@@ -1277,7 +1304,7 @@ func free_room_list() -> Array:
 			"needs_ticket_name": OnlineConfig.free_ticket_name(str(data.get("needs_ticket", ""))),
 			"gives_ticket_name": OnlineConfig.free_ticket_name(str(data.get("gives_ticket", ""))),
 			"state": _free_state(free_id), "races": _free_racing_count(free_id), "max_races": int(data["max_races"]),
-			"waiting": free_line(free_id).size(), "open_unix": int(data["open_unix"]), "close_unix": int(data["close_unix"]),
+			"waiting": free_line(free_id).size(), "waiting_players": _free_waiting_count(free_id), "racing_players": _free_racing_players(free_id), "open_unix": int(data["open_unix"]), "close_unix": int(data["close_unix"]),
 			"kind": "final" if is_final(free_id) else "normal",
 		})
 		if is_final(free_id):
@@ -1313,7 +1340,7 @@ func free_room_detail(free_id: String) -> Dictionary:
 		var entry := _free_entry_of(peer_id, free_id)
 		entrants.append({"peer_id": peer_id, "name": str(_peers[peer_id]["name"]), "pururin_id": str(entry["pururin_id"]), "hold": bool(entry["hold"])})
 	return {
-		"room_id": free_id, "intro": str(data["intro"]), "capacity": Protocol.ROOM_CAPACITY, "fill_wait_s": _fill_wait_s(),
+		"room_id": free_id, "intro": str(data["intro"]), "capacity": Protocol.ROOM_CAPACITY,
 		"races": _free_racing_count(free_id), "entrants": entrants,
 	}
 
@@ -1481,7 +1508,8 @@ func _free_entry(peer_id: int, free_id: String, data: Dictionary) -> void:
 		_refuse(peer_id, Protocol.ERROR_ROOM_FULL, free_id)
 		return
 	if entry.is_empty():
-		entry = {"room_id": free_id, "hold": false, "since_msec": Time.get_ticks_msec()}
+		# 新しいエントリーは、決めた秒数のあいだ呼ばない（ほかのルームも見られるように）。hold なら、保留のままエントリーする。
+		entry = {"room_id": free_id, "hold": bool(data.get("hold", false)), "since_msec": Time.get_ticks_msec(), "call_after_msec": Time.get_ticks_msec() + int(_entry_call_delay_s() * 1000.0)}
 		(_peers[peer_id]["entries"] as Array).append(entry)
 	entry["pururin_id"] = pururin_id
 	entry["uid"] = uid
@@ -1736,7 +1764,7 @@ func _free_call(now: int) -> bool:
 		if not _free_callable(peer_id):
 			continue
 		for entry: Dictionary in _peers[peer_id]["entries"]:
-			if not bool(entry["hold"]) and room_left.has(str(entry["room_id"])):
+			if not bool(entry["hold"]) and now >= int(entry.get("call_after_msec", 0)) and room_left.has(str(entry["room_id"])):
 				(by_room.get_or_add(str(entry["room_id"]), []) as Array).append(peer_id)
 				break
 	var called := false
@@ -1889,7 +1917,7 @@ func _announce_free() -> void:
 		if not bool(peer["free"]):
 			continue
 		_send(peer_id, Protocol.message(Protocol.FREE_LOBBY, {
-			"peer_id": peer_id, "rooms": rooms, "entries": free_entry_list(peer_id), "answer_wait_s": _answer_wait_s(), "now_unix": now_unix(),
+			"peer_id": peer_id, "rooms": rooms, "entries": free_entry_list(peer_id), "now_unix": now_unix(),
 			"rest_s": maxf(float(int(peer["rest_until_msec"]) - Time.get_ticks_msec()) / 1000.0, 0.0),
 		}))
 		var viewing := str(peer["viewing"])

@@ -20,13 +20,26 @@ const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
 const LocalServer := preload("res://scripts/online/local_server.gd")
+const RaceHud := preload("res://scripts/presentation/race_hud.gd")
+const PururinStatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 const MODE_SELECT_SCENE_PATH := "res://scenes/mode_select.tscn"
 ## ルームの今のようすの色（カードの下の帯・ルームの画面の帯）。空き＝緑、呼び出し中＝黄、レース中＝橙。
+const MY_NONE := "my_none"
+const MY_ENTRY := "my_entry"
+const MY_HOLD := "my_hold"
+const MY_CALLED := "my_called"
+const MY_RACING := "my_racing"
 const STATE_COLORS := {
 	Protocol.FREE_STATE_IDLE: Color(0.32, 0.86, 0.5),
 	Protocol.FREE_STATE_CALLING: Color(1.0, 0.8, 0.28),
 	Protocol.FREE_STATE_RACING: Color(1.0, 0.56, 0.25),
+	# ルームの画面の帯は、自分の状態の色：エントリー中＝緑、保留中＝灰、呼び出し中＝黄、レース中＝青、エントリーしていない＝うすい青灰。
+	MY_NONE: Color(0.62, 0.68, 0.78),
+	MY_ENTRY: Color(0.32, 0.86, 0.5),
+	MY_HOLD: Color(0.6, 0.62, 0.66),
+	MY_CALLED: Color(1.0, 0.8, 0.28),
+	MY_RACING: Color(0.35, 0.7, 1.0),
 }
 ## 受付の外のルームの帯の色。
 const COLOR_CLOSED := Color(0.62, 0.68, 0.78)
@@ -60,6 +73,9 @@ const TABS := [TAB_ROOMS, TAB_ENTRIES, TAB_RESULTS]
 const PART_CONDITIONS := "conditions"
 const PART_ENTRANTS := "entrants"
 const PART_RESULTS := "results"
+const ROOM_PARTS := [PART_CONDITIONS, PART_ENTRANTS, PART_RESULTS]
+## 右の欄の、脚質の印の大きさ（操作盤の印に対する倍率）。
+const PICK_CHEVRON_SCALE := 1.5
 ## ルームの過去の結果で、レースごとに出す着順の数。
 const RESULT_ROWS_SHOWN := 3
 ## 結果の、CPUの名前の色。
@@ -109,7 +125,6 @@ const PICKER_STATUS_GAP := 12.0
 @onready var _field_value: Label = %FieldValue
 @onready var _rule_value: Label = %RuleValue
 @onready var _open_value: Label = %OpenValue
-@onready var _wait_value: Label = %WaitValue
 @onready var _ticket_value: Label = %TicketValue
 @onready var _reward_value: Label = %RewardValue
 @onready var _pick_tickets: Label = %PickTickets
@@ -120,13 +135,12 @@ const PICKER_STATUS_GAP := 12.0
 @onready var _entrant_grid: GridContainer = %EntrantGrid
 @onready var _entrants_empty: Label = %EntrantsEmpty
 @onready var _portrait: Control = %Portrait
-@onready var _prev_button: Button = %PrevButton
-@onready var _next_button: Button = %NextButton
 @onready var _pick_name: Label = %PickName
 @onready var _pick_info: Label = %PickInfo
 @onready var _status_button: Button = %StatusButton
 @onready var _entry_button: Button = %EntryButton
 @onready var _hold_button: Button = %HoldButton
+@onready var _cancel_button: Button = %CancelButton
 @onready var _entry_note: Label = %EntryNote
 @onready var _picker_status: Control = %PickerStatus
 @onready var _picker_status_window: Control = %PickerStatusWindow
@@ -170,6 +184,7 @@ const PICKER_STATUS_GAP := 12.0
 @onready var _offer_time: Label = %OfferTime
 @onready var _accept_button: Button = %AcceptButton
 @onready var _decline_button: Button = %DeclineButton
+@onready var _offer_hold_button: Button = %OfferHoldButton
 @onready var _guide_accept: Label = %GuideAccept
 @onready var _back_button: Button = %BackButton
 @onready var _guide_tabs: Control = %GuideTabs
@@ -202,7 +217,6 @@ var _status_font_size := 0
 var _overlay_room := ""
 ## レースのあと、ロビーのようすが届いたら開くルーム（ID）。
 var _open_after_lobby := ""
-var _answer_wait_s := 0.0
 ## サーバーの時計と、この機械の時計のずれ（秒）。締め切りまでの時間は、サーバーの時計で数える。
 var _server_offset_s := 0
 var _offer := {}
@@ -288,9 +302,8 @@ func _ready() -> void:
 	for button: Button in [_results_tab, _conditions_tab, _entrants_tab, _room_results_tab]:
 		UIAudio.bind_button_sound(button, "confirmation")
 	_filter.item_selected.connect(func(_index: int) -> void: _refresh_cards())
-	_prev_button.pressed.connect(step_pick.bind(-1))
-	_next_button.pressed.connect(step_pick.bind(1))
 	_status_button.pressed.connect(open_picker)
+	_pick_info.draw.connect(_draw_pick_marks)
 	_picker.connect("picked", _on_picker_picked)
 	_picker.connect("tile_focused", func(pururin_id: String) -> void: _pick_detail.call("show_pururin", pururin_id, "", false, false))
 	_picker.connect("closed", _on_picker_closed)
@@ -318,14 +331,22 @@ func _ready() -> void:
 		UIAudio.bind_button_sound(button, "confirmation")
 	_entry_button.pressed.connect(press_entry)
 	_hold_button.pressed.connect(press_hold)
+	_cancel_button.pressed.connect(press_cancel)
+	# 右の欄のボタンは、カーソル（マウス）が乗ったら、下にそのボタンの説明を出す。
+	for button: Button in [_status_button, _entry_button, _hold_button, _cancel_button]:
+		button.focus_entered.connect(_refresh_side_note)
+		button.mouse_entered.connect(_refresh_side_note.bind(button))
+		button.focus_exited.connect(_refresh_side_note)
 	_accept_button.pressed.connect(answer.bind(true))
 	_decline_button.pressed.connect(answer.bind(false))
+	_offer_hold_button.pressed.connect(hold_offer)
 	_back_button.pressed.connect(press_back)
-	for button: BaseButton in [_rooms_tab, _entries_tab, _prev_button, _next_button, _hold_button, _status_button]:
+	for button: BaseButton in [_rooms_tab, _entries_tab, _hold_button, _status_button, _offer_hold_button]:
 		UIAudio.bind_button_sound(button, "confirmation")
 	UIAudio.bind_button_sound(_entry_button, "confirmation")
 	UIAudio.bind_button_sound(_accept_button, "confirmation")
 	UIAudio.bind_button_sound(_decline_button, "back")
+	UIAudio.bind_button_sound(_cancel_button, "back")
 	UIAudio.bind_button_sound(_back_button, "back")
 	_add_marks()
 	_link_room_focus()
@@ -356,17 +377,20 @@ func _ready() -> void:
 		connect_to_server()
 
 
-## ルームの画面の、ゲームパッド・方向キーでの動き：右の欄（ステータス・矢印・エントリー・保留）と、左の下のタブ（出走の条件・紹介／エントリーしている人／過去の結果）を、左右で行き来する。
+## ルームの画面の、ゲームパッド・方向キーでの動き：右の欄のボタン4つは、上下で順に。左へは、左の下のタブ（出走の条件・紹介／エントリーしている人／過去の結果）へ。
+## タブの右端から右へは、右の欄のいちばん上のボタンへ。タブは、L1・R1 でも切り替えられる。
 func _link_room_focus() -> void:
-	for button: Control in [_status_button, _prev_button, _entry_button]:
+	var column: Array[Button] = [_status_button, _entry_button, _hold_button, _cancel_button]
+	for index in column.size():
+		var button := column[index]
 		button.focus_neighbor_left = button.get_path_to(_room_results_tab)
-	_room_results_tab.focus_neighbor_right = _room_results_tab.get_path_to(_entry_button)
+		button.focus_neighbor_right = button.get_path_to(button)
+		button.focus_neighbor_top = button.get_path_to(column[maxi(index - 1, 0)])
+		button.focus_neighbor_bottom = button.get_path_to(column[mini(index + 1, column.size() - 1)])
+	_room_results_tab.focus_neighbor_right = _room_results_tab.get_path_to(_status_button)
 	for tab: Control in [_conditions_tab, _entrants_tab, _room_results_tab]:
 		tab.focus_neighbor_top = tab.get_path_to(tab)
 		tab.focus_neighbor_bottom = tab.get_path_to(tab)
-	_entry_button.focus_neighbor_bottom = _entry_button.get_path_to(_hold_button)
-	_hold_button.focus_neighbor_top = _hold_button.get_path_to(_entry_button)
-	_hold_button.focus_neighbor_bottom = _hold_button.get_path_to(_hold_button)
 
 
 ## 前にある窓を、入力と表示で共通に使う。
@@ -463,6 +487,19 @@ func _add_marks() -> void:
 	_guide_chat.add_child(MenuStyle.mark("SELECT", 24.0))
 	_guide_chat.move_child(_guide_chat.get_child(_guide_chat.get_child_count() - 1), 0)
 	(_guide_chat.get_child(0) as Control).size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	# タブの左右に、L1・R1 で動かすボタン（オフラインの距離選びと同じ形）。
+	var tabs := _rooms_tab.get_parent()
+	for direction: int in [-1, 1]:
+		var step := MenuStyle.step_button(direction)
+		step.name = "TabPrev" if direction < 0 else "TabNext"
+		step.pressed.connect(func() -> void: show_tab(TABS[posmod(TABS.find(current_tab()) + direction, TABS.size())]))
+		tabs.add_child(step)
+		if direction < 0:
+			tabs.move_child(step, 0)
+	# 絞り込み（「すべて」など）へは、タブの「結果」から右へ。ゲームパッドでも選べる。
+	_results_tab.focus_neighbor_right = _results_tab.get_path_to(_filter)
+	_filter.focus_neighbor_left = _filter.get_path_to(_results_tab)
+	_filter.focus_mode = Control.FOCUS_ALL
 	for kind: String in ["R1", "L1"]:
 		_guide_tabs.add_child(MenuStyle.mark(kind, 24.0))
 		_guide_tabs.move_child(_guide_tabs.get_child(_guide_tabs.get_child_count() - 1), 0)
@@ -546,6 +583,13 @@ func show_room_part(part: String) -> void:
 		_room_results_log.clear()
 		_room_results_log.add_text("読み込んでいます…")
 		_client.send(Protocol.FREE_RESULTS_ASK, {"room_id": _open_room})
+
+
+## ルームの画面の、今のタブ。
+func current_room_part() -> String:
+	if _entrants_tab.button_pressed:
+		return PART_ENTRANTS
+	return PART_RESULTS if _room_results_tab.button_pressed else PART_CONDITIONS
 
 
 ## レースのタイム「1分44秒84」。
@@ -639,7 +683,6 @@ func _apply_lobby(data: Dictionary) -> void:
 			# 新しくエントリーできたら、ルームの画面の真ん中に、はっきり知らせる。
 			if not had_entry.has(id) and id == _open_room:
 				_show_entry_done(index + 1, pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))))
-	_answer_wait_s = float(data.get("answer_wait_s", 0.0))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
 	var rest_s := float(data.get("rest_s", 0.0))
 	_rest_until_msec = Time.get_ticks_msec() + int(rest_s * 1000.0) if rest_s > 0.0 else 0
@@ -847,15 +890,12 @@ func _set_strip_final(strip: Control, dot: Control, label: Label, room: Dictiona
 	label.text = final_state_text(room, server_now(), strip != _room_strip)
 
 
-## ルームの今のようすの文。
+## ルームの今のようすの文：合わせた人数（レース中・待機中）。呼び出し中は、頭に付ける。
 static func state_text(room: Dictionary) -> String:
-	var waiting := int(room.get("waiting", 0))
-	match str(room.get("state", "")):
-		Protocol.FREE_STATE_CALLING:
-			return "呼び出し中　待ち %d人" % waiting
-		Protocol.FREE_STATE_RACING:
-			return "レース中 %d　待ち %d人" % [int(room.get("races", 0)), waiting]
-	return "空いています　待ち %d人" % waiting
+	var racing := int(room.get("racing_players", 0))
+	var waiting := int(room.get("waiting_players", 0))
+	var text := "%d名（レース中 %d名・待機中 %d名）" % [racing + waiting, racing, waiting]
+	return ("呼び出し中　" + text) if str(room.get("state", "")) == Protocol.FREE_STATE_CALLING else text
 
 
 static func distance_text(distance_m: float) -> String:
@@ -943,8 +983,16 @@ func _refresh_entries() -> void:
 		var room := room_by_id(str(entry["room_id"]))
 		row.set_meta("index", index)
 		(row.find_child("Number", true, false) as Label).text = str(index + 1)
+		(row.find_child("RoomImage", true, false) as TextureRect).texture = _room_image(str(entry["room_id"]))
+		_set_tag(row.find_child("Tag", true, false), row.find_child("Text", true, false), room)
 		(row.find_child("Open", true, false) as Button).text = "%s　%s" % [str(room.get("name", entry["room_id"])), distance_text(float(room.get("distance_m", 0.0)))]
-		(row.find_child("Pururin", true, false) as Label).text = "%sで出る" % pururin_name(OnlineSession.local_id(str(entry["pururin_id"])))
+		var pururin_id := OnlineSession.local_id(str(entry["pururin_id"]))
+		var preview := PururinDetail.preview_for(pururin_id)
+		# 同じぷるりんのままなら、絵は写し直さない。
+		if str(row.get_meta("pururin_id", "")) != pururin_id:
+			row.set_meta("pururin_id", pururin_id)
+			row.find_child("Portrait", true, false).call("set_pururin", PururinRosterConfig.pururin_by_id(pururin_id))
+		(row.find_child("Pururin", true, false) as Label).text = "%sで出る　%s属性・%s" % [pururin_name(pururin_id), str(preview.get("attribute", "")), str(preview.get("running_style", ""))]
 		(row.find_child("State", true, false) as Label).text = entry_state_text(entry)
 		(row.find_child("Up", true, false) as Button).disabled = index == 0 or not _client.is_open()
 		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1 or not _client.is_open()
@@ -1039,10 +1087,13 @@ func open_room(room_id: String) -> void:
 	_client.send(Protocol.FREE_VIEW, {"room_id": room_id})
 	var entry := entry_for(room_id)
 	var pururin_id := OnlineSession.local_id(str(entry["pururin_id"])) if not entry.is_empty() else OnlineSession.last_pick
+	# チケットが要るルームでは、チケットを持っているぷるりんから選ぶ（今の子が持っていなければ、持っている最初の子）。
+	var allowed := pick_choices(room)
+	if entry.is_empty() and not allowed.has(pururin_id) and not allowed.is_empty():
+		pururin_id = str(allowed[0])
 	_pick_index = maxi(_roster_ids().find(pururin_id), 0)
 	_lobby_view.visible = false
 	_room_view.visible = true
-	_guide_tabs.visible = false
 	_back_button.text = "ロビーへ戻る"
 	_refresh_room_view()
 	show_room_part(PART_CONDITIONS)
@@ -1060,7 +1111,6 @@ func close_room() -> void:
 	_client.send(Protocol.FREE_VIEW, {"room_id": ""})
 	_room_view.visible = false
 	_lobby_view.visible = true
-	_guide_tabs.visible = true
 	_back_button.text = "戻る"
 	_set_status("ルームを選んで、くわしい条件を見てから、エントリーしてください。")
 	if _cards.has(room_id) and _rooms_page.visible and (_cards[room_id] as Control).visible:
@@ -1078,13 +1128,12 @@ func selected_pururin_id() -> String:
 	return str(ids[clampi(_pick_index, 0, ids.size() - 1)])
 
 
-## 出るぷるりんを、一覧の次・前に替える（端まで行ったら、反対の端へ）。
-func step_pick(step: int) -> void:
-	var count := _roster_ids().size()
-	_pick_index = posmod(_pick_index + step, count)
-	OnlineSession.last_pick = selected_pururin_id()
-	_apply_pick_to_entry()
-	_refresh_pick()
+## そのルームに出せるぷるりん（一覧の順）。チケットが要るルームは、そのチケットを持っている子だけ。
+func pick_choices(room: Dictionary) -> Array:
+	var needs := str(room.get("needs_ticket", ""))
+	if needs.is_empty():
+		return _roster_ids()
+	return _roster_ids().filter(func(pururin_id: String) -> bool: return OwnedPururins.tickets(pururin_id, server_now()).has(needs))
 
 
 func _refresh_room_view() -> void:
@@ -1106,7 +1155,6 @@ func _refresh_room_view() -> void:
 		_open_value.text = "開始 %s まで（開始の時刻に呼び出し）" % schedule_text(int(room["start_unix"]))
 	else:
 		_open_value.text = schedule_range_text(int(room["open_unix"]), int(room["close_unix"])) if int(room.get("open_unix", 0)) > 0 else "いつでも（終わったら次のレース）"
-	_wait_value.text = "呼び出しに %d秒以内に答える（答えないと失格）" % int(round(float(room.get("final_answer_s", 0.0)))) if is_final(room) else "返事 %d秒・集まり 最大%d秒" % [int(round(_answer_wait_s)), int(round(float(_detail.get("fill_wait_s", 0.0))))]
 	_intro.text = str(_detail.get("intro", ""))
 	_refresh_room_strip(room)
 	_refresh_entrants()
@@ -1121,9 +1169,48 @@ func _refresh_room_strip(room: Dictionary) -> void:
 	if not is_open(room):
 		_set_strip_closed(_room_strip, _room_strip_dot, _room_strip_text, room)
 		return
-	_set_strip(_room_strip, _room_strip_dot, _room_strip_text, room)
+	var entry := entry_for(_open_room)
+	var mine := my_state(entry)
+	var shown := room.duplicate()
+	shown["state"] = mine
+	_set_strip(_room_strip, _room_strip_dot, _room_strip_text, shown)
+	var offer_left := maxi(int(ceil(float(_offer_until_msec - Time.get_ticks_msec()) / 1000.0)), 0) if str(_offer.get("room_id", "")) == _open_room else -1
 	var schedule := schedule_state_text(room, server_now())
-	_room_strip_text.text = state_text(room) + ("　" + schedule if not schedule.is_empty() else "　同時に走るレースは %d まで" % int(room.get("max_races", 1)))
+	var pururin := pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))) if not entry.is_empty() else ""
+	_room_strip_text.text = room_count_text(room) + "　" + my_state_text(entry, pururin, offer_left) + ("　" + schedule if not schedule.is_empty() else "")
+
+
+## ルームの画面の帯の人数「45名（レース中 32名・待機中 13名）」。待機中は、保留・呼ばれている人も入る。
+static func room_count_text(room: Dictionary) -> String:
+	var racing := int(room.get("racing_players", 0))
+	var waiting := int(room.get("waiting_players", 0))
+	return "%d名（レース中 %d名・待機中 %d名）" % [racing + waiting, racing, waiting]
+
+
+## 自分の状態：none＝エントリーしていない、entry＝エントリー中、hold＝保留中、called＝呼び出し中、racing＝入ると答えた・レース中。
+static func my_state(entry: Dictionary) -> String:
+	if entry.is_empty():
+		return MY_NONE
+	match str(entry.get("state", "")):
+		Protocol.FREE_ENTRY_CALLED:
+			return MY_CALLED
+		Protocol.FREE_ENTRY_ACCEPTED, Protocol.FREE_ENTRY_RACING:
+			return MY_RACING
+	return MY_HOLD if bool(entry.get("hold", false)) else MY_ENTRY
+
+
+## 自分の状態の文。offer_left は、呼ばれている返事の残り秒（呼ばれていなければ負）。
+static func my_state_text(entry: Dictionary, pururin: String, offer_left: int = -1) -> String:
+	match my_state(entry):
+		MY_ENTRY:
+			return "エントリー中：%s" % pururin
+		MY_HOLD:
+			return "保留中：%s" % pururin
+		MY_CALLED:
+			return "呼び出し中：%s（あと%d秒）" % [pururin, offer_left] if offer_left >= 0 else "呼び出し中：%s" % pururin
+		MY_RACING:
+			return "レース中：%s" % pururin
+	return "エントリーしていません"
 
 
 ## 縛りの文。チケットが要るルームは、出られる人がしぼられるので「チケットが必要」（ルームの設定の文より先）。
@@ -1167,77 +1254,134 @@ func _refresh_entrants() -> void:
 		(row.get_node("Pururin") as Label).text = str(preview.get("display_name", "")) + ("（保留中）" if bool(entrant["hold"]) else "")
 
 
-## 右の欄：出るぷるりんの絵と名前、エントリーのボタン（まだ・取り消す）、保留のボタン。
+## 右の欄：左に出るぷるりんの絵・名前・属性と脚質の印（チケットが要るルームでは、そのチケット）。
+## 右にボタン4つ（出走ぷるりん変更・出走エントリー・エントリー＆保留・出走キャンセル）。ボタンは同じ場所に置いたまま、使えないときは薄くする。
 func _refresh_pick() -> void:
 	var pururin_id := selected_pururin_id()
+	var room := room_by_id(_open_room)
 	var preview := PururinDetail.preview_for(pururin_id)
 	_portrait.call("set_pururin", PururinRosterConfig.pururin_by_id(pururin_id))
 	_pick_name.text = str(preview.get("display_name", ""))
-	_pick_info.text = "%s属性・%s" % [str(preview.get("attribute", "")), str(preview.get("running_style", ""))]
+	_pick_info.queue_redraw()
+	var needs := str(room.get("needs_ticket", ""))
 	var owned_tickets := OwnedPururins.tickets(pururin_id, server_now())
-	_pick_tickets.text = "チケット：" + "・".join(PackedStringArray(owned_tickets.values())) if not owned_tickets.is_empty() else ""
+	_pick_tickets.text = "チケット：" + str(owned_tickets[needs]) if not needs.is_empty() and owned_tickets.has(needs) else ""
 	var entry := entry_for(_open_room)
-	var needs := str(room_by_id(_open_room).get("needs_ticket", ""))
+	var mine := my_state(entry)
 	var missing := not needs.is_empty() and not owned_tickets.has(needs)
-	var closed := not is_open(room_by_id(_open_room))
-	# もうエントリーしていれば、いつでも取り消せる。まだなら、チケットが無い・受付の外のときは押せない。
-	_entry_button.disabled = ((missing or closed) and entry.is_empty()) or not _client.is_open() or _sending_entries.has(_open_room)
-	# 本戦は、保留できない（開始の時刻に、エントリーした全員を呼ぶ）。
-	_hold_button.visible = not entry.is_empty() and not is_final(room_by_id(_open_room))
-	if closed and _entry_button.disabled:
-		_entry_button.text = "エントリーする"
-		_entry_note.text = "本戦は、開始の時刻までにエントリーした人だけが出られます。" if is_final(room_by_id(_open_room)) else schedule_state_text(room_by_id(_open_room), server_now()) + "。受付のあいだだけエントリーできます。"
-	elif missing and _entry_button.disabled:
-		_entry_button.text = "エントリーする"
-		_entry_note.text = "このぷるりんは「%s」を持っていません。" % str(room_by_id(_open_room)["needs_ticket_name"])
-	elif entry.is_empty():
-		_entry_button.text = "エントリーする"
-		_entry_note.text = "エントリーすると、出走の順番が来たときに呼び出します。"
-	elif OnlineSession.local_id(str(entry["pururin_id"])) != pururin_id and (missing or closed):
-		# チケットが無い・受付の外なので、替えなかった。
-		_entry_button.text = "取り消す"
-		_entry_note.text = "%sでエントリーしています（%sには替えられません：%s）。" % [pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))), pururin_name(pururin_id), "チケットがありません" if missing else "受付の外です"]
-	elif OnlineSession.local_id(str(entry["pururin_id"])) != pururin_id:
-		# 選び直したぷるりんへの替えを、サーバーに送ったところ（返事が届くと、下の「エントリーしています」になる）。
-		_entry_button.text = "取り消す"
-		_entry_note.text = "%sに替えています…" % pururin_name(pururin_id)
-	else:
-		_entry_button.text = "取り消す"
-		_entry_note.text = "%sでエントリーしています（%s）。" % [pururin_name(pururin_id), entry_state_text(entry)]
-	for button: BaseButton in [_prev_button, _next_button, _status_button, _hold_button]:
-		button.disabled = not _client.is_open() or _sending_entries.has(_open_room)
-	_hold_button.text = "保留を外す" if not entry.is_empty() and bool(entry["hold"]) else "保留にする"
+	var closed := not is_open(room)
+	var busy: bool = not _client.is_open() or _sending_entries.has(_open_room)
+	var locked := mine == MY_CALLED or mine == MY_RACING
+	_status_button.disabled = busy or locked
+	_entry_button.disabled = busy or not ((mine == MY_NONE and not missing and not closed) or mine == MY_HOLD)
+	_hold_button.disabled = busy or is_final(room) or not ((mine == MY_NONE and not missing and not closed) or mine == MY_ENTRY)
+	_cancel_button.disabled = busy or mine == MY_NONE
+	_refresh_side_note()
 	if is_inside_tree() and _room_view.visible and _top_window() == null and get_viewport().gui_get_focus_owner() == null:
 		(_conditions_tab if _status_button.disabled else _status_button).grab_focus()
 
 
-## エントリーのボタン：まだならエントリー、もうしていれば取り消す（ぷるりんの替えは、選び直したときに、すぐ送る）。
+## 属性の印と、脚質の印（「〈」の並び。得意な順位の組が光る）を、名前の下に並べて描く。
+func _draw_pick_marks() -> void:
+	var preview := PururinDetail.preview_for(selected_pururin_id())
+	if preview.is_empty():
+		return
+	var mark_size := _pick_info.size.y - 2.0
+	var chevrons_width := RaceHud.STYLE_CHEVRON_STEP * PICK_CHEVRON_SCALE * PururinStatsMath.rank_group_count()
+	var left := (_pick_info.size.x - (mark_size + 8.0 + chevrons_width)) * 0.5
+	var center_y := _pick_info.size.y * 0.5
+	PururinDetail.draw_attribute_mark(_pick_info, Vector2(left + mark_size * 0.5, center_y), mark_size, str(preview["attribute_id"]), preview["attribute_color"])
+	RaceHud.draw_style_chevrons(_pick_info, Vector2(left + mark_size + 8.0, center_y), RaceHud.COLOR_STYLE_MATCH, PururinStatsMath.rank_group_count(), PururinStatsMath.style_rank_group_index(str(preview["style_id"])), PICK_CHEVRON_SCALE)
+
+
+## 右の欄の下の説明：カーソル（マウス）が乗っているボタンの説明。使えないボタンなら、使えないわけ。
+func _refresh_side_note(hovered: Control = null) -> void:
+	var button: Control = hovered if hovered != null else get_viewport().gui_get_focus_owner() if is_inside_tree() else null
+	_entry_note.text = side_note(button) if button in [_status_button, _entry_button, _hold_button, _cancel_button] else ""
+
+
+## 右の欄のボタンの説明。
+func side_note(button: Control) -> String:
+	var room := room_by_id(_open_room)
+	var entry := entry_for(_open_room)
+	var mine := my_state(entry)
+	var pururin := pururin_name(selected_pururin_id())
+	var needs := str(room.get("needs_ticket", ""))
+	if not (button as BaseButton).disabled:
+		if button == _status_button:
+			return "出るぷるりんを選び直します。エントリー中なら、そのまま替わります。"
+		if button == _entry_button:
+			return "保留を外して、呼び出しを受けます。" if mine == MY_HOLD else "%sでエントリーします。順番が来たら呼び出します。" % pururin
+		if button == _hold_button:
+			return "呼び出しを止めておきます。「出走エントリー」で外せます。" if mine == MY_ENTRY else "%sでエントリーだけして、呼び出しは止めておきます。" % pururin
+		return "このルームのエントリーを取り消します。"
+	if not _client.is_open():
+		return "サーバーとつながっていません。"
+	if _sending_entries.has(_open_room):
+		return "送っています…"
+	if mine == MY_CALLED or mine == MY_RACING:
+		return "%sのあいだは、使えません。" % entry_state_text(entry)
+	if button == _cancel_button:
+		return "まだエントリーしていません。"
+	if button == _hold_button and is_final(room):
+		return "本戦は、保留できません。"
+	if mine == MY_ENTRY:
+		return "エントリー中です（%s）。" % entry_state_text(entry)
+	if mine == MY_HOLD:
+		return "保留中です（%s）。" % entry_state_text(entry)
+	if not is_open(room):
+		return "本戦は、開始の時刻までにエントリーした人だけが出られます。" if is_final(room) else schedule_state_text(room, server_now()) + "。受付のあいだだけエントリーできます。"
+	if not needs.is_empty():
+		return "このぷるりんは「%s」を持っていません。" % str(room["needs_ticket_name"])
+	return ""
+
+
+## 出走エントリー：まだなら、エントリーする。保留中なら、保留を外す。
 func press_entry() -> void:
 	if _open_room.is_empty() or not _client.is_open() or _sending_entries.has(_open_room):
 		return
 	var entry := entry_for(_open_room)
-	if not entry.is_empty():
-		cancel_entry(_open_room)
+	if entry.is_empty():
+		_send_entry()
+	elif bool(entry["hold"]):
+		set_hold(_open_room, false)
+
+
+## エントリー＆保留：まだなら、保留のままエントリーする。エントリー中なら、保留にする。
+func press_hold() -> void:
+	if _open_room.is_empty() or not _client.is_open() or _sending_entries.has(_open_room):
 		return
-	_send_entry()
+	var entry := entry_for(_open_room)
+	if entry.is_empty():
+		_send_entry(true)
+	elif not bool(entry["hold"]):
+		set_hold(_open_room, true)
 
 
-## 選んでいるぷるりんで、エントリーする（もうしていれば、ぷるりんを替える）。
-func _send_entry() -> void:
+## 出走キャンセル：このルームのエントリーを取り消す。
+func press_cancel() -> void:
+	if not _open_room.is_empty() and not entry_for(_open_room).is_empty():
+		cancel_entry(_open_room)
+
+
+## 選んでいるぷるりんで、エントリーする（もうしていれば、ぷるりんを替える）。hold なら、保留のままエントリーする。
+func _send_entry(hold: bool = false) -> void:
 	if _sending_entries.has(_open_room):
 		return
 	var entry := entry_for(_open_room)
 	var room_name := str(room_by_id(_open_room).get("name", _open_room))
 	OnlineSession.last_pick = selected_pururin_id()
-	if not _client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id())}):
+	if not _client.send(Protocol.FREE_ENTRY, {"room_id": _open_room, "pururin_id": selected_pururin_id(), "uid": OwnedPururins.uid(selected_pururin_id()), "secret": OwnedPururins.secret(selected_pururin_id()), "hold": hold}):
 		_set_status(str(_client.get("last_error")) if not str(_client.get("last_error")).is_empty() else "送れませんでした。つながりを確かめてください。")
 		return
 	_sending_entries[_open_room] = selected_pururin_id()
 	_refresh_pick()
-	if entry.is_empty():
-		_set_status("「%s」にエントリーしました。出走の順番が来たら、呼び出します。" % room_name)
-	else:
+	if not entry.is_empty():
 		_set_status("「%s」に出るぷるりんを、%sに替えました。" % [room_name, pururin_name(selected_pururin_id())])
+	elif hold:
+		_set_status("「%s」に保留でエントリーしました。「出走エントリー」を押すまで、呼び出しは来ません。" % room_name)
+	else:
+		_set_status("「%s」にエントリーしました。出走の順番が来たら、呼び出します。" % room_name)
 
 
 ## エントリーできた知らせ：画面の真ん中に、少しのあいだ大きく出して、消える。
@@ -1290,7 +1434,7 @@ func open_picker() -> void:
 	_picker_status.visible = true
 	# 一覧を開いているあいだの B は、一覧を閉じる。
 	_back_button.text = "閉じる"
-	_picker.call("open_choices", "出るぷるりんを選ぶ", selected_pururin_id(), {})
+	_picker.call("open_choices", "出るぷるりんを選ぶ", selected_pururin_id(), {}, pick_choices(room_by_id(_open_room)))
 	_sync_windows()
 
 
@@ -1330,12 +1474,6 @@ func _on_picker_closed() -> void:
 	_back_button.text = "ロビーへ戻る" if _room_view.visible else "戻る"
 	if is_inside_tree():
 		_restore_window_focus(_picker)
-
-
-func press_hold() -> void:
-	var entry := entry_for(_open_room)
-	if not entry.is_empty():
-		set_hold(_open_room, not bool(entry["hold"]))
 
 
 ## チケットをもらった：そのぷるりんに覚えさせて、知らせる。錠のカードは、開けられるようになる。
@@ -1446,6 +1584,8 @@ func _show_offer(data: Dictionary) -> void:
 	_answer_pending = false
 	_accept_button.disabled = false
 	_decline_button.disabled = false
+	# 本戦・決勝の呼び出しは、保留できない（答えないと失格）。
+	_offer_hold_button.disabled = not str(data.get("stage", "")).is_empty()
 	_offer_total_s = maxf(float(data.get("wait_s", 0.0)), 0.1)
 	_offer_until_msec = Time.get_ticks_msec() + int(_offer_total_s * 1000.0)
 	_offer_image.texture = _room_image(str(data["room_id"]))
@@ -1462,6 +1602,13 @@ func _show_offer(data: Dictionary) -> void:
 	UIAudio.play_confirmation()
 
 
+## 呼び出しを保留にする：エントリーは残して、保留を外すまで呼ばれない。
+func hold_offer() -> void:
+	if _offer.is_empty() or _answer_pending or _offer_hold_button.disabled:
+		return
+	set_hold(str(_offer["room_id"]), true)
+
+
 ## 呼ばれたルームに答える。
 func answer(accept: bool) -> void:
 	if _offer.is_empty() or _answer_pending:
@@ -1475,6 +1622,7 @@ func answer(accept: bool) -> void:
 	_answer_accept = accept
 	_accept_button.disabled = true
 	_decline_button.disabled = true
+	_offer_hold_button.disabled = true
 	_offer_panel.grab_focus()
 	_offer_info.text = "入っています…" if accept else "取り消しています…"
 
@@ -1850,10 +1998,15 @@ func _update_clock() -> void:
 	_clock.text = "%d:%02d" % [int(now["hour"]), int(now["minute"])]
 
 
+## Esc（「戻る」の動作）。日本語入力がオンのときは「戻る」の動作として届かないことがあるので、キーの場所でも見る。
+static func is_escape(event: InputEvent) -> bool:
+	return event.is_action_pressed("ui_cancel") or (event is InputEventKey and event.pressed and not event.echo and (event as InputEventKey).physical_keycode == KEY_ESCAPE)
+
+
 ## 入力らんにいるときも、B・Esc は前にある窓だけを閉じる。C は文字として打てる。
 func _input(event: InputEvent) -> void:
 	var window := _top_window()
-	var cancel := event.is_action_pressed("ui_cancel") or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_B)
+	var cancel := is_escape(event) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_B)
 	var close_chat := window == _chat_overlay and RaceControllerInput.is_button_pressed(event, JOY_BUTTON_BACK)
 	if window != null and (cancel or close_chat):
 		get_viewport().set_input_as_handled()
@@ -1877,7 +2030,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
 	var focused := viewport.gui_get_focus_owner()
 	var window := _top_window()
-	var cancel := event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event)
+	var cancel := is_escape(event) or RaceControllerInput.is_cancel_pressed(event)
 	if window != null:
 		if cancel:
 			_cancel_window(window)
@@ -1909,3 +2062,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		UIAudio.play_confirmation()
 		var step := 1 if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER) else -1
 		show_tab(TABS[posmod(TABS.find(current_tab()) + step, TABS.size())])
+	elif _room_view.visible and (RaceControllerInput.is_button_pressed(event, JOY_BUTTON_LEFT_SHOULDER) or RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER)):
+		viewport.set_input_as_handled()
+		UIAudio.play_confirmation()
+		var step := 1 if RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_SHOULDER) else -1
+		show_room_part(ROOM_PARTS[posmod(ROOM_PARTS.find(current_room_part()) + step, ROOM_PARTS.size())])

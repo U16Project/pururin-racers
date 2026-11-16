@@ -1210,198 +1210,6 @@ corner_radius_top_right = 18
 corner_radius_bottom_right = 18
 corner_radius_bottom_left = 18
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_61txf"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.1, 0.16, 0.26, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.18)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lnvx4"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.088, 0.1408, 0.22879998, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_lylwb"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.208, 0.2608, 0.3488, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3uvi3"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.095, 0.152, 0.247, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1ieid"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.1, 0.16, 0.26, 0.35)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.08)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_mrm73"]
-content_margin_left = 0.0
-content_margin_top = 0.0
-content_margin_right = 0.0
-content_margin_bottom = 0.0
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(1, 0.8, 0.28, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_76ghr"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.1, 0.16, 0.26, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.18)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_opb3i"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.088, 0.1408, 0.22879998, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_nmcty"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.208, 0.2608, 0.3488, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_000p8"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.095, 0.152, 0.247, 0.7)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.35)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3lxye"]
-content_margin_left = 14.0
-content_margin_top = 4.0
-content_margin_right = 14.0
-content_margin_bottom = 4.0
-bg_color = Color(0.1, 0.16, 0.26, 0.35)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
-border_color = Color(1, 1, 1, 0.08)
-corner_radius_top_left = 12
-corner_radius_top_right = 12
-corner_radius_bottom_right = 12
-corner_radius_bottom_left = 12
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_iet63"]
-content_margin_left = 0.0
-content_margin_top = 0.0
-content_margin_right = 0.0
-content_margin_bottom = 0.0
-bg_color = Color(0, 0, 0, 0)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(1, 0.8, 0.28, 1)
-corner_radius_top_left = 14
-corner_radius_top_right = 14
-corner_radius_bottom_right = 14
-corner_radius_bottom_left = 14
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_k2nom"]
 content_margin_left = 44.0
 content_margin_top = 4.0
@@ -3709,6 +3517,38 @@ corner_radius_top_right = 24
 corner_radius_bottom_right = 24
 corner_radius_bottom_left = 24
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_entryportrait"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0.16, 0.24, 0.36, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.45, 0.78, 1, 0.45)
+corner_radius_top_left = 14
+corner_radius_top_right = 14
+corner_radius_bottom_right = 14
+corner_radius_bottom_left = 14
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_entrystate"]
+content_margin_left = 12.0
+content_margin_top = 3.0
+content_margin_right = 12.0
+content_margin_bottom = 3.0
+bg_color = Color(0.35, 0.86, 1, 0.14)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.35, 0.86, 1, 0.6)
+corner_radius_top_left = 12
+corner_radius_top_right = 12
+corner_radius_bottom_right = 12
+corner_radius_bottom_left = 12
+
 [node name="OnlineFreeLobby" type="Control" unique_id=1296811212]
 layout_mode = 3
 anchors_preset = 15
@@ -4201,7 +4041,7 @@ layout_mode = 2
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.04, 0.07, 0.13, 1)
-text = "いつもの"
+text = "常設"
 horizontal_alignment = 1
 
 [node name="RoomDistance" type="Label" parent="RoomView/Main" unique_id=177160211]
@@ -4490,28 +4330,6 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
 
-[node name="WaitRow" type="PanelContainer" parent="RoomView/Main/ConditionsPage/Conditions" unique_id=742876563]
-layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_raghk")
-
-[node name="Row" type="HBoxContainer" parent="RoomView/Main/ConditionsPage/Conditions/WaitRow" unique_id=741804321]
-layout_mode = 2
-
-[node name="Key" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/WaitRow/Row" unique_id=1376970983]
-custom_minimum_size = Vector2(112, 0)
-layout_mode = 2
-theme_override_fonts/font = ExtResource("3_pj84j")
-theme_override_font_sizes/font_size = 15
-theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "待ち時間"
-
-[node name="WaitValue" type="Label" parent="RoomView/Main/ConditionsPage/Conditions/WaitRow/Row" unique_id=1924045288]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 15
-theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-
 [node name="IntroBox" type="PanelContainer" parent="RoomView/Main/ConditionsPage" unique_id=1970433500]
 layout_mode = 0
 anchor_right = 1.0
@@ -4582,7 +4400,7 @@ anchor_right = 1.0
 offset_left = -396.0
 offset_top = 78.0
 offset_right = -28.0
-offset_bottom = 352.0
+offset_bottom = 384.0
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_csqe5")
 
@@ -4599,10 +4417,10 @@ text = "出るぷるりん"
 
 [node name="PortraitBox" type="Panel" parent="RoomView/Side" unique_id=854750294]
 layout_mode = 0
-offset_left = 18.0
-offset_top = 40.0
-offset_right = 142.0
-offset_bottom = 164.0
+offset_left = 18
+offset_top = 40
+offset_right = 142
+offset_bottom = 164
 mouse_filter = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_fmqp7")
 
@@ -4622,11 +4440,12 @@ script = ExtResource("4_v84k3")
 [node name="PickName" type="Label" parent="RoomView/Side" unique_id=1114080968]
 unique_name_in_owner = true
 layout_mode = 0
-anchor_right = 1.0
-offset_left = 156.0
-offset_top = 42.0
-offset_right = -18.0
-offset_bottom = 70.0
+horizontal_alignment = 1
+anchor_right = 0.0
+offset_left = 18
+offset_top = 168
+offset_right = 142
+offset_bottom = 194
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 20
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
@@ -4636,24 +4455,23 @@ clip_text = true
 [node name="PickInfo" type="Label" parent="RoomView/Side" unique_id=1755761269]
 unique_name_in_owner = true
 layout_mode = 0
-anchor_right = 1.0
-offset_left = 156.0
-offset_top = 72.0
-offset_right = -18.0
-offset_bottom = 92.0
+anchor_right = 0.0
+offset_left = 18
+offset_top = 194
+offset_right = 142
+offset_bottom = 222
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "風属性・先行"
 
 [node name="StatusButton" type="Button" parent="RoomView/Side" unique_id=1870010267]
 unique_name_in_owner = true
 layout_mode = 0
 anchor_right = 1.0
-offset_left = 156.0
-offset_top = 98.0
-offset_right = -18.0
-offset_bottom = 130.0
+offset_left = 156
+offset_top = 40
+offset_right = -18
+offset_bottom = 74
 theme_override_styles/normal = SubResource("StyleBoxFlat_txlwx")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_ybxft")
 theme_override_styles/hover = SubResource("StyleBoxFlat_6tct5")
@@ -4668,62 +4486,16 @@ theme_override_colors/font_hover_pressed_color = Color(0.35, 0.86, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.35, 0.86, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
-text = "ぷるりんを選ぶ"
-
-[node name="PrevButton" type="Button" parent="RoomView/Side" unique_id=100723915]
-unique_name_in_owner = true
-layout_mode = 0
-offset_left = 156.0
-offset_top = 134.0
-offset_right = 204.0
-offset_bottom = 164.0
-theme_override_styles/normal = SubResource("StyleBoxFlat_61txf")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_lnvx4")
-theme_override_styles/hover = SubResource("StyleBoxFlat_lylwb")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_3uvi3")
-theme_override_styles/disabled = SubResource("StyleBoxFlat_1ieid")
-theme_override_styles/focus = SubResource("StyleBoxFlat_mrm73")
-theme_override_colors/font_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_focus_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_hover_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_disabled_color = Color(0.35, 0.86, 1, 0.35)
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 18
-text = "◀"
-
-[node name="NextButton" type="Button" parent="RoomView/Side" unique_id=184526895]
-unique_name_in_owner = true
-layout_mode = 0
-offset_left = 212.0
-offset_top = 134.0
-offset_right = 260.0
-offset_bottom = 164.0
-theme_override_styles/normal = SubResource("StyleBoxFlat_76ghr")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_opb3i")
-theme_override_styles/hover = SubResource("StyleBoxFlat_nmcty")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_000p8")
-theme_override_styles/disabled = SubResource("StyleBoxFlat_3lxye")
-theme_override_styles/focus = SubResource("StyleBoxFlat_iet63")
-theme_override_colors/font_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_focus_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_hover_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.35, 0.86, 1, 1)
-theme_override_colors/font_disabled_color = Color(0.35, 0.86, 1, 0.35)
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 18
-text = "▶"
+text = "出走ぷるりん変更"
 
 [node name="EntryButton" type="Button" parent="RoomView/Side" unique_id=457473748]
 unique_name_in_owner = true
 layout_mode = 0
 anchor_right = 1.0
-offset_left = 18.0
-offset_top = 174.0
-offset_right = -132.0
-offset_bottom = 218.0
+offset_left = 156
+offset_top = 80
+offset_right = -18
+offset_bottom = 114
 theme_override_styles/normal = SubResource("StyleBoxFlat_k2nom")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_1qut8")
 theme_override_styles/hover = SubResource("StyleBoxFlat_8k5eh")
@@ -4737,18 +4509,18 @@ theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 20
-text = "エントリーする"
+theme_override_font_sizes/font_size = 16
+text = "出走エントリー"
 
 [node name="HoldButton" type="Button" parent="RoomView/Side" unique_id=544627218]
 unique_name_in_owner = true
 layout_mode = 0
-anchor_left = 1.0
+anchor_left = 0.0
 anchor_right = 1.0
-offset_left = -124.0
-offset_top = 174.0
-offset_right = -18.0
-offset_bottom = 218.0
+offset_left = 156
+offset_top = 120
+offset_right = -18
+offset_bottom = 154
 theme_override_styles/normal = SubResource("StyleBoxFlat_bg2p7")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_nanuf")
 theme_override_styles/hover = SubResource("StyleBoxFlat_w0h00")
@@ -4763,19 +4535,44 @@ theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
-text = "保留にする"
+text = "エントリー＆保留"
+
+[node name="CancelButton" type="Button" parent="RoomView/Side"]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_left = 0.0
+anchor_right = 1.0
+offset_left = 156
+offset_top = 160
+offset_right = -18
+offset_bottom = 194
+theme_override_styles/normal = SubResource("StyleBoxFlat_bg2p7")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_nanuf")
+theme_override_styles/hover = SubResource("StyleBoxFlat_w0h00")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_q001h")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_v5xkc")
+theme_override_styles/focus = SubResource("StyleBoxFlat_emfh8")
+theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_focus_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
+theme_override_fonts/font = SubResource("FontVariation_7qbkn")
+theme_override_font_sizes/font_size = 15
+text = "出走キャンセル"
 
 [node name="EntryNote" type="Label" parent="RoomView/Side" unique_id=352522204]
 unique_name_in_owner = true
 layout_mode = 0
 anchor_right = 1.0
-offset_left = 18.0
-offset_top = 218.0
-offset_right = -18.0
-offset_bottom = 258.0
+offset_left = 18
+offset_top = 254
+offset_right = -18
+offset_bottom = 296
 theme_override_constants/line_spacing = -3
 theme_override_fonts/font = ExtResource("3_pj84j")
-theme_override_font_sizes/font_size = 13
+theme_override_font_sizes/font_size = 14
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
 autowrap_mode = 3
 text_overrun_behavior = 3
@@ -4784,11 +4581,12 @@ max_lines_visible = 2
 [node name="PickTickets" type="Label" parent="RoomView/Side" unique_id=1368169459]
 unique_name_in_owner = true
 layout_mode = 0
+horizontal_alignment = 0
 anchor_right = 1.0
-offset_left = 18.0
-offset_top = 256.0
-offset_right = -18.0
-offset_bottom = 272.0
+offset_left = 18
+offset_top = 234
+offset_right = -18
+offset_bottom = 252
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(1, 0.8, 0.28, 1)
@@ -4800,7 +4598,7 @@ anchor_left = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -396.0
-offset_top = 362.0
+offset_top = 394.0
 offset_right = -28.0
 offset_bottom = -48.0
 mouse_filter = 1
@@ -4939,7 +4737,7 @@ layout_mode = 2
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 13
 theme_override_colors/font_color = Color(0.04, 0.07, 0.13, 1)
-text = "いつもの"
+text = "常設"
 horizontal_alignment = 1
 
 [node name="Distance" type="Label" parent="CardTemplate" unique_id=1105741119]
@@ -5093,12 +4891,12 @@ theme_override_styles/panel = SubResource("StyleBoxFlat_x3ncd")
 
 [node name="Row" type="HBoxContainer" parent="EntryRowTemplate" unique_id=1229027861]
 layout_mode = 2
-theme_override_constants/separation = 12
+theme_override_constants/separation = 16
 
 [node name="NumberBox" type="PanelContainer" parent="EntryRowTemplate/Row" unique_id=183031357]
 custom_minimum_size = Vector2(40, 40)
 layout_mode = 2
-size_flags_vertical = 4
+size_flags_vertical = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_640fp")
 
 [node name="Number" type="Label" parent="EntryRowTemplate/Row/NumberBox" unique_id=197523889]
@@ -5110,13 +4908,55 @@ text = "1"
 horizontal_alignment = 1
 vertical_alignment = 1
 
+[node name="PortraitBox" type="PanelContainer" parent="EntryRowTemplate/Row"]
+clip_children = 2
+custom_minimum_size = Vector2(190, 124)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_entryportrait")
+
+[node name="RoomImage" type="TextureRect" parent="EntryRowTemplate/Row/PortraitBox"]
+modulate = Color(0.75, 0.78, 0.85, 1)
+layout_mode = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Portrait" type="Control" parent="EntryRowTemplate/Row/PortraitBox"]
+custom_minimum_size = Vector2(116, 116)
+layout_mode = 2
+size_flags_horizontal = 4
+size_flags_vertical = 4
+mouse_filter = 2
+script = ExtResource("4_v84k3")
+
 [node name="Info" type="VBoxContainer" parent="EntryRowTemplate/Row" unique_id=159191141]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 0
+alignment = 1
+theme_override_constants/separation = 6
 
-[node name="Open" type="Button" parent="EntryRowTemplate/Row/Info" unique_id=1543476672]
+[node name="Head" type="HBoxContainer" parent="EntryRowTemplate/Row/Info"]
 layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Tag" type="PanelContainer" parent="EntryRowTemplate/Row/Info/Head"]
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_l5eq6")
+
+[node name="Text" type="Label" parent="EntryRowTemplate/Row/Info/Head/Tag"]
+layout_mode = 2
+theme_override_fonts/font = SubResource("FontVariation_7qbkn")
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.04, 0.07, 0.13, 1)
+text = "常設"
+horizontal_alignment = 1
+
+[node name="Open" type="Button" parent="EntryRowTemplate/Row/Info/Head" unique_id=1543476672]
+layout_mode = 2
+size_flags_horizontal = 0
 tooltip_text = "ルームの画面を開く"
 theme_override_styles/normal = SubResource("StyleBoxFlat_oo6kx")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_ys8ag")
@@ -5131,29 +4971,43 @@ theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 19
+theme_override_font_sizes/font_size = 24
 text = "短距離　1200m"
 alignment = 0
 
 [node name="Pururin" type="Label" parent="EntryRowTemplate/Row/Info" unique_id=764825579]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
-theme_override_font_sizes/font_size = 14
-theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
 text = "ヒカリで出る"
 
-[node name="State" type="Label" parent="EntryRowTemplate/Row" unique_id=486493873]
-custom_minimum_size = Vector2(220, 0)
+[node name="StateBox" type="PanelContainer" parent="EntryRowTemplate/Row/Info"]
+layout_mode = 2
+size_flags_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_entrystate")
+
+[node name="State" type="Label" parent="EntryRowTemplate/Row/Info/StateBox" unique_id=486493873]
 layout_mode = 2
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 17
+theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.35, 0.86, 1, 1)
 text = "待ち 1番目"
 
-[node name="Up" type="Button" parent="EntryRowTemplate/Row" unique_id=1106857755]
-custom_minimum_size = Vector2(44, 42)
+[node name="Actions" type="VBoxContainer" parent="EntryRowTemplate/Row"]
+custom_minimum_size = Vector2(230, 0)
 layout_mode = 2
 size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="Order" type="HBoxContainer" parent="EntryRowTemplate/Row/Actions"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Up" type="Button" parent="EntryRowTemplate/Row/Actions/Order" unique_id=1106857755]
+custom_minimum_size = Vector2(0, 38)
+size_flags_horizontal = 3
+layout_mode = 2
 theme_override_styles/normal = SubResource("StyleBoxFlat_auvmv")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_1rrjo")
 theme_override_styles/hover = SubResource("StyleBoxFlat_ckqo7")
@@ -5168,12 +5022,12 @@ theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 16
-text = "▲"
+text = "▲ 優先を上げる"
 
-[node name="Down" type="Button" parent="EntryRowTemplate/Row" unique_id=1152552354]
-custom_minimum_size = Vector2(44, 42)
+[node name="Down" type="Button" parent="EntryRowTemplate/Row/Actions/Order" unique_id=1152552354]
+custom_minimum_size = Vector2(0, 38)
+size_flags_horizontal = 3
 layout_mode = 2
-size_flags_vertical = 4
 theme_override_styles/normal = SubResource("StyleBoxFlat_itb5a")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_1gdfd")
 theme_override_styles/hover = SubResource("StyleBoxFlat_jao43")
@@ -5190,10 +5044,9 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 16
 text = "▼"
 
-[node name="Hold" type="Button" parent="EntryRowTemplate/Row" unique_id=412366496]
-custom_minimum_size = Vector2(130, 42)
+[node name="Hold" type="Button" parent="EntryRowTemplate/Row/Actions" unique_id=412366496]
+custom_minimum_size = Vector2(0, 38)
 layout_mode = 2
-size_flags_vertical = 4
 theme_override_styles/normal = SubResource("StyleBoxFlat_g7nme")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_liq4c")
 theme_override_styles/hover = SubResource("StyleBoxFlat_hrr02")
@@ -5210,10 +5063,9 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 16
 text = "保留にする"
 
-[node name="Cancel" type="Button" parent="EntryRowTemplate/Row" unique_id=657244702]
-custom_minimum_size = Vector2(110, 42)
+[node name="Cancel" type="Button" parent="EntryRowTemplate/Row/Actions" unique_id=657244702]
+custom_minimum_size = Vector2(0, 38)
 layout_mode = 2
-size_flags_vertical = 4
 theme_override_styles/normal = SubResource("StyleBoxFlat_8wnxy")
 theme_override_styles/pressed = SubResource("StyleBoxFlat_yred7")
 theme_override_styles/hover = SubResource("StyleBoxFlat_ro6ky")
@@ -5373,7 +5225,7 @@ layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "タブ"
+text = "タブ切替え"
 
 [node name="GuideChat" type="HBoxContainer" parent="GuideBar/Row" unique_id=640091654]
 unique_name_in_owner = true
@@ -5950,11 +5802,36 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 22
 text = "入る"
 
+[node name="OfferHoldButton" type="Button" parent="OfferPanel/Window"]
+unique_name_in_owner = true
+layout_mode = 0
+anchor_right = 0.5
+offset_left = 24.0
+offset_top = 352.0
+offset_right = -6.0
+offset_bottom = 396.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_0rd4v")
+theme_override_styles/pressed = SubResource("StyleBoxFlat_ebikm")
+theme_override_styles/hover = SubResource("StyleBoxFlat_t3au7")
+theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_m7udx")
+theme_override_styles/disabled = SubResource("StyleBoxFlat_0hqrg")
+theme_override_styles/focus = SubResource("StyleBoxFlat_4mnxa")
+theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_focus_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_pressed_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
+theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
+theme_override_fonts/font = SubResource("FontVariation_7qbkn")
+theme_override_font_sizes/font_size = 18
+text = "保留"
+
 [node name="DeclineButton" type="Button" parent="OfferPanel/Window" unique_id=731296405]
 unique_name_in_owner = true
 layout_mode = 0
+anchor_left = 0.5
 anchor_right = 1.0
-offset_left = 24.0
+offset_left = 6.0
 offset_top = 352.0
 offset_right = -24.0
 offset_bottom = 396.0
@@ -5971,5 +5848,5 @@ theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
 theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 16
-text = "入らない（このルームのエントリーを取り消す）"
+theme_override_font_sizes/font_size = 18
+text = "取り消す"

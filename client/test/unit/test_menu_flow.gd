@@ -1081,7 +1081,7 @@ func _free_lobby_fixture() -> Dictionary:
 	client.message_received.connect(Session._remember)
 	Session._client = client
 	Session.peer_id = 1
-	Session.free_lobby = {"peer_id": 1, "rooms": server.free_room_list(), "entries": [], "answer_wait_s": Config.free_answer_wait_s()}
+	Session.free_lobby = {"peer_id": 1, "rooms": server.free_room_list(), "entries": []}
 	var screen: Control = load("res://scenes/online_free_lobby.tscn").instantiate()
 	screen.set_script(FreeLobbyWaitingProbe)
 	add_child_autofree(screen)

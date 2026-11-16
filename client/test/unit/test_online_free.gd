@@ -36,6 +36,7 @@ func before_each() -> void:
 	_server.fill_wait_s = FILL_WAIT_S
 	_server.answer_wait_s = ANSWER_WAIT_S
 	_server.rest_after_race_s = 0.0
+	_server.entry_call_delay_s = 0.0
 	# 自分のぷるりんとチケットは、テスト用の場所に置く（本物に触らない）。
 	DirAccess.remove_absolute(OWNED_FILE)
 	DirAccess.remove_absolute(TICKET_FILE)
@@ -147,7 +148,6 @@ func test_the_free_lobby_lists_the_configured_rooms_and_friend_rooms_do_not_show
 		assert_eq(int(room["max_races"]), int(spec["max_races"]))
 	assert_eq(ids, _free_ids())
 	assert_eq((lobby["entries"] as Array).size(), 0)
-	assert_almost_eq(float(lobby["answer_wait_s"]), ANSWER_WAIT_S, 0.001)
 	# ともだち対戦の部屋の一覧と、部屋の数には、入らない。
 	assert_eq(_server.room_count(), 0)
 	assert_eq(_server.room_list().size(), 0)
@@ -895,29 +895,78 @@ func test_clicking_a_card_only_opens_the_room_and_the_entry_button_enters() -> v
 	assert_true((screen.find_child("RoomView", true, false) as Control).visible)
 	assert_eq((screen.find_child("Intro", true, false) as Label).text, str(OnlineConfig.free_rooms()[1]["intro"]))
 	assert_eq(_server.free_line(ids[1]).size(), 0)
-	# 「エントリーする」を押して、はじめてエントリーになる。
+	# 「出走エントリー」を押して、はじめてエントリーになる。ボタンは同じ場所のまま、使えないものが薄くなる。
 	var entry_button: Button = screen.find_child("EntryButton", true, false)
+	var cancel_button: Button = screen.find_child("CancelButton", true, false)
+	assert_true(cancel_button.disabled, "エントリー前は、取り消せない")
 	entry_button.pressed.emit()
 	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).size() == 1))
-	assert_eq(entry_button.text, "取り消す")
+	assert_true(await _wait_until(func() -> bool: return not cancel_button.disabled))
+	assert_true(entry_button.disabled, "エントリー中は、出走エントリーが薄い")
 	# エントリーしたあとで、ぷるりんを選び直すと、ボタンを押さなくても、すぐエントリーのぷるりんが替わる
 	# （呼ばれる前に確かめるため、いったん保留にしておく）。
 	screen.press_hold()
 	assert_true(await _wait_until(func() -> bool: return bool((screen.get("_entries") as Array)[0]["hold"])))
+	assert_true(await _wait_until(func() -> bool: return not entry_button.disabled), "保留中は、出走エントリーで保留を外せる")
 	var other := str(PururinRosterConfig.values()["roster"][2]["id"])
 	screen.find_child("Picker", true, false).picked.emit(other)
 	assert_true(await _wait_until(func() -> bool: return str((screen.get("_entries") as Array)[0]["pururin_id"]) == other), "エントリーのぷるりんが替わる")
-	assert_eq(entry_button.text, "取り消す")
-	screen.press_hold()
+	screen.press_entry()
 	# 呼ばれると、どのルームかを出した確かめの窓が出る。
 	var panel: Control = screen.find_child("OfferPanel", true, false)
 	assert_true(await _wait_until(func() -> bool: return panel.visible))
 	assert_true((screen.find_child("OfferRoom", true, false) as Label).text.contains(str(OnlineConfig.free_rooms()[1]["name"])))
 	assert_true((screen.find_child("OfferInfo", true, false) as Label).text.contains("第1候補"))
-	# 入らないと、そのルームのエントリーが取り消される。
+	# 呼び出しを保留にすると、窓が閉じて、エントリーは保留で残る。
+	screen.hold_offer()
+	assert_false(panel.visible)
+	assert_true(await _wait_until(func() -> bool: return bool((screen.get("_entries") as Array)[0]["hold"])), "保留で残る")
+	screen.press_entry()
+	assert_true(await _wait_until(func() -> bool: return panel.visible), "保留を外すと、また呼ばれる")
+	# 取り消すと、そのルームのエントリーが取り消される。
 	screen.answer(false)
 	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).is_empty()))
-	assert_eq(entry_button.text, "エントリーする")
+	assert_true(await _wait_until(func() -> bool: return cancel_button.disabled))
+	assert_false(entry_button.disabled)
+
+
+func test_a_new_entry_is_called_only_after_the_entry_delay() -> void:
+	var ids := _free_ids()
+	_server.entry_call_delay_s = 0.6
+	await _enter_free("a")
+	_enter_rooms("a", [ids[0]])
+	assert_true((await _wait_for("a", Protocol.FREE_OFFER, 0.3)).is_empty(), "エントリーしてすぐは、呼ばない")
+	assert_eq(str((await _wait_for("a", Protocol.FREE_OFFER))["room_id"]), ids[0], "決めた秒数のあとで呼ぶ")
+
+
+func test_an_entry_can_start_on_hold() -> void:
+	var ids := _free_ids()
+	await _enter_free("a")
+	var message := _entry_message(ids[0], _first_pururin())
+	message["hold"] = true
+	_clients["a"].send(Protocol.FREE_ENTRY, message)
+	var lobby := await _latest_lobby("a")
+	assert_true(bool(lobby["entries"][0]["hold"]))
+	assert_true((await _wait_for("a", Protocol.FREE_OFFER, 0.5)).is_empty(), "保留のままなら、呼ばない")
+
+
+func test_the_room_list_counts_waiting_and_racing_players() -> void:
+	var ids := _free_ids()
+	_server.set("fill_wait_s", 60.0)
+	_server.set("answer_wait_s", 60.0)
+	await _enter_free("a")
+	await _enter_free("b")
+	_enter_rooms("a", [ids[0]])
+	var offer := await _wait_for("a", Protocol.FREE_OFFER)
+	_clients["a"].send(Protocol.FREE_ANSWER, {"room_id": str(offer["room_id"]), "accept": true})
+	await _wait_for("a", Protocol.FREE_ANSWER_RESULT)
+	var message := _entry_message(ids[0], _first_pururin())
+	message["hold"] = true
+	_clients["b"].send(Protocol.FREE_ENTRY, message)
+	var room := _room_line(await _latest_lobby("b"), ids[0])
+	assert_eq(int(room["racing_players"]), 1)
+	assert_eq(int(room["waiting_players"]), 1)
+	assert_eq(FreeLobby.room_count_text(room), "2名（レース中 1名・待機中 1名）")
 
 
 func test_the_entries_tab_lists_the_entries_with_hold_and_cancel() -> void:
@@ -942,12 +991,14 @@ func test_the_entries_tab_lists_the_entries_with_hold_and_cancel() -> void:
 
 
 func test_the_state_texts() -> void:
-	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_RACING, "races": 2, "waiting": 5}), "レース中 2　待ち 5人")
-	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_CALLING, "waiting": 3}), "呼び出し中　待ち 3人")
-	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_IDLE, "waiting": 0}), "空いています　待ち 0人")
-	assert_eq(FreeLobby.entry_state_text({"state": Protocol.FREE_ENTRY_WAIT, "hold": false, "place": 3}), "待ち 3番目")
-	assert_eq(FreeLobby.entry_state_text({"state": Protocol.FREE_ENTRY_WAIT, "hold": true, "place": 1}), "保留中（待ち 1番目）")
-	assert_eq(FreeLobby.entry_state_text({"state": Protocol.FREE_ENTRY_CALLED, "hold": false, "place": 1}), "呼ばれています")
+	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_RACING, "racing_players": 32, "waiting_players": 13}), "45名（レース中 32名・待機中 13名）")
+	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_CALLING, "racing_players": 0, "waiting_players": 3}), "呼び出し中　3名（レース中 0名・待機中 3名）")
+	assert_eq(FreeLobby.state_text({"state": Protocol.FREE_STATE_IDLE}), "0名（レース中 0名・待機中 0名）")
+	assert_eq(FreeLobby.my_state_text({}, "アカネ"), "エントリーしていません")
+	assert_eq(FreeLobby.my_state_text({"state": Protocol.FREE_ENTRY_WAIT, "hold": false}, "アカネ"), "エントリー中：アカネ")
+	assert_eq(FreeLobby.my_state_text({"state": Protocol.FREE_ENTRY_WAIT, "hold": true}, "アカネ"), "保留中：アカネ")
+	assert_eq(FreeLobby.my_state_text({"state": Protocol.FREE_ENTRY_CALLED, "hold": false}, "アカネ", 12), "呼び出し中：アカネ（あと12秒）")
+	assert_eq(FreeLobby.my_state_text({"state": Protocol.FREE_ENTRY_RACING, "hold": false}, "アカネ"), "レース中：アカネ")
 
 
 func test_choosing_a_pururin_opens_the_pick_window_with_the_status_beside_it() -> void:
@@ -1498,7 +1549,7 @@ func test_sending_entries_need_confirmation_and_only_matching_errors_restore_pic
 	assert_true((screen.find_child("ConfirmDialog", true, false) as Control).visible)
 	screen.call("_answer_confirm", false)
 	screen.open_room(ids[1])
-	screen.call("step_pick", 1)
+	screen.call("_on_picker_picked", str(screen.call("pick_choices", screen.room_by_id(ids[1]))[1]))
 	var selected: String = screen.selected_pururin_id()
 	screen.call("_on_message", {"t": Protocol.ERROR, "code": Protocol.ERROR_PICK_LOCKED, "room_id": ids[0]})
 	assert_eq(screen.selected_pururin_id(), selected, "ほかのルームへの拒否では、今の選びを戻さない")

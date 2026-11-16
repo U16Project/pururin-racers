@@ -485,6 +485,7 @@ class MessageClient:
 func _server() -> Node:
 	var server := MessageServer.new()
 	server.listen_on_ready = false
+	server.entry_call_delay_s = 0.0
 	server.tickets_path = "user://test_online_custom_tickets.json"
 	server.results_path = "user://test_online_custom_results.json"
 	_files.append(server.tickets_path)

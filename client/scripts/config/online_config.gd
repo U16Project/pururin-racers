@@ -11,7 +11,8 @@ const SERVER_MAX_FPS_RANGE := Vector2(10.0, 120.0)
 ## free_rest_after_race_s＝オンラインフリー対戦で、レースからロビーに戻ったあと、呼ばないで休ませる秒数。
 ## free_result_keep＝オンラインフリー対戦のルームごとに残す、過去の結果のレースの数。
 ## free_answer_wait_s＝呼ばれた人の、返事を待つ秒数の上限（返事がなければ、そのルームのエントリーを取り消す）。
-const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0), "log_keep_days": Vector2(1.0, 365.0), "free_fill_wait_s": Vector2(1.0, 300.0), "free_answer_wait_s": Vector2(1.0, 120.0), "free_result_keep": Vector2(1.0, 200.0), "free_rest_after_race_s": Vector2(0.0, 300.0)}
+## free_entry_call_delay_s＝エントリーしてから、そのルームで呼ぶまでに置く秒数（そのあいだに、ほかのルームも見られるように）。
+const WHOLE_NUMBER_RANGES := {"max_rooms": Vector2(1.0, 100.0), "chat_max_length": Vector2(1.0, 200.0), "result_linger_s": Vector2(0.0, 120.0), "log_keep_days": Vector2(1.0, 365.0), "free_fill_wait_s": Vector2(1.0, 300.0), "free_answer_wait_s": Vector2(1.0, 120.0), "free_entry_call_delay_s": Vector2(0.0, 300.0), "free_result_keep": Vector2(1.0, 200.0), "free_rest_after_race_s": Vector2(0.0, 300.0)}
 ## オンラインフリー対戦のルームの、名前・札・縛りの文・紹介文の長さの上限と、IDに使える文字、画像のファイル名に使える文字。
 const FREE_ROOM_NAME_MAX_LENGTH := 16
 const FREE_ROOM_TAG_MAX_LENGTH := 8
@@ -229,6 +230,11 @@ static func free_result_keep() -> int:
 ## 呼ばれた人の、返事を待つ秒数の上限。
 static func free_answer_wait_s() -> float:
 	return float(values()["free_answer_wait_s"])
+
+
+## エントリーしてから、そのルームで呼ぶまでに置く秒数。
+static func free_entry_call_delay_s() -> float:
+	return float(values()["free_entry_call_delay_s"])
 
 
 ## つなぐ先として使える形か（ws:// か wss:// で始まり、そのあとに何か書いてある）。
