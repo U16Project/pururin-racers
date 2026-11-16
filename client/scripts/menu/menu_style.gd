@@ -160,7 +160,7 @@ static func style_card_button(button: BaseButton) -> void:
 	button.add_theme_stylebox_override("focus", focus_box(15, 0.0))
 
 
-## 丸い札（「いつもの」など）。地の色に、暗い文字。
+## 丸い札（「常設」など）。地の色に、暗い文字。
 static func tag(text: String, color: Color, font_size: int = 13) -> PanelContainer:
 	var node := PanelContainer.new()
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -378,3 +378,49 @@ static func section_title(text: String, font_size: int = 18) -> VBoxContainer:
 	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	node.add_child(rule)
 	return node
+
+
+## タブや距離を1つ動かすボタン（左は「‹ L1」、右は「R1 ›」）。丸い札と見分けがつくように、暗い地に金色の縁。矢印とマークは金色。
+## カーソルは乗らない（ゲームパッドでは、L1・R1 を押せば、どこを選んでいても動く）。押したときの動きは、使う側でつなぐ。
+const STEP_BUTTON_WIDTH := 70.0
+const STEP_MARK_SIZE := 20.0
+const COLOR_STEP_BUTTON := Color(0.09, 0.1, 0.13, 1.0)
+const COLOR_STEP_BUTTON_BORDER := Color(1.0, 0.82, 0.3, 0.7)
+
+
+static func step_button(direction: int) -> Button:
+	var button := Button.new()
+	button.text = "‹" if direction < 0 else "›"
+	button.custom_minimum_size = Vector2(STEP_BUTTON_WIDTH, 36.0)
+	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	button.focus_mode = Control.FOCUS_NONE
+	button.add_theme_font_size_override("font_size", 24)
+	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
+		button.add_theme_color_override(state, ButtonMark.COLOR_GOLD)
+	button.add_theme_stylebox_override("normal", _step_button_box(COLOR_STEP_BUTTON, COLOR_STEP_BUTTON_BORDER))
+	button.add_theme_stylebox_override("hover", _step_button_box(COLOR_STEP_BUTTON.lightened(0.12), COLOR_STEP_BUTTON_BORDER.lightened(0.2)))
+	button.add_theme_stylebox_override("pressed", _step_button_box(COLOR_STEP_BUTTON.lightened(0.25), ButtonMark.COLOR_GOLD))
+	button.alignment = HORIZONTAL_ALIGNMENT_LEFT if direction < 0 else HORIZONTAL_ALIGNMENT_RIGHT
+	var step_mark := mark("L1" if direction < 0 else "R1", STEP_MARK_SIZE)
+	step_mark.name = "ButtonMark"
+	button.add_child(step_mark)
+	var mark_width := float(step_mark.custom_minimum_size.x)
+	step_mark.set_anchors_preset(Control.PRESET_CENTER_RIGHT if direction < 0 else Control.PRESET_CENTER_LEFT)
+	step_mark.offset_left = -9.0 - mark_width if direction < 0 else 9.0
+	step_mark.offset_right = step_mark.offset_left + mark_width
+	step_mark.offset_top = -STEP_MARK_SIZE * 0.5
+	step_mark.offset_bottom = STEP_MARK_SIZE * 0.5
+	return button
+
+
+static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = fill
+	box.border_color = border
+	box.set_border_width_all(1)
+	box.set_corner_radius_all(18)
+	box.content_margin_left = 12.0
+	box.content_margin_right = 12.0
+	box.content_margin_top = 0.0
+	box.content_margin_bottom = 4.0
+	return box

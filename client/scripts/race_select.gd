@@ -24,15 +24,11 @@ const PANEL_WIDTH := 900.0
 const PANEL_GAP := 8.0
 const SLOT_COLUMN_WIDTH := 436.0
 const GATE_BADGE_SIZE := 28.0
-const DISTANCE_STEP_BUTTON_WIDTH := 70.0
-const DISTANCE_MARK_SIZE := 20.0
 const NOTE_MARK_SIZE := 18.0
 const NOTE_ITEM_WIDTH := 190.0
 ## キャラの一覧の窓と、板の端との間。
 const PICKER_MARGIN := 12.0
 ## 距離を動かすボタン（L1・R1）の色。L1・R1 の印と同じ、暗い地に金色の縁。
-const COLOR_STEP_BUTTON := Color(0.09, 0.1, 0.13, 1.0)
-const COLOR_STEP_BUTTON_BORDER := Color(1.0, 0.82, 0.3, 0.7)
 ## レースを始められない理由の文。
 const START_PROBLEM_TEXT := {
 	"no_player": "ユーザーのぷるりんを選んでください",
@@ -177,46 +173,11 @@ func _build_distance_row() -> HBoxContainer:
 
 
 ## 距離を1つ動かすボタン。左が「‹ L1」、右が「R1 ›」。ゲームパッドの L1・R1 で、どこを選んでいても動く。
-## 距離のボタン（丸い札）と見分けがつくように、暗い地に金色の縁にする。矢印とマークは金色。
 func _distance_step_button(direction: int) -> Button:
-	var button := Button.new()
-	button.text = "‹" if direction < 0 else "›"
+	var button := MenuStyle.step_button(direction)
 	button.name = "DistancePrev" if direction < 0 else "DistanceNext"
-	button.custom_minimum_size = Vector2(DISTANCE_STEP_BUTTON_WIDTH, 36.0)
-	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	button.focus_mode = Control.FOCUS_NONE
-	button.add_theme_font_size_override("font_size", 24)
-	for state in ["font_color", "font_hover_color", "font_pressed_color"]:
-		button.add_theme_color_override(state, ButtonMark.COLOR_GOLD)
-	button.add_theme_stylebox_override("normal", _step_button_box(COLOR_STEP_BUTTON, COLOR_STEP_BUTTON_BORDER))
-	button.add_theme_stylebox_override("hover", _step_button_box(COLOR_STEP_BUTTON.lightened(0.12), COLOR_STEP_BUTTON_BORDER.lightened(0.2)))
-	button.add_theme_stylebox_override("pressed", _step_button_box(COLOR_STEP_BUTTON.lightened(0.25), ButtonMark.COLOR_GOLD))
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT if direction < 0 else HORIZONTAL_ALIGNMENT_RIGHT
-	var kind := "L1" if direction < 0 else "R1"
-	var mark := MenuStyle.mark(kind, DISTANCE_MARK_SIZE)
-	mark.name = "ButtonMark"
-	button.add_child(mark)
-	var mark_width := float(mark.custom_minimum_size.x)
-	mark.set_anchors_preset(Control.PRESET_CENTER_RIGHT if direction < 0 else Control.PRESET_CENTER_LEFT)
-	mark.offset_left = -9.0 - mark_width if direction < 0 else 9.0
-	mark.offset_right = mark.offset_left + mark_width
-	mark.offset_top = -DISTANCE_MARK_SIZE * 0.5
-	mark.offset_bottom = DISTANCE_MARK_SIZE * 0.5
 	button.pressed.connect(func() -> void: step_distance(direction, "mouse"))
 	return button
-
-
-static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
-	var box := StyleBoxFlat.new()
-	box.bg_color = fill
-	box.border_color = border
-	box.set_border_width_all(1)
-	box.set_corner_radius_all(18)
-	box.content_margin_left = 12.0
-	box.content_margin_right = 12.0
-	box.content_margin_top = 0.0
-	box.content_margin_bottom = 4.0
-	return box
 
 
 ## 距離を、1つ前（-1）か次（1）へ動かす。端では止まる。

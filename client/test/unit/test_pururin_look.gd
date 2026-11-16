@@ -1,6 +1,7 @@
 extends GutTest
 ## ぷるりんの見た目：設定の検査、体の組み立て、部品の取り替え、表情とアクションの受け口。
 
+const MakerConfig := preload("res://scripts/config/pururin_maker_config.gd")
 const LookConfig := preload("res://scripts/config/pururin_look_config.gd")
 const Builder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surface.gd")
@@ -615,17 +616,25 @@ func test_every_pururin_in_the_roster_has_a_look_with_a_colour_of_its_attribute(
 		assert_false(pururin.has("visual_color"), "個体一覧には、色を持たせない")
 
 
-func test_two_pururins_of_the_same_attribute_do_not_share_a_colour_or_a_height() -> void:
+func test_two_pururins_of_the_same_attribute_do_not_share_a_colour() -> void:
 	var config := _game_config()
 	var seen := {}
 	for pururin: Dictionary in RosterConfig.values()["roster"]:
 		var look: Dictionary = config["looks"][str(pururin["id"])]
 		var color_key := "%s/%s" % [pururin["attribute"], look["primary_color"]]
-		var height_key := "%s/%s" % [pururin["attribute"], look["body"]["height"]]
 		assert_false(seen.has(color_key), "%s：同じ属性で、同じ色の個体がいる" % pururin["id"])
-		assert_false(seen.has(height_key), "%s：同じ属性で、同じ高さの個体がいる" % pururin["id"])
 		seen[color_key] = true
-		seen[height_key] = true
+
+
+## 元の個体の体の高さは、作成コーナーの体高の選択肢のどれか（作成コーナーで写したとき、印が付くように）。
+func test_every_roster_body_height_is_one_of_the_maker_choices() -> void:
+	var config := _game_config()
+	var choices: Array = []
+	for body_height: Dictionary in MakerConfig.values()["body_heights"]:
+		choices.append(float(body_height["height"]))
+	for pururin: Dictionary in RosterConfig.values()["roster"]:
+		var height := float(config["looks"][str(pururin["id"])]["body"]["height"])
+		assert_true(height in choices, "%s の体の高さ %s が、体高の選択肢に無い" % [pururin["id"], height])
 
 
 func test_roster_mismatches_stop_the_load() -> void:

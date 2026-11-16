@@ -67,6 +67,32 @@
       "ratio": 0.55
     }
   ],
+  "body_heights": [
+    {
+      "label": "高い",
+      "height": 1.12
+    },
+    {
+      "label": "標準",
+      "height": 0.98
+    },
+    {
+      "label": "低い",
+      "height": 0.84
+    }
+  ],
+  "blank": {
+    "name": "新規ぷるりん",
+    "attribute": "wind",
+    "running_style": "pace",
+    "body_height_index": 1,
+    "face": {
+      "eyes": "round",
+      "brows": "none",
+      "mouth": "omega",
+      "cheeks": "blush"
+    }
+  },
   "user_parts": {
     "mesh": {
       "scale": 1.0,

@@ -1,5 +1,5 @@
 extends Control
-## ゲームモード選択。ストーリー・チュートリアル（どちらも準備中）・オフライン・オンラインフリー対戦・ともだち対戦・ぷるりん作成コーナーを選ぶ。
+## ゲームモード選択。ストーリー・チュートリアル（どちらも準備中）・オフライン・オンラインフリー対戦・ともだち対戦・ぷるりん管理コーナーを選ぶ。
 ## 見た目は、オンラインフリー対戦の画面と同じ組み立て（上の帯・絵つきのカード・下の帯）。
 
 const RACE_SELECT_SCENE_PATH := "res://scenes/race_select.tscn"
@@ -11,7 +11,7 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const OnlineSession := preload("res://scripts/online/online_session.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
-const PURURIN_MAKER_SCENE_PATH := "res://scenes/pururin_maker.tscn"
+const PURURIN_MANAGER_SCENE_PATH := "res://scenes/pururin_manager.tscn"
 const CARD_GAP := 20
 ## 準備中のカードの暗さと、「準備中です」を出しておく秒数。
 const SOON_DIM := Color(0.55, 0.55, 0.6, 1.0)
@@ -39,7 +39,7 @@ const MODES := [
 	{"name": "FriendRaceButton", "title": "ともだち対戦", "tag": "オンライン", "tag_color": Color(1.0, 0.8, 0.28),
 		"text": "部屋を作って、ともだちと走ります。",
 		"image": "res://assets/ui/title_screen_background.png", "region": Rect2(80, 410, 1432, 531)},
-	{"name": "PururinMakerButton", "title": "ぷるりん作成コーナー", "tag": "つくる", "tag_color": Color(1.0, 0.56, 0.74),
+	{"name": "PururinMakerButton", "title": "ぷるりん管理コーナー", "tag": "つくる", "tag_color": Color(1.0, 0.56, 0.74),
 		"text": "自分だけのぷるりんを作ります。部品も自分で足せます。",
 		"image": "res://assets/ui/trainer_background.jpg", "region": Rect2(1250, 1020, 1900, 790)},
 ]
@@ -286,7 +286,7 @@ func go_to_online_lobby() -> void:
 
 func go_to_pururin_maker() -> void:
 	_last_mode = "PururinMakerButton"
-	get_tree().change_scene_to_file(PURURIN_MAKER_SCENE_PATH)
+	get_tree().change_scene_to_file(PURURIN_MANAGER_SCENE_PATH)
 
 
 func go_to_race_select() -> void:

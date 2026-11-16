@@ -5,7 +5,7 @@ extends RefCounted
 ## 誤りがあれば、読み込みを失敗にする（last_error に理由を入れ、values() は空を返す）。
 
 const PATH := "res://data/config/pururin_maker.json"
-const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "secondary_colors", "secondary_heights", "user_parts", "face_parts", "labels", "parts_readme"]
+const KEYS := ["schema_version", "save_folder", "parts_folder", "id_prefix", "base_pururin", "name_max_length", "placements", "mark_spots", "mark_colors", "secondary_colors", "secondary_heights", "body_heights", "blank", "user_parts", "face_parts", "labels", "parts_readme"]
 ## 顔のうち、作成コーナーで部品ごとに選ぶ場所（ユーザーが画像で用意できる場所も同じ）。
 const IMAGE_FACE_SLOTS := ["eyes", "brows", "mouth", "cheeks"]
 
@@ -84,6 +84,14 @@ static func validate(data: Variant) -> PackedStringArray:
 			var height: Variant = data["secondary_heights"][index]
 			if not height is Dictionary or not height.get("label") is String or not _is_number(height.get("ratio")) or float(height["ratio"]) < 0.0 or float(height["ratio"]) > 1.0:
 				errors.append("secondary_heights[%d]: label（文字）と ratio（0〜1）が必要です" % index)
+	if not data["body_heights"] is Array or data["body_heights"].is_empty():
+		errors.append("body_heights: 体高の選択肢が1つ以上必要です")
+	else:
+		for index in (data["body_heights"] as Array).size():
+			var body_height: Variant = data["body_heights"][index]
+			if not body_height is Dictionary or not body_height.get("label") is String or not _is_number(body_height.get("height")) or float(body_height["height"]) < 0.5 or float(body_height["height"]) > 1.5:
+				errors.append("body_heights[%d]: label（文字）と height（0.5〜1.5 m）が必要です" % index)
+	_validate_blank(data, errors)
 	_validate_user_parts(data["user_parts"], errors)
 	_validate_face_parts(data["face_parts"], errors)
 	var readme: Variant = data["parts_readme"]
@@ -143,3 +151,24 @@ static func label(kind: String, identifier: String) -> String:
 
 static func _is_number(value: Variant) -> bool:
 	return (value is float or value is int) and is_finite(float(value))
+
+
+## イチから作るときの中身（blank）。名前の頭・属性・脚質・体高の番号・顔の部品（場所ごとの名前）。
+static func _validate_blank(data: Dictionary, errors: PackedStringArray) -> void:
+	var blank: Variant = data["blank"]
+	if not blank is Dictionary or not blank.get("name") is String or str(blank["name"]).is_empty():
+		errors.append("blank: name（名前の頭）が必要です")
+		return
+	if not blank.get("attribute") is String or not blank.get("running_style") is String:
+		errors.append("blank: attribute と running_style が必要です")
+	var index: Variant = blank.get("body_height_index")
+	if not _is_number(index) or int(index) < 0 or (data["body_heights"] is Array and int(index) >= (data["body_heights"] as Array).size()):
+		errors.append("blank.body_height_index: body_heights の番号が必要です")
+	var face: Variant = blank.get("face")
+	if not face is Dictionary:
+		errors.append("blank.face: 顔の部品が必要です")
+		return
+	for slot: String in ["eyes", "brows", "mouth", "cheeks"]:
+		var faces: Variant = data["face_parts"]
+		if not faces is Dictionary or not (faces as Dictionary).get(slot, {}).has(str(face.get(slot, ""))):
+			errors.append("blank.face.%s: face_parts の %s にある名前が必要です" % [slot, slot])
