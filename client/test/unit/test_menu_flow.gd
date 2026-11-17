@@ -929,8 +929,12 @@ func test_picker_tiles_keep_the_cursor_inside_the_window() -> void:
 		var tile: Button = tiles[index]
 		for path: NodePath in [tile.focus_neighbor_left, tile.focus_neighbor_right, tile.focus_neighbor_top, tile.focus_neighbor_bottom]:
 			assert_true(tiles.has(tile.get_node(path)), "行き先は、必ず窓の中のタイル")
+		var last_row := (tiles.size() - 1) / PururinPicker.COLUMNS
 		if index + PururinPicker.COLUMNS < tiles.size():
 			assert_eq(tile.get_node(tile.focus_neighbor_bottom), tiles[index + PururinPicker.COLUMNS])
+		elif index / PururinPicker.COLUMNS < last_row:
+			# 真下が空いていても、下の段があれば、その段の最後のタイルへ（下の段を見逃さないように）。
+			assert_eq(tile.get_node(tile.focus_neighbor_bottom), tiles[tiles.size() - 1])
 		else:
 			assert_eq(tile.get_node(tile.focus_neighbor_bottom), tile)
 	screen.free()

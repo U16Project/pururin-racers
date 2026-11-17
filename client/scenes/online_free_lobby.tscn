@@ -3717,7 +3717,7 @@ theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
 theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 18
 toggle_mode = true
-text = "ルーム"
+text = "ルーム選択"
 
 [node name="EntriesTab" type="Button" parent="LobbyView/Tabs" unique_id=533750087]
 unique_name_in_owner = true
@@ -4537,31 +4537,6 @@ theme_override_fonts/font = SubResource("FontVariation_7qbkn")
 theme_override_font_sizes/font_size = 15
 text = "エントリー＆保留"
 
-[node name="CancelButton" type="Button" parent="RoomView/Side"]
-unique_name_in_owner = true
-layout_mode = 0
-anchor_left = 0.0
-anchor_right = 1.0
-offset_left = 156
-offset_top = 160
-offset_right = -18
-offset_bottom = 194
-theme_override_styles/normal = SubResource("StyleBoxFlat_bg2p7")
-theme_override_styles/pressed = SubResource("StyleBoxFlat_nanuf")
-theme_override_styles/hover = SubResource("StyleBoxFlat_w0h00")
-theme_override_styles/hover_pressed = SubResource("StyleBoxFlat_q001h")
-theme_override_styles/disabled = SubResource("StyleBoxFlat_v5xkc")
-theme_override_styles/focus = SubResource("StyleBoxFlat_emfh8")
-theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_focus_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_hover_pressed_color = Color(0.97, 0.98, 1, 1)
-theme_override_colors/font_disabled_color = Color(0.97, 0.98, 1, 0.35)
-theme_override_fonts/font = SubResource("FontVariation_7qbkn")
-theme_override_font_sizes/font_size = 15
-text = "出走キャンセル"
-
 [node name="EntryNote" type="Label" parent="RoomView/Side" unique_id=352522204]
 unique_name_in_owner = true
 layout_mode = 0
@@ -4916,11 +4891,15 @@ size_flags_vertical = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_entryportrait")
 
 [node name="RoomImage" type="TextureRect" parent="EntryRowTemplate/Row/PortraitBox"]
-modulate = Color(0.75, 0.78, 0.85, 1)
 layout_mode = 2
 mouse_filter = 2
 expand_mode = 1
 stretch_mode = 6
+
+[node name="Shade" type="ColorRect" parent="EntryRowTemplate/Row/PortraitBox"]
+layout_mode = 2
+mouse_filter = 2
+color = Color(0.03, 0.05, 0.1, 0.62)
 
 [node name="Portrait" type="Control" parent="EntryRowTemplate/Row/PortraitBox"]
 custom_minimum_size = Vector2(116, 116)
@@ -4975,12 +4954,22 @@ theme_override_font_sizes/font_size = 24
 text = "短距離　1200m"
 alignment = 0
 
-[node name="Pururin" type="Label" parent="EntryRowTemplate/Row/Info" unique_id=764825579]
+[node name="PururinLine" type="HBoxContainer" parent="EntryRowTemplate/Row/Info"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Pururin" type="Label" parent="EntryRowTemplate/Row/Info/PururinLine" unique_id=764825579]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(0.97, 0.98, 1, 1)
 text = "ヒカリで出る"
+
+[node name="Marks" type="Control" parent="EntryRowTemplate/Row/Info/PururinLine"]
+custom_minimum_size = Vector2(110, 24)
+layout_mode = 2
+size_flags_vertical = 4
+mouse_filter = 2
 
 [node name="StateBox" type="PanelContainer" parent="EntryRowTemplate/Row/Info"]
 layout_mode = 2

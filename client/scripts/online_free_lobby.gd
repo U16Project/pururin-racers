@@ -76,6 +76,8 @@ const PART_RESULTS := "results"
 const ROOM_PARTS := [PART_CONDITIONS, PART_ENTRANTS, PART_RESULTS]
 ## 右の欄の、脚質の印の大きさ（操作盤の印に対する倍率）。
 const PICK_CHEVRON_SCALE := 1.5
+## エントリー候補の行の、脚質の印の大きさ。
+const ENTRY_CHEVRON_SCALE := 1.2
 ## ルームの過去の結果で、レースごとに出す着順の数。
 const RESULT_ROWS_SHOWN := 3
 ## 結果の、CPUの名前の色。
@@ -140,7 +142,6 @@ const PICKER_STATUS_GAP := 12.0
 @onready var _status_button: Button = %StatusButton
 @onready var _entry_button: Button = %EntryButton
 @onready var _hold_button: Button = %HoldButton
-@onready var _cancel_button: Button = %CancelButton
 @onready var _entry_note: Label = %EntryNote
 @onready var _picker_status: Control = %PickerStatus
 @onready var _picker_status_window: Control = %PickerStatusWindow
@@ -192,6 +193,8 @@ const PICKER_STATUS_GAP := 12.0
 var _client: Node
 ## サーバーから届いた最後のもの：ルームの一覧（設定の順）、自分のエントリー候補（前ほど優先）、開いているルームのくわしいようす。
 var _rooms: Array = []
+## 「出走エントリー」のボタンの、元の見た目（状態 → 見た目）。
+var _entry_button_styles := {}
 var _entries: Array = []
 var _detail := {}
 ## ルームのID → カード。
@@ -329,11 +332,13 @@ func _ready() -> void:
 	_chat_overlay_room_tab.pressed.connect(_show_overlay_chat.bind(false))
 	for button: Button in [_chat_overlay_send, _chat_overlay_lobby_tab, _chat_overlay_room_tab]:
 		UIAudio.bind_button_sound(button, "confirmation")
+	# 「出走エントリー」の緑の見た目を覚えておく（「出走キャンセル」のあいだは、ほかのボタンの見た目にする）。
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+		_entry_button_styles[state] = _entry_button.get_theme_stylebox(state)
 	_entry_button.pressed.connect(press_entry)
 	_hold_button.pressed.connect(press_hold)
-	_cancel_button.pressed.connect(press_cancel)
 	# 右の欄のボタンは、カーソル（マウス）が乗ったら、下にそのボタンの説明を出す。
-	for button: Button in [_status_button, _entry_button, _hold_button, _cancel_button]:
+	for button: Button in [_status_button, _entry_button, _hold_button]:
 		button.focus_entered.connect(_refresh_side_note)
 		button.mouse_entered.connect(_refresh_side_note.bind(button))
 		button.focus_exited.connect(_refresh_side_note)
@@ -346,10 +351,15 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_entry_button, "confirmation")
 	UIAudio.bind_button_sound(_accept_button, "confirmation")
 	UIAudio.bind_button_sound(_decline_button, "back")
-	UIAudio.bind_button_sound(_cancel_button, "back")
 	UIAudio.bind_button_sound(_back_button, "back")
 	_add_marks()
 	_link_room_focus()
+	# 呼び出しの窓：「入る」の下に「保留」「取り消す」。ゲームパッドの上下左右で、3つを行き来できる。
+	_accept_button.focus_neighbor_bottom = _accept_button.get_path_to(_offer_hold_button)
+	_offer_hold_button.focus_neighbor_top = _offer_hold_button.get_path_to(_accept_button)
+	_offer_hold_button.focus_neighbor_right = _offer_hold_button.get_path_to(_decline_button)
+	_decline_button.focus_neighbor_top = _decline_button.get_path_to(_accept_button)
+	_decline_button.focus_neighbor_left = _decline_button.get_path_to(_offer_hold_button)
 	show_tab(TAB_ROOMS)
 	_client = OnlineSession.client(get_tree())
 	_client.message_received.connect(_on_message)
@@ -377,10 +387,10 @@ func _ready() -> void:
 		connect_to_server()
 
 
-## ルームの画面の、ゲームパッド・方向キーでの動き：右の欄のボタン4つは、上下で順に。左へは、左の下のタブ（出走の条件・紹介／エントリーしている人／過去の結果）へ。
+## ルームの画面の、ゲームパッド・方向キーでの動き：右の欄のボタン3つは、上下で順に。左へは、左の下のタブ（出走の条件・紹介／エントリーしている人／過去の結果）へ。
 ## タブの右端から右へは、右の欄のいちばん上のボタンへ。タブは、L1・R1 でも切り替えられる。
 func _link_room_focus() -> void:
-	var column: Array[Button] = [_status_button, _entry_button, _hold_button, _cancel_button]
+	var column: Array[Button] = [_status_button, _entry_button, _hold_button]
 	for index in column.size():
 		var button := column[index]
 		button.focus_neighbor_left = button.get_path_to(_room_results_tab)
@@ -682,7 +692,7 @@ func _apply_lobby(data: Dictionary) -> void:
 			_sending_entries.erase(id)
 			# 新しくエントリーできたら、ルームの画面の真ん中に、はっきり知らせる。
 			if not had_entry.has(id) and id == _open_room:
-				_show_entry_done(index + 1, pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))))
+				_show_entry_done(pururin_name(OnlineSession.local_id(str(entry["pururin_id"]))), bool(entry.get("hold", false)))
 	_server_offset_s = int(data.get("now_unix", _local_unix())) - _local_unix()
 	var rest_s := float(data.get("rest_s", 0.0))
 	_rest_until_msec = Time.get_ticks_msec() + int(rest_s * 1000.0) if rest_s > 0.0 else 0
@@ -775,6 +785,12 @@ func fill_card(card: Control, room: Dictionary, entry: Dictionary) -> void:
 	(card.get_node("Priority/Number") as Label).text = str(priority)
 	(card.get_node("Hold") as Control).visible = not entry.is_empty() and bool(entry["hold"])
 	_set_strip(card.get_node("Strip"), card.get_node("Strip/Dot"), card.get_node("Strip/Text"), room)
+	# カードの人数は、枠と地を付けず、小さい点と、うすい字だけにする（目立ちすぎないように。ようすの色は点に残す）。
+	var strip_box := (card.get_node("Strip") as Control).get_theme_stylebox("panel").duplicate() as StyleBoxFlat
+	strip_box.bg_color = Color(0, 0, 0, 0)
+	strip_box.border_color = Color(0, 0, 0, 0)
+	(card.get_node("Strip") as Control).add_theme_stylebox_override("panel", strip_box)
+	(card.get_node("Strip/Text") as Label).add_theme_color_override("font_color", MenuStyle.COLOR_DIM)
 	var locked := is_locked(room)
 	(card.get_node("Lock") as Control).visible = locked
 	if locked:
@@ -992,7 +1008,13 @@ func _refresh_entries() -> void:
 		if str(row.get_meta("pururin_id", "")) != pururin_id:
 			row.set_meta("pururin_id", pururin_id)
 			row.find_child("Portrait", true, false).call("set_pururin", PururinRosterConfig.pururin_by_id(pururin_id))
-		(row.find_child("Pururin", true, false) as Label).text = "%sで出る　%s属性・%s" % [pururin_name(pururin_id), str(preview.get("attribute", "")), str(preview.get("running_style", ""))]
+		(row.find_child("Pururin", true, false) as Label).text = "%sで出る" % pururin_name(pururin_id)
+		# 属性と脚質は、ルームの画面の右の欄と同じマークで出す。
+		var marks: Control = row.find_child("Marks", true, false)
+		marks.set_meta("preview", preview)
+		if not marks.draw.is_connected(_draw_entry_marks):
+			marks.draw.connect(_draw_entry_marks.bind(marks))
+		marks.queue_redraw()
 		(row.find_child("State", true, false) as Label).text = entry_state_text(entry)
 		(row.find_child("Up", true, false) as Button).disabled = index == 0 or not _client.is_open()
 		(row.find_child("Down", true, false) as Button).disabled = index == _entries.size() - 1 or not _client.is_open()
@@ -1099,8 +1121,8 @@ func open_room(room_id: String) -> void:
 	show_room_part(PART_CONDITIONS)
 	# 下の帯のお知らせは、ロビーのものを残さず、このルームの案内にする。
 	_set_status("「%s」の条件を見て、出るぷるりんを選んでエントリーできます。" % str(room_by_id(room_id).get("name", room_id)))
-	# ルームを開いた A を続けて押しても、エントリーしないように、最初は「条件」タブに置く。
-	_conditions_tab.grab_focus()
+	# 最初は「出走ぷるりん変更」に置く（ルームを開いた A を続けて押しても、エントリーはしない）。
+	(_conditions_tab if _status_button.disabled else _status_button).grab_focus()
 
 
 func close_room() -> void:
@@ -1255,7 +1277,8 @@ func _refresh_entrants() -> void:
 
 
 ## 右の欄：左に出るぷるりんの絵・名前・属性と脚質の印（チケットが要るルームでは、そのチケット）。
-## 右にボタン4つ（出走ぷるりん変更・出走エントリー・エントリー＆保留・出走キャンセル）。ボタンは同じ場所に置いたまま、使えないときは薄くする。
+## 右にボタン3つ。上から「出走ぷるりん変更」、エントリーのボタン（まだなら「出走エントリー」、エントリーしていれば「出走キャンセル」）、
+## 保留のボタン（まだなら「エントリー＆保留」、エントリー中なら「保留にする」、保留中なら「保留を外す」）。使えないときは薄くする。
 func _refresh_pick() -> void:
 	var pururin_id := selected_pururin_id()
 	var room := room_by_id(_open_room)
@@ -1273,9 +1296,14 @@ func _refresh_pick() -> void:
 	var busy: bool = not _client.is_open() or _sending_entries.has(_open_room)
 	var locked := mine == MY_CALLED or mine == MY_RACING
 	_status_button.disabled = busy or locked
-	_entry_button.disabled = busy or not ((mine == MY_NONE and not missing and not closed) or mine == MY_HOLD)
-	_hold_button.disabled = busy or is_final(room) or not ((mine == MY_NONE and not missing and not closed) or mine == MY_ENTRY)
-	_cancel_button.disabled = busy or mine == MY_NONE
+	var cannot_enter := mine == MY_NONE and (missing or closed)
+	_entry_button.disabled = busy or locked or cannot_enter
+	_hold_button.disabled = busy or locked or cannot_enter or is_final(room)
+	_entry_button.text = "出走エントリー" if mine == MY_NONE else "出走キャンセル"
+	_hold_button.text = "エントリー＆保留" if mine == MY_NONE else "保留を外す" if mine == MY_HOLD else "保留にする"
+	# 「出走キャンセル」のときは、緑をやめて、ほかのボタンと同じ落ち着いた見た目にする。
+	for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+		_entry_button.add_theme_stylebox_override(state, _hold_button.get_theme_stylebox(state) if mine != MY_NONE else _entry_button_styles[state])
 	_refresh_side_note()
 	if is_inside_tree() and _room_view.visible and _top_window() == null and get_viewport().gui_get_focus_owner() == null:
 		(_conditions_tab if _status_button.disabled else _status_button).grab_focus()
@@ -1294,10 +1322,21 @@ func _draw_pick_marks() -> void:
 	RaceHud.draw_style_chevrons(_pick_info, Vector2(left + mark_size + 8.0, center_y), RaceHud.COLOR_STYLE_MATCH, PururinStatsMath.rank_group_count(), PururinStatsMath.style_rank_group_index(str(preview["style_id"])), PICK_CHEVRON_SCALE)
 
 
+## エントリー候補の行の、属性のマークと脚質の印。
+func _draw_entry_marks(marks: Control) -> void:
+	var preview: Dictionary = marks.get_meta("preview", {})
+	if preview.is_empty():
+		return
+	var mark_size := marks.size.y - 2.0
+	var center_y := marks.size.y * 0.5
+	PururinDetail.draw_attribute_mark(marks, Vector2(mark_size * 0.5, center_y), mark_size, str(preview["attribute_id"]), preview["attribute_color"])
+	RaceHud.draw_style_chevrons(marks, Vector2(mark_size + 8.0, center_y), RaceHud.COLOR_STYLE_MATCH, PururinStatsMath.rank_group_count(), PururinStatsMath.style_rank_group_index(str(preview["style_id"])), ENTRY_CHEVRON_SCALE)
+
+
 ## 右の欄の下の説明：カーソル（マウス）が乗っているボタンの説明。使えないボタンなら、使えないわけ。
 func _refresh_side_note(hovered: Control = null) -> void:
 	var button: Control = hovered if hovered != null else get_viewport().gui_get_focus_owner() if is_inside_tree() else null
-	_entry_note.text = side_note(button) if button in [_status_button, _entry_button, _hold_button, _cancel_button] else ""
+	_entry_note.text = side_note(button) if button in [_status_button, _entry_button, _hold_button] else ""
 
 
 ## 右の欄のボタンの説明。
@@ -1309,20 +1348,20 @@ func side_note(button: Control) -> String:
 	var needs := str(room.get("needs_ticket", ""))
 	if not (button as BaseButton).disabled:
 		if button == _status_button:
-			return "出るぷるりんを選び直します。エントリー中なら、そのまま替わります。"
+			return "レースに出すぷるりんを選びます。"
 		if button == _entry_button:
-			return "保留を外して、呼び出しを受けます。" if mine == MY_HOLD else "%sでエントリーします。順番が来たら呼び出します。" % pururin
-		if button == _hold_button:
-			return "呼び出しを止めておきます。「出走エントリー」で外せます。" if mine == MY_ENTRY else "%sでエントリーだけして、呼び出しは止めておきます。" % pururin
-		return "このルームのエントリーを取り消します。"
+			return "%sでエントリーします。順番が来たら呼び出します。" % pururin if mine == MY_NONE else "このルームのエントリーを取り消します。"
+		if mine == MY_ENTRY:
+			return "呼び出しを一旦保留扱いにします。「保留を外す」で戻せます。"
+		if mine == MY_HOLD:
+			return "保留を外して、呼び出しを受けます。"
+		return "%sでエントリーしますが、呼び出しを一旦保留扱いにします。" % pururin
 	if not _client.is_open():
 		return "サーバーとつながっていません。"
 	if _sending_entries.has(_open_room):
 		return "送っています…"
 	if mine == MY_CALLED or mine == MY_RACING:
 		return "%sのあいだは、使えません。" % entry_state_text(entry)
-	if button == _cancel_button:
-		return "まだエントリーしていません。"
 	if button == _hold_button and is_final(room):
 		return "本戦は、保留できません。"
 	if mine == MY_ENTRY:
@@ -1336,32 +1375,26 @@ func side_note(button: Control) -> String:
 	return ""
 
 
-## 出走エントリー：まだなら、エントリーする。保留中なら、保留を外す。
+## エントリーのボタン：まだなら、エントリーする。エントリーしていれば、確かめてから取り消す（A の押しすぎで取り消さないように）。
 func press_entry() -> void:
 	if _open_room.is_empty() or not _client.is_open() or _sending_entries.has(_open_room):
 		return
-	var entry := entry_for(_open_room)
-	if entry.is_empty():
+	if entry_for(_open_room).is_empty():
 		_send_entry()
-	elif bool(entry["hold"]):
-		set_hold(_open_room, false)
+		return
+	var room_id := _open_room
+	ask("「%s」のエントリーを取り消しますか？" % str(room_by_id(room_id).get("name", room_id)), "取り消す", func() -> void: cancel_entry(room_id), "やめる", Callable())
 
 
-## エントリー＆保留：まだなら、保留のままエントリーする。エントリー中なら、保留にする。
+## 保留のボタン：まだなら、保留のままエントリーする。エントリー中なら保留にし、保留中なら外す。
 func press_hold() -> void:
 	if _open_room.is_empty() or not _client.is_open() or _sending_entries.has(_open_room):
 		return
 	var entry := entry_for(_open_room)
 	if entry.is_empty():
 		_send_entry(true)
-	elif not bool(entry["hold"]):
-		set_hold(_open_room, true)
-
-
-## 出走キャンセル：このルームのエントリーを取り消す。
-func press_cancel() -> void:
-	if not _open_room.is_empty() and not entry_for(_open_room).is_empty():
-		cancel_entry(_open_room)
+	else:
+		set_hold(_open_room, not bool(entry["hold"]))
 
 
 ## 選んでいるぷるりんで、エントリーする（もうしていれば、ぷるりんを替える）。hold なら、保留のままエントリーする。
@@ -1379,14 +1412,17 @@ func _send_entry(hold: bool = false) -> void:
 	if not entry.is_empty():
 		_set_status("「%s」に出るぷるりんを、%sに替えました。" % [room_name, pururin_name(selected_pururin_id())])
 	elif hold:
-		_set_status("「%s」に保留でエントリーしました。「出走エントリー」を押すまで、呼び出しは来ません。" % room_name)
+		_set_status("「%s」に保留でエントリーしました。「保留を外す」を押すまで、呼び出しは来ません。" % room_name)
 	else:
 		_set_status("「%s」にエントリーしました。出走の順番が来たら、呼び出します。" % room_name)
 
 
 ## エントリーできた知らせ：画面の真ん中に、少しのあいだ大きく出して、消える。
-func _show_entry_done(priority: int, pururin: String) -> void:
-	_show_center_notice("✓ エントリーしました", "第%d候補・%sで出ます　出走の順番が来たら、呼び出します" % [priority, pururin], Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
+func _show_entry_done(pururin: String, hold: bool = false) -> void:
+	if hold:
+		_show_center_notice("✓ 保留でエントリーしました", "%sで出ます　「保留を外す」を押すまで、呼び出しは来ません" % pururin, Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
+		return
+	_show_center_notice("✓ エントリーしました", "%sで出ます　出走の順番が来たら、呼び出します" % pururin, Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
 
 
 ## 画面の真ん中に出す、大きい知らせ（見出しと、その下の1行）。少しのあいだ出して、消える。前の知らせは消して出し直す。
@@ -1443,6 +1479,7 @@ func is_picker_open() -> bool:
 
 
 func _on_picker_picked(pururin_id: String) -> void:
+	UIAudio.play_confirmation()
 	_pick_index = maxi(_roster_ids().find(pururin_id), 0)
 	OnlineSession.last_pick = selected_pururin_id()
 	_picker.call("close")
@@ -1584,17 +1621,17 @@ func _show_offer(data: Dictionary) -> void:
 	_answer_pending = false
 	_accept_button.disabled = false
 	_decline_button.disabled = false
-	# 本戦・決勝の呼び出しは、保留できない（答えないと失格）。
+	# 本戦・決勝の呼び出しは、自分では保留にできない（答えないと、このレースには出ず、保留になる）。
 	_offer_hold_button.disabled = not str(data.get("stage", "")).is_empty()
 	_offer_total_s = maxf(float(data.get("wait_s", 0.0)), 0.1)
 	_offer_until_msec = Time.get_ticks_msec() + int(_offer_total_s * 1000.0)
 	_offer_image.texture = _room_image(str(data["room_id"]))
 	_offer_room.text = "%s　%s" % [str(data["name"]), distance_text(float(data["distance_m"]))]
-	_offer_info.text = "第%d候補・%sで出ます" % [int(data.get("priority", 1)), pururin_name(str(data.get("pururin_id", "")))]
+	_offer_info.text = "%sで出ます" % pururin_name(str(data.get("pururin_id", "")))
 	var stage := str(data.get("stage", ""))
 	(_offer_panel.find_child("Called", true, false) as Label).text = {Protocol.STAGE_SEMI: "本戦の呼び出しです！", Protocol.STAGE_FINAL: "決勝の呼び出しです！"}.get(stage, "呼ばれました！")
 	if not stage.is_empty():
-		_offer_info.text = "%sで出ます。答えないと失格になります" % pururin_name(str(data.get("pururin_id", "")))
+		_offer_info.text = "%sで出ます。答えないと、このレースには出られません" % pururin_name(str(data.get("pururin_id", "")))
 	_offer_panel.visible = true
 	_sync_windows()
 	_update_offer_time()
@@ -1942,8 +1979,8 @@ func _on_message(data: Dictionary) -> void:
 			_close_offer()
 			if str(data.get("reason", "")) == Protocol.FREE_OFFER_TIMEOUT:
 				var timeout_room := str(room_by_id(str(data.get("room_id", ""))).get("name", ""))
-				_set_status("返事がなかったので、「%s」のエントリーを取り消しました。" % timeout_room)
-				_show_center_notice("エントリーを取り消しました", "呼び出しに返事がなかったため（%s）" % timeout_room, Color(1.0, 0.55, 0.5), Color(0.9, 0.35, 0.3), Color(0.22, 0.06, 0.06, 0.95))
+				_set_status("返事がなかったので、「%s」を保留にしました。「保留を外す」で戻せます。" % timeout_room)
+				_show_center_notice("保留にしました", "呼び出しに返事がなかったため（%s）　「保留を外す」で戻せます" % timeout_room, Color(1.0, 0.78, 0.35), MenuStyle.COLOR_TAKEN, Color(0.2, 0.12, 0.04, 0.95))
 			else:
 				_set_status("返事の前にレースが始まり、今回は出られませんでした（エントリーは残っています）。")
 				_show_center_notice("今回は出られませんでした", "返事の前にレースが始まりました　エントリーは残っています", Color(1.0, 0.78, 0.35), MenuStyle.COLOR_TAKEN, Color(0.2, 0.12, 0.04, 0.95))

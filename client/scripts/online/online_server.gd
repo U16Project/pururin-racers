@@ -1692,16 +1692,22 @@ func _update_free(delta: float) -> void:
 		return
 	var now := Time.get_ticks_msec()
 	var changed := false
-	# 返事がない人は、そのルームのエントリーだけを取り消す（ほかのルームのエントリーは残す）。
+	# 返事がない人は、そのルームのエントリーを保留にする（エントリーと順番は残す。保留を外すまで呼ばない）。
+	# 本戦も同じ。ただし、今回の呼び出しの組み分けには入らない（締め切りは全員共通のため）。
 	for peer_id: int in _peers.keys():
 		var peer: Dictionary = _peers[peer_id]
 		if str(peer["offer"]).is_empty() or now < int(peer["offer_until_msec"]):
 			continue
 		var free_id := str(peer["offer"])
 		_free_withdraw_offer(peer_id)
-		(peer["entries"] as Array).erase(_free_entry_of(peer_id, free_id))
+		var held := _free_entry_of(peer_id, free_id)
 		if is_final(free_id):
-			_final_drop(peer_id, free_id)
+			for key: String in ["accepted", "deferred", "advancers"]:
+				(_free_rooms[free_id][key] as Array).erase(peer_id)
+			if str(peer["final_room"]) == free_id:
+				peer["final_room"] = ""
+		if not held.is_empty():
+			held["hold"] = true
 		_send(peer_id, Protocol.message(Protocol.FREE_OFFER_END, {"room_id": free_id, "reason": Protocol.FREE_OFFER_TIMEOUT}))
 		changed = true
 	# 受付が始まった・終わったルームは、ロビーの全員に知らせる。終わったルームは、呼んでいたレースを、入ると答えた人ですぐ始め

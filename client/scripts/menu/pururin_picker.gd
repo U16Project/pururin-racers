@@ -220,7 +220,8 @@ func _link_tiles() -> void:
 		var left := index - 1 if column > 0 else index
 		var right := index + 1 if column < COLUMNS - 1 and index + 1 < _tiles.size() else index
 		var up := index - COLUMNS if index - COLUMNS >= 0 else index
-		var down := index + COLUMNS if index + COLUMNS < _tiles.size() else index
+		# 真下が空いている（最後の段が短い）ときは、その段の最後のタイルへ（下の段を見逃さないように）。
+		var down := index + COLUMNS if index + COLUMNS < _tiles.size() else (_tiles.size() - 1 if index / COLUMNS < (_tiles.size() - 1) / COLUMNS else index)
 		tile.focus_neighbor_left = tile.get_path_to(_tiles[left])
 		tile.focus_neighbor_right = tile.get_path_to(_tiles[right])
 		tile.focus_neighbor_top = tile.get_path_to(_tiles[up])

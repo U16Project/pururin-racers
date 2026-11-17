@@ -293,7 +293,7 @@ func test_declining_cancels_only_that_room() -> void:
 	assert_eq(_entry_ids(lobby), [ids[1]])
 
 
-func test_no_answer_cancels_only_that_room() -> void:
+func test_no_answer_puts_only_that_room_on_hold() -> void:
 	var ids := _free_ids()
 	await _enter_free("a")
 	_enter_rooms("a", [ids[0], ids[1]])
@@ -301,9 +301,11 @@ func test_no_answer_cancels_only_that_room() -> void:
 	assert_eq(str(offer["room_id"]), ids[0])
 	var ended := await _wait_for("a", Protocol.FREE_OFFER_END)
 	assert_eq(str(ended["reason"]), Protocol.FREE_OFFER_TIMEOUT)
-	var lobby := await _latest_lobby("a")
-	assert_false(_entry_ids(lobby).has(ids[0]))
-	assert_true(_entry_ids(lobby).has(ids[1]))
+	# 返事がないと、取り消さずに保留にする（エントリーは残る）。ほかのルームは、そのまま。
+	var held: Dictionary = _server.call("_free_entry_of", _peer_id("a"), ids[0])
+	assert_false(held.is_empty(), "エントリーは残る")
+	assert_true(bool(held["hold"]), "保留になる")
+	assert_false(bool(_server.call("_free_entry_of", _peer_id("a"), ids[1])["hold"]))
 
 
 func test_cancelling_while_called_withdraws_the_call() -> void:
@@ -666,13 +668,14 @@ func test_at_the_start_everyone_is_called_and_no_answer_means_out() -> void:
 	assert_eq(str(offer_a["stage"]), Protocol.STAGE_SEMI)
 	assert_almost_eq(float(offer_a["wait_s"]), 0.5, 0.001)
 	assert_false((await _wait_for("b", Protocol.FREE_OFFER)).is_empty())
-	# a は入る、b は答えない（失格）。8人以下なので、すぐ決勝。
+	# a は入る、b は答えない（このレースには出ない）。8人以下なので、すぐ決勝。
 	_clients["a"].send(Protocol.FREE_ANSWER, {"room_id": ids[0], "accept": true})
 	var start := await _wait_for("a", Protocol.RACE_START)
 	assert_eq(str(start["stage"]), Protocol.STAGE_FINAL)
 	assert_eq((start["entries"] as Array).filter(func(entry: Dictionary) -> bool: return bool(entry["player"])).size(), 1)
 	assert_eq(str((await _wait_for("b", Protocol.FREE_OFFER_END))["reason"]), Protocol.FREE_OFFER_TIMEOUT)
-	assert_true(_server.call("_free_entry_of", _peer_id("b"), ids[0]).is_empty(), "答えなかった人は失格")
+	# 答えなかった人は、このレースには出ない（組み分けに入らない）。エントリーは保留で残る。
+	assert_true(bool(_server.call("_free_entry_of", _peer_id("b"), ids[0]).get("hold", false)), "答えなかった人は保留")
 
 
 func test_semifinal_winners_go_to_the_final_and_a_cpu_win_lifts_the_best_human() -> void:
@@ -895,38 +898,45 @@ func test_clicking_a_card_only_opens_the_room_and_the_entry_button_enters() -> v
 	assert_true((screen.find_child("RoomView", true, false) as Control).visible)
 	assert_eq((screen.find_child("Intro", true, false) as Label).text, str(OnlineConfig.free_rooms()[1]["intro"]))
 	assert_eq(_server.free_line(ids[1]).size(), 0)
-	# 「出走エントリー」を押して、はじめてエントリーになる。ボタンは同じ場所のまま、使えないものが薄くなる。
+	# 「出走エントリー」を押して、はじめてエントリーになる。エントリーすると、同じボタンが「出走キャンセル」に、
+	# 保留のボタンが「保留にする」に替わる。
 	var entry_button: Button = screen.find_child("EntryButton", true, false)
-	var cancel_button: Button = screen.find_child("CancelButton", true, false)
-	assert_true(cancel_button.disabled, "エントリー前は、取り消せない")
+	var hold_button: Button = screen.find_child("HoldButton", true, false)
+	assert_eq(entry_button.text, "出走エントリー")
+	assert_eq(hold_button.text, "エントリー＆保留")
 	entry_button.pressed.emit()
 	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).size() == 1))
-	assert_true(await _wait_until(func() -> bool: return not cancel_button.disabled))
-	assert_true(entry_button.disabled, "エントリー中は、出走エントリーが薄い")
+	assert_true(await _wait_until(func() -> bool: return entry_button.text == "出走キャンセル"))
+	assert_eq(hold_button.text, "保留にする")
+	# 「出走キャンセル」は、すぐには取り消さず、確かめる（やめると、エントリーは残る）。
+	entry_button.pressed.emit()
+	assert_true((screen.find_child("ConfirmDialog", true, false) as Control).visible, "取り消す前に確かめる")
+	screen.call("_answer_confirm", false)
+	assert_eq((screen.get("_entries") as Array).size(), 1)
 	# エントリーしたあとで、ぷるりんを選び直すと、ボタンを押さなくても、すぐエントリーのぷるりんが替わる
 	# （呼ばれる前に確かめるため、いったん保留にしておく）。
 	screen.press_hold()
 	assert_true(await _wait_until(func() -> bool: return bool((screen.get("_entries") as Array)[0]["hold"])))
-	assert_true(await _wait_until(func() -> bool: return not entry_button.disabled), "保留中は、出走エントリーで保留を外せる")
+	assert_true(await _wait_until(func() -> bool: return hold_button.text == "保留を外す"), "保留中は、保留のボタンで外せる")
 	var other := str(PururinRosterConfig.values()["roster"][2]["id"])
 	screen.find_child("Picker", true, false).picked.emit(other)
 	assert_true(await _wait_until(func() -> bool: return str((screen.get("_entries") as Array)[0]["pururin_id"]) == other), "エントリーのぷるりんが替わる")
-	screen.press_entry()
+	screen.press_hold()
 	# 呼ばれると、どのルームかを出した確かめの窓が出る。
 	var panel: Control = screen.find_child("OfferPanel", true, false)
 	assert_true(await _wait_until(func() -> bool: return panel.visible))
 	assert_true((screen.find_child("OfferRoom", true, false) as Label).text.contains(str(OnlineConfig.free_rooms()[1]["name"])))
-	assert_true((screen.find_child("OfferInfo", true, false) as Label).text.contains("第1候補"))
+	assert_true((screen.find_child("OfferInfo", true, false) as Label).text.contains("%sで出ます" % str(PururinRosterConfig.pururin_by_id(other)["display_name"])))
 	# 呼び出しを保留にすると、窓が閉じて、エントリーは保留で残る。
 	screen.hold_offer()
 	assert_false(panel.visible)
 	assert_true(await _wait_until(func() -> bool: return bool((screen.get("_entries") as Array)[0]["hold"])), "保留で残る")
-	screen.press_entry()
+	screen.press_hold()
 	assert_true(await _wait_until(func() -> bool: return panel.visible), "保留を外すと、また呼ばれる")
 	# 取り消すと、そのルームのエントリーが取り消される。
 	screen.answer(false)
 	assert_true(await _wait_until(func() -> bool: return (screen.get("_entries") as Array).is_empty()))
-	assert_true(await _wait_until(func() -> bool: return cancel_button.disabled))
+	assert_true(await _wait_until(func() -> bool: return entry_button.text == "出走エントリー"))
 	assert_false(entry_button.disabled)
 
 
