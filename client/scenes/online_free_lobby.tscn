@@ -3841,7 +3841,7 @@ layout_mode = 2
 theme_override_fonts/font = ExtResource("3_pj84j")
 theme_override_font_sizes/font_size = 17
 theme_override_colors/font_color = Color(0.74, 0.8, 0.9, 1)
-text = "まだエントリーしていません。「ルーム」のタブでルームを選んで、エントリーしてください。"
+text = "まだエントリーしていません。「ルーム選択」のタブでルームを選んで、エントリーしてください。"
 autowrap_mode = 1
 
 [node name="EntryList" type="VBoxContainer" parent="LobbyView/EntriesPage/EntriesBox" unique_id=1969351449]

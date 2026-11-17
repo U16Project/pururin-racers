@@ -896,7 +896,8 @@ func _tile_grid(columns: int) -> GridContainer:
 	grid.columns = columns
 	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 8)
-	scroll.add_child(grid)
+	# 選んだときの枠が、スクロールの端で切れないように、まわりにすき間を空ける。
+	scroll.add_child(MenuStyle.focus_room(grid))
 	return grid
 
 

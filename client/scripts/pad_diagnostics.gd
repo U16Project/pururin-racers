@@ -31,7 +31,7 @@ func _ready() -> void:
 	var column := VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation", 8)
-	scroll.add_child(column)
+	scroll.add_child(MenuStyle.focus_room(column))
 	column.add_child(MenuStyle.label("ゲームパッド設定・入力確認", 28))
 	column.add_child(MenuStyle.label("MODEは固定。操作はマウス／キーボード。戻る：Esc／B\n設定は保存され、タイトルへ戻ると適用します。下の診断は補正前の入力です。", 18))
 	_device_picker = OptionButton.new()

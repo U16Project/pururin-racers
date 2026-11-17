@@ -424,3 +424,30 @@ static func _step_button_box(fill: Color, border: Color) -> StyleBoxFlat:
 	box.content_margin_top = 0.0
 	box.content_margin_bottom = 4.0
 	return box
+
+
+## スクロールする一覧の中で、選んだときの枠（外へはみ出す分と光）が、端で切れないように空けるすき間。
+const FOCUS_ROOM := 10
+
+
+## 一覧の中身を、まわりに FOCUS_ROOM のすき間を空けた入れ物で包んで返す（スクロールの中に入れる）。
+static func focus_room(content: Control) -> MarginContainer:
+	var room := MarginContainer.new()
+	room.name = "FocusRoom"
+	room.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	room.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for side in ["left", "right", "top", "bottom"]:
+		room.add_theme_constant_override("margin_" + side, FOCUS_ROOM)
+	room.add_child(content)
+	return room
+
+
+## 場面に置いてあるスクロールの中身を、すき間の入れ物で包み直す。中身の見える位置は変えないよう、スクロールを外へ同じだけ広げる。
+static func give_focus_room(scroll: ScrollContainer) -> void:
+	var content := scroll.get_child(0) as Control
+	scroll.remove_child(content)
+	scroll.add_child(focus_room(content))
+	scroll.offset_left -= FOCUS_ROOM
+	scroll.offset_top -= FOCUS_ROOM
+	scroll.offset_right += FOCUS_ROOM
+	scroll.offset_bottom += FOCUS_ROOM

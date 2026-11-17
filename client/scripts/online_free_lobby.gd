@@ -85,6 +85,14 @@ const COLOR_RESULT_CPU := Color(0.74, 0.8, 0.9)
 ## このPCのサーバーを起動してから、つながるまで待つ秒数と、つなぎ直す間（ともだち対戦の画面と同じ）。
 const LOCAL_SERVER_START_TIMEOUT_S := 12.0
 const LOCAL_SERVER_RETRY_S := 0.8
+## 真ん中に出す知らせの色：できた（緑）・保留（橙）・取り消し（赤）。
+const COLOR_NOTICE_OK_TEXT := Color(0.55, 1.0, 0.7)
+const COLOR_NOTICE_OK_BACK := Color(0.05, 0.16, 0.12, 0.95)
+const COLOR_NOTICE_HOLD_TEXT := Color(1.0, 0.78, 0.35)
+const COLOR_NOTICE_HOLD_BACK := Color(0.2, 0.12, 0.04, 0.95)
+const COLOR_NOTICE_CANCEL_TEXT := Color(1.0, 0.55, 0.5)
+const COLOR_NOTICE_CANCEL_BORDER := Color(0.9, 0.35, 0.3)
+const COLOR_NOTICE_CANCEL_BACK := Color(0.22, 0.06, 0.06, 0.95)
 ## 真ん中に出す知らせを出しておく秒数。
 const CENTER_NOTICE_S := 2.5
 ## しぼりこみの「すべて」。
@@ -354,6 +362,9 @@ func _ready() -> void:
 	UIAudio.bind_button_sound(_back_button, "back")
 	_add_marks()
 	_link_room_focus()
+	# ルームのカードとエントリー候補の行は、選んだときの枠が、スクロールの端で切れないように、まわりにすき間を空ける。
+	MenuStyle.give_focus_room(_rooms_page as ScrollContainer)
+	MenuStyle.give_focus_room(_entries_page as ScrollContainer)
 	# 呼び出しの窓：「入る」の下に「保留」「取り消す」。ゲームパッドの上下左右で、3つを行き来できる。
 	_accept_button.focus_neighbor_bottom = _accept_button.get_path_to(_offer_hold_button)
 	_offer_hold_button.focus_neighbor_top = _offer_hold_button.get_path_to(_accept_button)
@@ -1078,7 +1089,14 @@ func set_hold(room_id: String, hold: bool) -> void:
 	# 呼ばれているルームを保留にしたら、サーバーは呼び出しを取り消すので、窓も閉じる。
 	if hold and str(_offer.get("room_id", "")) == room_id:
 		_close_offer()
-	_set_status("「%s」を保留にしました（保留のあいだは呼ばれません）。" % str(room_by_id(room_id).get("name", room_id)) if hold else "「%s」の保留を外しました。" % str(room_by_id(room_id).get("name", room_id)))
+	var room_name := str(room_by_id(room_id).get("name", room_id))
+	# エントリー・保留・保留を外す・取り消しは、どれも画面の真ん中に知らせる（下の帯にも同じことを出す）。
+	if hold:
+		_set_status("「%s」を保留にしました（保留のあいだは呼ばれません）。" % room_name)
+		_show_center_notice("保留にしました", "「%s」　「保留を外す」を押すまで、呼び出しは来ません" % room_name, COLOR_NOTICE_HOLD_TEXT, MenuStyle.COLOR_TAKEN, COLOR_NOTICE_HOLD_BACK)
+	else:
+		_set_status("「%s」の保留を外しました。" % room_name)
+		_show_center_notice("✓ 保留を外しました", "「%s」　出走の順番が来たら、呼び出します" % room_name, COLOR_NOTICE_OK_TEXT, MenuStyle.COLOR_PRIMARY, COLOR_NOTICE_OK_BACK)
 
 
 func cancel_entry(room_id: String) -> void:
@@ -1087,7 +1105,9 @@ func cancel_entry(room_id: String) -> void:
 	_client.send(Protocol.FREE_CANCEL, {"room_id": room_id})
 	if str(_offer.get("room_id", "")) == room_id:
 		_close_offer()
-	_set_status("「%s」のエントリーを取り消しました。" % str(room_by_id(room_id).get("name", room_id)))
+	var room_name := str(room_by_id(room_id).get("name", room_id))
+	_set_status("「%s」のエントリーを取り消しました。" % room_name)
+	_show_center_notice("エントリーを取り消しました", "「%s」" % room_name, COLOR_NOTICE_CANCEL_TEXT, COLOR_NOTICE_CANCEL_BORDER, COLOR_NOTICE_CANCEL_BACK)
 
 
 # ---------------------------------------------------------------- ルームの画面
@@ -1420,9 +1440,9 @@ func _send_entry(hold: bool = false) -> void:
 ## エントリーできた知らせ：画面の真ん中に、少しのあいだ大きく出して、消える。
 func _show_entry_done(pururin: String, hold: bool = false) -> void:
 	if hold:
-		_show_center_notice("✓ 保留でエントリーしました", "%sで出ます　「保留を外す」を押すまで、呼び出しは来ません" % pururin, Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
+		_show_center_notice("✓ 保留でエントリーしました", "%sで出ます　「保留を外す」を押すまで、呼び出しは来ません" % pururin, COLOR_NOTICE_OK_TEXT, MenuStyle.COLOR_PRIMARY, COLOR_NOTICE_OK_BACK)
 		return
-	_show_center_notice("✓ エントリーしました", "%sで出ます　出走の順番が来たら、呼び出します" % pururin, Color(0.55, 1.0, 0.7), MenuStyle.COLOR_PRIMARY, Color(0.05, 0.16, 0.12, 0.95))
+	_show_center_notice("✓ エントリーしました", "%sで出ます　出走の順番が来たら、呼び出します" % pururin, COLOR_NOTICE_OK_TEXT, MenuStyle.COLOR_PRIMARY, COLOR_NOTICE_OK_BACK)
 
 
 ## 画面の真ん中に出す、大きい知らせ（見出しと、その下の1行）。少しのあいだ出して、消える。前の知らせは消して出し直す。
@@ -1980,10 +2000,10 @@ func _on_message(data: Dictionary) -> void:
 			if str(data.get("reason", "")) == Protocol.FREE_OFFER_TIMEOUT:
 				var timeout_room := str(room_by_id(str(data.get("room_id", ""))).get("name", ""))
 				_set_status("返事がなかったので、「%s」を保留にしました。「保留を外す」で戻せます。" % timeout_room)
-				_show_center_notice("保留にしました", "呼び出しに返事がなかったため（%s）　「保留を外す」で戻せます" % timeout_room, Color(1.0, 0.78, 0.35), MenuStyle.COLOR_TAKEN, Color(0.2, 0.12, 0.04, 0.95))
+				_show_center_notice("保留にしました", "呼び出しに返事がなかったため（%s）　「保留を外す」で戻せます" % timeout_room, COLOR_NOTICE_HOLD_TEXT, MenuStyle.COLOR_TAKEN, COLOR_NOTICE_HOLD_BACK)
 			else:
 				_set_status("返事の前にレースが始まり、今回は出られませんでした（エントリーは残っています）。")
-				_show_center_notice("今回は出られませんでした", "返事の前にレースが始まりました　エントリーは残っています", Color(1.0, 0.78, 0.35), MenuStyle.COLOR_TAKEN, Color(0.2, 0.12, 0.04, 0.95))
+				_show_center_notice("今回は出られませんでした", "返事の前にレースが始まりました　エントリーは残っています", COLOR_NOTICE_HOLD_TEXT, MenuStyle.COLOR_TAKEN, COLOR_NOTICE_HOLD_BACK)
 		Protocol.ERROR:
 			var id := str(data.get("room_id", ""))
 			if not id.is_empty():

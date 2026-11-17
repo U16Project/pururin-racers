@@ -28,13 +28,14 @@ func _ready() -> void:
 	column.add_child(body)
 	var scroll := ScrollContainer.new()
 	scroll.name = "TrainerScroll"
-	scroll.custom_minimum_size.x = 258
+	scroll.custom_minimum_size.x = 258 + MenuStyle.FOCUS_ROOM * 2
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	body.add_child(scroll)
 	var list := VBoxContainer.new()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(list)
+	# 選んだときの枠が、スクロールの端で切れないように、まわりにすき間を空ける（ボタンどうしの間は、下の5ずつ）。
+	scroll.add_child(MenuStyle.focus_room(list))
 	for trainer: Dictionary in Trainers.values():
 		var button := MenuStyle.button(str(trainer["name"]), 20, MenuStyle.COLOR_BUTTON_QUIET)
 		button.name = str(trainer["id"])

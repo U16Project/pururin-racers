@@ -124,7 +124,7 @@ func _ready() -> void:
 	icon_panel.add_child(icon_column)
 	icon_column.add_child(MenuStyle.section_title("アイコン"))
 	var choice_scroll := ScrollContainer.new()
-	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * CHOICE_ROWS_SHOWN + 8 * (CHOICE_ROWS_SHOWN - 1)
+	choice_scroll.custom_minimum_size.y = CHOICE_SIZE * CHOICE_ROWS_SHOWN + 8 * (CHOICE_ROWS_SHOWN - 1) + MenuStyle.FOCUS_ROOM * 2
 	choice_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	icon_column.add_child(choice_scroll)
 	_choices = GridContainer.new()
@@ -132,7 +132,8 @@ func _ready() -> void:
 	_choices.columns = CHOICE_COLUMNS
 	_choices.add_theme_constant_override("h_separation", 8)
 	_choices.add_theme_constant_override("v_separation", 8)
-	choice_scroll.add_child(_choices)
+	# 選んだときの枠が、スクロールの端で切れないように、まわりにすき間を空ける。
+	choice_scroll.add_child(MenuStyle.focus_room(_choices))
 	var migrated := TrainerProfile.preserve_registered_icon()
 	if migrated.has("error"):
 		_problem_label.text = str(migrated["error"])

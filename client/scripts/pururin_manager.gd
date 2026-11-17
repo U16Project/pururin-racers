@@ -62,15 +62,10 @@ func _ready() -> void:
 	scroll.follow_focus = true
 	left.add_child(scroll)
 	# 選んだときの枠が切れないよう、まわりにすき間を空ける。
-	var room := MarginContainer.new()
-	room.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for side in ["left", "right", "top", "bottom"]:
-		room.add_theme_constant_override("margin_" + side, 8)
-	scroll.add_child(room)
 	_list = VBoxContainer.new()
 	_list.name = "CardList"
 	_list.add_theme_constant_override("separation", 10)
-	room.add_child(_list)
+	scroll.add_child(MenuStyle.focus_room(_list))
 	var right := PanelContainer.new()
 	right.name = "DetailPanel"
 	right.custom_minimum_size.x = RIGHT_WIDTH
