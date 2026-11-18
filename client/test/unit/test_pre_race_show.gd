@@ -264,3 +264,18 @@ func test_waiting_cancel_confirmation_closes_when_racers_arrive() -> void:
 	Session.clear_free_wait()
 	RaceSession.set_online_entries([])
 	RaceSession.set_online_view(0)
+
+
+func test_a_skips_the_venue_view_to_the_paddock_even_while_the_paddock_waits_for_the_entries() -> void:
+	var race := _race()
+	var show: Node = race.get("_pre_race_show")
+	show.set("hold_paddock", true)
+	var press := InputEventJoypadButton.new()
+	press.button_index = JOY_BUTTON_A
+	press.pressed = true
+	race._unhandled_input(press)
+	_advance(show, PreRaceShow.fade_out_seconds() + 0.1)
+	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_PADDOCK, "レース場の全景で A を押すと、パドックへ")
+	race._unhandled_input(press)
+	_advance(show, 0.2)
+	assert_eq(int(show.get("_stage")), PreRaceShow.STAGE_PADDOCK, "出走表を待つパドックでは、A で飛ばさない")

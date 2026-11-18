@@ -471,7 +471,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		_gate_in_list.visible = not _gate_in_list.visible
 		return
 	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
-	if _is_showing_pre_race() and not bool(_pre_race_show.get("hold_paddock")) and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
+	# パドックで出走表を待っている間は、A は出走表の決定なので飛ばさない。レース場の全景なら、飛ばしてパドックへ。
+	var waiting_in_paddock := bool(_pre_race_show.get("hold_paddock")) and int(_pre_race_show.get("_stage")) != PreRaceShow.STAGE_OVERVIEW if _is_showing_pre_race() else false
+	if _is_showing_pre_race() and not waiting_in_paddock and not _online_view and not _paused and (RaceControllerInput.is_accept_pressed(event) or event.is_action_pressed("ui_accept")):
 		viewport.set_input_as_handled()
 		_pre_race_show.call("skip")
 		return
