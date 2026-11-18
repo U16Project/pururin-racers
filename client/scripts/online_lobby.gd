@@ -50,6 +50,10 @@ const STATE_COLUMN_WIDTH := 100.0
 const CREATE_BUTTON_GAP := 20.0
 const CREATE_BUTTON_WIDTH := 320.0
 const COLOR_CARD := Color(1.0, 1.0, 1.0, 0.055)
+## つなぐ画面の2つのカードの色（インターネット上のサーバー＝青、このPCをサーバーに＝緑）と、カードの間。
+const COLOR_CONNECT_INTERNET := Color(0.35, 0.65, 1.0)
+const COLOR_CONNECT_LOCAL := Color(0.35, 0.85, 0.55)
+const CONNECT_CARD_GAP := 14.0
 const COLOR_ROW_EMPTY := Color(1.0, 1.0, 1.0, 0.03)
 const COLOR_CHIP := Color(0.1, 0.16, 0.26, 0.95)
 const DISTANCE_BUTTON_HEIGHT := 36.0
@@ -505,7 +509,7 @@ func _show_room_header(view: String) -> void:
 
 func _build_connect(column: VBoxContainer) -> void:
 	_connect_box = _centered_column(column, "ConnectBox", LIST_WIDTH)
-	var card := _card(_connect_box, "サーバーにつなぐ")
+	var card := _card(_connect_box, "インターネット上のサーバーにつなぐ", COLOR_CONNECT_INTERNET)
 	var group := ButtonGroup.new()
 	var default_row := HBoxContainer.new()
 	default_row.add_theme_constant_override("separation", 10)
@@ -533,15 +537,19 @@ func _build_connect(column: VBoxContainer) -> void:
 	_connect_button = _big_button(card, "つなぐ", "ConnectButton", connect_to_server, MenuStyle.COLOR_BUTTON)
 	MenuStyle.add_mark(_connect_button, "START", 22.0)
 	# このPCをサーバーにする：サーバーを裏で起動して、自分もそのままつないで遊ぶ。ブラウザ版では出さない。
-	var local := _card(_connect_box, "このPCをサーバーにする")
+	# 2つの段は、別々の操作と分かるよう、間を空けて、色の違うカードにする。
+	var gap := Control.new()
+	gap.custom_minimum_size.y = CONNECT_CARD_GAP
+	_connect_box.add_child(gap)
+	var local := _card(_connect_box, "このPCをサーバーにする（同じWi-Fiの人と遊ぶ）", COLOR_CONNECT_LOCAL)
 	_local_server_card = local.get_parent()
 	_local_server_card.name = "LocalServerCard"
 	_local_server_card.visible = LocalServer.is_supported()
-	var note := MenuStyle.label("このPCでサーバーを動かして、自分もそのまま遊べます。同じWi-Fiの人は、下の場所につなぎます（PC版だけ。ブラウザ版からは、つなげません）。", 15, MenuStyle.COLOR_DIM)
+	var note := MenuStyle.label("このPCでサーバーを動かして、自分もそのまま遊べます。同じWi-Fiの人（PC版）は、下の場所につなぎます。", 15, MenuStyle.COLOR_DIM)
 	note.name = "LocalServerNote"
 	note.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	local.add_child(note)
-	_local_server_address = MenuStyle.label("", 15)
+	_local_server_address = MenuStyle.label("", 19)
 	_local_server_address.name = "LocalServerAddress"
 	_local_server_address.autowrap_mode = TextServer.AUTOWRAP_ARBITRARY
 	local.add_child(_local_server_address)
@@ -574,7 +582,7 @@ func _on_server_choice_changed() -> void:
 	_server_edit.editable = custom
 	_server_edit.focus_mode = Control.FOCUS_ALL if custom else Control.FOCUS_NONE
 	_server_edit.modulate = Color.WHITE if custom else Color(1.0, 1.0, 1.0, 0.45)
-	ServerChoice.save(ServerChoice.CHOICE_CUSTOM if custom else ServerChoice.CHOICE_DEFAULT, _server_edit.text)
+	# 選びは、丸を切り替えただけでは保存しない。「つなぐ」を押したときに保存する（オンラインフリー対戦も同じ所を読むため）。
 
 
 ## 今、つなぐ先として選ばれているURL。
@@ -595,19 +603,37 @@ func _centered_column(parent: Control, node_name: String, width: float) -> VBoxC
 	return inner
 
 
-## うすい板（見出しつき）。中身を足す縦の並びを返す。
-func _card(parent: Control, title: String) -> VBoxContainer:
+## うすい板（見出しつき）。中身を足す縦の並びを返す。accent を渡すと、その色をうすく敷いて、見出しの左に同じ色の帯を付ける
+## （見出しも大きく、白にする）。
+func _card(parent: Control, title: String, accent: Color = Color(0, 0, 0, 0)) -> VBoxContainer:
 	var card := PanelContainer.new()
-	card.add_theme_stylebox_override("panel", MenuStyle.box(COLOR_CARD, 12, 16.0, 6.0))
+	var tinted := accent.a > 0.0
+	var box := MenuStyle.box(COLOR_CARD, 12, 16.0, 6.0 if not tinted else 12.0)
+	if tinted:
+		box.bg_color = Color(accent, 0.16)
+		box.border_color = Color(accent, 0.55)
+		box.set_border_width_all(2)
+	card.add_theme_stylebox_override("panel", box)
 	card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(card)
 	var inner := VBoxContainer.new()
-	inner.add_theme_constant_override("separation", 4)
+	inner.add_theme_constant_override("separation", 4 if not tinted else 8)
 	card.add_child(inner)
 	if not title.is_empty():
-		var heading := MenuStyle.label(title, 17, MenuStyle.COLOR_DIM)
+		var heading := MenuStyle.label(title, 17 if not tinted else 22, MenuStyle.COLOR_DIM if not tinted else MenuStyle.COLOR_TEXT)
 		heading.name = "CardTitle"
-		inner.add_child(heading)
+		if tinted:
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 10)
+			var bar := ColorRect.new()
+			bar.color = accent
+			bar.custom_minimum_size = Vector2(6, 26)
+			bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			row.add_child(bar)
+			row.add_child(heading)
+			inner.add_child(row)
+		else:
+			inner.add_child(heading)
 	return inner
 
 
@@ -1256,8 +1282,8 @@ func _wait_for_local_server(delta: float) -> void:
 func local_server_note() -> String:
 	if not LocalServer.is_running():
 		return ""
-	var urls := LocalServer.lan_urls()
-	return "このPCがサーバーです（同じWi-Fiの人は %s につなぎます）。" % urls[0] if not urls.is_empty() else "このPCがサーバーです。"
+	var url := LocalServer.lan_url()
+	return "このPCがサーバーです（同じWi-Fiの人は %s につなぎます）。" % url if not url.is_empty() else "このPCがサーバーです。"
 
 
 ## 「このPCをサーバーにする」の欄を、今の状態に合わせる。
@@ -1266,8 +1292,8 @@ func _show_local_server() -> void:
 		return
 	var running := LocalServer.is_running()
 	_local_server_button.text = "このPCのサーバーを止める" if running else "このPCでサーバーを始めて、つなぐ"
-	var urls := LocalServer.lan_urls()
-	_local_server_address.text = "ほかの人がつなぐ場所：%s" % ("　".join(urls) if not urls.is_empty() else "（このPCの番号が見つかりません）")
+	var url := LocalServer.lan_url()
+	_local_server_address.text = "ほかの人がつなぐ場所：%s" % (url if not url.is_empty() else "（このPCの番号が見つかりません）")
 
 
 ## 「サーバーにつなぐ」：つないで、名乗る。名乗ると、部屋の一覧が届く。

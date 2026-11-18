@@ -220,6 +220,9 @@ var _local_retry_s := 0.0
 ## 確かめの窓で「はい」「いいえ」を押したときにすること。
 var _confirm_yes_action := Callable()
 var _confirm_no_action := Callable()
+## 確かめの窓の、3つ目のボタン（つながらないときの「標準のサーバーにつなぐ」）と、押したときの動き。
+var _confirm_alt: Button
+var _confirm_alt_action := Callable()
 ## レースのあと、呼ばれない時刻（ミリ秒。休んでいなければ0）。
 var _rest_until_msec := 0
 ## 下の帯のお知らせの、ふだんの文字の大きさ（場面ファイルの値）。
@@ -331,6 +334,16 @@ func _ready() -> void:
 		UIAudio.bind_button_sound(pair[1], "confirmation")
 	_confirm_yes.pressed.connect(func() -> void: _answer_confirm(true))
 	_confirm_no.pressed.connect(func() -> void: _answer_confirm(false))
+	_confirm_alt = _confirm_yes.duplicate(0) as Button
+	_confirm_alt.name = "ConfirmAlt"
+	_confirm_alt.visible = false
+	_confirm_yes.get_parent().add_child(_confirm_alt)
+	_confirm_yes.get_parent().move_child(_confirm_alt, 0)
+	_confirm_alt.pressed.connect(func() -> void:
+		var action := _confirm_alt_action
+		_confirm_yes_action = action
+		_answer_confirm(true))
+	UIAudio.bind_button_sound(_confirm_alt, "confirmation")
 	UIAudio.bind_button_sound(_confirm_yes, "confirmation")
 	UIAudio.bind_button_sound(_confirm_no, "back")
 	_chat_overlay_edit.max_length = OnlineConfig.chat_max_length()
@@ -542,7 +555,7 @@ func connect_to_server() -> void:
 	var error: Error = _client.connect_to(server_url())
 	if error != OK:
 		_set_status("サーバーにつながりません（%s）。" % error_string(error))
-		ask("サーバーにつながりませんでした。", "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+		_ask_reconnect("サーバーにつながりませんでした。")
 		return
 	_connect_wait_s = 0.0
 	_set_status("サーバーにつないでいます…")
@@ -1810,8 +1823,8 @@ func close_server_dialog() -> void:
 func _refresh_server_dialog() -> void:
 	_server_url_edit.editable = _server_custom.button_pressed
 	_server_url_edit.modulate = Color.WHITE if _server_custom.button_pressed else Color(1, 1, 1, 0.4)
-	var urls := LocalServer.lan_urls()
-	_server_local_note.text = ("同じWi-Fiの人は %s につなぎます。" % urls[0] if not urls.is_empty() else "このPCで、サーバーを動かします。") if _server_local.button_pressed else ""
+	var url := LocalServer.lan_url()
+	_server_local_note.text = ("同じWi-Fiの人は %s につなぎます。" % url if not url.is_empty() else "このPCで、サーバーを動かします。") if _server_local.button_pressed else ""
 	_server_local_note.visible = _server_local.button_pressed
 
 
@@ -1878,9 +1891,26 @@ func ask(text: String, yes_text: String, on_yes: Callable, no_text: String, on_n
 	_confirm_no.text = no_text
 	_confirm_yes_action = on_yes
 	_confirm_no_action = on_no
+	_confirm_alt.visible = false
 	_confirm_dialog.visible = true
 	_sync_windows()
 	_confirm_no.grab_focus()
+
+
+## つながらなかった・切れたとき：つなぎ直すか、ゲームモード選択へ戻るかを聞く。
+## 自分で指定したサーバーを使っていたら、「標準のサーバーにつなぐ」も出す（指定したサーバーが動いていないことがあるため）。
+func _ask_reconnect(text: String) -> void:
+	ask(text, "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+	if not LocalServer.is_running() and server_url() != OnlineConfig.server_url():
+		_confirm_alt.text = "標準のサーバーにつなぐ"
+		_confirm_alt_action = use_default_server
+		_confirm_alt.visible = true
+
+
+## 標準のサーバーに切り替えて、つなぎ直す（選びも保存する。自分で指定したURLは、そのまま覚えておく）。
+func use_default_server() -> void:
+	ServerChoice.save(ServerChoice.CHOICE_DEFAULT, ServerChoice.custom_url())
+	reconnect()
 
 
 func _answer_confirm(yes: bool) -> void:
@@ -1934,7 +1964,7 @@ func _on_closed() -> void:
 	_server_dialog.visible = false
 	_set_status("サーバーにつながりません。" if was_waiting else "サーバーとのつながりが切れました。")
 	var text := "サーバーにつながりませんでした。" if was_waiting else "サーバーとのつながりが切れました。エントリー候補は、取り消されています。"
-	ask(text, "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+	_ask_reconnect(text)
 
 
 ## つなぎ直す（つながったら、名乗って、ロビーに入り直す）。
@@ -2040,7 +2070,7 @@ func _process(delta: float) -> void:
 				_connect_wait_s = -1.0
 				_set_status("サーバーにつながりません。")
 				if not _confirm_dialog.visible:
-					ask("サーバーにつながりませんでした。", "つなぎ直す", reconnect, "ゲームモード選択へ", go_back)
+					_ask_reconnect("サーバーにつながりませんでした。")
 
 
 func _update_clock() -> void:

@@ -62,18 +62,20 @@ static func local_url() -> String:
 	return "ws://127.0.0.1:%d" % Protocol.server_port()
 
 
-## ほかの人がつなぐ場所（同じネットワークの中の、このPCの番号）。家のWi-Fiでよく使う 192.168 を先に。見つからなければ空。
-static func lan_urls() -> PackedStringArray:
+## ほかの人がつなぐ場所（同じWi-Fiの中の、このPCの番号）を1つ。家のWi-Fiでよく使う 192.168 を先に、次に 10、172。
+## 172.17 で始まる番号は、このPCの中だけで使う番号（Docker などの道具が作る）なので、ほかの人はつなげないため出さない。
+## 見つからなければ空。
+static func lan_url() -> String:
 	var addresses: Array[String] = []
 	for address: String in IP.get_local_addresses():
-		if is_private_address(address):
+		if is_private_address(address) and not address.begins_with("172.17."):
 			addresses.append(address)
-	addresses.sort_custom(func(a: String, b: String) -> bool:
-		return (0 if a.begins_with("192.168.") else 1) < (0 if b.begins_with("192.168.") else 1))
-	var urls := PackedStringArray()
-	for address: String in addresses:
-		urls.append("ws://%s:%d" % [address, Protocol.server_port()])
-	return urls
+	if addresses.is_empty():
+		return ""
+	var rank := func(address: String) -> int:
+		return 0 if address.begins_with("192.168.") else (1 if address.begins_with("10.") else 2)
+	addresses.sort_custom(func(a: String, b: String) -> bool: return rank.call(a) < rank.call(b))
+	return "ws://%s:%d" % [addresses[0], Protocol.server_port()]
 
 
 ## 家や学校の中だけで使う番号か（192.168.x.x・10.x.x.x・172.16〜31.x.x）。

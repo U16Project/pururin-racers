@@ -239,7 +239,7 @@ func test_online_config_names_a_server_and_the_limits() -> void:
 	var room := {"id": "middle", "name": "中距離", "distance_m": RaceSession.supported_distances_m()[0], "tag": "いつもの", "tag_color": "#52db80",
 		"rule": "縛りなし", "intro": "紹介", "image": "middle.jpg", "max_races": int(OnlineConfig.FREE_ROOM_MAX_RACES_RANGE.x)}
 	var good := {"server_url": "ws://x", "default_room": "部屋", "connect_timeout_s": 8.0, "server_max_fps": int(fps_range.x), "max_rooms": 6, "chat_max_length": 60, "result_linger_s": 20, "log_keep_days": 14,
-		"free_rooms": [room], "free_tickets": [{"id": "t2", "name": "チケット"}], "free_fill_wait_s": 20, "free_answer_wait_s": 10, "free_result_keep": 20, "free_rest_after_race_s": 15,
+		"free_rooms": [room], "free_tickets": [{"id": "t2", "name": "チケット"}], "free_fill_wait_s": 20, "free_answer_wait_s": 10, "free_entry_call_delay_s": int(OnlineConfig.free_entry_call_delay_s()), "free_result_keep": 20, "free_rest_after_race_s": 15,
 		# 自作部品の上限と、相手の自作部品を表示しない初期値は、今の設定のものを使う。
 		"custom_limits": OnlineConfig.custom_limits().duplicate(), "hide_remote_parts": bool(OnlineConfig.values()["hide_remote_parts"])}
 	assert_true(OnlineConfig.validate(good).is_empty())
@@ -452,10 +452,14 @@ func test_choosing_your_own_server_enables_the_field_and_is_remembered() -> void
 	assert_eq((again.find_child("ServerEdit", true, false) as LineEdit).text, "wss://example.test")
 	assert_eq(again.selected_server_url(), "wss://example.test")
 	# 標準に戻すと、標準のURLでつなぐ。入力した文字は残す。
+	# 選びは、丸を切り替えただけでは保存しない（オンラインフリー対戦も同じ所を読む）。「つなぐ」で保存する。
 	(again.find_child("DefaultServerRadio", true, false) as CheckBox).button_pressed = true
 	assert_eq(again.selected_server_url(), OnlineConfig.server_url())
-	assert_eq(ServerChoice.choice(), ServerChoice.CHOICE_DEFAULT)
+	assert_eq(ServerChoice.choice(), ServerChoice.CHOICE_CUSTOM, "切り替えただけでは、保存しない")
+	again.connect_to_server()
+	assert_eq(ServerChoice.choice(), ServerChoice.CHOICE_DEFAULT, "つなぐと、保存する")
 	assert_eq(ServerChoice.custom_url(), "wss://example.test")
+	OnlineSession.close()
 	assert_not_null(connect)
 
 
