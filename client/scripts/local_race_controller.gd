@@ -40,6 +40,7 @@ const PururinVisualStyle := preload("res://scripts/pururin_visual_style.gd")
 const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd")
 const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PreRaceShow := preload("res://scripts/presentation/pre_race_show.gd")
+const StartCountdown := preload("res://scripts/presentation/start_countdown.gd")
 const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const RaceEntriesScene := preload("res://scenes/race_entries.tscn")
 const OnlineConfig := preload("res://scripts/config/online_config.gd")
@@ -86,7 +87,10 @@ const FINAL_STRETCH_FADE_OUT_S := 10.0
 @onready var _runners_root: Node3D = $Runners
 @onready var _hud_label: Label = %HudLabel
 @onready var _guide_label: Label = $UI/GuideLabel
+## オンラインの「みんなの準備を待っています…」の文（数字と START! は、_start_countdown_view が出す）。
 @onready var _countdown_label: Label = %CountdownLabel
+## スタート前のカウントダウン（3・2・1・START!）と、スタートのノッチの案内。
+var _start_countdown_view: Control
 @onready var _pause_panel: Control = %PausePanel
 @onready var _result_panel: Control = %ResultPanel
 ## 着順の表（結果の板の中に、コードで足す）。
@@ -350,6 +354,9 @@ func _ready() -> void:
 		# 画面ができたことは、スタート前の準備（_is_preparing）が終わってから、サーバーに知らせる（_send_online_ready_when_prepared）。
 	_entry_wait_remaining = LocalRaceMath.Config.number("race_entry_wait_seconds")
 	_countdown_label.visible = false
+	_start_countdown_view = StartCountdown.new()
+	_start_countdown_view.name = "StartCountdown"
+	$UI.add_child(_start_countdown_view)
 	RaceAudio.play_race_entry()
 	# 画面のある所では、スタート前の見せ方から（画面の無いサーバー・ラボで走らせるときは、出さない）。
 	if not _is_online_host():
@@ -571,6 +578,10 @@ func _follow_runner(runner: Node3D) -> void:
 
 
 func _process(_delta: float) -> void:
+	# カウントダウンの間だけ、下に、スタートのノッチの案内（今のノッチ）を出す。
+	if _start_countdown_view != null:
+		var choosing := _player != null and not _race_started and bool(_start_countdown_view.call("is_counting")) and not _paused
+		_start_countdown_view.call("set_notch", choosing, int(roundi(float(_player.call("get_drive_level")))) if choosing else 0, int(LocalRaceMath.DRIVE_LEVEL_MIN), int(LocalRaceMath.DRIVE_LEVEL_MAX))
 	# 右上の札は、カウントダウンから結果の板が出るまで。
 	_race_info_box.visible = not _runners.is_empty() and not _is_showing_pre_race() and not _is_in_paddock_overlay() and not _result_panel.visible
 	if _race_info_box.visible:
@@ -934,8 +945,8 @@ func _update_before_start(delta: float) -> void:
 func _begin_start_countdown() -> void:
 	_countdown_begun = true
 	_start_countdown_remaining = LocalRaceMath.Config.number("start_countdown_seconds")
-	_countdown_label.visible = true
-	_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
+	_countdown_label.visible = false
+	_start_countdown_view.call("show_count", _start_countdown_remaining)
 	RaceAudio.play_countdown_start()
 
 
@@ -957,7 +968,7 @@ static func contact_sound_starts(was_touching: bool, contact_count: int, in_push
 func _update_start_countdown(delta: float) -> void:
 	_start_countdown_remaining = maxf(_start_countdown_remaining - delta, 0.0)
 	if _start_countdown_remaining > 0.0:
-		_countdown_label.text = "スタートまで %d" % ceili(_start_countdown_remaining)
+		_start_countdown_view.call("show_count", _start_countdown_remaining)
 		return
 	_race_started = true
 	_start_gate.clear_after_start()
@@ -965,7 +976,7 @@ func _update_start_countdown(delta: float) -> void:
 	create_tween().tween_callback(_start_marker.hide).set_delay(StartGate.CLEAR_DELAY_S)
 	if not _is_online_host():
 		_telemetry_recorder.start(_race_distance_m)
-	_countdown_label.text = "START!"
+	_start_countdown_view.call("show_start")
 	_start_signal_remaining = 0.8
 	for runner in _runners:
 		runner.call("set_race_active", true)
@@ -1180,8 +1191,8 @@ func _apply_online_state(data: Dictionary) -> void:
 		_race_started = true
 		_start_gate.clear_after_start()
 		create_tween().tween_callback(_start_marker.hide).set_delay(StartGate.CLEAR_DELAY_S)
-		_countdown_label.visible = true
-		_countdown_label.text = "START!"
+		_countdown_label.visible = false
+		_start_countdown_view.call("show_start")
 		_start_signal_remaining = 0.8
 		for runner in _runners:
 			runner.call("set_race_active", true)
@@ -1193,12 +1204,13 @@ func _apply_online_state(data: Dictionary) -> void:
 	elif float(data["countdown"]) > 0.0:
 		if not _online_countdown_shown:
 			_online_countdown_shown = true
-			_countdown_label.visible = true
 			RaceAudio.play_countdown_start()
-		_countdown_label.text = "スタートまで %d" % ceili(float(data["countdown"]))
+		_countdown_label.visible = false
+		_start_countdown_view.call("show_count", float(data["countdown"]))
 	else:
 		# 入場の待ちのあいだは、何も出さない。
 		_countdown_label.visible = false
+		_start_countdown_view.call("hide_all")
 
 
 ## 自分の走者の状態の変わり目で、音を鳴らす（ノッチ・ダッシュ・ブースト・ゴール）。
