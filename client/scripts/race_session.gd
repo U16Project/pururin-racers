@@ -14,11 +14,28 @@ static func slot_trainer_id(slot: int) -> String:
 		return _trainer_ids[slot]
 	return str(PururinRosterConfig.pururin_by_id(_slots[slot]).get("trainer_id", ""))
 
+## そのスロットの担当を決める。ユーザーの枠には、USER_TRAINER（ユーザーが走らせる）か、CPUのトレーナーを入れられる。
+## ユーザーの枠をCPUにすると、ユーザーはレースに出ず、観戦になる。
 static func set_slot_trainer(slot: int, identifier: String) -> bool:
-	if slot < 0 or slot >= SLOT_COUNT or is_user_slot(slot) or _locked[slot] or CpuTrainers.by_id(identifier).is_empty():
+	if slot < 0 or slot >= SLOT_COUNT or _locked[slot]:
 		return false
+	if identifier == USER_TRAINER:
+		if not is_user_slot(slot):
+			return false
+		_user_as_cpu = false
+		_trainer_ids[slot] = EMPTY
+		return true
+	if CpuTrainers.by_id(identifier).is_empty():
+		return false
+	if is_user_slot(slot):
+		_user_as_cpu = true
 	_trainer_ids[slot] = identifier
 	return true
+
+
+## ユーザーの枠を、CPUのトレーナーが走らせるか（そのとき、ユーザーは観戦）。
+static func is_spectating() -> bool:
+	return _user_as_cpu
 
 static func trainer_for_slot(slot: int) -> Dictionary:
 	return CpuTrainers.by_id(slot_trainer_id(slot))
@@ -40,6 +57,10 @@ static var _slots: Array[String] = _empty_slots()
 static var _locked: Array[bool] = _no_locks()
 ## ユーザーのスロットがある枠。起動した直後は、1枠（番号0）。
 static var _user_slot := 0
+## ユーザーの枠を、CPUのトレーナーに替えたか（true なら、ユーザーはレースに出ず、観戦）。
+static var _user_as_cpu := false
+## トレーナーの一覧で「ユーザー（自分）」を表す値。
+const USER_TRAINER := "@user"
 ## レースからレース選択へ戻るところか（戻ったとき、選択の枠をレース開始ボタンに置くための印）。
 static var _returning_from_race := false
 ## 選択した画質が軽量か。true のあいだ、レースの景色は、コースまわり（地面と柵）だけにする
@@ -176,7 +197,7 @@ static func field_entries() -> Array:
 	var entries: Array = []
 	for slot in SLOT_COUNT:
 		if _slots[slot] != EMPTY:
-			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot, "trainer_id": slot_trainer_id(slot)})
+			entries.append({"gate": slot, "id": _slots[slot], "player": slot == _user_slot and not _user_as_cpu, "trainer_id": slot_trainer_id(slot)})
 	return entries
 
 
@@ -303,7 +324,7 @@ static func randomize_unlocked(fill_only: bool = false) -> void:
 static func randomize_trainers_unlocked(fill_only: bool = false) -> void:
 	var trainers: Array = CpuTrainers.values()
 	for slot in SLOT_COUNT:
-		if _locked[slot] or is_user_slot(slot):
+		if _locked[slot] or (is_user_slot(slot) and not _user_as_cpu):
 			continue
 		# 個体の既定担当も、すでに選ばれている人物として扱う。
 		if fill_only and not slot_trainer_id(slot).is_empty():
@@ -317,6 +338,8 @@ static func clear_unlocked() -> void:
 		if not _locked[slot]:
 			_slots[slot] = EMPTY
 			_trainer_ids[slot] = EMPTY
+			if is_user_slot(slot):
+				_user_as_cpu = false
 
 
 ## レースを始められない理由。始められるなら空。"no_player"＝ユーザーが未選択、"no_opponent"＝相手が1体もいない。
@@ -337,6 +360,7 @@ static func clear_slots() -> void:
 	_locked = _no_locks()
 	_trainer_ids = _empty_slots()
 	_user_slot = 0
+	_user_as_cpu = false
 
 
 ## 測定とテスト用。ユーザーを1枠に指定の個体で置き、残りの枠を、ほかの個体で一覧の順に埋める。
@@ -356,7 +380,7 @@ static func select_full_field(player_id: String) -> bool:
 
 ## 選択を一時的に変えて、あとで戻すための控え（個体・施錠・ユーザーの枠）。
 static func slots_snapshot() -> Dictionary:
-	return {"slots": _slots.duplicate(), "locked": _locked.duplicate(), "user_slot": _user_slot, "trainers": _trainer_ids.duplicate()}
+	return {"slots": _slots.duplicate(), "locked": _locked.duplicate(), "user_slot": _user_slot, "trainers": _trainer_ids.duplicate(), "user_as_cpu": _user_as_cpu}
 
 
 static func restore_slots(snapshot: Dictionary) -> void:
@@ -366,6 +390,7 @@ static func restore_slots(snapshot: Dictionary) -> void:
 		_locked[slot] = bool(snapshot["locked"][slot])
 		_trainer_ids[slot] = str(snapshot.get("trainers", _empty_slots())[slot])
 	_user_slot = int(snapshot["user_slot"])
+	_user_as_cpu = bool(snapshot.get("user_as_cpu", false))
 
 
 static func roster_ids() -> Array[String]:

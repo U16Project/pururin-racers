@@ -1095,6 +1095,13 @@ func _spawn_field() -> void:
 					_camera.call("set_follow_target", runner)
 				_camera.set("overview_ortho_size", 560.0)
 				_camera.set("overview_height", 500.0)
+	# 観戦モード（ユーザーの枠をCPUに替えた）：カメラは、その枠の子を追う（L1・R1 で、ほかの子へ替えられる）。
+	if _player == null and not _online_view and not _online_host and RaceSession.is_spectating() and _camera != null and _camera.has_method("set_follow_target"):
+		for runner: Node3D in _runners:
+			if int(runner.get("gate_index")) == RaceSession.user_slot():
+				_camera.call("set_follow_target", runner)
+		_camera.set("overview_ortho_size", 560.0)
+		_camera.set("overview_height", 500.0)
 
 
 # ---------------------------------------------------------------- オンラインのゲーム側
@@ -1765,11 +1772,12 @@ static func result_wait_seconds(seconds_since_player_finish: float) -> float:
 
 
 func _update_hud() -> void:
-	if _player == null:
+	# 観戦モードでは、カメラで見ている子の操作盤と順位表を出す。
+	if _player == null and _hud_runner() == null:
 		return
 	_update_race_hud()
 	# 詳細表示（F3）の文字は、見えているときだけ作る（毎コマ作ると、見えていなくても重い）。
-	if _hud_label.visible:
+	if _hud_label.visible and _player != null:
 		_update_detail_text()
 
 
@@ -1993,7 +2001,7 @@ func _runner_hud_state(hud: Node3D) -> Dictionary:
 
 ## 操作盤に出す子。カメラで見ている子（操作を受け付けていないときは自分）。
 func _hud_runner() -> Node3D:
-	if not _camera_input_allowed():
+	if not _camera_input_allowed() and _player != null:
 		return _player
 	var watched := _camera.get("_target") as Node3D
 	if is_instance_valid(watched) and _runners.has(watched):

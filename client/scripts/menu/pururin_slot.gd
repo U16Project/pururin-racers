@@ -181,7 +181,8 @@ func set_role(is_user: bool) -> void:
 
 ## トレーナー名の表示を、今の役（ユーザーかCPUか）とキャラに合わせる。
 func _refresh_trainer() -> void:
-	_trainer_button.disabled = _view_only or _is_user or _taken or _locked
+	# ユーザーの枠も押せる（CPUのトレーナーに替えると、観戦になる）。
+	_trainer_button.disabled = _view_only or _taken or _locked
 	_trainer_button.focus_mode = Control.FOCUS_NONE if _trainer_button.disabled else Control.FOCUS_ALL
 	_tag_label.call("set_text", trainer_text())
 	_tag_label.call("set_color", trainer_color())

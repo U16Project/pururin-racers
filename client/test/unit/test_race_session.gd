@@ -301,3 +301,24 @@ func test_local_race_does_not_run_when_the_user_slot_is_empty() -> void:
 	assert_true(race.get_node("UI/HudLabel").visible)
 	assert_true(str(race.get_node("UI/HudLabel").text).contains("レース選択"))
 	race.free()
+
+
+func test_the_user_slot_can_be_handed_to_a_cpu_trainer_for_spectating_and_back() -> void:
+	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
+	var slot := RaceSession.user_slot()
+	var trainer_id := str(load("res://scripts/config/cpu_trainers_config.gd").values()[0]["id"])
+	assert_false(RaceSession.is_spectating())
+	assert_true(RaceSession.set_slot_trainer(slot, trainer_id), "ユーザーの枠にも、CPUのトレーナーを入れられる")
+	assert_true(RaceSession.is_spectating(), "ユーザーの枠をCPUにすると、観戦")
+	assert_eq(RaceSession.slot_trainer_id(slot), trainer_id)
+	for entry: Dictionary in RaceSession.field_entries():
+		assert_false(bool(entry["player"]), "観戦では、ユーザーが走らせる子はいない")
+	assert_eq(RaceSession.race_start_problem(), "", "観戦でも、レースは始められる")
+	var snapshot := RaceSession.slots_snapshot()
+	RaceSession.clear_slots()
+	RaceSession.restore_slots(snapshot)
+	assert_true(RaceSession.is_spectating(), "控えから戻しても、観戦のまま")
+	assert_true(RaceSession.set_slot_trainer(slot, RaceSession.USER_TRAINER), "自分に戻せる")
+	assert_false(RaceSession.is_spectating())
+	assert_true(bool(RaceSession.field_entries()[slot]["player"]))
+	assert_false(RaceSession.set_slot_trainer((slot + 1) % RaceSession.SLOT_COUNT, RaceSession.USER_TRAINER), "ほかの枠に、ユーザーは入れない")

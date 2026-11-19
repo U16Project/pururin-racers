@@ -134,7 +134,11 @@ func test_selection_survives_character_change_and_snapshot_and_moves() -> void:
 	Session.restore_slots(saved)
 	assert_eq(Session.slot_trainer_id(1), "kaede")
 	assert_eq(Session.field_entries()[1]["trainer_id"], "kaede")
-	assert_false(Session.set_slot_trainer(0, "kaede"))
+	# ユーザーの枠（0）にCPUのトレーナーを入れると、観戦になる。自分（USER_TRAINER）で戻せる。
+	assert_true(Session.set_slot_trainer(0, "kaede"))
+	assert_true(Session.is_spectating())
+	assert_true(Session.set_slot_trainer(0, Session.USER_TRAINER))
+	assert_false(Session.is_spectating())
 	Session.toggle_lock(1)
 	assert_false(Session.set_slot_trainer(1, "ren"))
 
@@ -202,6 +206,10 @@ func test_picker_selection_and_return_focus() -> void:
 	await get_tree().process_frame
 	var buttons: Array = picker.get("_buttons")
 	for button: Button in buttons:
+		# 「自分（ユーザー）」のボタンは、ユーザーの枠を開いたときだけ出る（色は、いつもユーザーの色）。
+		if button == picker.get("_user_button"):
+			assert_false(button.get_parent().visible)
+			continue
 		var expected: Color = picker.DEFAULT_COLOR if button.name == "homura" else preload("res://scripts/menu/menu_style.gd").COLOR_TEXT
 		assert_eq(button.get_theme_color("font_color"), expected)
 		assert_eq(button.get_parent().get_theme_constant("margin_top"), 5)

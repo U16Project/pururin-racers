@@ -18,6 +18,8 @@ const GateBadge := preload("res://scripts/menu/gate_badge.gd")
 const PururinPicker := preload("res://scripts/menu/pururin_picker.gd")
 const TrainerPicker := preload("res://scripts/menu/cpu_trainer_picker.gd")
 var _trainer_picker: PanelContainer
+## 観戦モードで始めるかの確かめの窓（出していなければ null）。
+var _spectate_confirm: Control
 const ButtonMark := preload("res://scripts/menu/button_mark.gd")
 const PANEL_WIDTH := 900.0
 ## 上の帯・画面の下の端と、箱とのすき間。
@@ -34,6 +36,10 @@ const START_PROBLEM_TEXT := {
 	"no_player": "ユーザーのぷるりんを選んでください",
 	"no_opponent": "相手を1体以上選んでください",
 }
+## ユーザーの枠をCPUに替えたとき（観戦モード）の、下の注意書き。
+const SPECTATE_TEXT := "観戦モード：%s はレースに出ず、CPUどうしのレースを見ます"
+const SPECTATE_NO_PURURIN_TEXT := "観戦モード：%d枠（CPU）のぷるりんを選んでください"
+const COLOR_SPECTATE := Color(0.5, 1.0, 1.0)
 
 var _distance_buttons: Array[Button] = []
 var _slots: Array[Control] = []
@@ -107,7 +113,7 @@ func _ready() -> void:
 	_race_button.name = "RaceButton"
 	_race_button.custom_minimum_size = Vector2(0.0, 40.0)
 	_race_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_race_button.pressed.connect(go_to_race)
+	_race_button.pressed.connect(request_race)
 	UIAudio.bind_button_sound(_race_button, "confirmation")
 	UIAudio.bind_disabled_button_error(_race_button)
 	MenuStyle.add_mark(_race_button, "START")
@@ -357,11 +363,16 @@ func _refresh_slots() -> void:
 		var taken := slot == _preview_slot
 		var identifier := _preview_id if taken else RaceSession.slot_pururin_id(slot)
 		_slots[slot].call("set_pururin", PururinRosterConfig.pururin_by_id(identifier) if identifier != RaceSession.EMPTY else {}, taken)
-		_slots[slot].call("set_role", RaceSession.is_user_slot(slot))
+		_slots[slot].call("set_role", RaceSession.is_user_slot(slot) and not RaceSession.is_spectating())
 		_slots[slot].call("set_locked", RaceSession.is_locked(slot))
 	var problem := RaceSession.race_start_problem()
 	_race_button.disabled = not problem.is_empty()
 	_hint_label.text = str(START_PROBLEM_TEXT[problem]) if not problem.is_empty() else ""
+	if problem == "no_player" and RaceSession.is_spectating():
+		_hint_label.text = SPECTATE_NO_PURURIN_TEXT % (RaceSession.user_slot() + 1)
+	elif RaceSession.is_spectating():
+		_hint_label.text = SPECTATE_TEXT % TrainerProfile.trainer_name() if problem.is_empty() else _hint_label.text + "（観戦モード）"
+	_hint_label.add_theme_color_override("font_color", COLOR_SPECTATE if RaceSession.is_spectating() and problem.is_empty() else MenuStyle.COLOR_FOCUS)
 
 
 ## 右側の詳細を、今見ているスロットに合わせる。「見ているだけ」のキャラなら、誰が使っているかも出す。
@@ -376,6 +387,17 @@ func _refresh_detail() -> void:
 ## ゲームパッドは、Aで決定、Bで戻る、STARTでレース開始、L1・R1で距離
 ## （Godotの標準では、ゲームパッドのボタンは「決定」「戻る」に割り当てられていない）。
 func _unhandled_input(event: InputEvent) -> void:
+	if is_instance_valid(_spectate_confirm):
+		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
+			UIAudio.play_back()
+			get_viewport().set_input_as_handled()
+			_close_spectate_confirm()
+		elif RaceControllerInput.is_accept_pressed(event):
+			if RaceControllerInput.activate_focused_control(get_viewport()):
+				get_viewport().set_input_as_handled()
+		elif event is InputEventKey or event is InputEventJoypadButton:
+			get_viewport().set_input_as_handled()
+		return
 	if _trainer_picker.visible:
 		if event.is_action_pressed("ui_cancel") or RaceControllerInput.is_cancel_pressed(event):
 			UIAudio.play_back()
@@ -404,7 +426,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if RaceSession.race_start_problem().is_empty():
 			UIAudio.play_confirmation()
 			get_viewport().set_input_as_handled()
-			go_to_race()
+			request_race()
 		else:
 			UIAudio.play_error()
 			get_viewport().set_input_as_handled()
@@ -423,6 +445,75 @@ func go_to_title() -> void:
 		RaceSession.race_select_back.call()
 		return
 	get_tree().change_scene_to_file(MODE_SELECT_SCENE_PATH)
+
+
+## レースへ進むボタン・START：観戦モードなら、確かめの窓を出してから。
+func request_race() -> void:
+	if not RaceSession.race_start_problem().is_empty():
+		UIAudio.play_error()
+		return
+	if RaceSession.is_spectating():
+		_open_spectate_confirm()
+	else:
+		go_to_race()
+
+
+## 観戦モードで始めるかの確かめの窓。
+func _open_spectate_confirm() -> void:
+	if is_instance_valid(_spectate_confirm):
+		return
+	var shade := ColorRect.new()
+	shade.name = "SpectateConfirm"
+	shade.color = Color(0, 0, 0, 0.6)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(shade)
+	_spectate_confirm = shade
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.add_child(center)
+	var box := PanelContainer.new()
+	box.add_theme_stylebox_override("panel", MenuStyle.panel_box(28.0, 22.0))
+	center.add_child(box)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 16)
+	box.add_child(column)
+	var title := MenuStyle.bold_label("観戦モードで始めますか？", 26, COLOR_SPECTATE)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	var text := MenuStyle.label("%s はレースに出ません。\nCPUどうしのレースを、カメラを切り替えながら見られます。" % TrainerProfile.trainer_name(), 18)
+	text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(text)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	column.add_child(row)
+	var no := MenuStyle.pill_button("やめる", "quiet", 20)
+	no.name = "SpectateNo"
+	no.custom_minimum_size = Vector2(200.0, 52.0)
+	MenuStyle.add_mark(no, "B")
+	no.pressed.connect(_close_spectate_confirm)
+	UIAudio.bind_button_sound(no, "back")
+	row.add_child(no)
+	var yes := MenuStyle.pill_button("観戦で始める", "primary", 20)
+	yes.name = "SpectateYes"
+	yes.custom_minimum_size = Vector2(240.0, 52.0)
+	yes.pressed.connect(go_to_race)
+	UIAudio.bind_button_sound(yes, "confirmation")
+	row.add_child(yes)
+	no.focus_neighbor_right = no.get_path_to(yes)
+	yes.focus_neighbor_left = yes.get_path_to(no)
+	for button: Button in [no, yes]:
+		button.focus_neighbor_top = button.get_path_to(button)
+		button.focus_neighbor_bottom = button.get_path_to(button)
+	yes.grab_focus()
+
+
+func _close_spectate_confirm() -> void:
+	if is_instance_valid(_spectate_confirm):
+		_spectate_confirm.queue_free()
+	_spectate_confirm = null
+	_race_button.grab_focus()
 
 
 ## レースへ進む。ふつうは、レース会場のパドック（レースの画面）へ。ラボから起動したときは、今までのパドックの画面へ
@@ -568,7 +659,7 @@ func _build_picker() -> void:
 		_slots[_trainer_picker.selected_slot].grab_focus())
 
 func _on_trainer_requested(slot: int) -> void:
-	if slot < 0 or slot >= RaceSession.SLOT_COUNT or RaceSession.is_user_slot(slot) or RaceSession.is_locked(slot):
+	if slot < 0 or slot >= RaceSession.SLOT_COUNT or RaceSession.is_locked(slot):
 		UIAudio.play_error()
 		return
 	_viewed_slot = slot
