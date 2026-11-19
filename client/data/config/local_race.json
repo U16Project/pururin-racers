@@ -78,6 +78,7 @@
   "pre_race_venue_s": 5.0,
   "pre_race_gate_in_s": 16.0,
   "goal_carpet_show_remaining_m": 1800.0,
+  "finish_cutoff_after_winner_s": 20.0,
   "contact_lateral_range_m": 1.5,
   "contact_longitudinal_range_m": 1.5,
   "draft_air_resistance_factor": 1.0,

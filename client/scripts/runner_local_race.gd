@@ -120,6 +120,7 @@ var _race_route: Dictionary = {}
 var _finished: bool = false
 var _finish_order: int = -1
 var _finish_time: float = -1.0
+var _cut_off := false
 var _straight_len: float = 0.0
 var _turn_radius: float = 0.0
 var _drive_diagnostic_log_remaining: float = 0.0
@@ -753,10 +754,16 @@ func get_finish_crossing_lead_s(race_distance_m: float) -> float:
 	return (1.0 - fraction) * _last_tick_delta
 
 
-func mark_finished(order: int, finish_time: float) -> void:
+## cut_off＝1着から決めた秒数がたって、打ち切りで着順を付けたか（タイムは、打ち切ったときの時刻）。
+func mark_finished(order: int, finish_time: float, cut_off: bool = false) -> void:
 	_finished = true
 	_finish_order = order
 	_finish_time = finish_time
+	_cut_off = cut_off
+
+
+func is_cut_off() -> bool:
+	return _cut_off
 
 
 ## オンラインで配る、この走者の今の状態（画面に出すのに要るものだけ）。

@@ -20,6 +20,10 @@ const CHEVRON_SCALE := 0.62
 ## 会場の上に重ねるときの、ステータスの欄の高さ・右の列の幅。
 const DETAIL_HEIGHT_OVERLAY := 380.0
 const RIGHT_WIDTH_OVERLAY := 470.0
+## X で切り替えたときの、トレーナーの絵の大きさ（ふだんは 64）と、ぷるりん1行の絵の大きさ。
+const TRAINER_IMAGE_LARGE := 170.0
+const TRAINER_IMAGE_SMALL := 64.0
+const PURURIN_SMALL_PORTRAIT := 56.0
 ## 会場の上に重ねるときの、一覧の行（幅・高さ・絵の大きさ・名前と2段目の字の大きさ・印の大きさ）。
 ## 一覧は、上の帯の下から画面の下まで伸ばし、行はその高さに合わせて伸びる（高さは最小）。行は枠の線を付けず、うすい地だけにする。
 const ROW_WIDTH_OVERLAY := 400.0
@@ -42,6 +46,14 @@ var _favorite: Label
 var _trainer_line: HBoxContainer
 var _kind_tag: Control
 var _introduction: Label
+## パドック（重ねて出すとき）の右の箱：X で、トレーナーを大きく・くわしく出すか（そのとき、ぷるりんは1行だけ）。
+var trainer_large := false
+var _pururin_small: HBoxContainer
+var _pururin_small_portrait: Control
+var _pururin_small_name: Label
+var _pururin_small_marks: Control
+var _pururin_small_id := ""
+var _switch_hint: Label
 var _start: Button
 var _back: Button
 var _transitioning := false
@@ -289,8 +301,25 @@ func _ready() -> void:
 		trainer_row.add_child(trainer_texts)
 		trainer_texts.add_child(_trainer_line)
 		trainer_texts.add_child(_favorite)
+		# トレーナーを大きく出すときだけ、紹介文と、ぷるりんの1行（絵・名前・属性と脚質の印）を出す。
+		_introduction.add_theme_font_size_override("font_size", 16)
+		_introduction.custom_minimum_size.x = RIGHT_WIDTH_OVERLAY - 40.0
+		right.add_child(_introduction)
+		_pururin_small = _make_pururin_small()
+		right.add_child(_pururin_small)
 		_detail.custom_minimum_size.y = DETAIL_HEIGHT_OVERLAY
 		right.add_child(_detail)
+		var hint_row := HBoxContainer.new()
+		hint_row.add_theme_constant_override("separation", 6)
+		hint_row.alignment = BoxContainer.ALIGNMENT_END
+		hint_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		right.add_child(hint_row)
+		var hint_mark := Style.mark("X", 20.0)
+		hint_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		hint_row.add_child(hint_mark)
+		_switch_hint = _dim_label("", 14)
+		hint_row.add_child(_switch_hint)
+		_apply_trainer_large()
 	else:
 		body.add_child(_detail)
 		trainer_panel.custom_minimum_size.x = 244
@@ -339,8 +368,12 @@ func _ready() -> void:
 	_start.pressed.connect(start)
 	buttons.add_child(_start)
 	_link_focus()
+	focus_first()
+
+
+## はじめのカーソルは、自分のぷるりんの行（いなければ、いちばん上）。行が無ければ、戻るのボタン。
+func focus_first() -> void:
 	if not _rows.is_empty():
-		# はじめのカーソルは、自分のぷるりんの行（いなければ、いちばん上）。
 		var first := maxi(_entries.find_custom(func(entry: Dictionary) -> bool: return _is_me(entry)), 0)
 		_rows[first].grab_focus()
 		_show_entry(_entries[first])
@@ -360,6 +393,12 @@ func _show_entry(entry: Dictionary) -> void:
 	shown_gate = int(entry["gate"])
 	entry_shown.emit(shown_gate)
 	_detail.call("show_pururin", str(entry["id"]))
+	if _pururin_small != null:
+		_pururin_small_id = str(entry["id"])
+		var pururin := Roster.pururin_by_id(_pururin_small_id)
+		_pururin_small_portrait.call("set_pururin", pururin)
+		_pururin_small_name.text = str(pururin.get("display_name", ""))
+		_pururin_small_marks.queue_redraw()
 	var player := _is_me(entry)
 	if _kind_tag != null:
 		_kind_tag.queue_free()
@@ -390,6 +429,53 @@ func _show_entry(entry: Dictionary) -> void:
 		_trainer_name.add_theme_color_override("font_color", Color(0.5, 1, 0.6) if Session.is_default_trainer(shown_gate, str(trainer.get("id", ""))) else Style.COLOR_TEXT)
 		_favorite.text = "得意脚質：" + str(STYLE_NAMES.get(str(trainer.get("favorite_running_style", "")), ""))
 		_introduction.text = str(trainer.get("introduction", ""))
+
+
+## パドックの右の箱の、ぷるりん1行（トレーナーを大きく出すときに使う）。
+func _make_pururin_small() -> HBoxContainer:
+	var line := HBoxContainer.new()
+	line.name = "PururinSmall"
+	line.add_theme_constant_override("separation", 10)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pururin_small_portrait = Portrait.new()
+	_pururin_small_portrait.custom_minimum_size = Vector2.ONE * PURURIN_SMALL_PORTRAIT
+	_pururin_small_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	line.add_child(_pururin_small_portrait)
+	_pururin_small_name = Style.label("", 22)
+	_pururin_small_name.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	line.add_child(_pururin_small_name)
+	_pururin_small_marks = Control.new()
+	_pururin_small_marks.custom_minimum_size = Vector2(MARK_SIZE_OVERLAY + 8.0 + Hud.STYLE_CHEVRON_STEP * StatsMath.rank_group_count() + 2.0, MARK_SIZE_OVERLAY + 4.0)
+	_pururin_small_marks.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_pururin_small_marks.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pururin_small_marks.draw.connect(func() -> void:
+		var pururin := Roster.pururin_by_id(_pururin_small_id)
+		if pururin.is_empty():
+			return
+		var attribute_id := str(pururin["attribute"])
+		var center_y := _pururin_small_marks.size.y * 0.5
+		Detail.draw_attribute_mark(_pururin_small_marks, Vector2(MARK_SIZE_OVERLAY * 0.5, center_y), MARK_SIZE_OVERLAY, attribute_id, Color.from_string(str(Stats.values()["attributes"][attribute_id]["color"]), Color.WHITE))
+		Hud.draw_style_chevrons(_pururin_small_marks, Vector2(MARK_SIZE_OVERLAY + 8.0, center_y), Hud.COLOR_STYLE_MATCH, StatsMath.rank_group_count(), StatsMath.style_rank_group_index(str(pururin["running_style"])), 1.0))
+	line.add_child(_pururin_small_marks)
+	return line
+
+
+## X：右の箱を、トレーナーを大きく（ぷるりんは1行）・ぷるりんを大きく（トレーナーは小さく）で切り替える。
+func toggle_trainer_large() -> void:
+	trainer_large = not trainer_large
+	_apply_trainer_large()
+
+
+func _apply_trainer_large() -> void:
+	if _pururin_small == null:
+		return
+	var image_size := TRAINER_IMAGE_LARGE if trainer_large else TRAINER_IMAGE_SMALL
+	_trainer_image.custom_minimum_size = Vector2(image_size, image_size)
+	_player_image.custom_minimum_size = Vector2(image_size, image_size)
+	_introduction.visible = trainer_large
+	_pururin_small.visible = trainer_large
+	_detail.visible = not trainer_large
+	_switch_hint.text = "ぷるりんをくわしく" if trainer_large else "トレーナーをくわしく"
 
 
 ## オンラインで、その走者を誰が動かすか（Hud の KIND_PLAYER・KIND_CPU）。オフラインは空（札を出さない）。
@@ -468,6 +554,11 @@ func back() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var viewport := get_viewport()
+	# パドックの右の箱：X で、トレーナーとぷるりんの大きさを入れ替える。
+	if overlay_mode and _pururin_small != null and is_visible_in_tree() and InputHelper.is_face_pressed(event, JOY_BUTTON_X):
+		viewport.set_input_as_handled()
+		toggle_trainer_large()
+		return
 	# 見るだけのとき：カーソルを動かして見るだけ。レース開始・戻るは無い。
 	if read_only:
 		if accept_passes:

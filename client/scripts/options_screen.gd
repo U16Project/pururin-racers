@@ -33,6 +33,10 @@ var _screen_mode_row: HBoxContainer
 var _screen_direction_down := {"ui_left": false, "ui_right": false}
 var _quality_button: HBoxContainer
 var _quality_label: Label
+var _quality_note: Label
+## 画質の説明。軽量＝観客席・町・遠くの景色と、太陽の影を出さない（コースと柵だけ）。
+const QUALITY_NOTE_STANDARD := "観客席や町並み、影まで、すべて表示します。"
+const QUALITY_NOTE_LIGHT := "コースと柵だけにして、影も消します。ノートPCなどで、動きがカクつくときに選んでください。"
 var _quality_direction_down := {"ui_left": false, "ui_right": false}
 
 
@@ -65,6 +69,12 @@ func _ready() -> void:
 	column.add_child(gap)
 	column.add_child(MenuStyle.section_title("オプション", 17))
 	_build_quality_selector(column)
+	# 画質の行の下に、今の画質で何が変わるか（いつ選ぶとよいか）を小さく出す。
+	_quality_note = MenuStyle.label("", 14, MenuStyle.COLOR_DIM)
+	_quality_note.name = "QualityNote"
+	_quality_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(_quality_note)
+	_update_quality_text()
 	_build_screen_mode_selector(column)
 	var parts_row := CheckButton.new()
 	parts_row.name = "HideRemoteParts"
@@ -132,6 +142,8 @@ func step_quality() -> void:
 
 func _update_quality_text() -> void:
 	_quality_label.text = "軽量" if RaceSession.is_course_only() else "標準"
+	if _quality_note != null:
+		_quality_note.text = QUALITY_NOTE_LIGHT if RaceSession.is_course_only() else QUALITY_NOTE_STANDARD
 
 
 func _quality_input(event: InputEvent) -> void:

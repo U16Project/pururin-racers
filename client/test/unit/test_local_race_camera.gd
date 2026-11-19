@@ -281,7 +281,7 @@ func test_turn_orbits_the_target_and_first_person_turns_only_the_head() -> void:
 		camera.call("apply_turn", turn, delta)
 		camera.call("_apply")
 		var settings: Dictionary = LocalRaceCamera.VIEW_SETTINGS[LocalRaceCamera.View.DEFAULT]
-		var angle := (turn.x - turn.y) * float(camera.get("chase_turn_speed")) * delta
+		var angle := (turn.y - turn.x) * float(camera.get("chase_turn_speed")) * delta
 		var expected := -(Basis(Vector3.UP, angle) * Vector3.FORWARD) * float(settings["back"]) + Vector3.UP * float(settings["height"])
 		assert_true(camera.position.is_equal_approx(expected))
 	camera.call("_set_view", LocalRaceCamera.View.FIRST_PERSON)

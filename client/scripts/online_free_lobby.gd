@@ -823,6 +823,21 @@ func fill_card(card: Control, room: Dictionary, entry: Dictionary) -> void:
 		_set_strip_final(card.get_node("Strip"), card.get_node("Strip/Dot"), card.get_node("Strip/Text"), room)
 	elif not is_open(room):
 		_set_strip_closed(card.get_node("Strip"), card.get_node("Strip/Dot"), card.get_node("Strip/Text"), room)
+	# 広い画面（1920×1080 など）では、カードが細くなるので、入りきらない字は小さくする。
+	_shrink_to_fit.call_deferred(card.get_node("Strip/Text") as Label)
+
+
+## 字が欄の幅に入りきらなければ、入るまで小さくする（場面に置いた大きさが上限。STATUS_MIN_FONT_SIZE まで）。
+func _shrink_to_fit(label: Label) -> void:
+	if not is_instance_valid(label) or label.size.x <= 0.0:
+		return
+	if not label.has_meta("base_font_size"):
+		label.set_meta("base_font_size", label.get_theme_font_size("font_size"))
+	var font := label.get_theme_font("font")
+	var font_size := int(label.get_meta("base_font_size"))
+	while font_size > STATUS_MIN_FONT_SIZE and font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > label.size.x:
+		font_size -= 1
+	label.add_theme_font_size_override("font_size", font_size)
 
 
 ## チケットが要るのに、自分のぷるりんが、どれも（期限の前に）持っていないルームか（カードを暗くして、錠を付ける。押しても開かない）。

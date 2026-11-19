@@ -85,7 +85,7 @@ tools/godot/Godot_v4.7-stable_linux.x86_64 --headless --path client res://scenes
 | `race_state` | レースの状態 | レース中、1秒に20回配る |
 | `notice` | `kind`（`joined`・`left`・`disconnected`・`kicked`・`host`・`race_open`）、`name`、`by`（`kicked` のとき `host` か `admin`） | 部屋のできごと（入った・出た・切れた・退出させられた・主になった）。部屋の全員に配る |
 | `race_end` | — | サーバーが、レースを片づけた。部屋は待機室に戻る。まだレースの画面にいる人は、待機室へ戻る |
-| `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒） |
+| `race_result` | `rows` | レースが終わった。`rows` は着順（`id`、`place`、`time`＝秒、`cut_off`＝1着から決めた秒数で打ち切って着順を付けたか） |
 | `free_lobby` | `peer_id`、`rooms`、`entries`、`rest_s`（レースのあと、呼ばないで休ませる残りの秒数。設定 `free_rest_after_race_s`）、`now_unix`（サーバーの今の時刻。締め切りまでの時間を、サーバーの時計で数えるため） | フリー対戦のロビーのようす。変わるたびに、ロビーにいる全員に届く。`rooms` の1つぶん：`room_id`、`name`、`distance_m`、`tag`（種類の札）、`tag_color`、`rule`（縛りの文）、`state`（`idle`＝空き、`calling`＝呼んでいる、`racing`＝レース中）、`races`（走っているレースの数）、`max_races`、`waiting`（エントリーしている人数）、`waiting_players`（順番を待っている人数。保留中・呼ばれている人も入る）、`racing_players`（入ると答えた・走っている人数。CPUは数えない）、`kind`（`normal`・`final`＝本戦）、本戦なら `start_unix`・`max_players`・`phase`（`entry`・`calling`・`semis`・`final_calling`・`final`・`done`）・`final_answer_s`、`open_unix`・`close_unix`（受付の開始と終了。世界の基準の秒。いつでも開いていれば0）、`needs_ticket`・`gives_ticket`（チケットのID。無ければ空）、`needs_ticket_name`・`gives_ticket_name`。`entries` は自分のエントリー候補（前ほど優先）。1つぶん：`room_id`、`pururin_id`、`hold`、`place`（待っている列の何番目か。保留中も数える）、`state`（`wait`・`called`＝呼ばれている・`accepted`＝入ると答えて始まるのを待っている・`racing`） |
 | `free_room` | `room_id`、`intro`（紹介文）、`capacity`、`races`、`entrants`（エントリーしている人 `{name, pururin_id, hold}` の並び＝待っている列の順） | 開いているルームの、くわしいようす。開いているあいだ、変わるたびに届く |
 | `free_chat_message` | `room_id`、`peer_id`、`name`、`text` | チャットの1行 |

@@ -15,7 +15,9 @@ const PortraitCache := preload("res://scripts/presentation/pururin_portrait_cach
 const PururinDetail := preload("res://scripts/menu/pururin_detail.gd")
 const PururinMakerRequest := preload("res://scripts/menu/pururin_maker_request.gd")
 const GAP := 14.0
-const RIGHT_WIDTH := 580.0
+## 右の詳細の幅：これより狭くはしない。広い画面では、左の一覧と分け合って広がる。
+const RIGHT_WIDTH := 440.0
+const RIGHT_STRETCH := 0.9
 const CARD_SIZE := Vector2(104.0, 120.0)
 const CARD_COLUMNS := 5
 ## 選んでいる場所の光る枠：まわりに空ける幅と、明るさが1回りする秒数。
@@ -38,6 +40,7 @@ var _shown_id := ""
 var _confirm: Control
 var _focus_ring: Panel
 var _ring_time := 0.0
+var _scroll: ScrollContainer
 
 
 func _ready() -> void:
@@ -58,6 +61,7 @@ func _ready() -> void:
 	left.add_theme_stylebox_override("panel", MenuStyle.panel_box(14.0, 12.0))
 	main.add_child(left)
 	var scroll := ScrollContainer.new()
+	_scroll = scroll
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.follow_focus = true
 	left.add_child(scroll)
@@ -69,6 +73,8 @@ func _ready() -> void:
 	var right := PanelContainer.new()
 	right.name = "DetailPanel"
 	right.custom_minimum_size.x = RIGHT_WIDTH
+	right.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	right.size_flags_stretch_ratio = RIGHT_STRETCH
 	right.add_theme_stylebox_override("panel", MenuStyle.panel_box(14.0, 12.0))
 	main.add_child(right)
 	var column := VBoxContainer.new()
@@ -342,6 +348,12 @@ func _update_focus_ring() -> void:
 	if not _focus_ring.visible:
 		return
 	var rect := owner.get_global_rect().grow(FOCUS_RING_ROOM)
+	# 一覧の中のカードは、一覧の見えている所からはみ出した分を描かない（上の帯などに重ならないように）。
+	if _scroll.is_ancestor_of(owner):
+		rect = rect.intersection(_scroll.get_global_rect().grow(FOCUS_RING_ROOM))
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			_focus_ring.visible = false
+			return
 	_focus_ring.position = rect.position
 	_focus_ring.size = rect.size
 	_focus_ring.modulate.a = 0.65 + 0.35 * sin(_ring_time * TAU / FOCUS_RING_SECONDS)

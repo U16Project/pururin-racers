@@ -93,6 +93,8 @@ const NUMBER_RANGES := {
 	"pre_race_gate_in_s": [2.0, 60.0],
 	# ゴールのレッドカーペットを出すのは、いちばん後ろの走者の残りがこの距離を切ってから。
 	"goal_carpet_show_remaining_m": [0.0, 5000.0],
+	# 1着のゴールからこの秒数がたったら、まだゴールしていない走者は、進んでいる順で着順を付けて打ち切る。
+	"finish_cutoff_after_winner_s": [1.0, 600.0],
 	"contact_lateral_range_m": [0.001, 15.0],
 	"contact_longitudinal_range_m": [0.001, 15.0],
 	"draft_air_resistance_factor": [0.0, 1.0],

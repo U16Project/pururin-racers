@@ -294,7 +294,9 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	assert_null(diagnostics)
 	var quality_row: Control = menu.find_child("QualityButton", true, false)
 	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), quality_row)
-	assert_eq(quality_row.get_index() + 1, row.get_index())
+	# 画質の行の下に、画質の説明があって、その下がウィンドウサイズの行。
+	assert_eq(menu.find_child("QualityNote", true, false).get_index(), quality_row.get_index() + 1)
+	assert_eq(quality_row.get_index() + 2, row.get_index())
 	assert_eq(quality_row.get_child(1).position.x, row.get_child(1).position.x)
 	assert_eq(row.focus_mode, Control.FOCUS_ALL)
 	assert_eq(previous.focus_mode, Control.FOCUS_NONE)

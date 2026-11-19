@@ -173,7 +173,8 @@ func apply_turn(turn: Vector2, delta: float) -> void:
 	if turn.x > 0.0 and turn.y > 0.0:
 		reset_view()
 	else:
-		_yaw_offset += (turn.x - turn.y) * chase_turn_speed * delta
+		# 左（L2・Q）で左へ、右（R2・E）で右へ回す（右スティックと同じ向き：右が＋）。
+		_yaw_offset += (turn.y - turn.x) * chase_turn_speed * delta
 
 
 func _target_finished() -> bool:

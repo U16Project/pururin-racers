@@ -74,6 +74,8 @@ const OwnedPururins := preload("res://scripts/config/owned_pururins.gd")
 const ONLINE_INPUT_RESEND_S := 0.25
 ## 結果の板を出すまでの待ち。最後の走者がゴールしてからの秒数と、ユーザーがゴールしてからの秒数（長いほうを待つ）。
 const RESULT_WAIT_AFTER_LAST_S := 2.0
+## 結果の板の、エントリーの続け方のボタンの左右の余白。
+const FREE_AFTER_BUTTON_MARGIN := 8.0
 const RESULT_WAIT_AFTER_PLAYER_S := 5.0
 const FINAL_STRETCH_DISTANCE_M := 400.0
 ## 首位の自プルがこの距離まで来たら、ゴール線を越える少し前から紙吹雪を始める。
@@ -148,6 +150,8 @@ var _paddock_mode := ""
 var _paddock_overlay: Control
 ## ゲートインの間に重ねる、見るだけの出走表（Y で出し入れ）。
 var _gate_in_list: Control
+## ゲートインの出走表を隠す前に、カーソルがあった所。
+var _gate_in_list_focus: WeakRef
 ## フリー対戦で、会場で出走者を待っている間か（自分のぷるりんだけ。レースはまだ無い）と、待ち始めた時刻（ミリ秒）。
 var _free_waiting := false
 ## オンラインのゲーム側：人（通信ごしの人と自分）が動かす走者と、そのうち、抜けてCPUが代わりに走っている走者（走者 → true）。
@@ -468,7 +472,18 @@ func _unhandled_input(event: InputEvent) -> void:
 	# ゲートインの間は、Y で出走表を出し入れする。
 	if _is_showing_pre_race() and is_instance_valid(_gate_in_list) and not _paused and RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
 		viewport.set_input_as_handled()
-		_gate_in_list.visible = not _gate_in_list.visible
+		# 隠すとカーソルが外れるので、出し直したら、隠す前の行へ戻す。
+		if _gate_in_list.visible:
+			var focused := viewport.gui_get_focus_owner()
+			_gate_in_list_focus = weakref(focused) if focused != null and _gate_in_list.is_ancestor_of(focused) else null
+			_gate_in_list.visible = false
+		else:
+			_gate_in_list.visible = true
+			var saved: Control = _gate_in_list_focus.get_ref() if _gate_in_list_focus != null else null
+			if is_instance_valid(saved) and saved.is_visible_in_tree():
+				saved.grab_focus()
+			else:
+				_gate_in_list.call("focus_first")
 		return
 	# オフラインでは、スタート前の見せ方を A・Enter で飛ばせる（準備が終わっていなければ、並んだ所で待つ）。
 	# パドックで出走表を待っている間は、A は出走表の決定なので飛ばさない。レース場の全景なら、飛ばしてパドックへ。
@@ -1207,7 +1222,7 @@ func _apply_online_result(data: Dictionary) -> void:
 	for row: Dictionary in data["rows"]:
 		var runner: Node3D = _runners_by_id.get(str(row["id"]))
 		if runner != null:
-			runner.call("mark_finished", int(row["place"]), float(row["time"]))
+			runner.call("mark_finished", int(row["place"]), float(row["time"]), bool(row.get("cut_off", false)))
 	_show_results()
 
 
@@ -1268,6 +1283,12 @@ func _build_free_entry_choice(choice: VBoxContainer, room_name: String) -> void:
 		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		button.add_theme_stylebox_override("pressed", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON))
 		button.add_theme_stylebox_override("hover_pressed", MenuStyle.box(MenuStyle.COLOR_BUTTON_ON))
+		# 3つ並べても、字（「続けて呼ばれる」）が隣のボタンに隠れないように、左右の余白を小さくする。
+		for state: String in ["normal", "hover", "pressed", "hover_pressed", "focus", "disabled"]:
+			var box := button.get_theme_stylebox(state).duplicate() as StyleBox
+			box.content_margin_left = FREE_AFTER_BUTTON_MARGIN
+			box.content_margin_right = FREE_AFTER_BUTTON_MARGIN
+			button.add_theme_stylebox_override(state, box)
 		UIAudio.bind_button_sound(button, "confirmation")
 		row.add_child(button)
 		_free_after_buttons[option[0]] = button
@@ -1447,7 +1468,7 @@ func online_result_rows() -> Array:
 	ordered.sort_custom(func(a, b): return a.call("get_finish_order") < b.call("get_finish_order"))
 	var rows: Array = []
 	for runner in ordered:
-		rows.append({"id": str(runner.call("get_snapshot")["id"]), "place": int(runner.call("get_finish_order")), "time": float(runner.call("get_finish_time"))})
+		rows.append({"id": str(runner.call("get_snapshot")["id"]), "place": int(runner.call("get_finish_order")), "time": float(runner.call("get_finish_time")), "cut_off": bool(runner.call("is_cut_off"))})
 	return rows
 
 
@@ -1682,6 +1703,7 @@ func _check_finishes() -> void:
 		elif _finish_count == 1 and _player != null:
 			var remaining := _race_distance_m - float(_player.call("get_race_progress"))
 			RaceAudio.play_other_leader_finish(remaining, _race_distance_m)
+	_cut_off_unfinished()
 	var all_done := true
 	for r in _runners:
 		if not r.call("is_finished"):
@@ -1690,6 +1712,30 @@ func _check_finishes() -> void:
 	if all_done and not _results_pending:
 		_results_pending = true
 		_results_wait_remaining = result_wait_seconds(_race_elapsed - float(_player.call("get_finish_time")) if _player != null else RESULT_WAIT_AFTER_PLAYER_S)
+
+
+## 1着のゴールから決めた秒数（local_race.json の finish_cutoff_after_winner_s）がたったら、
+## まだゴールしていない走者に、進んでいる順で着順を付けて打ち切る（タイムは、打ち切った時刻）。
+func _cut_off_unfinished() -> void:
+	if _finish_count == 0:
+		return
+	var winner_time := INF
+	var left: Array = []
+	for r in _runners:
+		if r.call("is_finished"):
+			winner_time = minf(winner_time, float(r.call("get_finish_time")))
+		else:
+			left.append(r)
+	if left.is_empty() or _race_elapsed - winner_time < finish_cutoff_after_winner_s():
+		return
+	left.sort_custom(func(a, b) -> bool: return float(a.call("get_race_progress")) > float(b.call("get_race_progress")))
+	for r in left:
+		_finish_count += 1
+		r.call("mark_finished", _finish_count, _race_elapsed, true)
+
+
+static func finish_cutoff_after_winner_s() -> float:
+	return LocalRaceMath.Config.number("finish_cutoff_after_winner_s")
 
 
 ## 直前に首位なら、ゴール線を越える約8m前から紙吹雪を見せ始める。
@@ -2100,7 +2146,7 @@ func _result_rows() -> Array:
 			"kind": control_kind(r),
 			"color": PururinVisualStyle.color_for_racer_id(str(r.call("get_snapshot")["id"])),
 			"player": r == _player,
-			"time_text": LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),
+			"time_text": "打ち切り" if bool(r.call("is_cut_off")) else LocalRaceMath.format_race_time(float(r.call("get_finish_time"))),
 		})
 	return rows
 

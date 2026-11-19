@@ -329,3 +329,28 @@ func test_the_ground_marker_shows_notch_heart_and_stamina() -> void:
 	var target_ring := PlayerGroundMarker.soft_color(RaceHud.fuel_color(1.0))
 	assert_gt(absf(next_ring.r - target_ring.r) + absf(next_ring.g - target_ring.g) + absf(next_ring.b - target_ring.b), 0.01)
 
+
+
+func test_runners_left_after_the_cutoff_get_places_by_progress_and_a_cut_off_mark() -> void:
+	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
+	var race: Node = LocalRaceScene.instantiate()
+	race.set("_online_host", true)
+	add_child_autofree(race)
+	var runners: Array = race.get("_runners")
+	var cutoff := LocalRaceController.finish_cutoff_after_winner_s()
+	# 1体だけゴール。残りは、進み方をばらばらにしておく。
+	runners[0].call("mark_finished", 1, 100.0)
+	race.set("_finish_count", 1)
+	race.set("_race_elapsed", 100.0 + cutoff - 0.1)
+	race.call("_cut_off_unfinished")
+	assert_false(bool(runners[1].call("is_finished")), "決めた秒数の前は、打ち切らない")
+	race.set("_race_elapsed", 100.0 + cutoff)
+	race.call("_cut_off_unfinished")
+	for runner: Node in runners.slice(1):
+		assert_true(bool(runner.call("is_finished")))
+		assert_true(bool(runner.call("is_cut_off")), "打ち切りの印が付く")
+	var ordered := runners.slice(1)
+	ordered.sort_custom(func(a, b) -> bool: return int(a.call("get_finish_order")) < int(b.call("get_finish_order")))
+	for index in ordered.size() - 1:
+		assert_gte(float(ordered[index].call("get_race_progress")), float(ordered[index + 1].call("get_race_progress")), "進んでいる順に着順")
+	assert_false(bool(runners[0].call("is_cut_off")))
