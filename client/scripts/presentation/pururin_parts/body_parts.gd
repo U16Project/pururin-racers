@@ -8,9 +8,9 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna", "witch_hat", "mushroom", "propeller"],
+	"top": ["nub", "rocks", "flames", "sprout", "bubbles", "crystals", "horns", "ring", "ears", "antenna", "bow", "crown", "flower", "horn", "hat", "star_antenna", "witch_hat", "mushroom", "propeller", "headband", "leaf_hat", "frog_eyes"],
 	"side": ["flipper", "rock", "flame", "leaf", "drop", "crystal", "bat_wing", "hand", "bow", "butterfly"],
-	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft", "star", "heart", "devil", "spiky"],
+	"tail": ["flipper", "rock", "flame", "leaf", "bubble", "crystal", "bow", "curl", "tuft", "star", "heart", "devil", "spiky", "striped"],
 }
 ## 形ごとに、必ず要る数字。
 const REQUIRED_PARAMS := {
@@ -49,6 +49,10 @@ const REQUIRED_PARAMS := {
 	"heart": ["size", "depth", "tilt_deg"],
 	"devil": ["length", "thickness", "tip_size"],
 	"spiky": ["length", "thickness", "spikes"],
+	"headband": ["radius", "band", "tail"],
+	"leaf_hat": ["length", "width", "lean_deg", "tilt_deg"],
+	"frog_eyes": ["size", "spread"],
+	"striped": ["length", "thickness", "stripes"],
 }
 ## 形ごとに、必ず要る色。
 const REQUIRED_COLORS := {
@@ -83,6 +87,9 @@ const REQUIRED_COLORS := {
 	"heart": ["color"],
 	"devil": ["color"],
 	"spiky": ["color"],
+	"headband": ["color"],
+	"leaf_hat": ["color"],
+	"striped": ["stripe_color"],
 }
 ## メッシュの部品に、必ず要る項目。material は "body"（体と同じ素材で塗る）か "own"（メッシュの素材のまま）。
 const REQUIRED_MESH_PARAMS := ["path", "scale", "material"]
@@ -127,6 +134,9 @@ static func build_top(shape: Dictionary, source: Dictionary, body_material: Mate
 			"witch_hat": _add_witch_hat(bits, source)
 			"mushroom": _add_mushroom(bits, source)
 			"propeller": _add_propeller(bits, source)
+			"headband": _add_headband(bits, shape, source)
+			"leaf_hat": _add_leaf_hat(bits, source)
+			"frog_eyes": _add_frog_eyes(bits, shape, source)
 		node = _builtin_node(bits, body_material, str(source["shape"]) in ["rocks", "crystals"])
 	node.position = Vector3(0.0, float(shape["height"]), 0.0)
 	node.name = "Top"
@@ -182,6 +192,7 @@ static func _attached(source: Dictionary, point: Vector3, basis: Basis, body_mat
 		"heart": _add_attached_puffy(bits, source, _heart_outline(float(source["size"])), on_side)
 		"devil": _add_devil(bits, source)
 		"spiky": _add_spiky(bits, source)
+		"striped": _add_striped_tail(bits, source)
 	node = _builtin_node(bits, body_material, str(source["shape"]) in ["rock", "crystal"])
 	node.transform = Transform3D(basis, point)
 	return node
@@ -864,6 +875,87 @@ static func _add_propeller(bits: Bits, source: Dictionary) -> void:
 		var twist := Basis(Vector3.RIGHT, deg_to_rad(18.0))
 		_add_ellipsoid(bits, Vector3.ZERO, Vector3(size * 0.16, size * 0.025, size * 0.5), color, Transform3D(around * twist, around * Vector3(0.0, size * 0.6, size * 0.48)))
 	_add_ellipsoid(bits, Vector3(0.0, size * 0.62, 0.0), Vector3(size * 0.13, size * 0.1, size * 0.13), _tint(Color(str(source["hub_color"])), 1.0), Transform3D.IDENTITY)
+
+
+## はちまき（頭の上）：頭のまわりに巻いた帯と、後ろの結び目、たれる2本の端。
+static func _add_headband(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var radius := float(source["radius"])
+	var band := float(source["band"])
+	var tint := _tint(Color(str(source["color"])), 1.0)
+	var drop := Surface.height_at_radius(shape, radius) - float(shape["height"])
+	var steps := 32
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var angle := TAU * float(index) / float(steps)
+		centers.append(Vector3(cos(angle) * radius, sin(angle) * radius, 0.0))
+		radii.append(band * 0.22)
+		colors.append(tint)
+	# 帯は、たてに幅のある輪（寝かせると、奥行きの向きが上下になるので、depth_ratio を大きくする）。
+	_add_tube(bits, centers, radii, 2.3, colors, Transform3D(Basis(Vector3.RIGHT, deg_to_rad(90.0)), Vector3(0.0, drop, 0.0)))
+	var knot := Vector3(0.0, drop, radius + band * 0.15)
+	_add_ellipsoid(bits, knot, Vector3(band * 0.55, band * 0.6, band * 0.45), tint, Transform3D.IDENTITY)
+	for side: float in [1.0, -1.0]:
+		var tail := float(source["tail"])
+		var tail_centers: Array[Vector3] = []
+		var tail_radii: Array[float] = []
+		var tail_colors: Array[Color] = []
+		for index in 9:
+			var t := float(index) / 8.0
+			tail_centers.append(Vector3(side * tail * 0.55 * t, -tail * t + sin(t * PI) * tail * 0.12, 0.0))
+			tail_radii.append(band * 0.45 * (1.0 - 0.3 * t))
+			tail_colors.append(tint)
+		_add_tube(bits, tail_centers, tail_radii, 0.25, tail_colors, Transform3D(Basis(Vector3.UP, PI * 0.5), knot + Vector3(0.0, 0.0, band * 0.2)))
+
+
+## 葉っぱ1枚を、頭に乗せる（たぬきの変化の葉）。少し前へ傾ける。
+static func _add_leaf_hat(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var width := float(source["width"])
+	var color := Color(str(source["color"]))
+	var lean := Basis(Vector3.RIGHT, deg_to_rad(-float(source["lean_deg"])))
+	var twist := Basis(Vector3.BACK, deg_to_rad(float(source["tilt_deg"])))
+	_add_leaf_blade(bits, length, width, length * 0.18, color, Transform3D(twist * lean, Vector3(0.0, -0.03, 0.0)))
+	# 葉の付け根の、短い茎。
+	var stem := _tint(color.darkened(0.3), 1.0)
+	var stem_centers: Array[Vector3] = [Vector3(0.0, -0.06, 0.0), Vector3(0.0, 0.0, 0.0)]
+	var stem_radii: Array[float] = [0.012, 0.009]
+	var stem_colors: Array[Color] = [stem, stem]
+	_add_tube(bits, stem_centers, stem_radii, 1.0, stem_colors, Transform3D(twist * lean, Vector3.ZERO))
+
+
+## カエルの目玉（頭の上）：左右に、体の色の土台と、白い目と、黒いひとみ。
+static func _add_frog_eyes(bits: Bits, shape: Dictionary, source: Dictionary) -> void:
+	var size := float(source["size"])
+	var spread := float(source["spread"])
+	var drop := Surface.height_at_radius(shape, spread) - float(shape["height"])
+	var white := _tint(Color(1.0, 1.0, 1.0), 1.0)
+	var pupil := _tint(Color(0.1, 0.1, 0.16), 1.0)
+	for side: float in [1.0, -1.0]:
+		var base := Vector3(spread * side, drop + size * 0.5, 0.0)
+		_add_ellipsoid(bits, base, Vector3(size * 1.15, size * 1.0, size * 1.1), _plain(), Transform3D.IDENTITY)
+		_add_ellipsoid(bits, base + Vector3(0.0, size * 0.25, -size * 0.55), Vector3(size * 0.78, size * 0.72, size * 0.6), white, Transform3D.IDENTITY)
+		_add_ellipsoid(bits, base + Vector3(side * size * 0.05, size * 0.22, -size * 1.0), Vector3(size * 0.32, size * 0.36, size * 0.2), pupil, Transform3D.IDENTITY)
+
+
+## しましっぽ（尾）：太くて、先が丸い。色の帯を、体の色と交互に巻く（たぬき・あらいぐま）。
+static func _add_striped_tail(bits: Bits, source: Dictionary) -> void:
+	var length := float(source["length"])
+	var thickness := float(source["thickness"])
+	var stripe := _tint(Color(str(source["stripe_color"])), 1.0)
+	var stripes := int(source["stripes"])
+	var steps := 40
+	var centers: Array[Vector3] = []
+	var radii: Array[float] = []
+	var colors: Array[Color] = []
+	for index in steps + 1:
+		var t := float(index) / float(steps)
+		centers.append(Vector3(length * t, length * 0.35 * t * t, 0.0))
+		# 根元は細く、まん中がふくらみ、先は丸く閉じる。
+		radii.append(thickness * lerpf(0.75, 1.15, sin(t * PI * 0.8)) * sqrt(maxf(1.0 - pow(maxf(t - 0.85, 0.0) / 0.15, 2.0), 0.0)))
+		colors.append(stripe if int(floor(t * float(stripes * 2))) % 2 == 1 else _plain())
+	_add_tube(bits, centers, radii, 1.0, colors, Transform3D.IDENTITY)
 
 
 ## 上下が閉じた筒（Y の向き）。

@@ -258,6 +258,32 @@
           "push_win": "eyes_gloss_effort",
           "push_lose": "eyes_squeeze"
         }
+      },
+      "blaze": {
+        "label": "燃える瞳",
+        "expressions": {
+          "normal": "eyes_blaze",
+          "joy": "eyes_joy",
+          "anger": "eyes_blaze_anger",
+          "sorrow": "eyes_blaze_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_blaze",
+          "push_win": "eyes_blaze_effort",
+          "push_lose": "eyes_squeeze"
+        }
+      },
+      "tanuki": {
+        "label": "たぬきの目",
+        "expressions": {
+          "normal": "eyes_tanuki",
+          "joy": "eyes_joy",
+          "anger": "eyes_tanuki_anger",
+          "sorrow": "eyes_tanuki_sorrow",
+          "relax": "eyes_relax",
+          "first_place": "eyes_tanuki",
+          "push_win": "eyes_tanuki_effort",
+          "push_lose": "eyes_squeeze"
+        }
       }
     },
     "brows": {
@@ -302,6 +328,16 @@
           "sorrow": "brow_maro_sad",
           "push_win": "brow_maro_angry",
           "push_lose": "brow_maro_sad"
+        }
+      },
+      "saigo": {
+        "label": "もじゃまゆ",
+        "expressions": {
+          "normal": "brow_saigo",
+          "anger": "brow_saigo_angry",
+          "sorrow": "brow_saigo_sad",
+          "push_win": "brow_saigo_angry",
+          "push_lose": "brow_saigo_sad"
         }
       }
     },
@@ -448,6 +484,19 @@
           "push_win": "mouth_bunny_push_win",
           "push_lose": "mouth_bunny_push_lose"
         }
+      },
+      "beak": {
+        "label": "くちばし",
+        "expressions": {
+          "normal": "mouth_beak_normal",
+          "joy": "mouth_beak_joy",
+          "anger": "mouth_beak_anger",
+          "sorrow": "mouth_beak_sorrow",
+          "relax": "mouth_beak_relax",
+          "first_place": "mouth_beak_first_place",
+          "push_win": "mouth_beak_push_win",
+          "push_lose": "mouth_beak_push_lose"
+        }
       }
     },
     "cheeks": {
@@ -479,6 +528,18 @@
         "label": "そばかす",
         "expressions": {
           "normal": "cheek_freckles"
+        }
+      },
+      "whiskers": {
+        "label": "ねこのひげ",
+        "expressions": {
+          "normal": "cheek_whiskers"
+        }
+      },
+      "tanuki": {
+        "label": "たぬきのくま",
+        "expressions": {
+          "normal": "cheek_tanuki"
         }
       }
     }
@@ -604,7 +665,13 @@
       "mark_cat": "ねこ",
       "penguin_fin": "ペンギンのヒレ",
       "small_hand": "小さい手",
-      "big_hand": "大きい手"
+      "big_hand": "大きい手",
+      "tanuki_ears": "たぬき耳",
+      "leaf_hat": "変化の葉っぱ",
+      "headband": "はちまき",
+      "frog_eyes": "カエルの目玉",
+      "striped_tail": "しましっぽ",
+      "big_cat_ears": "ねこ耳（大）"
     },
     "finishes": {
       "gloss": "つやつや",

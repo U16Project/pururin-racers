@@ -154,11 +154,18 @@ static func build(look: Dictionary, config: Dictionary, watch: bool = true, targ
 	var expressions: Dictionary = look["face"]["expressions"]
 	for expression: String in expressions:
 		var slots: Dictionary = expressions[expression]
+		# まゆは、その表情で出す目（書いていなければ、ふつうの表情の目）の大きさに合わせた高さにする。
+		var eyes_id: Variant = slots.get("eyes", (expressions.get("normal", {}) as Dictionary).get("eyes"))
+		var face_here := face
+		if eyes_id != null:
+			face_here = face.duplicate()
+			face_here["brow_eye_scale"] = FaceParts.eye_height_scale(parts[str(eyes_id)]["source"], face)
 		for slot: String in slots:
 			var source: Variant = null if slots[slot] == null else parts[str(slots[slot])]["source"]
 			var node_name := "Face_%s_%s" % [expression, slot]
+			var face_for := face_here
 			root.call("register_face", expression, slot, func() -> Array:
-				return [] if source == null else [FaceParts.build(slot, shape, source, face, node_name)])
+				return [] if source == null else [FaceParts.build(slot, shape, source, face_for, node_name)])
 	# マーク（変わらない飾り）。
 	var marks: Array = look["marks"]
 	for index in marks.size():

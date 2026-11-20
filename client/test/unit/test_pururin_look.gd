@@ -829,3 +829,13 @@ func test_every_pururin_wears_its_own_kind_of_mark() -> void:
 		var kind := JSON.stringify(marks)
 		assert_false(seen.has(kind), "%s のマークは、ほかの個体と同じ種類" % id)
 		seen[kind] = true
+
+
+func test_brows_sit_above_the_big_tanuki_eyes() -> void:
+	var parts: Dictionary = LookConfig.values()["parts"]
+	var face := {"eye_size": [0.085, 0.125]}
+	assert_eq(FaceParts.eye_height_scale(parts["eyes_round"]["source"], face), 1.0, "ふつうの目では、まゆの高さは変えない")
+	var scale: float = FaceParts.eye_height_scale(parts["eyes_tanuki"]["source"], face)
+	var drawn: float = maxf(0.085, 0.125 * 0.85) * float(parts["eyes_tanuki"]["source"]["scale"])
+	assert_almost_eq(scale * 0.125, drawn, 0.0001, "たぬきの目と組むと、まゆは、描いた目の高さに合わせる")
+	assert_gt(scale, 1.0)

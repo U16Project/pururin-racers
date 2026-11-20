@@ -7,17 +7,17 @@ const Surface := preload("res://scripts/presentation/pururin_parts/pururin_surfa
 const PartAssets := preload("res://scripts/presentation/pururin_parts/part_assets.gd")
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
-	"eyes": ["eyes_open", "eyes_lidded", "eyes_dot", "eyes_arc", "eyes_squeeze", "eyes_dizzy", "eyes_cat", "eyes_ring", "eyes_gloss"],
+	"eyes": ["eyes_open", "eyes_lidded", "eyes_dot", "eyes_arc", "eyes_squeeze", "eyes_dizzy", "eyes_cat", "eyes_ring", "eyes_gloss", "eyes_blaze", "eyes_tanuki"],
 	"brows": ["brow"],
-	"mouth": ["mouth_omega", "mouth_smile", "mouth_open", "mouth_flat", "mouth_frown", "mouth_wavy", "mouth_o", "mouth_grit", "mouth_triangle", "mouth_zigzag", "mouth_bunny"],
-	"cheeks": ["cheek_ellipse", "cheek_lines", "cheek_swirl", "cheek_freckles"],
+	"mouth": ["mouth_omega", "mouth_smile", "mouth_open", "mouth_flat", "mouth_frown", "mouth_wavy", "mouth_o", "mouth_grit", "mouth_triangle", "mouth_zigzag", "mouth_bunny", "mouth_beak"],
+	"cheeks": ["cheek_ellipse", "cheek_lines", "cheek_swirl", "cheek_freckles", "cheek_whiskers", "cheek_tanuki"],
 	"effect": ["effect_sweat", "effect_tears", "effect_sparkle", "effect_anger"],
 	"mark": ["star", "heart", "drop", "bolt", "flower", "diamond", "moon", "swirl", "note", "paw", "snow", "clover", "dot", "ring", "sun", "plus", "sparkle", "triangle", "hexagon", "spade", "cloud", "leaf", "fish", "crown", "fire", "wave", "bone", "cherry", "ribbon", "cat"],
 }
 ## 形ごとに、必ず要る数字。
 ## 目：scale＝大きさの倍率、sparkle＝星の光（0か1）、level＝上まぶたの高さ、slope＝上まぶたの傾き（−で内側が下がる）、
 ## lower＝下まぶたが隠す量、line＝まぶたの線の太さの倍率、bend＝弧の向き（＋で上にふくらむ）。
-## まゆ：length・thickness は目の横幅を1とした大きさ、tilt_deg は＋で内側が下がる、lift は目の縦の半分を1とした高さ。
+## まゆ：length・thickness は目の横幅を1とした大きさ、tilt_deg は＋で内側が下がる、lift は目の縦の半分を1とした高さ。あれば bushy＝毛の房のとがりの長さ（0でなし）。
 const REQUIRED_PARAMS := {
 	"eyes_open": ["scale", "sparkle"],
 	"eyes_lidded": ["level", "slope", "lower", "line"],
@@ -28,6 +28,8 @@ const REQUIRED_PARAMS := {
 	"eyes_cat": ["scale"],
 	"eyes_ring": ["scale"],
 	"eyes_gloss": ["scale"],
+	"eyes_blaze": ["scale"],
+	"eyes_tanuki": ["scale"],
 	"brow": ["length", "thickness", "tilt_deg", "lift", "curve"],
 	"mouth_omega": ["width"],
 	"mouth_smile": ["width", "fang"],
@@ -40,10 +42,13 @@ const REQUIRED_PARAMS := {
 	"mouth_triangle": ["width"],
 	"mouth_zigzag": ["width"],
 	"mouth_bunny": ["width"],
+	"mouth_beak": ["width"],
 	"cheek_ellipse": ["width", "height"],
 	"cheek_lines": ["width", "height"],
 	"cheek_swirl": ["width", "height"],
 	"cheek_freckles": ["width", "height"],
+	"cheek_whiskers": ["width", "height"],
+	"cheek_tanuki": ["width", "height"],
 	"effect_sweat": ["size"],
 	"effect_tears": ["size"],
 	"effect_sparkle": ["size"],
@@ -86,6 +91,9 @@ const REQUIRED_COLORS := {
 	"mouth_o": ["inside_color"],
 	"mouth_grit": ["teeth_color"],
 	"mouth_triangle": ["inside_color"],
+	"mouth_beak": ["beak_color"],
+	"eyes_blaze": ["deep_color", "hot_color"],
+	"cheek_tanuki": ["color"],
 	"effect_sweat": ["color"],
 	"effect_tears": ["color"],
 	"effect_sparkle": ["color"],
@@ -503,12 +511,44 @@ static func _eyes(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 				gloss.append_array(_disc(Vector2(w * 0.32, -h * 0.4), w * 0.15))
 				add.call(gloss, 2.0, func(_p: Vector2) -> Color: return Color.WHITE)
 				add.call(_lashes(w * 0.85, h, side, int(face["eye_lashes"]), func(x: float) -> float: return h * 2.0), 3.0, solid_dark)
-		if not lid.is_empty() and not box.is_empty():
-			# まぶたの線。
-			var top_left := _lid_top(lid, side, box, box["left"] - box["w"] * 0.08)
-			var top_right := _lid_top(lid, side, box, box["right"] + box["w"] * 0.08)
-			add_line(sheet, PackedVector2Array([top_left, top_right]), box["w"] * 0.16, yaw, height, angle, dark)
+			"eyes_blaze":
+				# 熱血の燃える瞳：赤から橙の目に、炎の形の光。
+				w *= float(source["scale"])
+				h *= float(source["scale"])
+				var deep := Color(str(source["deep_color"]))
+				var hot := Color(str(source["hot_color"]))
+				add.call(Surface.ellipse_triangles(Vector2.ZERO, w, h), 1.0, func(point: Vector2) -> Color: return deep.lerp(hot, clampf(0.5 - point.y / (h * 2.0), 0.0, 1.0)))
+				var flame := Surface.ellipse_triangles(Vector2(0.0, -h * 0.3), w * 0.42, h * 0.36)
+				flame.append_array(PackedVector2Array([Vector2(-w * 0.38, -h * 0.22), Vector2(w * 0.38, -h * 0.22), Vector2(w * 0.08, h * 0.7)]))
+				flame.append_array(PackedVector2Array([Vector2(-w * 0.36, -h * 0.25), Vector2(0.0, -h * 0.2), Vector2(-w * 0.42, h * 0.32)]))
+				add.call(flame, 2.0, func(_p: Vector2) -> Color: return Color(1.0, 0.93, 0.5))
+				add.call(_disc(Vector2(-w * 0.4, h * 0.48), w * 0.14), 3.0, func(_p: Vector2) -> Color: return Color.WHITE)
+				add.call(_lashes(w, h, side, int(face["eye_lashes"]), func(x: float) -> float: return h * 2.0), 3.0, solid_dark)
+			"eyes_tanuki":
+				# たぬきの目：まん丸の白目に、大きく丸い黒い瞳と、白い光1つ（ふちの線は付けない）。顔の目の縦横に関係なく、丸くする。
+				w = maxf(w, h * 0.85) * float(source["scale"])
+				h = w
+				add.call(Surface.ellipse_triangles(Vector2.ZERO, w, h), 1.0, func(_p: Vector2) -> Color: return Color(0.99, 0.98, 0.96))
+				var pupil := Vector2(-side * w * 0.08, -h * 0.08)
+				add.call(Surface.ellipse_triangles(pupil, w * 0.66, h * 0.7), 2.0, func(_p: Vector2) -> Color: return Color(0.08, 0.06, 0.06))
+				add.call(_disc(pupil + Vector2(-w * 0.22, h * 0.26), w * 0.2), 3.0, func(_p: Vector2) -> Color: return Color.WHITE)
+		if not lid.is_empty() and not box.is_empty() and float(source.get("lid_line", 0.16)) > 0.0:
+			# まぶたの線（lid_line が 0 の部品は、引かない）。
+			# 線の、目からはみ出す長さ（lid_reach）と太さ（lid_line）。目の幅を1とした値。部品に無ければ、ふつうの長さと太さ。
+			var reach := float(source.get("lid_reach", 0.08))
+			var top_left := _lid_top(lid, side, box, box["left"] - box["w"] * reach)
+			var top_right := _lid_top(lid, side, box, box["right"] + box["w"] * reach)
+			add_line(sheet, PackedVector2Array([top_left, top_right]), box["w"] * float(source.get("lid_line", 0.16)), yaw, height, angle, dark)
 
+
+
+## その目の部品で描く目の高さが、顔の目の高さの何倍か（まゆの高さを合わせるため）。ふつうの目は1。
+static func eye_height_scale(source: Dictionary, face: Dictionary) -> float:
+	if str(source.get("shape", "")) != "eyes_tanuki":
+		return 1.0
+	var w := float(face["eye_size"][0])
+	var h := float(face["eye_size"][1])
+	return maxf(w, h * 0.85) * float(source["scale"]) / h
 
 
 ## まぶたの線を1本足す（まぶたで隠さずに）。
@@ -574,7 +614,8 @@ static func _lashes(w: float, h: float, side: float, count: int, top: Callable) 
 
 static func _brows(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 	var w := float(face["eye_size"][0])
-	var h := float(face["eye_size"][1])
+	# 目を大きく描く部品（たぬきの目）と組んだときは、その目の上に出るよう、まゆの高さを合わせる。
+	var h := float(face["eye_size"][1]) * float(face.get("brow_eye_scale", 1.0))
 	var dark: Color = face["eye_colors"][0]
 	var length := float(source["length"]) * w * 2.0
 	var rise := tan(deg_to_rad(float(source["tilt_deg"])))
@@ -585,7 +626,27 @@ static func _brows(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 			# along は、顔の中心側（−）から外側（＋）へ。tilt が＋なら、内側が下がる。
 			var along := lerpf(-length * 0.5, length * 0.5, t)
 			line.append(Vector2(side * along, h * float(source["lift"]) + rise * along + float(source["curve"]) * w * sin(t * PI)))
-		sheet.add(_stroke(line, float(source["thickness"]) * w), float(face["eye_yaw_deg"]) * side, float(face["eye_height_ratio"]), 4.0, func(_p: Vector2) -> Color: return dark)
+		var triangles := _stroke(line, float(source["thickness"]) * w)
+		# 毛深いまゆ（bushy＞0）：上と下のふちに、毛の房のとがりを並べる（西郷どんのような、もじゃっとしたまゆ）。
+		var bushy := float(source.get("bushy", 0.0))
+		if bushy > 0.0:
+			# 線の太さ（thickness）は、線の中心から、ふちまでの長さ。
+			var half := float(source["thickness"]) * w
+			for index in range(1, line.size()):
+				var a := line[index - 1]
+				var b := line[index]
+				var normal := (b - a).orthogonal().normalized()
+				if normal.y < 0.0:
+					normal = -normal
+				var middle := (a + b) * 0.5
+				for edge: float in [1.0, -0.6]:
+					var base := middle + normal * half * edge
+					var tip := base + normal * half * bushy * edge + (b - a) * 0.35 * side
+					# 面の表と裏のどちらからも見えるように、両方の向きで足す。
+					var root_a := a + normal * half * edge * 0.8
+					var root_b := b + normal * half * edge * 0.8
+					triangles.append_array(PackedVector2Array([root_a, root_b, tip, root_b, root_a, tip]))
+		sheet.add(triangles, float(face["eye_yaw_deg"]) * side, float(face["eye_height_ratio"]), 4.0, func(_p: Vector2) -> Color: return dark)
 
 
 # ---------------------------------------------------------------- 口
@@ -684,6 +745,16 @@ static func _mouth(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 			for index in 9:
 				zigzag.append(Vector2(lerpf(-width * 0.5, width * 0.5, float(index) / 8.0), -width * 0.1 * float(index % 2)))
 			add.call(_stroke(zigzag, thickness), 1.0, line)
+		"mouth_beak":
+			# ペンギンのくちばし：橙の三角（上の段と、少し小さい下の段）。
+			var beak := Color(str(source["beak_color"]))
+			var upper := PackedVector2Array([Vector2(-width * 0.5, width * 0.12), Vector2(width * 0.5, width * 0.12), Vector2(0.0, -width * 0.42)])
+			var lower := PackedVector2Array([Vector2(-width * 0.34, -width * 0.12), Vector2(width * 0.34, -width * 0.12), Vector2(0.0, -width * 0.5)])
+			add.call(lower, 1.0, func(_p: Vector2) -> Color: return beak.darkened(0.2))
+			add.call(upper, 2.0, func(_p: Vector2) -> Color: return beak)
+			var rim := upper.duplicate()
+			rim.append(upper[0])
+			add.call(_stroke(rim, thickness * 0.7), 3.0, func(_p: Vector2) -> Color: return beak.darkened(0.45))
 		"mouth_bunny":
 			# うさぎ口（ㅅ）：まん中から左右下へ下りる2本と、上へのびる短い線。
 			var bunny := _stroke(PackedVector2Array([Vector2(-width * 0.42, -width * 0.42), Vector2(-width * 0.18, -width * 0.18), Vector2(0.0, -width * 0.08)]), thickness)
@@ -751,6 +822,17 @@ static func _cheeks(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 					var t := float(index) / 36.0
 					spiral.append(Vector2(cos(t * TAU * 2.0) * width, sin(t * TAU * 2.0) * height) * (0.15 + 0.85 * t))
 				triangles = _stroke(spiral, width * 0.14)
+			"cheek_whiskers":
+				# ねこのひげ：外へ広がる3本。
+				for index in 3:
+					var y := height * (float(index) - 1.0) * 0.9
+					triangles.append_array(_stroke(PackedVector2Array([Vector2(-side * width * 0.1, y * 0.4), Vector2(side * width * 1.6, y * 1.6)]), height * 0.12))
+				paint = Color(face["eye_colors"][0], 0.85)
+			"cheek_tanuki":
+				# たぬきの目のまわりの黒いくま（目の下に描く）。
+				var patch := Surface.ellipse_triangles(Vector2(side * width * 0.1, 0.0), width, height)
+				sheet.add(patch, float(face["eye_yaw_deg"]) * side, float(face["eye_height_ratio"]), 0.5, func(_p: Vector2) -> Color: return Color(str(source["color"])))
+				continue
 			"cheek_freckles":
 				# そばかす：小さい点を3つ。
 				for point: Vector2 in [Vector2(-width * 0.55, height * 0.3), Vector2(0.0, -height * 0.2), Vector2(width * 0.55, height * 0.3)]:
