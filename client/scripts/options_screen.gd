@@ -8,14 +8,23 @@ const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const ControlGuide := preload("res://scripts/presentation/control_guide.gd")
+const PartsSettings := preload("res://scripts/online/online_parts_settings.gd")
 const TrainerProfile := preload("res://scripts/config/trainer_profile.gd")
 const SCREEN_MODES := [DisplayServer.WINDOW_MODE_WINDOWED, DisplayServer.WINDOW_MODE_MAXIMIZED, DisplayServer.WINDOW_MODE_FULLSCREEN]
 const SCREEN_MODE_LABELS := ["通常ウィンドウ", "最大化", "全画面"]
 const PANEL_WIDTH := 620.0
 const PANEL_HEIGHT := 430.0
 ## 「次へ」の下の余白と、オプションの行・操作ガイドのボタンの高さ（そろえる）。
-const NEXT_GAP := 40.0
+const NEXT_GAP := 16.0
 const ROW_HEIGHT := 46.0
+## ◀ と ▶ の幅（36×2）と、値とのすき間（4×2）。
+const ARROWS_WIDTH := 80.0
+## 画質の説明の字の大きさ。
+const NOTE_FONT_SIZE := 14
+## オプションの板と板のあいだ。
+const CARD_GAP := 8
+## 相手の自作部品の行の値（オフ・オン）。
+const PARTS_LABELS := ["表示する", "表示しない"]
 ## 操作ガイドのボタンに出す、ゲームパッドの絵（Phosphor Icons。白い絵を、ボタンの字と同じ色にして出す）。
 const PAD_ICON_PATH := "res://assets/ui/icon_gamepad.svg"
 const PAD_ICON_SIZE := 30.0
@@ -34,13 +43,17 @@ var _screen_direction_down := {"ui_left": false, "ui_right": false}
 var _quality_button: HBoxContainer
 var _quality_label: Label
 var _quality_note: Label
+var _parts_label: Label
+## ◀ 値 ▶ の幅。画質の説明（長いほう）が1行で入る幅に合わせる。説明はこの幅の中央に置く。
+var _selector_width := 0.0
 ## 画質の説明。軽量＝観客席・町・遠くの景色と、太陽の影を出さない（コースと柵だけ）。
-const QUALITY_NOTE_STANDARD := "観客席や町並み、影まで、すべて表示します。"
-const QUALITY_NOTE_LIGHT := "コースと柵だけにして、影も消します。ノートPCなどで、動きがカクつくときに選んでください。"
+const QUALITY_NOTE_STANDARD := "観客席・町並み・影まで、すべて表示。"
+const QUALITY_NOTE_LIGHT := "コースと柵だけ、影なし。ノートPCなどで重いときに。"
 var _quality_direction_down := {"ui_left": false, "ui_right": false}
 
 
 func _ready() -> void:
+	_selector_width = _note_width()
 	MenuStyle.background(self, BACKGROUND_IMAGE_PATH)
 	MenuStyle.top_bar(self, "オプション設定", TrainerProfile.trainer_name())
 	var panel := PanelContainer.new()
@@ -68,21 +81,14 @@ func _ready() -> void:
 	gap.custom_minimum_size = Vector2(0.0, NEXT_GAP)
 	column.add_child(gap)
 	column.add_child(MenuStyle.section_title("オプション", 17))
-	_build_quality_selector(column)
-	# 画質の行の下に、今の画質で何が変わるか（いつ選ぶとよいか）を小さく出す。
-	_quality_note = MenuStyle.label("", 14, MenuStyle.COLOR_DIM)
-	_quality_note.name = "QualityNote"
-	_quality_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	column.add_child(_quality_note)
-	_update_quality_text()
-	_build_screen_mode_selector(column)
-	var parts_row := CheckButton.new()
-	parts_row.name = "HideRemoteParts"
-	parts_row.text = "相手の自作部品を表示しない"
-	parts_row.custom_minimum_size.y = ROW_HEIGHT
-	parts_row.button_pressed = load("res://scripts/online/online_parts_settings.gd").hidden()
-	parts_row.toggled.connect(func(on: bool) -> void: load("res://scripts/online/online_parts_settings.gd").set_hidden(on))
-	column.add_child(parts_row)
+	# 3つのオプションは、1行ずつ同じ形の板に乗せる（左に名前、右に「◀ 値 ▶」）。
+	var options := VBoxContainer.new()
+	options.name = "OptionCards"
+	options.add_theme_constant_override("separation", CARD_GAP)
+	column.add_child(options)
+	_build_quality_selector(options)
+	_build_screen_mode_selector(options)
+	var parts_row: Control = _build_parts_selector(options)
 	# 3. 操作ガイドは、いちばん下に、小さな入口だけ。
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -131,7 +137,7 @@ func _ready() -> void:
 	_guide_button.focus_neighbor_bottom = _guide_button.get_path_to(_guide_button)
 	# オプションの行にいるときだけ、下の帯に「←→ 変える」を出す。
 	get_viewport().gui_focus_changed.connect(func(control: Control) -> void:
-		_change_hint.visible = control == _quality_button or control == _screen_mode_row)
+		_change_hint.visible = control in [_quality_button, _screen_mode_row, parts_row])
 	_next_button.grab_focus()
 
 
@@ -167,24 +173,38 @@ func _build_quality_selector(column: VBoxContainer) -> void:
 	row.custom_minimum_size = Vector2(364, ROW_HEIGHT)
 	row.add_theme_constant_override("separation", 4)
 	row.gui_input.connect(_quality_input)
-	row.focus_entered.connect(row.queue_redraw)
-	row.focus_exited.connect(row.queue_redraw)
 	row.focus_exited.connect(func(): _quality_direction_down = {"ui_left": false, "ui_right": false})
-	row.draw.connect(func():
-		if row.has_focus():
-			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
-	)
-	column.add_child(row)
+	# 画質の板には、行の下に、今の画質で何が変わるか（いつ選ぶとよいか）を小さく入れる。
+	var card := _option_card(column, row)
+	var inside := VBoxContainer.new()
+	inside.add_theme_constant_override("separation", 0)
+	card.add_child(inside)
+	inside.add_child(row)
+	# 説明は、値（標準・軽量）の真下に、中央そろえで置く。
+	var note_line := HBoxContainer.new()
+	note_line.name = "QualityNoteLine"
+	note_line.add_theme_constant_override("separation", 4)
+	inside.add_child(note_line)
+	var under_caption := Control.new()
+	under_caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	note_line.add_child(under_caption)
+	_quality_note = MenuStyle.label("", NOTE_FONT_SIZE, MenuStyle.COLOR_DIM)
+	_quality_note.name = "QualityNote"
+	_quality_note.custom_minimum_size.x = _selector_width
+	_quality_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note_line.add_child(_quality_note)
+	var bottom_gap := Control.new()
+	bottom_gap.custom_minimum_size.y = 8.0
+	inside.add_child(bottom_gap)
 	var caption := MenuStyle.label("画質", 17, MenuStyle.COLOR_TEXT)
-	caption.custom_minimum_size.x = 150
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousQualityButton", -1, true))
 	_quality_label = MenuStyle.bold_label("", 19)
 	_quality_label.name = "QualityLabel"
-	_quality_label.custom_minimum_size.x = 140
-	_quality_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_quality_label.custom_minimum_size.x = _selector_width - ARROWS_WIDTH
 	_quality_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_quality_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_quality_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -241,26 +261,19 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	row.focus_mode = Control.FOCUS_ALL
 	row.custom_minimum_size = Vector2(364.0, ROW_HEIGHT)
 	row.gui_input.connect(_screen_mode_gui_input)
-	row.focus_entered.connect(row.queue_redraw)
-	row.focus_exited.connect(row.queue_redraw)
 	row.focus_exited.connect(func(): _screen_direction_down = {"ui_left": false, "ui_right": false})
-	row.draw.connect(func():
-		if row.has_focus():
-			row.draw_style_box(MenuStyle.focus_box(), Rect2(Vector2.ZERO, row.size))
-	)
 	row.add_theme_constant_override("separation", 4)
-	menu.add_child(row)
+	_option_card(menu, row).add_child(row)
 	var caption := MenuStyle.label("ウィンドウサイズ", 17, MenuStyle.COLOR_TEXT)
 	caption.name = "ModeCaption"
-	caption.custom_minimum_size.x = 150
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(caption)
 	row.add_child(_screen_mode_button("◀", "PreviousModeButton", -1))
 	_screen_mode_label = MenuStyle.bold_label("通常ウィンドウ", 19)
 	_screen_mode_label.name = "ModeLabel"
-	_screen_mode_label.custom_minimum_size.x = 140.0
-	_screen_mode_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_screen_mode_label.custom_minimum_size.x = _selector_width - ARROWS_WIDTH
 	_screen_mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_screen_mode_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_screen_mode_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -269,19 +282,24 @@ func _build_screen_mode_selector(menu: VBoxContainer) -> void:
 	_sync_screen_mode()
 
 
-func _screen_mode_button(text: String, node_name: String, direction: int, quality: bool = false) -> Button:
-	var button := MenuStyle.pill_button(text, "secondary", 14)
+func _screen_mode_button(text: String, node_name: String, direction: int, quality: bool = false, on_press: Callable = Callable()) -> Button:
+	# 矢印は箱なしの小さな印だけ。押せる広さは保ち、乗せると白く光る。
+	var button := Button.new()
+	button.text = text
 	button.name = node_name
 	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(44, 34)
-	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled"]:
-		var style := button.get_theme_stylebox(state).duplicate() as StyleBoxFlat
-		style.content_margin_left = 8.0
-		style.content_margin_right = 8.0
-		style.content_margin_top = 3.0
-		style.content_margin_bottom = 3.0
-		button.add_theme_stylebox_override(state, style)
+	button.custom_minimum_size = Vector2(36, 34)
+	button.add_theme_font_size_override("font_size", 13)
+	for state in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		button.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	button.add_theme_color_override("font_color", MenuStyle.COLOR_ACCENT)
+	for state in ["font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
+		button.add_theme_color_override(state, MenuStyle.COLOR_TEXT)
 	button.pressed.connect(func() -> void:
+		if on_press.is_valid():
+			on_press.call()
+			UIAudio.play_arrow_click()
+			return
 		if quality:
 			step_quality()
 			UIAudio.play_arrow_click()
@@ -342,3 +360,75 @@ static func cycled_screen_mode(mode: int, direction: int) -> int:
 func _cycle_screen_mode(direction: int) -> void:
 	DisplayServer.window_set_mode(cycled_screen_mode(DisplayServer.window_get_mode(), direction))
 	_sync_screen_mode()
+
+
+
+# オプション1つぶんの板。カーソルが乗ると、板そのものが黄色い枠に変わる。
+func _option_card(parent: Control, focus_owner: Control) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.name = str(focus_owner.name) + "Card"
+	var plain := StyleBoxFlat.new()
+	plain.bg_color = Color(1.0, 1.0, 1.0, 0.06)
+	plain.set_corner_radius_all(10)
+	var focused := MenuStyle.focus_box()
+	for style: StyleBox in [plain, focused]:
+		style.content_margin_left = 16.0
+		style.content_margin_right = 6.0
+		style.content_margin_top = 0.0
+		style.content_margin_bottom = 0.0
+	card.add_theme_stylebox_override("panel", plain)
+	focus_owner.focus_entered.connect(func() -> void: card.add_theme_stylebox_override("panel", focused))
+	focus_owner.focus_exited.connect(func() -> void: card.add_theme_stylebox_override("panel", plain))
+	parent.add_child(card)
+	return card
+
+
+# 相手の自作部品：ほかの2つと同じ「◀ 値 ▶」の行。←→ で切り替わる。
+func _build_parts_selector(parent: Control) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.name = "HideRemoteParts"
+	row.focus_mode = Control.FOCUS_ALL
+	row.custom_minimum_size.y = ROW_HEIGHT
+	row.add_theme_constant_override("separation", 4)
+	_option_card(parent, row).add_child(row)
+	var caption := MenuStyle.label("相手の自作部品", 17, MenuStyle.COLOR_TEXT)
+	caption.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(caption)
+	row.add_child(_screen_mode_button("◀", "PreviousPartsButton", -1, false, flip_hide_remote_parts))
+	_parts_label = MenuStyle.bold_label("", 19)
+	_parts_label.name = "PartsLabel"
+	_parts_label.custom_minimum_size.x = _selector_width - ARROWS_WIDTH
+	_parts_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_parts_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_parts_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_child(_parts_label)
+	row.add_child(_screen_mode_button("▶", "NextPartsButton", 1, false, flip_hide_remote_parts))
+	_update_parts_text()
+	row.gui_input.connect(func(event: InputEvent) -> void:
+		for action in ["ui_left", "ui_right"]:
+			if event.is_action_pressed(action, false, true):
+				flip_hide_remote_parts()
+				UIAudio.play_selection_cycle()
+				row.accept_event())
+	return row
+
+
+func flip_hide_remote_parts() -> void:
+	PartsSettings.set_hidden(not PartsSettings.hidden())
+	_update_parts_text()
+
+
+func _update_parts_text() -> void:
+	_parts_label.text = PARTS_LABELS[int(PartsSettings.hidden())]
+
+
+func _note_width() -> float:
+	var probe := MenuStyle.label("", NOTE_FONT_SIZE, MenuStyle.COLOR_DIM)
+	var font := probe.get_theme_font("font")
+	var widest := 0.0
+	for text in [QUALITY_NOTE_STANDARD, QUALITY_NOTE_LIGHT]:
+		widest = maxf(widest, font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, NOTE_FONT_SIZE).x)
+	probe.free()
+	return ceilf(widest) + 8.0

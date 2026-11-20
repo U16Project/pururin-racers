@@ -8,16 +8,17 @@ const PartAssets := preload("res://scripts/presentation/pururin_parts/part_asset
 ## こちらで作れる形（スロットごと）。
 const BUILTIN_SHAPES := {
 	"eyes": ["eyes_open", "eyes_lidded", "eyes_dot", "eyes_arc", "eyes_squeeze", "eyes_dizzy", "eyes_cat", "eyes_ring", "eyes_gloss", "eyes_blaze", "eyes_tanuki"],
-	"brows": ["brow"],
+	"brows": ["brow", "brow_block", "brow_round"],
 	"mouth": ["mouth_omega", "mouth_smile", "mouth_open", "mouth_flat", "mouth_frown", "mouth_wavy", "mouth_o", "mouth_grit", "mouth_triangle", "mouth_zigzag", "mouth_bunny", "mouth_beak"],
 	"cheeks": ["cheek_ellipse", "cheek_lines", "cheek_swirl", "cheek_freckles", "cheek_whiskers", "cheek_tanuki"],
 	"effect": ["effect_sweat", "effect_tears", "effect_sparkle", "effect_anger"],
-	"mark": ["star", "heart", "drop", "bolt", "flower", "diamond", "moon", "swirl", "note", "paw", "snow", "clover", "dot", "ring", "sun", "plus", "sparkle", "triangle", "hexagon", "spade", "cloud", "leaf", "fish", "crown", "fire", "wave", "bone", "cherry", "ribbon", "cat"],
+	"mark": ["star", "heart", "drop", "bolt", "flower", "diamond", "moon", "swirl", "paw", "clover", "ring", "sun", "plus", "sparkle", "spade", "crown", "fire", "wave"],
 }
 ## 形ごとに、必ず要る数字。
 ## 目：scale＝大きさの倍率、sparkle＝星の光（0か1）、level＝上まぶたの高さ、slope＝上まぶたの傾き（−で内側が下がる）、
 ## lower＝下まぶたが隠す量、line＝まぶたの線の太さの倍率、bend＝弧の向き（＋で上にふくらむ）。
-## まゆ：length・thickness は目の横幅を1とした大きさ、tilt_deg は＋で内側が下がる、lift は目の縦の半分を1とした高さ。あれば bushy＝毛の房のとがりの長さ（0でなし）。
+## まゆ：length・thickness は目の横幅を1とした大きさ（thickness は、まん中から上下のふちまで）、tilt_deg は＋で内側が下がる、lift は目の縦の半分を1とした高さ。
+## brow＝線のまゆ（curve で弧）、brow_block＝のりのような四角いまゆ、brow_round＝まろまゆ（丸いまゆ）。
 const REQUIRED_PARAMS := {
 	"eyes_open": ["scale", "sparkle"],
 	"eyes_lidded": ["level", "slope", "lower", "line"],
@@ -31,6 +32,8 @@ const REQUIRED_PARAMS := {
 	"eyes_blaze": ["scale"],
 	"eyes_tanuki": ["scale"],
 	"brow": ["length", "thickness", "tilt_deg", "lift", "curve"],
+	"brow_block": ["length", "thickness", "tilt_deg", "lift"],
+	"brow_round": ["length", "thickness", "tilt_deg", "lift"],
 	"mouth_omega": ["width"],
 	"mouth_smile": ["width", "fang"],
 	"mouth_open": ["width", "fang"],
@@ -61,28 +64,16 @@ const REQUIRED_PARAMS := {
 	"diamond": [],
 	"moon": [],
 	"swirl": [],
-	"note": [],
 	"paw": [],
-	"snow": [],
 	"clover": [],
-	"dot": [],
 	"ring": [],
 	"sun": [],
 	"plus": [],
 	"sparkle": [],
-	"triangle": [],
-	"hexagon": [],
 	"spade": [],
-	"cloud": [],
-	"leaf": [],
-	"fish": [],
 	"crown": [],
 	"fire": [],
 	"wave": [],
-	"bone": [],
-	"cherry": [],
-	"ribbon": [],
-	"cat": [],
 }
 ## 形ごとに、必ず要る色。
 const REQUIRED_COLORS := {
@@ -211,20 +202,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 				var t := float(index) / 48.0
 				spiral.append(Vector2(cos(t * TAU * 1.7 + PI), sin(t * TAU * 1.7 + PI)) * size * (0.12 + 0.76 * t))
 			sheet.add(_stroke(spiral, size * 0.11), yaw, height, 1.0, solid)
-		"note":
-			# 音符：丸い玉と、まっすぐの棒と、旗。
-			var head := Surface.ellipse_triangles(Vector2(-size * 0.25, -size * 0.6), size * 0.36, size * 0.27)
-			# 長い線は、体の丸みに沿うように、細かく分ける。
-			var stem := PackedVector2Array()
-			for index in 8:
-				stem.append(Vector2(size * 0.08, lerpf(-size * 0.55, size * 0.85, float(index) / 7.0)))
-			head.append_array(_stroke(stem, size * 0.08))
-			var flag := PackedVector2Array()
-			for index in 9:
-				var t := float(index) / 8.0
-				flag.append(Vector2(size * 0.08 + size * 0.45 * t, size * (0.85 - 0.25 * t - 0.3 * t * t)))
-			head.append_array(_stroke(flag, size * 0.08))
-			sheet.add(head, yaw, height, 1.0, solid)
 		"paw":
 			# 肉球：大きい玉と、上に小さい玉4つ。
 			var pads := Surface.ellipse_triangles(Vector2(0.0, -size * 0.3), size * 0.45, size * 0.38)
@@ -232,16 +209,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 				var angle := deg_to_rad(lerpf(145.0, 35.0, float(index) / 3.0))
 				pads.append_array(Surface.ellipse_triangles(Vector2(cos(angle), sin(angle)) * size * 0.68 + Vector2(0.0, -size * 0.12), size * 0.17, size * 0.21))
 			sheet.add(pads, yaw, height, 1.0, solid)
-		"snow":
-			# 雪の結晶：6本の線と、それぞれの枝。
-			var lines := PackedVector2Array()
-			for index in 6:
-				var direction := Vector2.from_angle(PI * 0.5 + TAU * float(index) / 6.0)
-				lines.append_array(_stroke(PackedVector2Array([Vector2.ZERO, direction * size]), size * 0.07))
-				var fork := direction * size * 0.58
-				for turn: float in [0.7, -0.7]:
-					lines.append_array(_stroke(PackedVector2Array([fork, fork + direction.rotated(turn) * size * 0.3]), size * 0.06))
-			sheet.add(lines, yaw, height, 1.0, solid)
 		"clover":
 			# 四つ葉：ハートを4枚、まん中から外へ向けて並べる。
 			var leaves := PackedVector2Array()
@@ -255,8 +222,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 				leaves.append_array(_fill(turned, Vector2.from_angle(angle) * size * 0.45))
 			sheet.add(leaves, yaw, height, 1.0, solid)
 			sheet.add(_disc(Vector2.ZERO, size * 0.14), yaw, height, 2.0, lighter)
-		"dot":
-			sheet.add(_disc(Vector2.ZERO, size * 0.62), yaw, height, 1.0, solid)
 		"ring":
 			sheet.add(_stroke(_circle(Vector2.ZERO, size * 0.68, 40), size * 0.2), yaw, height, 1.0, solid)
 		"sun":
@@ -276,11 +241,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 			# キラッ：4つのとがった先の星と、小さい星。
 			sheet.add(_fill(_star_outline(Vector2(-size * 0.1, -size * 0.05), size * 0.85, 4, 0.28), Vector2(-size * 0.1, -size * 0.05)), yaw, height, 1.0, solid)
 			sheet.add(_fill(_star_outline(Vector2(size * 0.62, size * 0.6), size * 0.3, 4, 0.3), Vector2(size * 0.62, size * 0.6)), yaw, height, 1.0, solid)
-		"triangle":
-			sheet.add(_fill(_polygon(size * 0.95, 3, PI * 0.5), Vector2(0.0, 0.0)), yaw, height, 1.0, solid)
-		"hexagon":
-			sheet.add(_fill(_polygon(size * 0.82, 6, PI * 0.5), Vector2.ZERO), yaw, height, 1.0, solid)
-			sheet.add(_fill(_polygon(size * 0.42, 6, PI * 0.5), Vector2.ZERO), yaw, height, 2.0, lighter)
 		"spade":
 			# スペード：さかさまのハートと、下の足。
 			var spade := PackedVector2Array()
@@ -289,28 +249,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 			var triangles := _fill(spade, Vector2(0.0, size * 0.1))
 			triangles.append_array(PackedVector2Array([Vector2(0.0, -size * 0.2), Vector2(size * 0.3, -size * 0.9), Vector2(-size * 0.3, -size * 0.9)]))
 			sheet.add(triangles, yaw, height, 1.0, solid)
-		"cloud":
-			# 雲：丸を4つと、平たい底。
-			var puffs := _disc(Vector2(-size * 0.45, -size * 0.15), size * 0.38)
-			puffs.append_array(_disc(Vector2(0.0, size * 0.18), size * 0.5))
-			puffs.append_array(_disc(Vector2(size * 0.48, -size * 0.1), size * 0.4))
-			puffs.append_array(Surface.ellipse_triangles(Vector2(0.0, -size * 0.3), size * 0.85, size * 0.25))
-			sheet.add(puffs, yaw, height, 1.0, solid)
-		"leaf":
-			# 葉っぱ：ななめの、両はしがとがった形と、まん中のすじ。
-			var blade := PackedVector2Array()
-			for index in 32:
-				var t := TAU * float(index) / 32.0
-				blade.append(Vector2(cos(t) * size, sin(t) * size * 0.45 * absf(sin(t)) + sin(t) * size * 0.08))
-			var turn := PI * 0.25
-			sheet.add(_rotated(_fill(blade, Vector2.ZERO), turn), yaw, height, 1.0, solid)
-			sheet.add(_rotated(_stroke(PackedVector2Array([Vector2(-size * 0.8, 0.0), Vector2(0.0, 0.0), Vector2(size * 0.8, 0.0)]), size * 0.06), turn), yaw, height, 2.0, lighter)
-		"fish":
-			# 魚：だ円の体と、三角のしっぽと、目。
-			var fish := Surface.ellipse_triangles(Vector2(size * 0.15, 0.0), size * 0.62, size * 0.4)
-			fish.append_array(PackedVector2Array([Vector2(-size * 0.35, 0.0), Vector2(-size * 0.92, size * 0.42), Vector2(-size * 0.92, -size * 0.42)]))
-			sheet.add(fish, yaw, height, 1.0, solid)
-			sheet.add(_disc(Vector2(size * 0.45, size * 0.08), size * 0.09), yaw, height, 2.0, lighter)
 		"crown":
 			# かんむり：下の帯と、3つのとがった山。
 			var crown := Surface.rect_triangles(Rect2(-size * 0.8, -size * 0.55, size * 1.6, size * 0.5))
@@ -344,35 +282,6 @@ static func build_mark(shape: Dictionary, source: Dictionary, mark: Dictionary, 
 					line.append(Vector2(lerpf(-size * 0.85, size * 0.85, t), size * row + sin(t * TAU * 1.5) * size * 0.16))
 				waves.append_array(_stroke(line, size * 0.13))
 			sheet.add(waves, yaw, height, 1.0, solid)
-		"bone":
-			# ほね：ななめの棒と、両はしに丸2つずつ。
-			var bone := Surface.rect_triangles(Rect2(-size * 0.6, -size * 0.13, size * 1.2, size * 0.26))
-			for end: float in [-1.0, 1.0]:
-				for up: float in [-1.0, 1.0]:
-					bone.append_array(_disc(Vector2(end * size * 0.62, up * size * 0.17), size * 0.2))
-			sheet.add(_rotated(bone, PI * 0.2), yaw, height, 1.0, solid)
-		"cherry":
-			# さくらんぼ：実が2つと、くきと、葉。
-			var fruit := _disc(Vector2(-size * 0.38, -size * 0.45), size * 0.34)
-			fruit.append_array(_disc(Vector2(size * 0.4, -size * 0.35), size * 0.34))
-			sheet.add(fruit, yaw, height, 1.0, solid)
-			var stems := _stroke(PackedVector2Array([Vector2(-size * 0.38, -size * 0.2), Vector2(-size * 0.15, size * 0.35), Vector2(size * 0.12, size * 0.75)]), size * 0.07)
-			stems.append_array(_stroke(PackedVector2Array([Vector2(size * 0.4, -size * 0.1), Vector2(size * 0.3, size * 0.4), Vector2(size * 0.12, size * 0.75)]), size * 0.07))
-			sheet.add(stems, yaw, height, 1.0, solid)
-			sheet.add(_disc(Vector2(-size * 0.48, -size * 0.35), size * 0.09), yaw, height, 2.0, lighter)
-			sheet.add(_disc(Vector2(size * 0.3, -size * 0.25), size * 0.09), yaw, height, 2.0, lighter)
-		"ribbon":
-			# リボン：左右の三角と、まん中の結び目。
-			for x: float in [-1.0, 1.0]:
-				var wing := PackedVector2Array([Vector2(0.0, 0.0), Vector2(x * size * 0.9, size * 0.5), Vector2(x * size * 0.9, -size * 0.5)])
-				sheet.add(_fill(wing, Vector2(x * size * 0.6, 0.0)), yaw, height, 1.0, solid)
-			sheet.add(_disc(Vector2.ZERO, size * 0.22), yaw, height, 2.0, lighter)
-		"cat":
-			# ねこの顔の形：丸い頭と、三角の耳2つ。
-			var cat := Surface.ellipse_triangles(Vector2(0.0, -size * 0.12), size * 0.75, size * 0.62)
-			for x: float in [-1.0, 1.0]:
-				cat.append_array(PackedVector2Array([Vector2(x * size * 0.72, size * 0.15), Vector2(x * size * 0.2, size * 0.42), Vector2(x * size * 0.68, size * 0.9)]))
-			sheet.add(cat, yaw, height, 1.0, solid)
 	# 表面の左右は、外から見ると反対になる。外から見て正しい向きになるよう、左右を入れ替える。
 	for layer: Array in sheet.layers:
 		layer[0] = _mirrored(layer[0])
@@ -483,13 +392,21 @@ static func _eyes(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 					spiral.append(Vector2(cos(t * TAU * 2.2), sin(t * TAU * 2.2)) * w * 0.95 * t)
 				add.call(_stroke(spiral, w * 0.12), 1.0, solid_dark)
 			"eyes_cat":
-				# ねこ目：丸い目に、たての細いひとみ。
-				w *= float(source["scale"])
-				h *= float(source["scale"])
-				add.call(Surface.ellipse_triangles(Vector2.ZERO, w, h), 1.0, func(point: Vector2) -> Color: return bright.lerp(dark, 0.35 + 0.35 * clampf(point.y / h, 0.0, 1.0)))
-				add.call(Surface.ellipse_triangles(Vector2.ZERO, w * 0.2, h * 0.86), 2.0, solid_dark)
-				add.call(Surface.ellipse_triangles(Vector2(-w * 0.38, h * 0.4), w * 0.2, h * 0.15), 3.0, _shine_color())
-				add.call(_lashes(w, h, side, int(face["eye_lashes"]), func(x: float) -> float: return h * 2.0), 3.0, solid_dark)
+				# ねこ目：横に長いアーモンド形で、目じりがつり上がる。ひとみは、たての細いすじ。
+				# 横は、ふつうの目の1.6倍。縦は、横の0.46倍（横の寸法は、体の丸みに沿って貼るぶん、縦より小さく見える。
+				# 見た目で、横：縦がおよそ 1.3：1 になる）。
+				var cat_w := w * float(source["scale"]) * 1.6
+				var cat_h := cat_w * 0.46
+				var almond := PackedVector2Array()
+				for index in 40:
+					var turn := TAU * float(index) / 40.0
+					var x := cos(turn) * cat_w
+					var y := sin(turn) * cat_h * (1.0 - 0.4 * pow(cos(turn), 4.0))
+					almond.append(Vector2(x, y + 0.6 * cat_h * (x / cat_w) * side))
+				add.call(_fill(almond, Vector2.ZERO), 1.0, func(point: Vector2) -> Color: return bright.lerp(dark, 0.35 + 0.35 * clampf(point.y / cat_h, 0.0, 1.0)))
+				add.call(Surface.ellipse_triangles(Vector2.ZERO, cat_w * 0.13, cat_h * 0.88), 2.0, solid_dark)
+				add.call(Surface.ellipse_triangles(Vector2(-cat_w * 0.4, cat_h * 0.3), cat_w * 0.16, cat_h * 0.2), 3.0, _shine_color())
+				add.call(_lashes(cat_w, cat_h, side, int(face["eye_lashes"]), func(x: float) -> float: return cat_h * 2.0), 3.0, solid_dark)
 			"eyes_ring":
 				# びっくり目：白い目に、小さい黒目と、ふちの線。
 				w *= float(source["scale"])
@@ -618,35 +535,53 @@ static func _brows(sheet: Sheet, source: Dictionary, face: Dictionary) -> void:
 	var h := float(face["eye_size"][1]) * float(face.get("brow_eye_scale", 1.0))
 	var dark: Color = face["eye_colors"][0]
 	var length := float(source["length"]) * w * 2.0
+	var half := float(source["thickness"]) * w
 	var rise := tan(deg_to_rad(float(source["tilt_deg"])))
+	var base := h * float(source["lift"])
 	for side: float in [1.0, -1.0]:
-		var line := PackedVector2Array()
-		for index in 9:
-			var t := float(index) / 8.0
-			# along は、顔の中心側（−）から外側（＋）へ。tilt が＋なら、内側が下がる。
-			var along := lerpf(-length * 0.5, length * 0.5, t)
-			line.append(Vector2(side * along, h * float(source["lift"]) + rise * along + float(source["curve"]) * w * sin(t * PI)))
-		var triangles := _stroke(line, float(source["thickness"]) * w)
-		# 毛深いまゆ（bushy＞0）：上と下のふちに、毛の房のとがりを並べる（西郷どんのような、もじゃっとしたまゆ）。
-		var bushy := float(source.get("bushy", 0.0))
-		if bushy > 0.0:
-			# 線の太さ（thickness）は、線の中心から、ふちまでの長さ。
-			var half := float(source["thickness"]) * w
-			for index in range(1, line.size()):
-				var a := line[index - 1]
-				var b := line[index]
-				var normal := (b - a).orthogonal().normalized()
-				if normal.y < 0.0:
-					normal = -normal
-				var middle := (a + b) * 0.5
-				for edge: float in [1.0, -0.6]:
-					var base := middle + normal * half * edge
-					var tip := base + normal * half * bushy * edge + (b - a) * 0.35 * side
-					# 面の表と裏のどちらからも見えるように、両方の向きで足す。
-					var root_a := a + normal * half * edge * 0.8
-					var root_b := b + normal * half * edge * 0.8
-					triangles.append_array(PackedVector2Array([root_a, root_b, tip, root_b, root_a, tip]))
+		var triangles := PackedVector2Array()
+		match str(source["shape"]):
+			"brow":
+				var line := PackedVector2Array()
+				for index in 9:
+					var t := float(index) / 8.0
+					# along は、顔の中心側（−）から外側（＋）へ。tilt が＋なら、内側が下がる。
+					var along := lerpf(-length * 0.5, length * 0.5, t)
+					line.append(Vector2(side * along, base + rise * along + float(source["curve"]) * w * sin(t * PI)))
+				triangles = _stroke(line, half)
+			"brow_block":
+				# のりのような四角いまゆ：角だけ少し丸めた、太い長方形。傾けても上下のふちは平行のまま。
+				triangles = _brow_fill(_rounded_box(length * 0.5, half, half * 0.25), side, base, rise)
+			"brow_round":
+				# まろまゆ：ころんとした楕円。
+				var oval := PackedVector2Array()
+				for index in 32:
+					var turn := TAU * float(index) / 32.0
+					oval.append(Vector2(cos(turn) * length * 0.5, sin(turn) * half))
+				triangles = _brow_fill(oval, side, base, rise)
 		sheet.add(triangles, float(face["eye_yaw_deg"]) * side, float(face["eye_height_ratio"]), 4.0, func(_p: Vector2) -> Color: return dark)
+
+
+## まゆの外形（中心が原点、x は顔の中心側−から外側＋）を、傾けて高さに置き、左右に合わせて塗る。
+static func _brow_fill(outline: PackedVector2Array, side: float, base: float, rise: float) -> PackedVector2Array:
+	var placed := PackedVector2Array()
+	for point in outline:
+		placed.append(Vector2(side * point.x, base + point.y + rise * point.x))
+	# 左右を返すと、面の表裏も返るので、点の順を逆にしてそろえる。
+	if side < 0.0:
+		placed.reverse()
+	return _fill(placed, Vector2(0.0, base))
+
+
+## 角を丸めた長方形の外形（半分の幅・半分の高さ・角の丸み）。
+static func _rounded_box(half_w: float, half_h: float, radius: float) -> PackedVector2Array:
+	var outline := PackedVector2Array()
+	var corners := [Vector2(half_w - radius, half_h - radius), Vector2(-half_w + radius, half_h - radius), Vector2(-half_w + radius, -half_h + radius), Vector2(half_w - radius, -half_h + radius)]
+	for corner in 4:
+		for step in 5:
+			var turn := PI * 0.5 * (float(corner) + float(step) / 4.0)
+			outline.append(corners[corner] + Vector2(cos(turn), sin(turn)) * radius)
+	return outline
 
 
 # ---------------------------------------------------------------- 口
@@ -958,17 +893,6 @@ static func _circle(center: Vector2, radius: float, count: int) -> PackedVector2
 	var points := PackedVector2Array()
 	for index in count + 1:
 		points.append(center + Vector2.from_angle(TAU * float(index) / float(count)) * radius)
-	return points
-
-
-## 正多角形の外形（count 個の角。start は、最初の角の向き）。
-static func _polygon(radius: float, count: int, start: float) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	for index in count:
-		for step in 4:
-			var a := Vector2.from_angle(start + TAU * float(index) / float(count)) * radius
-			var b := Vector2.from_angle(start + TAU * float(index + 1) / float(count)) * radius
-			points.append(a.lerp(b, float(step) / 4.0))
 	return points
 
 

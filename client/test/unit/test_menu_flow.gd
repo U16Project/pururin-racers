@@ -271,8 +271,9 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	var next := row.get_node("NextModeButton") as Button
 	var guide_button := menu.find_child("ControlGuideButton", true, false) as Button
 	# 操作ガイドのボタンは、オプションの行と同じ幅・高さで、ゲームパッドの絵つき。
-	assert_eq(guide_button.size.x, row.size.x)
-	assert_eq(guide_button.size.y, row.size.y)
+	var mode_card := row.get_parent() as Control
+	assert_eq(guide_button.size.x, mode_card.size.x)
+	assert_eq(guide_button.size.y, mode_card.size.y)
 	assert_not_null(guide_button.get_node_or_null("PadIcon"))
 	for child: Control in row.get_children():
 		assert_gte(child.position.x, 0.0, child.name)
@@ -294,10 +295,19 @@ func test_title_screen_mode_selector_shows_current_mode_and_is_reachable() -> vo
 	assert_null(diagnostics)
 	var quality_row: Control = menu.find_child("QualityButton", true, false)
 	assert_eq(row.find_valid_focus_neighbor(SIDE_TOP), quality_row)
-	# 画質の行の下に、画質の説明があって、その下がウィンドウサイズの行。
-	assert_eq(menu.find_child("QualityNote", true, false).get_index(), quality_row.get_index() + 1)
-	assert_eq(quality_row.get_index() + 2, row.get_index())
+	# 画質の板の中、行のすぐ下に画質の説明。その次の板がウィンドウサイズ、その次が相手の自作部品。
+	var note := menu.find_child("QualityNote", true, false) as Label
+	assert_eq(note.get_parent().get_parent(), quality_row.get_parent())
+	assert_eq(note.get_parent().get_index(), quality_row.get_index() + 1)
+	var value := quality_row.find_child("QualityLabel", true, false) as Control
+	assert_eq(note.horizontal_alignment, HORIZONTAL_ALIGNMENT_CENTER)
+	assert_almost_eq(note.get_global_rect().get_center().x, value.get_global_rect().get_center().x, 1.0)
+	assert_eq(note.get_line_count(), 1)
+	var quality_card := quality_row.get_parent().get_parent()
+	assert_eq(quality_card.get_index() + 1, mode_card.get_index())
+	assert_eq(mode_card.get_index() + 1, hide_remote_parts.get_parent().get_index())
 	assert_eq(quality_row.get_child(1).position.x, row.get_child(1).position.x)
+	assert_eq(hide_remote_parts.get_child(1).position.x, row.get_child(1).position.x)
 	assert_eq(row.focus_mode, Control.FOCUS_ALL)
 	assert_eq(previous.focus_mode, Control.FOCUS_NONE)
 	assert_eq(next.focus_mode, Control.FOCUS_NONE)

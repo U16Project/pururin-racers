@@ -47,13 +47,13 @@
         "params": {}
       },
       "sides": {
-        "part": "crow_wing",
+        "part": "angel_wing",
         "yaw_deg": 78,
         "height_ratio": 0.15,
         "params": {}
       },
       "tail": {
-        "part": "blue_star_tail",
+        "part": "striped_tail",
         "height_ratio": 0.24,
         "params": {}
       },
@@ -119,7 +119,7 @@
       },
       "marks": [
         {
-          "part": "mark_snow",
+          "part": "mark_ring",
           "yaw_deg": 180,
           "height_ratio": 0.6,
           "size": 0.19,
@@ -150,7 +150,7 @@
         "params": {}
       },
       "sides": {
-        "part": "small_bat_wing",
+        "part": "bat_wing",
         "yaw_deg": 84,
         "height_ratio": 0.36,
         "params": {}
@@ -351,7 +351,7 @@
         "params": {}
       },
       "sides": {
-        "part": "big_flame_fin",
+        "part": "flame_fin",
         "yaw_deg": 82.0,
         "height_ratio": 0.3,
         "params": {}
@@ -455,7 +455,7 @@
         "params": {}
       },
       "sides": {
-        "part": "small_hand",
+        "part": "round_hand",
         "yaw_deg": 78.0,
         "height_ratio": 0.15,
         "params": {}
@@ -757,13 +757,13 @@
         "params": {}
       },
       "sides": {
-        "part": "fairy_wing",
+        "part": "butterfly_wing",
         "yaw_deg": 80.0,
         "height_ratio": 0.26,
         "params": {}
       },
       "tail": {
-        "part": "small_heart_tail",
+        "part": "leaf_tail",
         "height_ratio": 0.28,
         "params": {}
       },
@@ -863,7 +863,7 @@
         "params": {}
       },
       "sides": {
-        "part": "big_fin",
+        "part": "fin_flipper",
         "yaw_deg": 78.0,
         "height_ratio": 0.2,
         "params": {}
@@ -960,7 +960,7 @@
         "params": {}
       },
       "sides": {
-        "part": "stone_side",
+        "part": "rock_side",
         "yaw_deg": 86.0,
         "height_ratio": 0.4,
         "params": {}
@@ -1064,7 +1064,7 @@
         "params": {}
       },
       "sides": {
-        "part": "bird_wing",
+        "part": "angel_wing",
         "yaw_deg": 84,
         "height_ratio": 0.34,
         "params": {}
@@ -1272,7 +1272,7 @@
         "params": {}
       },
       "sides": {
-        "part": "dragon_wing",
+        "part": "bat_wing",
         "yaw_deg": 84,
         "height_ratio": 0.34,
         "params": {}
@@ -1344,7 +1344,7 @@
       },
       "marks": [
         {
-          "part": "mark_leaf",
+          "part": "mark_fire",
           "yaw_deg": 180,
           "height_ratio": 0.58,
           "size": 0.2,
@@ -1448,7 +1448,7 @@
       },
       "marks": [
         {
-          "part": "mark_fish",
+          "part": "mark_drop",
           "yaw_deg": 180,
           "height_ratio": 0.58,
           "size": 0.2,
@@ -1582,13 +1582,13 @@
         "params": {}
       },
       "sides": {
-        "part": "small_angel_wing",
+        "part": "angel_wing",
         "yaw_deg": 84,
         "height_ratio": 0.34,
         "params": {}
       },
       "tail": {
-        "part": "star_tail",
+        "part": "mouse_tail",
         "height_ratio": 0.3,
         "params": {}
       },
@@ -1651,7 +1651,7 @@
       },
       "marks": [
         {
-          "part": "mark_note",
+          "part": "mark_spade",
           "yaw_deg": 180,
           "height_ratio": 0.58,
           "size": 0.2,
