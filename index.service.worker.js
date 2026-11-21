@@ -4,7 +4,7 @@
 // Incrementing CACHE_VERSION will kick off the install event and force
 // previously cached resources to be updated from the network.
 /** @type {string} */
-const CACHE_VERSION = '1795265826|3978748';
+const CACHE_VERSION = '1795273086|4077610';
 /** @type {string} */
 const CACHE_PREFIX = 'PURURIN-RACERS-sw-cache-';
 const CACHE_NAME = CACHE_PREFIX + CACHE_VERSION;
