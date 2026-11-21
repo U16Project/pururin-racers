@@ -372,6 +372,9 @@ func test_left_and_right_parts_move_as_mirror_images() -> void:
 		body.call("set_action", "run")
 		for _step in 37:
 			body.call("advance_motion", 1.0 / 60.0)
+		# 横の部品が無い子（ワカバ・ミカンなど）は、確かめない。
+		if body.get_node_or_null("SideR") == null:
+			continue
 		var right := _body_space_bounds(body.get_node("SideR"))
 		var left := _body_space_bounds(body.get_node("SideL"))
 		assert_almost_eq(-left.end.x, right.position.x, 0.001, id)
@@ -522,6 +525,9 @@ func test_left_and_right_side_parts_are_mirror_images() -> void:
 	for id: String in config["looks"]:
 		var body: Node3D = Builder.build(config["looks"][id], config)
 		add_child_autofree(body)
+		# 横の部品が無い子（ワカバ・ミカンなど）は、確かめない。
+		if body.get_node_or_null("SideR") == null:
+			continue
 		var right := _body_space_bounds(body.get_node("SideR"))
 		var left := _body_space_bounds(body.get_node("SideL"))
 		# 左の箱を、体のまん中（x=0）で折り返すと、右の箱に重なる。
@@ -545,7 +551,8 @@ func test_body_parts_start_on_the_body_and_stick_out() -> void:
 		assert_almost_eq(top.position.y, height, 0.0001, id)
 		assert_gt(_body_space_bounds(top).end.y, height + 0.05, id)
 		# 左右の部品：体の横（半径0.75m）より外へ出る。尾は、後ろへ出る。
-		assert_gt(_body_space_bounds(body.get_node("SideR")).end.x, Surface.BODY_RADIUS + 0.05, id)
+		if look["sides"] != null:
+			assert_gt(_body_space_bounds(body.get_node("SideR")).end.x, Surface.BODY_RADIUS + 0.05, id)
 		assert_gt(_body_space_bounds(body.get_node("Tail")).end.z, Surface.BODY_RADIUS + 0.05, id)
 		# 明るさと第二カラーの高さを、体とそろえるための値。
 		assert_almost_eq(float((top as MeshInstance3D).get_instance_shader_parameter("part_y")), height, 0.0001, id)

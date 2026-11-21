@@ -47,14 +47,14 @@
         "params": {}
       },
       "sides": {
-        "part": "angel_wing",
-        "yaw_deg": 78,
-        "height_ratio": 0.15,
+        "part": "drop_wing",
+        "yaw_deg": 84.0,
+        "height_ratio": 0.34,
         "params": {}
       },
       "tail": {
-        "part": "striped_tail",
-        "height_ratio": 0.24,
+        "part": "mouse_tail",
+        "height_ratio": 0.28,
         "params": {}
       },
       "face": {
@@ -77,9 +77,7 @@
         "expressions": {
           "normal": {
             "eyes": "eyes_ring",
-            "brows": "brow_raise",
-            "mouth": "mouth_o_normal",
-            "cheeks": "cheek_blush"
+            "mouth": "mouth_o_normal"
           },
           "joy": {
             "eyes": "eyes_joy",
@@ -87,12 +85,10 @@
           },
           "anger": {
             "eyes": "eyes_ring_anger",
-            "brows": "brow_angry",
             "mouth": "mouth_o_anger"
           },
           "sorrow": {
             "eyes": "eyes_ring_sorrow",
-            "brows": "brow_sad",
             "mouth": "mouth_o_sorrow"
           },
           "relax": {
@@ -106,13 +102,11 @@
           },
           "push_win": {
             "eyes": "eyes_ring_effort",
-            "brows": "brow_angry",
             "mouth": "mouth_o_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_ring",
-            "brows": "brow_sad",
             "mouth": "mouth_o_push_lose"
           }
         }
@@ -149,12 +143,7 @@
         "part": "propeller",
         "params": {}
       },
-      "sides": {
-        "part": "bat_wing",
-        "yaw_deg": 84,
-        "height_ratio": 0.36,
-        "params": {}
-      },
+      "sides": null,
       "tail": {
         "part": "pig_tail",
         "height_ratio": 0.3,
@@ -278,7 +267,6 @@
         "expressions": {
           "normal": {
             "eyes": "eyes_round",
-            "brows": "brow_raise",
             "mouth": "mouth_omega_normal",
             "cheeks": "cheek_blush"
           },
@@ -288,12 +276,10 @@
           },
           "anger": {
             "eyes": "eyes_round_anger",
-            "brows": "brow_angry",
             "mouth": "mouth_omega_anger"
           },
           "sorrow": {
             "eyes": "eyes_round_sorrow",
-            "brows": "brow_sad",
             "mouth": "mouth_omega_sorrow"
           },
           "relax": {
@@ -307,13 +293,11 @@
           },
           "push_win": {
             "eyes": "eyes_round_effort",
-            "brows": "brow_angry",
             "mouth": "mouth_omega_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_sad",
             "mouth": "mouth_omega_push_lose"
           }
         }
@@ -380,7 +364,7 @@
         "cheek_color": "#FFD0A099",
         "expressions": {
           "normal": {
-            "eyes": "eyes_sharp",
+            "eyes": "eyes_blaze",
             "brows": "brow_thick",
             "mouth": "mouth_fang_normal"
           },
@@ -390,12 +374,12 @@
           },
           "anger": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_sharp_anger",
+            "eyes": "eyes_blaze_anger",
             "brows": "brow_thick_angry",
             "mouth": "mouth_fang_anger"
           },
           "sorrow": {
-            "eyes": "eyes_sharp_sorrow",
+            "eyes": "eyes_blaze_sorrow",
             "brows": "brow_thick_sad",
             "mouth": "mouth_fang_sorrow"
           },
@@ -405,12 +389,12 @@
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_sharp",
+            "eyes": "eyes_blaze",
             "mouth": "mouth_fang_first_place"
           },
           "push_win": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_sharp_effort",
+            "eyes": "eyes_blaze_effort",
             "brows": "brow_thick_angry",
             "mouth": "mouth_fang_push_win"
           },
@@ -451,7 +435,7 @@
       "secondary_top_ratio": 0.4,
       "outline_width": 0.014,
       "top": {
-        "part": "cat_ears",
+        "part": "big_cat_ears",
         "params": {}
       },
       "sides": {
@@ -486,7 +470,7 @@
           "normal": {
             "eyes": "eyes_cat",
             "mouth": "mouth_bunny_normal",
-            "cheeks": "cheek_blush"
+            "cheeks": "cheek_whiskers"
           },
           "joy": {
             "eyes": "eyes_joy",
@@ -550,7 +534,7 @@
       "secondary_top_ratio": 0.0,
       "outline_width": 0.014,
       "top": {
-        "part": "bear_ears",
+        "part": "tanuki_ears",
         "params": {}
       },
       "sides": {
@@ -560,8 +544,8 @@
         "params": {}
       },
       "tail": {
-        "part": "thick_tail",
-        "height_ratio": 0.34,
+        "part": "striped_tail",
+        "height_ratio": 0.28,
         "params": {}
       },
       "face": {
@@ -583,23 +567,20 @@
         "cheek_color": "#F08A6E99",
         "expressions": {
           "normal": {
-            "eyes": "eyes_droopy",
-            "brows": "brow_maro",
+            "eyes": "eyes_tanuki",
             "mouth": "mouth_wavy_normal",
-            "cheeks": "cheek_swirl"
+            "cheeks": "cheek_tanuki"
           },
           "joy": {
             "eyes": "eyes_joy",
             "mouth": "mouth_wavy_joy"
           },
           "anger": {
-            "eyes": "eyes_droopy_anger",
-            "brows": "brow_maro_angry",
+            "eyes": "eyes_tanuki_anger",
             "mouth": "mouth_wavy_anger"
           },
           "sorrow": {
-            "eyes": "eyes_droopy_sorrow",
-            "brows": "brow_maro_sad",
+            "eyes": "eyes_tanuki_sorrow",
             "mouth": "mouth_wavy_sorrow"
           },
           "relax": {
@@ -608,19 +589,17 @@
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_droopy",
+            "eyes": "eyes_tanuki",
             "mouth": "mouth_wavy_first_place"
           },
           "push_win": {
             "effect": "effect_sweat",
-            "eyes": "eyes_droopy_effort",
-            "brows": "brow_maro_angry",
+            "eyes": "eyes_tanuki_effort",
             "mouth": "mouth_wavy_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_maro_sad",
             "mouth": "mouth_wavy_push_lose"
           }
         }
@@ -763,7 +742,7 @@
         "params": {}
       },
       "tail": {
-        "part": "leaf_tail",
+        "part": "pink_crystal_tail",
         "height_ratio": 0.28,
         "params": {}
       },
@@ -787,7 +766,6 @@
         "expressions": {
           "normal": {
             "eyes": "eyes_gloss",
-            "brows": "brow_raise",
             "mouth": "mouth_triangle_normal",
             "cheeks": "cheek_blush"
           },
@@ -798,13 +776,11 @@
           "anger": {
             "effect": "effect_anger",
             "eyes": "eyes_gloss_anger",
-            "brows": "brow_angry",
             "mouth": "mouth_triangle_anger"
           },
           "sorrow": {
             "effect": "effect_tears",
             "eyes": "eyes_gloss_sorrow",
-            "brows": "brow_sad",
             "mouth": "mouth_triangle_sorrow"
           },
           "relax": {
@@ -819,13 +795,11 @@
           "push_win": {
             "effect": "effect_sweat",
             "eyes": "eyes_gloss_effort",
-            "brows": "brow_angry",
             "mouth": "mouth_triangle_push_win"
           },
           "push_lose": {
             "effect": "effect_tears",
             "eyes": "eyes_squeeze",
-            "brows": "brow_sad",
             "mouth": "mouth_triangle_push_lose"
           }
         }
@@ -990,7 +964,7 @@
         "expressions": {
           "normal": {
             "eyes": "eyes_dot",
-            "brows": "brow_thick",
+            "brows": "brow_nori",
             "mouth": "mouth_grit_normal",
             "cheeks": "cheek_lines"
           },
@@ -1001,12 +975,12 @@
           "anger": {
             "effect": "effect_anger",
             "eyes": "eyes_dot_anger",
-            "brows": "brow_thick_angry",
+            "brows": "brow_nori_angry",
             "mouth": "mouth_grit_anger"
           },
           "sorrow": {
             "eyes": "eyes_dot_sorrow",
-            "brows": "brow_thick_sad",
+            "brows": "brow_nori_sad",
             "mouth": "mouth_grit_sorrow"
           },
           "relax": {
@@ -1020,13 +994,13 @@
           },
           "push_win": {
             "eyes": "eyes_dot_effort",
-            "brows": "brow_thick_angry",
+            "brows": "brow_nori_angry",
             "mouth": "mouth_grit_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_thick_sad",
+            "brows": "brow_nori_sad",
             "mouth": "mouth_grit_push_lose"
           }
         }
@@ -1063,12 +1037,7 @@
         "part": "sunflower",
         "params": {}
       },
-      "sides": {
-        "part": "angel_wing",
-        "yaw_deg": 84,
-        "height_ratio": 0.34,
-        "params": {}
-      },
+      "sides": null,
       "tail": {
         "part": "tuft_tail",
         "height_ratio": 0.3,
@@ -1093,8 +1062,7 @@
         "cheek_color": "#FFD0A099",
         "expressions": {
           "normal": {
-            "eyes": "eyes_round",
-            "brows": "brow_maro",
+            "eyes": "eyes_droopy",
             "mouth": "mouth_open_normal",
             "cheeks": "cheek_blush"
           },
@@ -1104,13 +1072,11 @@
           },
           "anger": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_round_anger",
-            "brows": "brow_maro_angry",
+            "eyes": "eyes_droopy_anger",
             "mouth": "mouth_open_anger"
           },
           "sorrow": {
-            "eyes": "eyes_round_sorrow",
-            "brows": "brow_maro_sad",
+            "eyes": "eyes_droopy_sorrow",
             "mouth": "mouth_open_sorrow"
           },
           "relax": {
@@ -1119,19 +1085,17 @@
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_sparkle",
+            "eyes": "eyes_droopy",
             "mouth": "mouth_open_first_place"
           },
           "push_win": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_round_effort",
-            "brows": "brow_maro_angry",
+            "eyes": "eyes_droopy_effort",
             "mouth": "mouth_open_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_maro_sad",
             "mouth": "mouth_open_push_lose"
           }
         }
@@ -1199,43 +1163,43 @@
         "expressions": {
           "normal": {
             "eyes": "eyes_sharp",
-            "brows": "brow_raise",
-            "mouth": "mouth_flat_normal"
+            "brows": "brow_maro",
+            "mouth": "mouth_triangle_normal"
           },
           "joy": {
             "eyes": "eyes_joy",
-            "mouth": "mouth_flat_joy"
+            "mouth": "mouth_triangle_joy"
           },
           "anger": {
             "eyes": "eyes_sharp_anger",
-            "brows": "brow_angry",
-            "mouth": "mouth_flat_anger"
+            "brows": "brow_maro_angry",
+            "mouth": "mouth_triangle_anger"
           },
           "sorrow": {
             "eyes": "eyes_sharp_sorrow",
-            "brows": "brow_sad",
-            "mouth": "mouth_flat_sorrow"
+            "brows": "brow_maro_sad",
+            "mouth": "mouth_triangle_sorrow"
           },
           "relax": {
             "eyes": "eyes_relax",
-            "mouth": "mouth_flat_relax"
+            "mouth": "mouth_triangle_relax"
           },
           "first_place": {
             "effect": "effect_sparkle",
             "eyes": "eyes_sharp",
-            "mouth": "mouth_flat_first_place"
+            "mouth": "mouth_triangle_first_place"
           },
           "push_win": {
             "effect": "effect_sweat",
             "eyes": "eyes_sharp_effort",
-            "brows": "brow_angry",
-            "mouth": "mouth_flat_push_win"
+            "brows": "brow_maro_angry",
+            "mouth": "mouth_triangle_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_sad",
-            "mouth": "mouth_flat_push_lose"
+            "brows": "brow_maro_sad",
+            "mouth": "mouth_triangle_push_lose"
           }
         }
       },
@@ -1301,22 +1265,23 @@
         "cheek_color": "#FF99B899",
         "expressions": {
           "normal": {
-            "eyes": "eyes_line",
+            "eyes": "eyes_sharp",
             "brows": "brow_raise",
-            "mouth": "mouth_frown_normal"
+            "mouth": "mouth_frown_normal",
+            "cheeks": "cheek_swirl"
           },
           "joy": {
             "eyes": "eyes_joy",
             "mouth": "mouth_frown_joy"
           },
           "anger": {
-            "eyes": "eyes_line",
+            "eyes": "eyes_sharp_anger",
             "brows": "brow_angry",
             "mouth": "mouth_frown_anger"
           },
           "sorrow": {
             "effect": "effect_tears",
-            "eyes": "eyes_relax",
+            "eyes": "eyes_sharp_sorrow",
             "brows": "brow_sad",
             "mouth": "mouth_frown_sorrow"
           },
@@ -1326,11 +1291,11 @@
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_joy",
+            "eyes": "eyes_sharp",
             "mouth": "mouth_frown_first_place"
           },
           "push_win": {
-            "eyes": "eyes_line",
+            "eyes": "eyes_sharp_effort",
             "brows": "brow_angry",
             "mouth": "mouth_frown_push_win"
           },
@@ -1404,45 +1369,40 @@
         "cheek_color": "#FF99B899",
         "expressions": {
           "normal": {
-            "eyes": "eyes_joy",
-            "brows": "brow_thick",
-            "mouth": "mouth_fang_normal",
-            "cheeks": "cheek_freckles"
+            "mouth": "mouth_beak_normal",
+            "cheeks": "cheek_blush",
+            "eyes": "eyes_joy"
           },
           "joy": {
-            "eyes": "eyes_joy",
-            "mouth": "mouth_fang_joy"
+            "mouth": "mouth_beak_joy",
+            "eyes": "eyes_joy"
           },
           "anger": {
-            "eyes": "eyes_squeeze",
-            "brows": "brow_thick_angry",
-            "mouth": "mouth_fang_anger"
+            "mouth": "mouth_beak_anger",
+            "eyes": "eyes_squeeze"
           },
           "sorrow": {
             "effect": "effect_tears",
-            "eyes": "eyes_relax",
-            "brows": "brow_thick_sad",
-            "mouth": "mouth_fang_sorrow"
+            "mouth": "mouth_beak_sorrow",
+            "eyes": "eyes_relax"
           },
           "relax": {
-            "eyes": "eyes_relax",
-            "mouth": "mouth_fang_relax"
+            "mouth": "mouth_beak_relax",
+            "eyes": "eyes_relax"
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_joy",
-            "mouth": "mouth_fang_first_place"
+            "mouth": "mouth_beak_first_place",
+            "eyes": "eyes_joy"
           },
           "push_win": {
-            "eyes": "eyes_squeeze",
-            "brows": "brow_thick_angry",
-            "mouth": "mouth_fang_push_win"
+            "mouth": "mouth_beak_push_win",
+            "eyes": "eyes_squeeze"
           },
           "push_lose": {
             "effect": "effect_sweat",
-            "eyes": "eyes_squeeze",
-            "brows": "brow_thick_sad",
-            "mouth": "mouth_fang_push_lose"
+            "mouth": "mouth_beak_push_lose",
+            "eyes": "eyes_squeeze"
           }
         }
       },
@@ -1485,8 +1445,8 @@
         "params": {}
       },
       "tail": {
-        "part": "curl_tail",
-        "height_ratio": 0.3,
+        "part": "thick_tail",
+        "height_ratio": 0.28,
         "params": {}
       },
       "face": {
@@ -1508,22 +1468,20 @@
         "cheek_color": "#F08A6E99",
         "expressions": {
           "normal": {
-            "eyes": "eyes_cat",
-            "brows": "brow_thick",
-            "mouth": "mouth_omega_normal"
+            "eyes": "eyes_droopy",
+            "mouth": "mouth_omega_normal",
+            "cheeks": "cheek_freckles"
           },
           "joy": {
             "eyes": "eyes_joy",
             "mouth": "mouth_omega_joy"
           },
           "anger": {
-            "eyes": "eyes_cat_anger",
-            "brows": "brow_thick_angry",
+            "eyes": "eyes_droopy_anger",
             "mouth": "mouth_omega_anger"
           },
           "sorrow": {
-            "eyes": "eyes_cat_sorrow",
-            "brows": "brow_thick_sad",
+            "eyes": "eyes_droopy_sorrow",
             "mouth": "mouth_omega_sorrow"
           },
           "relax": {
@@ -1532,19 +1490,17 @@
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_cat",
+            "eyes": "eyes_droopy",
             "mouth": "mouth_omega_first_place"
           },
           "push_win": {
             "effect": "effect_sweat",
-            "eyes": "eyes_cat_effort",
-            "brows": "brow_thick_angry",
+            "eyes": "eyes_droopy_effort",
             "mouth": "mouth_omega_push_win"
           },
           "push_lose": {
             "effect": "effect_sweat",
             "eyes": "eyes_squeeze",
-            "brows": "brow_thick_sad",
             "mouth": "mouth_omega_push_lose"
           }
         }
@@ -1588,8 +1544,8 @@
         "params": {}
       },
       "tail": {
-        "part": "mouse_tail",
-        "height_ratio": 0.3,
+        "part": "flame_tail",
+        "height_ratio": 0.28,
         "params": {}
       },
       "face": {
@@ -1611,41 +1567,41 @@
         "cheek_color": "#FFD0A099",
         "expressions": {
           "normal": {
-            "eyes": "eyes_gloss",
             "mouth": "mouth_o_normal",
-            "cheeks": "cheek_blush"
+            "cheeks": "cheek_blush",
+            "eyes": "eyes_round"
           },
           "joy": {
-            "eyes": "eyes_joy",
-            "mouth": "mouth_o_joy"
+            "mouth": "mouth_o_joy",
+            "eyes": "eyes_joy"
           },
           "anger": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_gloss_anger",
-            "mouth": "mouth_o_anger"
+            "mouth": "mouth_o_anger",
+            "eyes": "eyes_round_anger"
           },
           "sorrow": {
-            "eyes": "eyes_gloss_sorrow",
-            "mouth": "mouth_o_sorrow"
+            "mouth": "mouth_o_sorrow",
+            "eyes": "eyes_round_sorrow"
           },
           "relax": {
-            "eyes": "eyes_relax",
-            "mouth": "mouth_o_relax"
+            "mouth": "mouth_o_relax",
+            "eyes": "eyes_relax"
           },
           "first_place": {
             "effect": "effect_sparkle",
-            "eyes": "eyes_gloss",
-            "mouth": "mouth_o_first_place"
+            "mouth": "mouth_o_first_place",
+            "eyes": "eyes_sparkle"
           },
           "push_win": {
             "effect": "effect_anger_white",
-            "eyes": "eyes_gloss_effort",
-            "mouth": "mouth_o_push_win"
+            "mouth": "mouth_o_push_win",
+            "eyes": "eyes_round_effort"
           },
           "push_lose": {
             "effect": "effect_sweat",
-            "eyes": "eyes_squeeze",
-            "mouth": "mouth_o_push_lose"
+            "mouth": "mouth_o_push_lose",
+            "eyes": "eyes_squeeze"
           }
         }
       },
