@@ -9,6 +9,7 @@
 
 | ファイル | 中身 |
 |---|---|
+| `title_goal_v03.png` | 現行タイトル画面の元画像（3840x2160、ロゴなし）。ゲームでは、この一部を拡大して見せる |
 | `title_background_v01.png` | 現行タイトル画面案。レース場背景、タイトルロゴ、レース場のSTART看板を含む。アプリの操作ボタン・メニューUIは含めない |
 | `title_background_nologo_v01.png` | 同じ絵の、ロゴなし |
 | `title_background_sunset_v01.png` / `..._sunset_nologo_v01.png` | 夕方の版 |
@@ -29,6 +30,8 @@
 `src/kv.gd` が撮影用の場面（Godot）。ぷるりんの見た目を変えたあとに撮り直せる。
 
 ```bash
+src/shoot.sh title_side   # 今のタイトルの元画像（ゴールの先、ロゴなし）。title_goal_v03.png として保存し、2560x1440 に縮めて client/assets/ui/title_goal.png へ
+src/shoot.sh logo_pururin # ロゴに添えるヒカリ（透明）。切り抜いて client/assets/ui/title_hikari.png へ
 src/shoot.sh title      # src/out/title.png ができる
 python3 src/logo.py     # 先に src/shoot.sh logo_pururin を撮っておく
 ```

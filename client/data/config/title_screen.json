@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "background": "res://assets/ui/title_goal.png",
+  "view_start": {
+    "center": [
+      0.5525,
+      0.4325
+    ],
+    "zoom": 1.6
+  },
+  "view_end": {
+    "center": [
+      0.55,
+      0.42
+    ],
+    "zoom": 1.33
+  },
+  "view_seconds": 10.0,
+  "layers": [
+    {
+      "name": "Logo",
+      "image": "res://assets/ui/title_logo.png",
+      "center": [
+        0.5,
+        0.275
+      ],
+      "width": 0.42,
+      "rotation": 0.0
+    },
+    {
+      "name": "Hikari",
+      "image": "res://assets/ui/title_hikari.png",
+      "center": [
+        0.683,
+        0.248
+      ],
+      "width": 0.155,
+      "rotation": 0.0
+    }
+  ]
+}

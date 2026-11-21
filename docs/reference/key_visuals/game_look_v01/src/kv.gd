@@ -64,6 +64,7 @@ func _initialize() -> void:
 	cam.far = 9000.0
 	cam.near = 0.1
 	cam.look_at_from_position(_shot["cam"], _shot["look"], Vector3.UP)
+	cam.rotate_object_local(Vector3.BACK, deg_to_rad(float(_shot.get("cam_roll", 0.0))))
 	if _shot.has("ortho"):
 		cam.projection = Camera3D.PROJECTION_ORTHOGONAL
 		cam.size = float(_shot["ortho"])
@@ -73,6 +74,11 @@ func _initialize() -> void:
 		attrs.dof_blur_far_distance = float(_shot["dof"][0])
 		attrs.dof_blur_far_transition = float(_shot["dof"][1])
 		attrs.dof_blur_amount = float(_shot["dof"][2])
+		# 手前のぼかし（あれば）。[ぼかし終わる距離, 移り変わりの幅]
+		if _shot.has("dof_near"):
+			attrs.dof_blur_near_enabled = true
+			attrs.dof_blur_near_distance = float(_shot["dof_near"][0])
+			attrs.dof_blur_near_transition = float(_shot["dof_near"][1])
 		cam.attributes = attrs
 	cam.current = true
 
@@ -119,6 +125,37 @@ func _shots() -> Dictionary:
 	shots["title_sunset"] = sunset.merged({
 		"cam": Vector3(0.2, 1.55, 7.4), "look": Vector3(0.0, 2.9, 30.0), "fov": 44.0, "dof": [30.0, 80.0, 0.04],
 		"runners": title_runners,
+	})
+	# タイトル。先頭を争うヒカリとアカネが、ゴールの門をくぐって20mほど進んだ所を、真正面からヒカリを中心に右へ30度回り込み、ヒカリへ向けた、やや下から写す。
+	# 門は2体の後ろ（奥）に見える。ほかの6体は後ろに続き、前の子のすき間から顔が出る位置にしてある（計算で決めた）。
+	# どの2体も、体が重ならない間（1.9m以上）をあけてある。
+	# ピントはヒカリ（カメラから約6m）に一番合わせ、ほかの子（約8〜14m）はある程度はっきり、門や観客席はしっかりぼかす。
+	# 体の影は切って足もとに丸い影を置く（ほかの子の影や紙吹雪の影が、体に写って汚く見えるため）。
+	var lead_z := GOAL_Z - 20.0
+	shots["title_side"] = day.merged({
+		"cam": Vector3(-2.77, 0.6, lead_z - 5.67), "look": Vector3(0.78, 1.9, lead_z + 5.69), "fov": 46.0,
+		"dof": [9.5, 12.0, 0.14], "dof_near": [4.0, 2.5], "ground_fine": 0.15, "blob_shadows": true,
+		"confetti": {"center": Vector3(0.0, 6.0, lead_z + 10.0), "extent": Vector3(7.0, 2.5, 8.0), "count": 200},
+		"runners": [
+			{"id": "player-1", "x": -1.00, "z": lead_z + 0.00, "yaw": 0.0, "expr": "first_place", "action": "dash", "hop": 0.30, "lean": 6.0},
+			{"id": "cpu-1", "x": 1.00, "z": lead_z + 0.40, "yaw": 0.0, "expr": "normal", "expr_slots": {"brows": "anger", "mouth": "anger", "effect": "anger"}, "action": "dash", "hop": 0.15, "lean": 6.0},
+			{"id": "cpu-2", "x": -2.90, "z": lead_z + 2.30, "yaw": 0.0, "expr": "joy", "action": "dash", "hop": 0.35, "lean": 6.0},
+			{"id": "cpu-4", "x": 3.80, "z": lead_z + 1.40, "yaw": 0.0, "expr": "push_win", "action": "run", "hop": 0.40, "lean": 6.0},
+			{"id": "cpu-5", "x": -2.00, "z": lead_z + 4.60, "yaw": 0.0, "expr": "first_place", "action": "run", "hop": 0.90, "lean": 6.0},
+			{"id": "cpu-6", "x": -4.60, "z": lead_z + 4.20, "yaw": 0.0, "expr": "relax", "action": "run", "hop": 0.55, "lean": 6.0},
+			{"id": "cpu-7", "x": -4.10, "z": lead_z + 8.00, "yaw": 0.0, "expr": "anger", "action": "run", "hop": 1.20, "lean": 6.0},
+			{"id": "cpu-3", "x": 2.30, "z": lead_z + 4.70, "yaw": 0.0, "expr": "push_lose", "action": "run", "hop": 1.10, "lean": 6.0},
+		],
+	})
+	# 表情の見比べ（タイトル用）。上の段ヒカリ、下の段アカネ。左から normal・joy・anger・relax・first_place・push_win。
+	var face_check := []
+	var face_names := ["normal", "joy", "anger", "relax", "first_place", "push_win"]
+	for row in 2:
+		for col in face_names.size():
+			face_check.append({"id": ["player-1", "cpu-1"][row], "x": (2.5 - float(col)) * 1.5, "z": 0.0, "y": float(1 - row) * 1.5, "yaw": 0.0, "expr": face_names[col], "action": "idle", "dust": false})
+	shots["face_check"] = day.merged({
+		"cam": Vector3(0.0, 1.4, -20.0), "look": Vector3(0.0, 1.35, 0.0), "ortho": 3.4, "size": Vector2i(2400, 1000),
+		"no_venue": true, "runners": face_check, "ambient": 0.85,
 	})
 	# スタート前。8プルが、枠の番号の下に並ぶ。
 	var start_runners := []
@@ -219,9 +256,9 @@ func _shots() -> Dictionary:
 	})
 	# ロゴに添える1プル（透明）。
 	shots["logo_pururin"] = day.merged({
-		"cam": Vector3(3.0, 1.6, -9.0), "look": Vector3(0.0, 0.62, 0.0), "fov": 14.0, "size": Vector2i(1600, 1600),
+		"cam": Vector3(3.0, 1.6, -9.0), "look": Vector3(0.0, 1.0, 0.0), "fov": 18.0, "size": Vector2i(1600, 1600),
 		"no_venue": true, "transparent": true, "ambient": 0.85,
-		"runners": [{"id": "player-1", "x": 0.0, "z": 0.0, "yaw": 0.0, "expr": "joy", "action": "idle", "dust": false, "roll": 6.0}],
+		"runners": [{"id": "player-1", "x": 0.0, "z": 0.0, "yaw": -12.0, "expr": "joy", "action": "idle", "dust": false, "roll": 16.0}],
 	})
 	# アイコン（正方形）。
 	shots["icon"] = day.merged({
@@ -486,12 +523,13 @@ void fragment() {
 	var dirt := _shader_mat("shader_type spatial;\nrender_mode cull_disabled;\n" + NOISE_GLSL + """
 uniform vec3 base : source_color;
 uniform float width = 15.0;
+uniform float fine = 1.0;
 varying vec3 wp;
 void vertex() { wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 void fragment() {
-	float n = vnoise(wp.xz * 0.3) * 0.5 + vnoise(wp.xz * 1.9) * 0.3 + vnoise(wp.xz * 9.0) * 0.2;
+	float n = vnoise(wp.xz * 0.3) * 0.5 + vnoise(wp.xz * 1.9) * 0.3 * fine + vnoise(wp.xz * 9.0) * 0.2 * fine;
 	float rake = vnoise(vec2(UV.x * 46.0, UV.y * 0.12));
-	vec3 c = base * (0.86 + 0.2 * n) * (0.95 + 0.1 * rake);
+	vec3 c = base * (0.86 + 0.2 * n) * (0.95 + 0.1 * rake * fine);
 	float edge = min(UV.x, 1.0 - UV.x) * width;
 	float line = 1.0 - smoothstep(0.09, 0.12, abs(edge - 0.45));
 	c = mix(c, vec3(0.97, 0.96, 0.92), line * 0.92);
@@ -499,7 +537,7 @@ void fragment() {
 	ROUGHNESS = 1.0;
 	SPECULAR = 0.05;
 }
-""", {"base": Color(0.80, 0.63, 0.43)})
+""", {"base": Color(0.80, 0.63, 0.43), "fine": float(_shot.get("ground_fine", 1.0))})
 	var node := MeshInstance3D.new()
 	node.mesh = ribbon
 	node.material_override = dirt
@@ -1205,7 +1243,9 @@ func _add_runner(spec: Dictionary) -> void:
 	var holder := Node3D.new()
 	_world.add_child(holder)
 	var hop := float(spec.get("hop", 0.0))
-	holder.position = Vector3(float(spec["x"]), hop, float(spec["z"]))
+	# 前へ傾けた分だけ持ち上げて、体の前側が地面にめり込まないようにする。
+	var lift := absf(sin(deg_to_rad(float(spec.get("lean", 0.0))))) * 0.75
+	holder.position = Vector3(float(spec["x"]), hop + lift + float(spec.get("y", 0.0)), float(spec["z"]))
 	holder.rotation_degrees = Vector3(0.0, float(spec.get("yaw", 0.0)), 0.0)
 	var tilt := Node3D.new()
 	holder.add_child(tilt)
@@ -1216,11 +1256,47 @@ func _add_runner(spec: Dictionary) -> void:
 	var body: Node3D = Builder.build(LookConfig.look_for(str(spec["id"])), LookConfig.values())
 	tilt.add_child(body)
 	body.call("set_expression", str(spec.get("expr", "normal")))
+	# 場所ごとに、別の表情の部品へ差し替える（撮影だけの特別な顔。例：目はふつう、まゆと青筋は怒り）。
+	var slots: Dictionary = spec.get("expr_slots", {})
+	for slot: String in slots:
+		var want := str(slots[slot])
+		body.call("_make_face", want, slot)
+		var face_nodes: Dictionary = body.get("_face_nodes")
+		for name: String in face_nodes:
+			for node: Node3D in face_nodes[name].get(slot, []):
+				node.visible = name == want
+	if not slots.is_empty():
+		body.call("_place_children")
 	body.call("set_action", str(spec.get("action", "idle")))
 	body.set_process(false)
 	_runners.append({"body": body, "time_scale": _rng.randf_range(0.6, 1.5)})
+	# ぷるりんどうしの影が体に写らないように、体の影は切り、足もとに丸い影を置く。
+	if bool(_shot.get("blob_shadows", false)):
+		_shadows_off(body)
+		var blob := _shader_mat("""
+shader_type spatial;
+render_mode blend_mix, unshaded, depth_draw_never, shadows_disabled;
+void fragment() {
+	float d = length(UV - vec2(0.5)) * 2.0;
+	ALBEDO = vec3(0.25, 0.17, 0.1);
+	ALPHA = 0.5 * (1.0 - smoothstep(0.55, 1.0, d));
+}
+""", {})
+		var disc := QuadMesh.new()
+		disc.size = Vector2(1.6, 1.4)
+		var shadow := _mesh(_world, disc, blob, Vector3(float(spec["x"]) + 0.12, 0.02, float(spec["z"]) + 0.15), Vector3(-90.0, 0.0, 0.0))
+		shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	if bool(spec.get("dust", true)) and str(spec.get("action", "idle")) != "idle":
 		_add_dust(holder, hop)
+	if bool(_shot.get("blob_shadows", false)):
+		_shadows_off(holder)
+
+
+func _shadows_off(node: Node) -> void:
+	if node is GeometryInstance3D:
+		(node as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for child in node.get_children():
+		_shadows_off(child)
 
 
 ## 走っているぷるりんの後ろの、土けむり。
@@ -1261,3 +1337,5 @@ func _add_confetti(spec: Dictionary) -> void:
 	material.emission = Color(1.0, 1.0, 1.0)
 	material.emission_energy_multiplier = 0.08
 	_multi(_world, quad, pieces, colors, material)
+	# 紙吹雪の影は落とさない（ぷるりんの体に、点々の影が写って汚く見えるため）。
+	(_world.get_child(_world.get_child_count() - 1) as GeometryInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

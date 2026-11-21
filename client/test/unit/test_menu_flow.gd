@@ -75,7 +75,7 @@ func test_logo_is_skipped_by_pressing_any_key_or_button_but_not_by_releasing() -
 func test_title_shows_only_a_prompt_and_any_button_opens_the_menu() -> void:
 	var title := TitleScene.instantiate()
 	add_child(title)
-	assert_not_null((title.get_node("Background") as TextureRect).texture)
+	assert_not_null((title.find_child("Background", true, false) as Sprite2D).texture)
 	assert_eq(title.find_children("*", "BaseButton", true, false).size(), 0)
 	var prompt := title.get_node("PressAnyButton") as Label
 	assert_eq(prompt.text, "ー　PRESS ANY BUTTON　ー")
