@@ -7,13 +7,13 @@
   "introduction_max_length": 70,
   "icon_size_px": 256,
   "avatars": [
-    {"id": "avatar-1", "body": "male", "hair_style": "short", "hair_color": "#3B2A20", "skin_color": "#F6D3B4", "shirt_color": "#3F7FD9"},
-    {"id": "avatar-2", "body": "female", "hair_style": "long", "hair_color": "#7A4A2A", "skin_color": "#F9DCC4", "shirt_color": "#E26A8D"},
-    {"id": "avatar-3", "body": "male", "hair_style": "spiky", "hair_color": "#D9A441", "skin_color": "#F2C9A0", "shirt_color": "#E5553A"},
-    {"id": "avatar-4", "body": "female", "hair_style": "bob", "hair_color": "#22252E", "skin_color": "#F6D3B4", "shirt_color": "#3FBFB0"},
-    {"id": "avatar-5", "body": "female", "hair_style": "ponytail", "hair_color": "#C4532F", "skin_color": "#F9DCC4", "shirt_color": "#62CF7C"},
-    {"id": "avatar-6", "body": "male", "hair_style": "short", "hair_color": "#8E8E96", "skin_color": "#E0B088", "shirt_color": "#6A5ACD"},
-    {"id": "avatar-7", "body": "female", "hair_style": "long", "hair_color": "#2E4A9E", "skin_color": "#F6D3B4", "shirt_color": "#F2C23A"},
-    {"id": "avatar-8", "body": "male", "hair_style": "spiky", "hair_color": "#2B2B2B", "skin_color": "#B98560", "shirt_color": "#D8AD5C"}
+    {"id": "avatar-1", "image_path": "res://assets/ui/player_avatars/avatar-1.png"},
+    {"id": "avatar-2", "image_path": "res://assets/ui/player_avatars/avatar-2.png"},
+    {"id": "avatar-3", "image_path": "res://assets/ui/player_avatars/avatar-3.png"},
+    {"id": "avatar-4", "image_path": "res://assets/ui/player_avatars/avatar-4.png"},
+    {"id": "avatar-5", "image_path": "res://assets/ui/player_avatars/avatar-5.png"},
+    {"id": "avatar-6", "image_path": "res://assets/ui/player_avatars/avatar-6.png"},
+    {"id": "avatar-7", "image_path": "res://assets/ui/player_avatars/avatar-7.png"},
+    {"id": "avatar-8", "image_path": "res://assets/ui/player_avatars/avatar-8.png"}
   ]
 }

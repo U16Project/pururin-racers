@@ -135,6 +135,9 @@ func test_config_rules_are_checked() -> void:
 	var reversed := good.duplicate()
 	reversed["name_min_length"] = int(good["name_max_length"]) + 1
 	assert_gt(TrainerProfile.validate_config(reversed).size(), 0)
+	var missing_image: Dictionary = good.duplicate(true)
+	missing_image["avatars"][0]["image_path"] = "res://assets/ui/player_avatars/no-such-image.png"
+	assert_gt(TrainerProfile.validate_config(missing_image).size(), 0)
 
 
 func test_the_user_pururin_carries_the_user_name_and_cpu_pururins_their_own_trainer() -> void:

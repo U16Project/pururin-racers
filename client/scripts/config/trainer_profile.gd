@@ -8,10 +8,6 @@ const DEFAULT_SAVE_PATH := "user://trainer_profile.json"
 const DEFAULT_ICON_PATH := "user://trainer_icon.png"
 ## 画像の種類。none＝なし、avatar＝用意してある人の絵（id が絵のID）、file＝自分で選んだ画像ファイル。
 const ICON_KINDS := ["none", "avatar", "file"]
-## 用意してある人の絵の、髪型の種類。
-const HAIR_STYLES := ["short", "long", "spiky", "bob", "ponytail"]
-## 用意してある人の絵の、体つき（顔の形・まゆ・肩幅などを変える）。
-const BODIES := ["male", "female"]
 
 ## 保存する場所（テストでは、use_paths で別の場所に替える）。
 static var _save_path: String = DEFAULT_SAVE_PATH
@@ -48,7 +44,7 @@ static func validate_config(data: Variant) -> PackedStringArray:
 		errors.append("trainer_profile.name_min_length: name_max_length 以下にしてください")
 	if not data.get("default_introduction") is String or (errors.is_empty() and str(data["default_introduction"]).length() > int(data["introduction_max_length"])):
 		errors.append("trainer_profile.default_introduction: 決まりの長さに収まる紹介文が必要です")
-	# 用意してある人の絵（仮）。髪型と、髪・肌・服の色で描く。
+	# 用意してある人の絵。1枚ずつ画像ファイル。
 	var avatars: Variant = data.get("avatars")
 	if not avatars is Array or avatars.is_empty():
 		errors.append("trainer_profile.avatars: 人の絵が1つ以上必要です")
@@ -61,13 +57,8 @@ static func validate_config(data: Variant) -> PackedStringArray:
 				errors.append("%s.id: 空または重複です" % label)
 				continue
 			ids[avatar["id"]] = true
-			if str(avatar.get("body", "")) not in BODIES:
-				errors.append("%s.body: %s のどちらかが必要です" % [label, "・".join(BODIES)])
-			if str(avatar.get("hair_style", "")) not in HAIR_STYLES:
-				errors.append("%s.hair_style: %s のどれかが必要です" % [label, "・".join(HAIR_STYLES)])
-			for key: String in ["hair_color", "skin_color", "shirt_color"]:
-				if not avatar.get(key) is String or not Color.html_is_valid(avatar[key]):
-					errors.append("%s.%s: 色が必要です" % [label, key])
+			if not avatar.get("image_path") is String or not ResourceLoader.exists(str(avatar["image_path"])):
+				errors.append("%s.image_path: 画像ファイルがありません" % label)
 	if not data.get("default_name") is String or (errors.is_empty() and not _length_ok(data, str(data["default_name"]))):
 		errors.append("trainer_profile.default_name: 決まりの長さに収まる名前が必要です")
 	return errors
