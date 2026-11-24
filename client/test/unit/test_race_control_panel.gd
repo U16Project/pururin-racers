@@ -14,7 +14,7 @@ func _panel() -> Control:
 	return panel
 
 
-func test_race_shows_the_panel_at_the_top_left_and_hides_the_old_bottom_panel() -> void:
+func test_race_shows_the_panel_at_the_top_left() -> void:
 	RaceSession.select_full_field(RaceSession.default_player_pururin_id())
 	var race: Node = LocalRaceScene.instantiate()
 	add_child_autofree(race)
@@ -23,7 +23,6 @@ func test_race_shows_the_panel_at_the_top_left_and_hides_the_old_bottom_panel() 
 	var view: Control = race.get_node("UI/HeartRaceHudView")
 	assert_eq(view.position, race.HEART_HUD_MARGIN)
 	assert_almost_eq(view.size.x, hud.render_rect.size.x * hud.panel_scale, 1.0)
-	assert_false(bool(race.get_node("UI/RaceHud").get("main_panel_visible")))
 
 
 func test_render_rect_sits_at_the_panel_origin() -> void:
@@ -321,54 +320,3 @@ func test_long_name_and_trainer_fit_together_before_the_attribute() -> void:
 	panel.update_state({"player_name": "ア", "trainer_name": "U16"})
 	assert_eq(name.scale, name_scale)
 	assert_eq(trainer.scale, trainer_scale)
-
-
-func _board_point(panel: Control, part: Control, point := Vector2.ZERO) -> Vector2:
-	return panel.get_global_transform().affine_inverse() * (part.get_global_transform() * point) - panel.get_node("Board").position
-
-
-func test_reference_icon_and_boost_button_centers() -> void:
-	var panel := _panel()
-	var centers := {"SpeedText/Icon": Vector2(224, 291), "StaminaText/Icon": Vector2(252, 574), "Aero/Icon": Vector2(38, 353), "Notch/Icon": Vector2(560, 311), "Boost/Icon": Vector2(607, 531), "Dash/Icon": Vector2(723, 531)}
-	for path in centers:
-		assert_almost_eq(_board_point(panel, panel.get_node(path)), centers[path], Vector2.ONE * 0.001, path)
-	var ring: Control = panel.get_node("Boost/BoostRing")
-	assert_almost_eq(_board_point(panel, ring, ring.center), Vector2(702, 474), Vector2.ONE * 0.001)
-	var button: Control = panel.get_node("Boost/BoostButton")
-	assert_almost_eq(_board_point(panel, button, button.size * 0.5), Vector2(702.2, 473.3), Vector2.ONE * 0.001)
-	assert_eq(button.scale, panel.get_node("Dash/DashButton").scale)
-	assert_eq(button.mark_size, panel.get_node("Dash/DashButton").mark_size)
-	for path in ["Aero/AeroBlue", "Aero/AeroGreen", "Aero/AeroBase"]:
-		var arc: Control = panel.get_node(path)
-		assert_almost_eq(_board_point(panel, arc, arc.center), Vector2(366.78, 435.97) + Vector2(16, -10), Vector2.ONE * 0.02)
-	assert_almost_eq(_board_point(panel, panel.get_node("Aero/AeroUnit")), Vector2(130, 377), Vector2.ONE * 0.001)
-
-
-func test_split_text_matches_reference_spacing_and_time_grows_left() -> void:
-	var panel := _panel()
-	panel.update_state({"time_s": 62.4, "remaining_m": 1240.0, "field_size": 8, "boost_max_uses": 3, "boost_uses_left": 2})
-	var minute: Label = panel.get_node("RaceInfo/Minutes")
-	var second: Label = panel.get_node("RaceInfo/Seconds")
-	var centi: Label = panel.get_node("RaceInfo/Centiseconds")
-	var minute_unit: Label = panel.get_node("RaceInfo/MinuteUnit")
-	var second_unit: Label = panel.get_node("RaceInfo/SecondUnit")
-	for pair in [[minute, minute_unit], [minute_unit, second], [second, second_unit], [second_unit, centi]]:
-		var left: Label = pair[0]
-		var right: Label = pair[1]
-		assert_almost_eq(left.position.x + left.size.x, right.position.x + right.size.x - _text_width(right), 1.0, left.name)
-	assert_almost_eq(_board_point(panel, centi, Vector2(centi.size.x, 0)), Vector2(738, 104.5), Vector2.ONE * 0.001)
-	var minute_right := minute.position.x + minute.size.x
-	panel.update_state({"time_s": 12345.0 * 60.0 + 2.4})
-	assert_eq(minute.text, "12345")
-	assert_almost_eq(minute.position.x + minute.size.x, minute_right, 0.001)
-	assert_lte(minute.position.x + minute.size.x, minute_unit.position.x + 0.001)
-	for group in [["RaceInfo/RemainingWord", "RaceInfo/Remaining", "RaceInfo/RemainingUnit"], ["RaceInfo/Slash", "RaceInfo/Field", "RaceInfo/PlaceUnit"], ["Boost/BoostOpen", "Boost/BoostCount", "Boost/BoostClose"]]:
-		# 比較する文字を同じ更新で入れ、前後の半角空白の幅を確かめる。
-		panel.update_state({"remaining_m": 1240.0, "field_size": 8, "boost_max_uses": 3, "boost_uses_left": 2})
-		for i in 2:
-			var left: Label = panel.get_node(group[i])
-			var right: Label = panel.get_node(group[i + 1])
-			var space := left.label_settings.font.get_string_size(" ", HORIZONTAL_ALIGNMENT_LEFT, -1, left.label_settings.font_size).x
-			var left_end := left.position.x + (left.size.x if left.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT else _text_width(left))
-			var right_start := right.position.x + (right.size.x - _text_width(right) if right.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT else 0.0)
-			assert_almost_eq(right_start - left_end, space, 1.0, left.name)

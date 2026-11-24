@@ -707,10 +707,13 @@ func test_line_speed_penalty_grows_toward_the_edge_of_the_course_in_corners() ->
 	assert_eq(LocalRaceMath.line_speed_multiplier(edge, 0.0, reference_speed), 1.0)
 	# 外側の端・基準の速さ・操作性5で、設定の遅れ。
 	assert_almost_eq(LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed), 1.0 - outer_edge, 0.0001)
-	# 内側（距離倍率が小さい側）は、外側より軽い。
+	# 内側（距離倍率が小さい側）は、操作性に比例して速くなる。端までの半分では、端の4分の1。速さには左右されない。
+	var inner_per_stat := LocalRaceMath.Config.number("line_speed_bonus_inner_edge_per_handling_stat")
 	var inner := LocalRaceMath.line_speed_multiplier(-edge, curvature, reference_speed)
-	assert_almost_eq(inner, 1.0 - outer_edge * LocalRaceMath.Config.number("line_speed_penalty_inner_ratio"), 0.0001)
-	assert_gt(inner, LocalRaceMath.line_speed_multiplier(edge, curvature, reference_speed))
+	assert_almost_eq(inner, 1.0 + inner_per_stat * 5.0, 0.0001)
+	assert_almost_eq(LocalRaceMath.line_speed_multiplier(-edge, curvature, reference_speed, 11), 1.0 + inner_per_stat * 11.0, 0.0001)
+	assert_almost_eq(LocalRaceMath.line_speed_multiplier(-edge * 0.5, curvature, reference_speed) - 1.0, inner_per_stat * 5.0 * 0.25, 0.0001)
+	assert_almost_eq(LocalRaceMath.line_speed_multiplier(-edge, curvature, reference_speed * 1.2), inner, 0.0001)
 	# 中央から離れるほど遅い。端までの半分では、端の4分の1の遅れ。
 	assert_almost_eq(1.0 - LocalRaceMath.line_speed_multiplier(edge * 0.5, curvature, reference_speed), outer_edge * 0.25, 0.0001)
 	# 速いほど、遅れが大きい。操作性が高いほど、遅れが小さい。
@@ -885,6 +888,8 @@ func _detail_text(race: Node) -> String:
 func test_hud_standings_list_finishers_first_then_runners_by_progress() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
+	# スタート前は枠順で並ぶので、スタート後として調べる。
+	race.set("_race_started", true)
 	var runners: Array = race.call("get_runners_for_simulation")
 	for index in runners.size():
 		runners[index].set("_race_progress", 100.0 + index * 10.0)
@@ -905,7 +910,7 @@ func test_hud_standings_list_finishers_first_then_runners_by_progress() -> void:
 	race.free()
 
 
-func test_detail_text_sits_right_of_the_panel_inside_the_screen() -> void:
+func test_detail_text_sits_in_the_right_half_inside_the_screen() -> void:
 	var race := LocalRaceScene.instantiate()
 	add_child(race)
 	var left: Label = race.get_node("UI/HudLabel")
@@ -915,8 +920,8 @@ func test_detail_text_sits_right_of_the_panel_inside_the_screen() -> void:
 		float(ProjectSettings.get_setting("display/window/size/viewport_width")),
 		float(ProjectSettings.get_setting("display/window/size/viewport_height"))
 	)
-	var panel_right: float = RaceHud.panel_left(screen.x) + RaceHud.PANEL_WIDTH
-	assert_gte(left.anchor_left * screen.x + left.offset_left, panel_right)
+	# 左半分は、操作盤と順位表が使う。
+	assert_gte(left.anchor_left * screen.x + left.offset_left, screen.x * 0.5)
 	assert_gte(right.anchor_left * screen.x + right.offset_left, left.anchor_right * screen.x + left.offset_right)
 	assert_lte(right.anchor_right * screen.x + right.offset_right, screen.x)
 	race.free()
@@ -1093,11 +1098,13 @@ func test_local_race_uses_its_own_camera_with_adjustable_views() -> void:
 	var initial_position := camera.global_position
 	assert_almost_eq(initial_position.y, float(settings["height"]), 0.001)
 	assert_almost_eq(initial_position.z - target.global_position.z, float(settings["back"]), 0.001)
-	# 向きの微調整は、カメラの位置を動かさない。
+	# 向きの微調整は、走者からの距離を保ったまま、走者のまわりを回る。
+	var flat := func(point: Vector3) -> Vector2: return Vector2(point.x - target.global_position.x, point.z - target.global_position.z)
 	camera.set("_yaw_offset", PI * 0.5)
 	camera.call("_process", 0.0)
-	assert_almost_eq(camera.global_position.x, initial_position.x, 0.001)
-	assert_almost_eq(camera.global_position.z, initial_position.z, 0.001)
+	assert_almost_eq(flat.call(camera.global_position).length(), flat.call(initial_position).length(), 0.001)
+	assert_gt(camera.global_position.distance_to(initial_position), 0.1)
+	assert_almost_eq(camera.global_position.y, initial_position.y, 0.001)
 	# 微調整は、元に戻せる。
 	camera.set("_back_offset", 10.0)
 	camera.set("_lateral_offset", 8.0)
@@ -1742,6 +1749,71 @@ func test_push_contest_multiplies_the_contact_load() -> void:
 	assert_almost_eq(float(runner.call("get_contact_heart_load_bpm_per_s")), normal, 0.0001)
 	runner.free()
 
+
+func test_contact_slows_the_runner_like_its_stamina_load() -> void:
+	var per_contact := LocalRaceMath.Config.number("contact_slowdown_per_contact")
+	var reference := LocalRaceMath.CONTACT_RESISTANCE_REFERENCE_STAT
+	# 下がる割合は、人数・接触耐性・押し合いの倍率で、体力の減りと同じように変わる。
+	assert_eq(LocalRaceMath.contact_slowdown_ratio(0, reference), 0.0)
+	assert_almost_eq(LocalRaceMath.contact_slowdown_ratio(2, reference), 2.0 * per_contact, 0.00001)
+	assert_almost_eq(LocalRaceMath.contact_slowdown_ratio(1, 9), per_contact * LocalRaceMath.contact_resistance_multiplier(9), 0.00001)
+	assert_almost_eq(LocalRaceMath.contact_slowdown_ratio(1, reference, 3.0), 3.0 * per_contact, 0.00001)
+	# 抵抗として速さの計算に入る（速さの値そのものが下がる）。
+	var drag := LocalRaceMath.contact_drag_kmh_per_s(per_contact, 60.0)
+	assert_almost_eq(drag, per_contact * 60.0 * LocalRaceMath.Config.number("contact_slowdown_rate_per_s"), 0.00001)
+	var free_run := LocalRaceMath.advance_drive_speed_kmh(60.0, 6.0, 0.1)
+	var touching := LocalRaceMath.advance_drive_speed_kmh(60.0, 6.0, 0.1, 0.0, 0.0, 1.0, 1.0, 1.0, false, 1.0, drag)
+	assert_lt(touching, free_run)
+	# 走者は、触れているときだけ抵抗を受ける。
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.set("_effective_stats", {"contact_resistance": reference})
+	assert_eq(float(runner.call("get_contact_drag_kmh_per_s")), 0.0)
+	runner.call("apply_contact_count", 1)
+	assert_almost_eq(float(runner.call("get_contact_slowdown_ratio")), per_contact, 0.00001)
+	assert_gt(float(runner.call("get_contact_drag_kmh_per_s")), 0.0)
+	runner.free()
+
+
+func test_contact_impact_drops_speed_once_and_ignores_quick_retouches() -> void:
+	var impact_kmh := LocalRaceMath.Config.number("contact_impact_kmh_per_contact")
+	var duration := LocalRaceMath.Config.number("contact_impact_duration_s")
+	var cooldown := LocalRaceMath.Config.number("contact_impact_cooldown_s")
+	var runner := Node3D.new()
+	runner.set_script(RunnerScript)
+	add_child(runner)
+	runner.call("setup_for_race", null, 0, 75.0, true, "あなた")
+	runner.set("_effective_stats", {"contact_resistance": LocalRaceMath.CONTACT_RESISTANCE_REFERENCE_STAT})
+	var step := duration / 3.0
+	# 触れた瞬間：落とす速さを、決めた時間で落とし切る強さの抵抗が加わる。
+	runner.call("apply_contact_count", 1)
+	runner.call("_update_contact_impact", step)
+	assert_almost_eq(float(runner.get("_contact_impact_drag_kmh_per_s")), impact_kmh / duration, 0.001)
+	for _i in 3:
+		runner.call("_update_contact_impact", step)
+	assert_almost_eq(float(runner.get("_contact_impact_drag_kmh_per_s")), 0.0, 0.001)
+	# すぐ離れて触れ直しても、もう一度は落ちない。
+	runner.call("apply_contact_count", 0)
+	runner.call("_update_contact_impact", step)
+	runner.call("apply_contact_count", 1)
+	runner.call("_update_contact_impact", step)
+	assert_almost_eq(float(runner.get("_contact_impact_drag_kmh_per_s")), 0.0, 0.001)
+	# 押し合いに変わったら、強さが増えた分だけ落ちる。
+	runner.call("apply_push_result", float(runner.call("get_offset")), true, false, 0)
+	runner.call("_update_contact_impact", step)
+	var push_increase := LocalRaceMath.Config.number("push_load_multiplier") - 1.0
+	assert_almost_eq(float(runner.get("_contact_impact_drag_kmh_per_s")), impact_kmh * push_increase / duration, 0.001)
+	# 離れて、しばらく（間の時間より長く）たってから触れると、また落ちる。
+	runner.call("apply_push_result", float(runner.call("get_offset")), false, false, 0)
+	runner.call("apply_contact_count", 0)
+	runner.call("_update_contact_impact", duration * 2.0)
+	runner.call("_update_contact_impact", cooldown + 0.01)
+	runner.call("apply_contact_count", 1)
+	runner.call("_update_contact_impact", step)
+	assert_almost_eq(float(runner.get("_contact_impact_drag_kmh_per_s")), impact_kmh / duration, 0.001)
+	runner.free()
 
 ## ノッチ6・空力5・ひとりで、推進力と抵抗が釣り合う速さ（加速度が0になる速さ）を、二分探しで求める。
 func _solo_notch6_speed(top_speed: int) -> float:

@@ -269,7 +269,8 @@ static func drive_diagnostics_kmh_per_s(
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
 	braking: bool = false,
-	drive_boost_multiplier: float = 1.0
+	drive_boost_multiplier: float = 1.0,
+	contact_drag_kmh_per_s: float = 0.0
 ) -> Dictionary:
 	var level := clamp_drive_level(drive_level)
 	var drive_contribution := 0.0
@@ -287,7 +288,8 @@ static func drive_diagnostics_kmh_per_s(
 	var safe_air_multiplier := maxf(air_resistance_multiplier, 0.0)
 	var air_resistance := AIR_RESISTANCE_QUADRATIC_COEFFICIENT * safe_speed * safe_speed * safe_air_multiplier
 	var draft_reduction := air_resistance * clampf(draft_factor, 0.0, 1.0)
-	var net_acceleration := drive_contribution - rolling_resistance - air_resistance + draft_reduction
+	var contact_drag := maxf(contact_drag_kmh_per_s, 0.0)
+	var net_acceleration := drive_contribution - rolling_resistance - air_resistance + draft_reduction - contact_drag
 	# 加速適性は正ノッチで速度が増える場合だけに効く。釣り合い・減速は変えない。
 	var response := maxf(acceleration_response_multiplier, 0.0) if level > 0.0 and not braking and net_acceleration > 0.0 else 1.0
 	return {
@@ -296,6 +298,7 @@ static func drive_diagnostics_kmh_per_s(
 		"air_resistance_multiplier": safe_air_multiplier,
 		"air_resistance_kmh_per_s": air_resistance,
 		"draft_air_reduction_kmh_per_s": draft_reduction,
+		"contact_drag_kmh_per_s": contact_drag,
 		"net_force_acceleration_kmh_per_s": net_acceleration,
 		"acceleration_response_multiplier": response,
 		"acceleration_response_bonus_kmh_per_s": net_acceleration * (response - 1.0),
@@ -488,19 +491,33 @@ static func lateral_move_stamina_load_l(distance_m: float, handling_stat: int = 
 	return maxf(distance_m, 0.0) * Config.number("lateral_move_stamina_load_l_per_m") * lateral_move_load_multiplier(handling_stat)
 
 
-## カーブで、コースの中央から離れるほど少し遅くなる倍率（1.0以下）。直線では1.0。
-## 遅れ = 外側の端の遅れ × (中央からの距離 ÷ 端までの距離)の2乗 × (内側なら内側の割合) × (速さ ÷ 基準の速さ) × 操作性の倍率。
+## カーブで、中央から離れたときの速さの倍率。直線では1.0。
+## 外側：遅れ = 外側の端の遅れ × (中央からの距離 ÷ 端までの距離)の2乗 × (速さ ÷ 基準の速さ) × 操作性の倍率。
+## 内側：速くなる = 操作性 × 1ポイントあたりの得 × (中央からの距離 ÷ 端までの距離)の2乗。
 ## 内側・外側は、距離倍率（1 + 横位置 × 曲率）が1より小さい側が内側。
 static func line_speed_multiplier(offset: float, curvature: float, speed_kmh: float, handling_stat: int = 5) -> float:
 	if absf(curvature) < 0.00001:
 		return 1.0
 	var ratio := clampf(absf(offset) / TrackMath.MAX_ABS_OFFSET_M, 0.0, 1.0)
-	var side := Config.number("line_speed_penalty_inner_ratio") if offset * curvature < 0.0 else 1.0
-	var speed_factor := maxf(speed_kmh, 0.0) / maxf(Config.number("line_speed_penalty_reference_speed_kmh"), 0.001)
 	var stat := clampi(handling_stat, 1, 15)
+	if offset * curvature < 0.0:
+		return 1.0 + Config.number("line_speed_bonus_inner_edge_per_handling_stat") * stat * ratio * ratio
+	var speed_factor := maxf(speed_kmh, 0.0) / maxf(Config.number("line_speed_penalty_reference_speed_kmh"), 0.001)
 	var handling := maxf(0.2, 1.0 - Config.number("line_speed_penalty_multiplier_per_stat") * (stat - HANDLING_STEER_REFERENCE_STAT))
-	var penalty := Config.number("line_speed_penalty_outer_edge") * ratio * ratio * side * speed_factor * handling
+	var penalty := Config.number("line_speed_penalty_outer_edge") * ratio * ratio * speed_factor * handling
 	return clampf(1.0 - penalty, 0.5, 1.0)
+
+
+## ダッシュ・ブーストの効く長さの倍率。操作性が基準（3）で1.0倍、1ポイントごとに増える。
+static func drive_action_duration_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.1, 1.0 + Config.number("drive_action_duration_per_handling_stat") * (stat - int(Config.number("drive_action_handling_reference_stat"))))
+
+
+## ダッシュ・ブーストの心拍・体力の負担の倍率。操作性が基準（3）で1.0倍、1ポイントごとに減る。
+static func drive_action_load_multiplier(handling_stat: int = 5) -> float:
+	var stat := clampi(handling_stat, 1, 15)
+	return maxf(0.1, 1.0 - Config.number("drive_action_load_per_handling_stat") * (stat - int(Config.number("drive_action_handling_reference_stat"))))
 
 
 ## ダッシュで増える推進力の割合。加速と操作性（少し）で変わる。
@@ -517,8 +534,9 @@ static func boost_points(points_at_press: float, time_left_s: float) -> float:
 
 
 ## 重ねて押したときに受け継ぐポイント。押した直後のポイントのうち、残り時間の割合ぶん（早く重ねるほど多い）。
-static func boost_carry_points(points_at_press: float, time_left_s: float) -> float:
-	return maxf(points_at_press, 0.0) * clampf(time_left_s / maxf(Config.number("boost_duration_s"), 0.001), 0.0, 1.0)
+## duration_s は、その走者のブーストの長さ（操作性で変わる）。
+static func boost_carry_points(points_at_press: float, time_left_s: float, duration_s: float) -> float:
+	return maxf(points_at_press, 0.0) * clampf(time_left_s / maxf(duration_s, 0.001), 0.0, 1.0)
 
 
 ## ブーストを押した直後のポイント。残っているポイントを、割り増しして受け継ぎ、1回ぶんを足す。
@@ -553,6 +571,27 @@ static func contact_heart_load_bpm_per_s(contact_count: int, contact_resistance_
 
 static func contact_stamina_load_l_per_s(contact_count: int, contact_resistance_stat: int = 5) -> float:
 	return float(clampi(contact_count, 0, CONTACT_COUNT_MAX)) * CONTACT_STAMINA_LOAD_L_PER_S * contact_resistance_multiplier(contact_resistance_stat)
+
+
+## 接触の強さ。体力の減りと同じ考え方（人数 × 接触耐性の倍率 × 押し合いの倍率）。触れているだけの1人・耐性が基準で1.0。
+static func contact_strength(contact_count: int, contact_resistance_stat: int = 5, push_multiplier: float = 1.0) -> float:
+	return float(clampi(contact_count, 0, CONTACT_COUNT_MAX)) * contact_resistance_multiplier(contact_resistance_stat) * maxf(push_multiplier, 0.0)
+
+
+## 接触で、落ち着く速さが下がる割合（接触の強さ × 1人あたりの割合）。
+static func contact_slowdown_ratio(contact_count: int, contact_resistance_stat: int = 5, push_multiplier: float = 1.0) -> float:
+	return contact_strength(contact_count, contact_resistance_stat, push_multiplier) * Config.number("contact_slowdown_per_contact")
+
+
+## ぶつかった瞬間に落とす速さ（km/h）。接触の強さが増えた分 × 1人あたりの落ち。
+static func contact_impact_kmh(strength_increase: float) -> float:
+	return maxf(strength_increase, 0.0) * Config.number("contact_impact_kmh_per_contact")
+
+
+## 接触中の抵抗（km/h毎秒）。速さの値そのものを下げ、離れたあとは、ふだんの加速で戻る。
+## 抵抗 = 下がる割合 × 今の速さ × 強さ。強さは、レースの速さで、落ち着く速さがほぼ「下がる割合」ぶん下がるように合わせた値。
+static func contact_drag_kmh_per_s(slowdown_ratio: float, speed_kmh: float) -> float:
+	return maxf(slowdown_ratio, 0.0) * maxf(speed_kmh, 0.0) * Config.number("contact_slowdown_rate_per_s")
 
 
 ## 操作性は左右のライン移動の速さだけを連続的に補正する。プレイヤーとCPUに共通。
@@ -781,7 +820,8 @@ static func advance_drive_speed_kmh(
 	air_resistance_multiplier: float = 1.0,
 	acceleration_response_multiplier: float = 1.0,
 	braking: bool = false,
-	drive_boost_multiplier: float = 1.0
+	drive_boost_multiplier: float = 1.0,
+	contact_drag_kmh_per_s: float = 0.0
 ) -> float:
 	if delta <= 0.0:
 		return maxf(current_kmh, MIN_SPEED_KMH)
@@ -795,7 +835,8 @@ static func advance_drive_speed_kmh(
 		air_resistance_multiplier,
 		acceleration_response_multiplier,
 		braking,
-		drive_boost_multiplier
+		drive_boost_multiplier,
+		contact_drag_kmh_per_s
 	)
 	var next_speed := current_kmh + float(diagnostics["total_acceleration_kmh_per_s"]) * delta
 	return maxf(next_speed, MIN_SPEED_KMH)

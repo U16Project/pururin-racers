@@ -471,6 +471,9 @@ func _focus_window(window: Control) -> void:
 
 
 func _on_focus_changed(control: Control) -> void:
+	# 画面から外れている間（消える途中など）は、ほかの画面のフォーカスの動きに反応しない。
+	if not is_inside_tree():
+		return
 	_refresh_guide_accept()
 	var window := _top_window()
 	if window != null and (control == null or not window.is_ancestor_of(control)):

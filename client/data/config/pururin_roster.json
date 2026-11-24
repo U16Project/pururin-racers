@@ -26,7 +26,7 @@
       "control_kind": "cpu",
       "attribute": "water",
       "running_style": "pace",
-      "allocation": {"top_speed": 5, "acceleration": 4, "stamina": 6, "cardio": 6, "aero": 4, "pack": 6, "contact_resistance": 4, "handling": 5}
+      "allocation": {"top_speed": 4, "acceleration": 5, "stamina": 5, "cardio": 9, "aero": 3, "pack": 6, "contact_resistance": 4, "handling": 4}
     },
     {
       "id": "cpu-3",
@@ -73,7 +73,7 @@
       "running_style": "escape",
       "allocation": {"top_speed": 5, "acceleration": 4, "stamina": 7, "cardio": 5, "aero": 6, "pack": 4, "contact_resistance": 6, "handling": 3}
     }
-    ,{"id":"cpu-8","display_name":"ルリ","trainer_id":"kaede","control_kind":"cpu","attribute":"water","running_style":"stalk","allocation":{"top_speed":6,"acceleration":4,"stamina":6,"cardio":5,"aero":5,"pack":5,"contact_resistance":3,"handling":6}}
+    ,{"id":"cpu-8","display_name":"ルリ","trainer_id":"kaede","control_kind":"cpu","attribute":"water","running_style":"closer","allocation":{"top_speed":7,"acceleration":3,"stamina":6,"cardio":4,"aero":4,"pack":5,"contact_resistance":2,"handling":9}}
     ,{"id":"cpu-9","display_name":"ワカバ","trainer_id":"ibuki","control_kind":"cpu","attribute":"wind","running_style":"closer","allocation":{"top_speed":6,"acceleration":7,"stamina":4,"cardio":3,"aero":8,"pack":3,"contact_resistance":3,"handling":6}},
     {
       "id": "cpu-10",

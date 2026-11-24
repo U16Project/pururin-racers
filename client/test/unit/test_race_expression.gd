@@ -129,6 +129,8 @@ func test_every_action_the_race_uses_is_in_the_list_of_action_names() -> void:
 		seen[name] = true
 	# 一覧にあるアクションは、レースで出るか、レース選択画面の絵で使う。
 	seen[Portrait.SHOWCASE_ACTION] = true
+	# レース前の紹介で、はって進む子が使う（pre_race_show.gd）。
+	seen["walk"] = true
 	for name: String in names:
 		assert_true(seen.has(name), "%s が、どこかで出る" % name)
 	# 1回だけの動きの名前も、どの体の動かし方にも入っている。

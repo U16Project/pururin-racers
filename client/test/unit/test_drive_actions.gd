@@ -59,8 +59,8 @@ func test_boost_points_hold_while_active_and_end_at_zero() -> void:
 	assert_almost_eq(LocalRaceMath.boost_points(per_use, duration * 0.5), per_use, 0.0001)
 	assert_eq(LocalRaceMath.boost_points(per_use, 0.0), 0.0)
 	# 重ねたときに受け継ぐのは、残り時間の割合ぶん。
-	assert_almost_eq(LocalRaceMath.boost_carry_points(per_use, duration * 0.5), per_use * 0.5, 0.0001)
-	assert_eq(LocalRaceMath.boost_carry_points(per_use, 0.0), 0.0)
+	assert_almost_eq(LocalRaceMath.boost_carry_points(per_use, duration * 0.5, duration), per_use * 0.5, 0.0001)
+	assert_eq(LocalRaceMath.boost_carry_points(per_use, 0.0, duration), 0.0)
 	assert_almost_eq(LocalRaceMath.boost_thrust_bonus(per_use, 1.0), per_use * LocalRaceMath.Config.number("boost_thrust_per_point"), 0.0001)
 
 
@@ -86,7 +86,7 @@ func test_dash_refreshes_but_does_not_stack_and_ends_after_its_duration() -> voi
 	runner.set("_dash_time_left", 0.5)
 	assert_true(runner.call("trigger_dash"))
 	assert_almost_eq(float(runner.call("get_drive_boost_multiplier")), once, 0.0001)
-	assert_almost_eq(float(runner.get("_dash_time_left")), LocalRaceMath.Config.number("dash_duration_s"), 0.0001)
+	assert_almost_eq(float(runner.get("_dash_time_left")), LocalRaceMath.Config.number("dash_duration_s") * LocalRaceMath.drive_action_duration_multiplier(5), 0.0001)
 	runner.set("_dash_time_left", 0.0)
 	assert_false(runner.call("is_dash_active"))
 	assert_almost_eq(float(runner.call("get_drive_boost_multiplier")), 1.0, 0.0001)
@@ -107,7 +107,7 @@ func test_dash_and_boost_need_no_brake() -> void:
 func test_boost_stacks_on_the_remaining_points_and_is_limited_in_uses() -> void:
 	var runner := _runner()
 	var per_use := LocalRaceMath.Config.number("boost_points_per_use")
-	var duration := LocalRaceMath.Config.number("boost_duration_s")
+	var duration := LocalRaceMath.Config.number("boost_duration_s") * LocalRaceMath.drive_action_duration_multiplier(5)
 	var max_uses := int(LocalRaceMath.Config.number("boost_max_uses"))
 	assert_true(runner.call("trigger_boost"))
 	assert_almost_eq(float(runner.call("get_boost_points")), per_use, 0.0001)
@@ -131,8 +131,9 @@ func test_boost_costs_heart_rate_and_stamina_when_used() -> void:
 	var heart_before := float(runner.call("get_heart_rate_bpm"))
 	var stamina_before := float(runner.call("get_stamina"))
 	runner.call("trigger_boost")
-	assert_almost_eq(float(runner.call("get_heart_rate_bpm")) - heart_before, LocalRaceMath.Config.number("boost_heart_cost_bpm"), 0.0001)
-	assert_almost_eq(stamina_before - float(runner.call("get_stamina")), LocalRaceMath.Config.number("boost_stamina_cost_l"), 0.0001)
+	var load := LocalRaceMath.drive_action_load_multiplier(5)
+	assert_almost_eq(float(runner.call("get_heart_rate_bpm")) - heart_before, LocalRaceMath.Config.number("boost_heart_cost_bpm") * load, 0.0001)
+	assert_almost_eq(stamina_before - float(runner.call("get_stamina")), LocalRaceMath.Config.number("boost_stamina_cost_l") * load, 0.0001)
 
 
 func test_active_dash_and_boost_raise_stamina_use_and_heart_rise() -> void:
@@ -151,7 +152,7 @@ func test_active_dash_and_boost_raise_stamina_use_and_heart_rise() -> void:
 		results[mode] = {"heart": float(runner.call("get_heart_rate_bpm")) - heart_before, "stamina": stamina_before - float(runner.call("get_stamina"))}
 	# 体力の消費は、倍率ぶん増える（心拍が上がるぶん、少し上乗せされる）。どちらが大きいかは、設定しだい。
 	for mode: String in ["dash", "boost"]:
-		var expected := float(results["none"]["stamina"]) * LocalRaceMath.Config.number("%s_stamina_multiplier" % mode)
+		var expected := float(results["none"]["stamina"]) * LocalRaceMath.Config.number("%s_stamina_multiplier" % mode) * LocalRaceMath.drive_action_load_multiplier(5)
 		assert_gte(float(results[mode]["stamina"]), expected * 0.99, mode)
 		assert_lte(float(results[mode]["stamina"]), expected * 1.15, mode)
 		assert_gt(float(results[mode]["heart"]), float(results["none"]["heart"]), mode)
@@ -191,3 +192,15 @@ func test_only_a_fresh_press_counts_for_dash_and_boost_keys() -> void:
 	assert_true(RaceControllerInput.is_dash_pressed(pad))
 	pad.button_index = JOY_BUTTON_X
 	assert_true(RaceControllerInput.is_boost_pressed(pad))
+
+
+func test_handling_lengthens_dash_and_boost_and_lightens_their_load() -> void:
+	var reference := int(LocalRaceMath.Config.number("drive_action_handling_reference_stat"))
+	var duration_per := LocalRaceMath.Config.number("drive_action_duration_per_handling_stat")
+	var load_per := LocalRaceMath.Config.number("drive_action_load_per_handling_stat")
+	# 基準の操作性では、今までどおり1.0倍。
+	assert_almost_eq(LocalRaceMath.drive_action_duration_multiplier(reference), 1.0, 0.0001)
+	assert_almost_eq(LocalRaceMath.drive_action_load_multiplier(reference), 1.0, 0.0001)
+	# 5ポイント上では、長さが増え、負担が減る。
+	assert_almost_eq(LocalRaceMath.drive_action_duration_multiplier(reference + 5), 1.0 + duration_per * 5.0, 0.0001)
+	assert_almost_eq(LocalRaceMath.drive_action_load_multiplier(reference + 5), 1.0 - load_per * 5.0, 0.0001)

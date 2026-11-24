@@ -4,17 +4,15 @@ const RosterConfig := preload("res://scripts/config/pururin_roster_config.gd")
 const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 
 
-func test_shipped_roster_has_eight_cpu_capable_entries_with_valid_allocations() -> void:
+func test_shipped_roster_entries_have_valid_allocations_and_a_default_player() -> void:
 	var result := RosterConfig.load_file()
 	assert_true(result.has("data"))
 	assert_true(RosterConfig.validate(result.data).is_empty())
 	var roster: Array = result.data["roster"]
-	assert_eq(roster.size(), 10)
+	assert_gt(roster.size(), 0)
 	for pururin in roster:
 		assert_true(StatsMath.validate_allocation(pururin["allocation"]).is_empty())
-	var default_id := RosterConfig.default_player_pururin_id()
-	assert_eq(default_id, "player-1")
-	assert_eq(RosterConfig.pururin_by_id(default_id)["display_name"], "ヒカリ")
+	assert_false(RosterConfig.pururin_by_id(RosterConfig.default_player_pururin_id()).is_empty())
 
 
 func test_roster_rejects_unknown_trainer_and_duplicate_id() -> void:

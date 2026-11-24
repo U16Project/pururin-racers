@@ -79,6 +79,13 @@ var _rear_assist_p: float = 0.0
 var _contact_count: int = 0
 ## 押し合いの勝負が起きた走者か。負荷が大きくなる。
 var _in_push_contest: bool = false
+## ぶつかった瞬間の落ち。覚えている接触の強さ（弱まっても、しばらくは前の強さを覚えて、触れ直しで何度も落ちないようにする）、
+## 弱まってから忘れるまでの残り時間、これから落とす速さ（km/h）と、その落とし方（km/h毎秒）、このtickの抵抗。
+var _contact_strength_memory: float = 0.0
+var _contact_memory_time_left: float = 0.0
+var _contact_impact_left_kmh: float = 0.0
+var _contact_impact_rate_kmh_per_s: float = 0.0
+var _contact_impact_drag_kmh_per_s: float = 0.0
 ## このtickに横へ動こうとした向き（-1／0／+1）と、動く前の横位置。
 var _offset_before_move: float = 0.0
 var _rear_source_ids: Array = []
@@ -299,7 +306,8 @@ func get_drive_diagnostics() -> Dictionary:
 		_aero_air_resistance_multiplier(),
 		get_acceleration_response_multiplier(),
 		_braking,
-		get_drive_boost_multiplier()
+		get_drive_boost_multiplier(),
+		get_contact_drag_kmh_per_s()
 	)
 
 
@@ -488,6 +496,42 @@ func get_contact_stamina_load_l_per_s() -> float:
 	return LocalRaceMath.contact_stamina_load_l_per_s(int(load[0]), int(load[2])) * float(load[1])
 
 
+## 接触で、落ち着く速さが下がる割合（体力の減りと同じ人数・倍率）。
+func get_contact_slowdown_ratio() -> float:
+	var load := _load_count_and_multiplier()
+	return LocalRaceMath.contact_slowdown_ratio(int(load[0]), int(load[2]), float(load[1]))
+
+
+## 接触中の抵抗（km/h毎秒）。触れている間の抵抗と、ぶつかった瞬間の強い抵抗の合計。
+func get_contact_drag_kmh_per_s() -> float:
+	return LocalRaceMath.contact_drag_kmh_per_s(get_contact_slowdown_ratio(), _current_speed_kmh) + _contact_impact_drag_kmh_per_s
+
+
+func _contact_strength() -> float:
+	var load := _load_count_and_multiplier()
+	return LocalRaceMath.contact_strength(int(load[0]), int(load[2]), float(load[1]))
+
+
+## ぶつかった瞬間の落ち。接触の強さが、覚えている強さより増えたら、増えた分だけ短い時間で強い抵抗をかける。
+## 弱まっても、しばらくは前の強さを覚えておき、触れたり離れたりを細かく繰り返しても、何度も落ちないようにする。
+func _update_contact_impact(delta: float) -> void:
+	var strength := _contact_strength()
+	if strength > _contact_strength_memory + 0.0001:
+		var impact := LocalRaceMath.contact_impact_kmh(strength - _contact_strength_memory) + _contact_impact_left_kmh
+		_contact_impact_left_kmh = impact
+		_contact_impact_rate_kmh_per_s = impact / maxf(LocalRaceMath.Config.number("contact_impact_duration_s"), 0.001)
+	if strength >= _contact_strength_memory - 0.0001:
+		_contact_strength_memory = maxf(_contact_strength_memory, strength)
+		_contact_memory_time_left = LocalRaceMath.Config.number("contact_impact_cooldown_s")
+	else:
+		_contact_memory_time_left -= delta
+		if _contact_memory_time_left <= 0.0:
+			_contact_strength_memory = strength
+	var applied := minf(_contact_impact_left_kmh, _contact_impact_rate_kmh_per_s * delta)
+	_contact_impact_left_kmh -= applied
+	_contact_impact_drag_kmh_per_s = applied / maxf(delta, 0.0001)
+
+
 func get_rear_assist_air_factor() -> float:
 	return LocalRaceMath.rear_assist_air_factor(_rear_assist_p, int(_effective_stats.get("aero", 5)))
 
@@ -515,8 +559,8 @@ func apply_online_state(state: Dictionary) -> void:
 	_braking = bool(state["braking"])
 	_heart_rate_bpm = float(state["heart"])
 	_stamina = float(state["stamina_ratio"]) * _stamina_capacity_l
-	_dash_time_left = float(state["dash_ratio"]) * LocalRaceMath.Config.number("dash_duration_s")
-	_boost_time_left = float(state["boost_ratio"]) * LocalRaceMath.Config.number("boost_duration_s")
+	_dash_time_left = float(state["dash_ratio"]) * get_dash_duration_s()
+	_boost_time_left = float(state["boost_ratio"]) * get_boost_duration_s()
 	_boost_uses = int(LocalRaceMath.Config.number("boost_max_uses")) - int(state["boost_uses_left"])
 	_contact_count = int(state["contacts"])
 	_in_push_contest = bool(state["pushing"])
@@ -610,7 +654,7 @@ func is_stamina_exhausted() -> bool:
 func trigger_dash() -> bool:
 	if not _can_use_drive_action() or is_stamina_exhausted():
 		return false
-	_dash_time_left = LocalRaceMath.Config.number("dash_duration_s")
+	_dash_time_left = get_dash_duration_s()
 	return true
 
 
@@ -619,15 +663,15 @@ func trigger_boost() -> bool:
 	if not _can_use_drive_action() or get_boost_uses_left() <= 0:
 		return false
 	# 残っているポイントは、割り増しして受け継ぐ（早めに重ねるほど有利）。
-	_boost_points_at_press = LocalRaceMath.boost_points_after_press(LocalRaceMath.boost_carry_points(_boost_points_at_press, _boost_time_left))
-	_boost_time_left = LocalRaceMath.Config.number("boost_duration_s")
+	_boost_points_at_press = LocalRaceMath.boost_points_after_press(LocalRaceMath.boost_carry_points(_boost_points_at_press, _boost_time_left, get_boost_duration_s()))
+	_boost_time_left = get_boost_duration_s()
 	_boost_uses += 1
 	_heart_rate_bpm = minf(
-		_heart_rate_bpm + LocalRaceMath.Config.number("boost_heart_cost_bpm"),
+		_heart_rate_bpm + LocalRaceMath.Config.number("boost_heart_cost_bpm") * _drive_action_load_multiplier(),
 		LocalRaceMath.Config.number("heart_rate_overheat_max_bpm")
 	)
 	_stamina = maxf(
-		_stamina - LocalRaceMath.Config.number("boost_stamina_cost_l"),
+		_stamina - LocalRaceMath.Config.number("boost_stamina_cost_l") * _drive_action_load_multiplier(),
 		-LocalRaceMath.stamina_debt_limit_l(_stamina_capacity_l)
 	)
 	return true
@@ -638,7 +682,26 @@ func is_dash_active() -> bool:
 
 
 func get_dash_time_ratio() -> float:
-	return clampf(_dash_time_left / maxf(LocalRaceMath.Config.number("dash_duration_s"), 0.001), 0.0, 1.0)
+	return clampf(_dash_time_left / maxf(get_dash_duration_s(), 0.001), 0.0, 1.0)
+
+
+## この走者のダッシュの長さ（秒）。操作性で変わる。
+func get_dash_duration_s() -> float:
+	return LocalRaceMath.Config.number("dash_duration_s") * LocalRaceMath.drive_action_duration_multiplier(_handling_stat())
+
+
+## この走者のブーストの長さ（秒）。操作性で変わる。
+func get_boost_duration_s() -> float:
+	return LocalRaceMath.Config.number("boost_duration_s") * LocalRaceMath.drive_action_duration_multiplier(_handling_stat())
+
+
+func _handling_stat() -> int:
+	return int(_effective_stats.get("handling", 5))
+
+
+## ダッシュ・ブーストの心拍・体力の負担に掛ける倍率。操作性で変わる。
+func _drive_action_load_multiplier() -> float:
+	return LocalRaceMath.drive_action_load_multiplier(_handling_stat())
 
 
 func is_boost_active() -> bool:
@@ -650,7 +713,7 @@ func get_boost_points() -> float:
 
 
 func get_boost_time_ratio() -> float:
-	return clampf(_boost_time_left / maxf(LocalRaceMath.Config.number("boost_duration_s"), 0.001), 0.0, 1.0)
+	return clampf(_boost_time_left / maxf(get_boost_duration_s(), 0.001), 0.0, 1.0)
 
 
 func get_boost_uses_left() -> int:
@@ -671,18 +734,18 @@ func get_drive_boost_multiplier() -> float:
 func _drive_action_heart_multiplier() -> float:
 	var multiplier := 1.0
 	if is_dash_active():
-		multiplier *= LocalRaceMath.Config.number("dash_heart_rise_multiplier")
+		multiplier *= LocalRaceMath.Config.number("dash_heart_rise_multiplier") * _drive_action_load_multiplier()
 	if is_boost_active():
-		multiplier *= LocalRaceMath.Config.number("boost_heart_rise_multiplier")
+		multiplier *= LocalRaceMath.Config.number("boost_heart_rise_multiplier") * _drive_action_load_multiplier()
 	return multiplier
 
 
 func _drive_action_stamina_multiplier() -> float:
 	var multiplier := 1.0
 	if is_dash_active():
-		multiplier *= LocalRaceMath.Config.number("dash_stamina_multiplier")
+		multiplier *= LocalRaceMath.Config.number("dash_stamina_multiplier") * _drive_action_load_multiplier()
 	if is_boost_active():
-		multiplier *= LocalRaceMath.Config.number("boost_stamina_multiplier")
+		multiplier *= LocalRaceMath.Config.number("boost_stamina_multiplier") * _drive_action_load_multiplier()
 	return multiplier
 
 
@@ -903,6 +966,7 @@ func _process(delta: float) -> void:
 	var path_len := _path.curve.get_baked_length()
 	if player_controlled:
 		_update_drive_level_input(delta)
+		_update_contact_impact(delta)
 		_current_speed_kmh = LocalRaceMath.advance_drive_speed_kmh(
 			_current_speed_kmh,
 			_active_drive_level(),
@@ -913,13 +977,14 @@ func _process(delta: float) -> void:
 			_aero_air_resistance_multiplier(),
 			get_acceleration_response_multiplier(),
 			_braking,
-			get_drive_boost_multiplier()
+			get_drive_boost_multiplier(),
+			get_contact_drag_kmh_per_s()
 		)
 		_update_condition(delta)
 		_dash_time_left = maxf(_dash_time_left - delta, 0.0)
 		_boost_time_left = maxf(_boost_time_left - delta, 0.0)
 		_update_drive_diagnostic_log(delta)
-	# カーブで、コースの中央から離れるほど少し遅くなる（操作性が高いほど小さい）。
+	# カーブで、外側は遅くなり（操作性が高いほど小さい）、内側は速くなる（操作性が高いほど大きい）。
 	var line_multiplier := LocalRaceMath.line_speed_multiplier(
 		_offset, curvature, _current_speed_kmh, int(_effective_stats.get("handling", 5))
 	)
@@ -964,6 +1029,11 @@ func _clear_draft_details() -> void:
 	_rear_source_ids = []
 	_contact_count = 0
 	_in_push_contest = false
+	_contact_strength_memory = 0.0
+	_contact_memory_time_left = 0.0
+	_contact_impact_left_kmh = 0.0
+	_contact_impact_rate_kmh_per_s = 0.0
+	_contact_impact_drag_kmh_per_s = 0.0
 
 
 func _update_inputs(delta: float) -> void:

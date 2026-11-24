@@ -261,8 +261,6 @@ func _ready() -> void:
 	else:
 		$UI.add_child(_race_hud)
 		$UI.move_child(_race_hud, 0)
-	# 下の操作盤は、左上の操作盤（場面 race_control_panel.tscn）に替える（前の操作盤は、消しているだけで残してある）。
-	_race_hud.set("main_panel_visible", false)
 	_heart_hud_viewport = SubViewport.new()
 	_heart_hud_viewport.name = "HeartRaceHudViewport"
 	_heart_hud_viewport.transparent_bg = true
@@ -1856,16 +1854,27 @@ func _update_detail_text() -> void:
 	_hud_label_right.text = "\n".join(lines.slice(left_count))
 
 
-## 詳細表示（診断数値・操作ガイド）の配置。診断は、操作盤の右に2列（左は順位表と操作盤が使う）。ガイドは右上に縦並び。
+## 詳細表示（F3）の診断の、置き場所。画面の下寄り、まん中より右に2列（左は、操作盤と順位表が使う）。
+const DETAIL_BOTTOM_MARGIN := 40.0
+const DETAIL_HEIGHT := 248.0
+const DETAIL_CENTER_OFFSET := 232.0
+const DETAIL_MIN_LEFT := 498.0
+
+
+## 診断の1列目の左はし。
+static func detail_left(screen_width: float) -> float:
+	return maxf(screen_width * 0.5 + DETAIL_CENTER_OFFSET, DETAIL_MIN_LEFT)
+
+
+## 詳細表示（診断数値・操作ガイド）の配置。診断は、画面のまん中より右に2列。ガイドは右上に縦並び。
 func _layout_overlay_labels() -> void:
 	var outline := Color(0.03, 0.05, 0.1, 0.9)
-	var panel_top := -(RaceHud.PANEL_BOTTOM_MARGIN + RaceHud.PANEL_HEIGHT)
 	var column_width := 320.0
 	for label: Label in [_hud_label, _hud_label_right]:
 		label.anchor_top = 1.0
 		label.anchor_bottom = 1.0
-		label.offset_top = panel_top
-		label.offset_bottom = -RaceHud.PANEL_BOTTOM_MARGIN
+		label.offset_top = -(DETAIL_BOTTOM_MARGIN + DETAIL_HEIGHT)
+		label.offset_bottom = -DETAIL_BOTTOM_MARGIN
 		label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		label.clip_text = false
 		label.add_theme_font_size_override("font_size", 13)
@@ -1874,7 +1883,7 @@ func _layout_overlay_labels() -> void:
 		label.add_theme_color_override("font_outline_color", outline)
 		label.add_theme_constant_override("outline_size", 5)
 	var screen_width := get_viewport().get_visible_rect().size.x
-	var first_left := RaceHud.panel_left(screen_width) + RaceHud.PANEL_WIDTH + 12.0
+	var first_left := detail_left(screen_width)
 	# 狭い画面では、2列が画面の右端からはみ出さないよう、列の幅を縮める。
 	column_width = minf(column_width, (screen_width - first_left - 16.0) * 0.5)
 	_hud_label.offset_left = first_left
@@ -1942,7 +1951,6 @@ func _update_race_hud() -> void:
 	var hud := _hud_runner()
 	# ゴールした子は、ゴールした時点の表示で止める（あとで見返せるように）。順位表だけは、動かし続ける。
 	var state: Dictionary = _finish_hud_states[hud].duplicate() if _finish_hud_states.has(hud) else _runner_hud_state(hud)
-	state["runners"] = _hud_runner_marks(hud)
 	state["standings"] = _hud_standings()
 	if _race_hud_viewport == null:
 		_race_hud.call("update_state", state)
@@ -2027,18 +2035,6 @@ func _hud_heart_phase(runner: Node3D) -> float:
 	if runner == _player:
 		return RaceAudio.heartbeat_phase(bpm)
 	return fposmod(Time.get_ticks_msec() / 1000.0 * bpm / 60.0, 1.0)
-
-
-## 進行バーに出す全走者の位置（割合）・操作盤に出している子かどうか・色。
-func _hud_runner_marks(hud: Node3D) -> Array:
-	var marks: Array = []
-	for runner in _runners:
-		marks.append({
-			"ratio": RaceHud.progress_ratio(float(runner.call("get_race_progress")), _race_distance_m),
-			"player": runner == hud,
-			"color": PururinVisualStyle.color_for_racer_id(str(runner.call("get_snapshot")["id"])),
-		})
-	return marks
 
 
 ## 左上の順位表に出す全走者。今の順位の順（ゴール済みは着順で上）。

@@ -29,6 +29,9 @@ const NUMBER_RANGES := {
 	"handling_steer_reference_stat": [1.0, 15.0],
 	"front_block_lateral_m": [0.0, 15.0],
 	"dash_duration_s": [0.1, 30.0],
+	"drive_action_handling_reference_stat": [1.0, 15.0],
+	"drive_action_duration_per_handling_stat": [0.0, 0.2],
+	"drive_action_load_per_handling_stat": [0.0, 0.2],
 	"dash_thrust_bonus": [0.0, 2.0],
 	"dash_thrust_per_acceleration_stat": [0.0, 0.2],
 	"dash_thrust_per_handling_stat": [0.0, 0.2],
@@ -56,12 +59,19 @@ const NUMBER_RANGES := {
 	"contact_touch_margin_m": [0.0, 3.0],
 	"contact_heart_load_bpm_per_s": [0.0, 50.0],
 	"contact_stamina_load_l_per_s": [0.0, 10.0],
+	# 接触中に、落ち着く速さが下がる割合（触れている1人あたり）と、その抵抗の強さ（毎秒、今の速さに対する割合）。
+	"contact_slowdown_per_contact": [0.0, 0.2],
+	"contact_slowdown_rate_per_s": [0.0, 10.0],
+	# ぶつかった瞬間の落ち（触れている1人あたりのkm/h）、それを落とし切るまでの時間、同じ強さの接触で再び落ちるまでの間。
+	"contact_impact_kmh_per_contact": [0.0, 30.0],
+	"contact_impact_duration_s": [0.05, 2.0],
+	"contact_impact_cooldown_s": [0.0, 10.0],
 	"contact_resistance_reference_stat": [1.0, 15.0],
 	"contact_resistance_multiplier_per_stat": [0.0, 0.2],
 	"handling_steer_multiplier_per_stat": [0.0, 0.2],
 	"draft_lateral_range_multiplier_per_stat": [0.0, 0.2],
 	"line_speed_penalty_outer_edge": [0.0, 0.2],
-	"line_speed_penalty_inner_ratio": [0.0, 1.0],
+	"line_speed_bonus_inner_edge_per_handling_stat": [0.0, 0.02],
 	"line_speed_penalty_reference_speed_kmh": [1.0, 200.0],
 	"line_speed_penalty_multiplier_per_stat": [0.0, 0.2],
 	"drive_change_heart_load_bpm_per_level": [0.0, 20.0],
@@ -185,7 +195,7 @@ static func validate(data: Variant) -> PackedStringArray:
 			errors.append("%s: 整数が必要です" % key)
 	if float(data["drive_level_min"]) > float(data["drive_level_max"]):
 		errors.append("drive_level_min: drive_level_max 以下が必要です")
-	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat", "handling_steer_reference_stat", "contact_resistance_reference_stat"]:
+	for key in ["aero_air_resistance_reference_stat", "pack_draft_effective_reference_stat", "handling_steer_reference_stat", "contact_resistance_reference_stat", "drive_action_handling_reference_stat"]:
 		if float(data[key]) != floorf(float(data[key])):
 			errors.append("%s: 整数が必要です" % key)
 	for key in ["player_start_drive_level"]:
