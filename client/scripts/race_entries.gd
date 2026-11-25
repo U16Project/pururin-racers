@@ -17,9 +17,10 @@ const Hud := preload("res://scripts/presentation/race_hud.gd")
 ## パドックの行の、属性と脚質の印の大きさ。
 const MARK_SIZE := 15.0
 const CHEVRON_SCALE := 0.62
-## 会場の上に重ねるときの、ステータスの欄の高さ・右の列の幅。
-const DETAIL_HEIGHT_OVERLAY := 380.0
+## 会場の上に重ねるときの、右の列の幅。
 const RIGHT_WIDTH_OVERLAY := 470.0
+## 会場の上に重ねるときの、ステータスの欄のぷるりんの絵の大きさ（能力のバーの高さを空けるため、ふだんより小さく）。
+const DETAIL_PORTRAIT_OVERLAY := 104.0
 ## X で切り替えたときの、トレーナーの絵の大きさ（ふだんは 64）と、ぷるりん1行の絵の大きさ。
 const TRAINER_IMAGE_LARGE := 170.0
 const TRAINER_IMAGE_SMALL := 64.0
@@ -65,11 +66,16 @@ const DRAW_TICK_S := 0.08
 var _list: VBoxContainer
 ## 会場の上に重ねるときの、右の列（ステータスの箱とボタン）。
 var _right_column: VBoxContainer
+## 右の列の、トレーナーとステータスの箱と、ボタンを下へ寄せるすき間。
+var _right_box: PanelContainer
+var _right_push: Control
 ## 行ごとの、名前の文字（枠番の抽選で、枠番の所を書き換える）。
 var _names: Array[Label] = []
 ## レース会場のパドックの上に重ねて出すか（左に出走表、右にステータス。真ん中は会場が見えるように空ける）。
 ## このときは、レース開始・戻るは自分で画面を変えず、合図を出す（会場の画面が受けて進める）。
 var overlay_mode := false
+## 重ねて出すとき、真ん中の下に、パドックのカメラの操作の説明を出すか（カメラを動かせる間だけ）。
+var show_camera_guide := false
 ## 見るだけ（オンライン：進めるのはサーバーなので、「レース開始」「選択に戻る」は出さず、まもなく進むことだけ知らせる）。
 var read_only := false
 ## オンラインで出走者を待っている間：枠番はまだ決まっていない（「枠未定」と出す）。待っている枠の数だけ「待受中…」の行を足す。
@@ -275,6 +281,8 @@ func _ready() -> void:
 		gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		body.add_child(gap)
+		if show_camera_guide:
+			gap.add_child(_camera_guide())
 		# 右の列：上にトレーナーとステータスの箱、下にボタン（一覧を下まで伸ばすため、ボタンはこちらに置く）。
 		var right_column := VBoxContainer.new()
 		right_column.name = "RightColumn"
@@ -286,8 +294,8 @@ func _ready() -> void:
 		var right_box := PanelContainer.new()
 		right_box.name = "RightBox"
 		right_box.add_theme_stylebox_override("panel", Style.panel_box(14.0, 12.0))
-		right_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		right_column.add_child(right_box)
+		_right_box = right_box
 		var right := VBoxContainer.new()
 		right.add_theme_constant_override("separation", 8)
 		right_box.add_child(right)
@@ -307,7 +315,9 @@ func _ready() -> void:
 		right.add_child(_introduction)
 		_pururin_small = _make_pururin_small()
 		right.add_child(_pururin_small)
-		_detail.custom_minimum_size.y = DETAIL_HEIGHT_OVERLAY
+		# ステータスの欄は、ボタンの上までの残りの高さに合わせる（画面の下にはみ出さないように）。
+		_detail.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		_detail.set("portrait_size", DETAIL_PORTRAIT_OVERLAY)
 		right.add_child(_detail)
 		var hint_row := HBoxContainer.new()
 		hint_row.add_theme_constant_override("separation", 6)
@@ -340,6 +350,8 @@ func _ready() -> void:
 		push.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		push.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_right_column.add_child(push)
+		_right_push = push
+		push.visible = trainer_large
 		button_parent = _right_column
 	button_parent.add_child(buttons)
 	# 出走者を待っている間・枠順の抽選の間は、「まもなくゲートイン」は出さない（下に、待っているようすを出すため）。
@@ -475,6 +487,10 @@ func _apply_trainer_large() -> void:
 	_introduction.visible = trainer_large
 	_pururin_small.visible = trainer_large
 	_detail.visible = not trainer_large
+	# ぷるりんを大きく出すときは、箱をボタンの上まで伸ばす。トレーナーのときは、中身の高さだけ。
+	_right_box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if trainer_large else Control.SIZE_EXPAND_FILL
+	if _right_push != null:
+		_right_push.visible = trainer_large
 	_switch_hint.text = "ぷるりんをくわしく" if trainer_large else "トレーナーをくわしく"
 
 
@@ -627,6 +643,40 @@ func play_draw(spin_s: float, each_s: float) -> void:
 	for name in _names:
 		name.add_theme_color_override("font_color", Style.COLOR_TEXT)
 	draw_finished.emit()
+
+
+## パドックのカメラの操作の説明：真ん中の下に、ボタン（左の列、中央そろえ）とその動き（右の列、左そろえ）を、同じ形の行で並べる。
+func _camera_guide() -> Control:
+	var box := PanelContainer.new()
+	box.name = "CameraGuide"
+	box.add_theme_stylebox_override("panel", Style.panel_box(14.0, 10.0))
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 6)
+	grid.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(grid)
+	for line: Array in [[["Y"], "", "視点を変える"], [["L2", "R2"], "", "視点の回転"], [[], "右スティック押込み", "回転リセット"]]:
+		var keys := HBoxContainer.new()
+		keys.add_theme_constant_override("separation", 4)
+		keys.alignment = BoxContainer.ALIGNMENT_CENTER
+		keys.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		grid.add_child(keys)
+		for kind: String in line[0]:
+			var key_mark := Style.mark(kind, 22.0)
+			key_mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			keys.add_child(key_mark)
+		if not str(line[1]).is_empty():
+			keys.add_child(Style.label(str(line[1]), 15))
+		grid.add_child(_dim_label(str(line[2]), 15))
+	# 真ん中の下に置く（CenterContainer は位置を整数にそろえるので、文字がぼけない）。
+	var holder := CenterContainer.new()
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	holder.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	holder.add_child(box)
+	return holder
 
 
 ## 行の2段目の、小さい文字。

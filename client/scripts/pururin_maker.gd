@@ -1223,9 +1223,26 @@ func _update_focus_ring() -> void:
 	if not _focus_ring.visible:
 		return
 	var rect := owner.get_global_rect().grow(FOCUS_RING_ROOM)
+	# 一覧の中のタイルは、一覧の見えている所からはみ出した分を描かない（送って隠れたタイルの枠だけが残らないように）。
+	var scroll := _scroll_of(owner)
+	if scroll != null:
+		rect = rect.intersection(scroll.get_global_rect().grow(FOCUS_RING_ROOM))
+		if rect.size.x <= 0.0 or rect.size.y <= 0.0:
+			_focus_ring.visible = false
+			return
 	_focus_ring.position = rect.position
 	_focus_ring.size = rect.size
 	_focus_ring.modulate.a = 0.65 + 0.35 * sin(_ring_time * TAU / FOCUS_RING_SECONDS)
+
+
+## いちばん近い、縦に送れる一覧。無ければ null。
+func _scroll_of(node: Node) -> ScrollContainer:
+	var parent := node.get_parent()
+	while parent != null:
+		if parent is ScrollContainer:
+			return parent
+		parent = parent.get_parent()
+	return null
 
 
 func _process(delta: float) -> void:

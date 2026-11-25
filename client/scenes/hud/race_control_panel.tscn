@@ -1330,3 +1330,11 @@ script = ExtResource("10_icon")
 kind = "dash"
 icon_color = Color(0.1, 0.9, 1, 1)
 icon_size = 80.0
+
+[node name="NotchHintArea" type="Control" parent="." unique_id=1849302117]
+anchors_preset = 0
+offset_left = 460.7
+offset_top = 191.7
+offset_right = 670.0
+offset_bottom = 589.6
+mouse_filter = 2

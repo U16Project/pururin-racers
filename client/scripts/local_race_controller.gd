@@ -41,6 +41,7 @@ const PururinLookConfig := preload("res://scripts/config/pururin_look_config.gd"
 const PururinBodyBuilder := preload("res://scripts/presentation/pururin_body_builder.gd")
 const PreRaceShow := preload("res://scripts/presentation/pre_race_show.gd")
 const StartCountdown := preload("res://scripts/presentation/start_countdown.gd")
+const StartNotchHint := preload("res://scripts/presentation/start_notch_hint.gd")
 const RaceScenePreload := preload("res://scripts/race_scene_preload.gd")
 const RaceEntriesScene := preload("res://scenes/race_entries.tscn")
 const OnlineConfig := preload("res://scripts/config/online_config.gd")
@@ -91,6 +92,8 @@ const FINAL_STRETCH_FADE_OUT_S := 10.0
 @onready var _countdown_label: Label = %CountdownLabel
 ## スタート前のカウントダウン（3・2・1・START!）と、スタートのノッチの案内。
 var _start_countdown_view: Control
+## スタートのノッチを選ぶ案内（カウントダウンの前まで）。
+var _start_notch_hint: Control
 @onready var _pause_panel: Control = %PausePanel
 @onready var _result_panel: Control = %ResultPanel
 ## 着順の表（結果の板の中に、コードで足す）。
@@ -355,6 +358,9 @@ func _ready() -> void:
 	_start_countdown_view = StartCountdown.new()
 	_start_countdown_view.name = "StartCountdown"
 	$UI.add_child(_start_countdown_view)
+	_start_notch_hint = StartNotchHint.new()
+	_start_notch_hint.name = "StartNotchHint"
+	$UI.add_child(_start_notch_hint)
 	RaceAudio.play_race_entry()
 	# 画面のある所では、スタート前の見せ方から（画面の無いサーバー・ラボで走らせるときは、出さない）。
 	if not _is_online_host():
@@ -576,10 +582,10 @@ func _follow_runner(runner: Node3D) -> void:
 
 
 func _process(_delta: float) -> void:
-	# カウントダウンの間だけ、下に、スタートのノッチの案内（今のノッチ）を出す。
+	# 後ろからの画面に替わってから、カウントダウンが始まるまで、スタートのノッチの案内を出す（↑↓ はカウントダウン中も選べる）。
 	if _start_countdown_view != null:
-		var choosing := _player != null and not _race_started and bool(_start_countdown_view.call("is_counting")) and not _paused
-		_start_countdown_view.call("set_notch", choosing, int(roundi(float(_player.call("get_drive_level")))) if choosing else 0, int(LocalRaceMath.DRIVE_LEVEL_MIN), int(LocalRaceMath.DRIVE_LEVEL_MAX))
+		var choosing := _player != null and not _race_started and not _is_showing_pre_race() and not _is_in_paddock_overlay() and not bool(_start_countdown_view.call("is_counting")) and not _paused
+		_start_notch_hint.call("set_shown", choosing, _notch_gauge_screen_rect() if choosing else Rect2())
 	# 右上の札は、カウントダウンから結果の板が出るまで。
 	_race_info_box.visible = not _runners.is_empty() and not _is_showing_pre_race() and not _is_in_paddock_overlay() and not _result_panel.visible
 	if _race_info_box.visible:
@@ -736,6 +742,7 @@ func _start_pre_race_show() -> void:
 func _open_offline_paddock() -> void:
 	var overlay: Control = RaceEntriesScene.instantiate()
 	overlay.set("overlay_mode", true)
+	overlay.set("show_camera_guide", bool(_pre_race_show.get("hold_paddock")))
 	overlay.name = "PaddockOverlay"
 	$UI.add_child(overlay)
 	overlay.connect("entry_shown", func(gate: int) -> void: _pre_race_show.call("focus_gate", gate))
@@ -857,6 +864,7 @@ func _open_online_paddock(options: Dictionary = {}) -> void:
 	overlay.set("read_only", true)
 	for key: String in options:
 		overlay.set(key, options[key])
+	overlay.set("show_camera_guide", bool(_pre_race_show.get("hold_paddock")))
 	overlay.name = "PaddockOverlay"
 	$UI.add_child(overlay)
 	overlay.connect("entry_shown", func(gate: int) -> void: _pre_race_show.call("focus_gate", gate))
@@ -1908,6 +1916,16 @@ func _layout_overlay_labels() -> void:
 
 
 ## 操作盤の位置：画面の左上。
+## 操作盤のノッチのゲージを囲む四角（画面の上の位置）。操作盤の NotchHintArea を、画面の大きさに直す。
+func _notch_gauge_screen_rect() -> Rect2:
+	var area := _heart_hud.get_node_or_null("NotchHintArea") as Control
+	if area == null or _heart_hud_viewport.size.x <= 0:
+		return Rect2()
+	var factor := _heart_hud_view.size / Vector2(_heart_hud_viewport.size)
+	var rect := area.get_global_rect()
+	return Rect2(_heart_hud_view.position + rect.position * factor, rect.size * factor)
+
+
 func _place_heart_hud() -> void:
 	var screen := get_viewport().get_visible_rect().size
 	# 絵は、画面の実際の点の細かさで描く（拡大してぼやけないように）。貼るときに、もとの大きさへ戻す。

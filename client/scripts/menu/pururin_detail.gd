@@ -67,6 +67,8 @@ var _taken_row: Control
 var _taken_label: Label
 var _force_button: Button
 var _force_mark: Control
+## 大きい絵の大きさ。場所の狭い画面（パドックの右の箱）では、出す前に小さくして、能力のバーの高さを空ける。
+var portrait_size := PORTRAIT_SIZE
 
 
 func _ready() -> void:
@@ -102,7 +104,7 @@ func _ready() -> void:
 	_portrait.name = "Portrait"
 	# 大きい絵は、体をゆっくり回して、表情も替える。
 	_portrait.set("live", true)
-	_portrait.custom_minimum_size = Vector2(PORTRAIT_SIZE, PORTRAIT_SIZE)
+	_portrait.custom_minimum_size = Vector2(portrait_size, portrait_size)
 	top.add_child(_portrait)
 	# 画像の右に2段：属性（印つき）、脚質（印つき）。
 	var texts := VBoxContainer.new()
@@ -350,7 +352,13 @@ func _draw_bars() -> void:
 	var column_width := _bars.size.x / float(stat_ids.size())
 	var bar_height := maxf(_bars.size.y - BAR_TOP - BAR_BOTTOM_MARGIN, 0.0)
 	var segments := bar_segment_count()
-	var segment_height := (bar_height - BAR_SEGMENT_GAP * float(segments - 1)) / float(segments)
+	# 段の高さと隙間を、画面の点の数でそろえる（画面を広げたときも、どの段も同じ太さ・同じ隙間にする）。
+	var to_screen := _bars.get_screen_transform()
+	var zoom := to_screen.get_scale()
+	var gap_px := maxf(roundf(BAR_SEGMENT_GAP * zoom.y), 1.0)
+	var segment_px := maxf(floorf((bar_height * zoom.y - gap_px * float(segments - 1)) / float(segments)), 1.0)
+	var bottom_px := roundf(to_screen.origin.y + (BAR_TOP + bar_height) * zoom.y)
+	var width_px := roundf(BAR_WIDTH * zoom.x)
 	for index in stat_ids.size():
 		var stat_id := str(stat_ids[index])
 		var value := int(stats[stat_id])
@@ -361,8 +369,9 @@ func _draw_bars() -> void:
 		var filled := bar_filled_segments(value)
 		for segment in segments:
 			# 下から数えて、値の数だけ色を付ける。
-			var top := BAR_TOP + bar_height - segment_height * float(segment + 1) - BAR_SEGMENT_GAP * float(segment)
-			var rect := Rect2(Vector2(center_x - BAR_WIDTH * 0.5, top), Vector2(BAR_WIDTH, segment_height))
+			var top_px := bottom_px - segment_px * float(segment + 1) - gap_px * float(segment)
+			var left_px := roundf(to_screen.origin.x + center_x * zoom.x - width_px * 0.5)
+			var rect := Rect2(Vector2((left_px - to_screen.origin.x) / zoom.x, (top_px - to_screen.origin.y) / zoom.y), Vector2(width_px / zoom.x, segment_px / zoom.y))
 			match bar_segment_kind(stat_id in bonus_stats, filled, segment):
 				"bonus":
 					_bars.draw_rect(rect, bonus_color)

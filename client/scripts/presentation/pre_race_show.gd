@@ -31,6 +31,7 @@ const StatsMath := preload("res://scripts/pururin_stats_math.gd")
 const RaceSession := preload("res://scripts/race_session.gd")
 const Parts := preload("res://scripts/presentation/venue_parts.gd")
 const RaceVenue := preload("res://scripts/presentation/race_venue.gd")
+const RaceControllerInput := preload("res://scripts/input/race_controller_input.gd")
 
 const STAGE_OVERVIEW := 0
 const STAGE_PADDOCK := 1
@@ -67,6 +68,16 @@ const SWEEP_RADIUS_M := Vector2(26.0, 16.0)
 const SWEEP_HEIGHT_M := Vector2(5.0, 2.2)
 ## パドックの場面の間に、カメラが輪のまわりを回る角度（ラジアン）。
 const PADDOCK_CAMERA_TURN := 0.5
+## パドックでカーソルを合わせたぷるりんを写す見え方（Y で順に切り替える）。
+## ahead＝進む先へ、inward＝輪の内側へ、up＝上へ（どれも m。ぷるりんから見たカメラの位置）、look_up＝見る点の高さ（m）。
+const PADDOCK_VIEWS := [
+	{"ahead": 4.0, "inward": 2.2, "up": 0.9, "look_up": 0.4},
+	{"ahead": 9.0, "inward": 5.0, "up": 3.0, "look_up": 0.4},
+	{"ahead": 4.2, "inward": 0.0, "up": 0.6, "look_up": 0.4},
+	{"ahead": 3.0, "inward": 6.0, "up": 16.0, "look_up": 0.0},
+]
+## パドックで L2・R2（Q・E）を押している間、ぷるりんを中心にカメラを回す速さ（ラジアン/秒。レース中と同じ）。
+const PADDOCK_TURN_SPEED := 1.2
 ## パドック・入場で進む体の、動きの速さ（レース中の「走る」に対する倍率。ゆっくり）。
 const PADDOCK_MOTION_RATE := 0.55
 const COLOR_PADDOCK_PATH := Color(0.62, 0.47, 0.32)
@@ -165,6 +176,9 @@ var hold_paddock := false
 var paddock_cards := true
 ## パドックで、カメラを寄せる走者（-1 なら、輪のまわりを回る）。
 var _focus_index := -1
+## パドックの見え方（PADDOCK_VIEWS の番号）と、ぷるりんを中心に回した角度（ラジアン。右が＋）。
+var _paddock_view := 0
+var _paddock_yaw := 0.0
 var _waiting: Label
 var _notice: Label
 ## 場面の見出し（暗くした画面の真ん中）。出している残りの秒数（0なら出していない）。
@@ -307,6 +321,43 @@ func release_paddock() -> void:
 		_go(STAGE_INTRO)
 
 
+## パドックでぷるりんを写している間：Y で見え方を切り替え、右スティック押し込み（R）で元の見え方に戻す。
+func _unhandled_input(event: InputEvent) -> void:
+	if not _can_move_paddock_camera():
+		return
+	if RaceControllerInput.is_face_pressed(event, JOY_BUTTON_Y):
+		_paddock_view = (_paddock_view + 1) % PADDOCK_VIEWS.size()
+		_start_blend()
+		get_viewport().set_input_as_handled()
+	elif RaceControllerInput.is_button_pressed(event, JOY_BUTTON_RIGHT_STICK) or (event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R):
+		_reset_paddock_camera()
+		get_viewport().set_input_as_handled()
+
+
+## パドックで待っていて、ぷるりんにカメラを寄せている間だけ、カメラを動かせる。
+func _can_move_paddock_camera() -> bool:
+	var paused := is_paused.is_valid() and bool(is_paused.call())
+	return _stage == STAGE_PADDOCK and hold_paddock and not paused and _title_left <= 0.0 and _focus_index >= 0 and _focus_index < _copies.size()
+
+
+## L2（Q）で左へ、R2（E）で右へ回す。両方を同時に押すと、元に戻す（レース中と同じ）。
+func _turn_paddock_camera(delta: float) -> void:
+	if not _can_move_paddock_camera():
+		return
+	var turn := RaceControllerInput.camera_turn()
+	if turn.x > 0.0 and turn.y > 0.0:
+		_reset_paddock_camera()
+	else:
+		_paddock_yaw += (turn.y - turn.x) * PADDOCK_TURN_SPEED * delta
+
+
+func _reset_paddock_camera() -> void:
+	if _paddock_view != 0 or _paddock_yaw != 0.0:
+		_paddock_view = 0
+		_paddock_yaw = 0.0
+		_start_blend()
+
+
 ## パドックで、その枠のぷるりんにカメラを寄せる（-1 で、輪のまわりを回るのに戻す）。
 func focus_gate(gate: int) -> void:
 	var index := -1
@@ -407,13 +458,18 @@ func _process(delta: float) -> void:
 				_aim(eye, far_side + _forward * slide + Vector3.UP * 0.4)
 			if _focus_index >= 0 and _focus_index < _copies.size():
 				# カーソルを合わせたぷるりんを、進む先の斜め前（少し内側）から、顔が見える向きで写す。一緒に動く。
+				# Y で見え方を、L2・R2 で回す角度を変えられる（両方同時か右スティック押し込みで、元に戻す）。
 				var copy := _copies[_focus_index]
 				var u := float(copy.get_meta("u"))
 				var ahead := _oval_point(u + 0.01) - _oval_point(u)
 				ahead.y = 0.0
 				var inward := _paddock_center - copy.global_position
 				inward.y = 0.0
-				_aim(copy.global_position + ahead.normalized() * 4.0 + inward.normalized() * 2.2 + Vector3.UP * 0.9, copy.global_position + Vector3.UP * 0.4)
+				_turn_paddock_camera(delta)
+				var view: Dictionary = PADDOCK_VIEWS[_paddock_view]
+				var offset: Vector3 = ahead.normalized() * float(view["ahead"]) + inward.normalized() * float(view["inward"])
+				offset = Basis(Vector3.UP, _paddock_yaw) * offset
+				_aim(copy.global_position + offset + Vector3.UP * float(view["up"]), copy.global_position + Vector3.UP * float(view["look_up"]))
 			if _stage_time >= _paddock_seconds() and not hold_paddock:
 				_go(STAGE_INTRO)
 		STAGE_INTRO:
@@ -557,37 +613,64 @@ func _oval_length() -> float:
 
 
 ## パドックの、土の道と白い柵を組み立てる（見せ方が終わったら、いっしょに消える）。
+## 楕円を区切った点ごとに外向きの向きを1つ決め、となりの区切りと同じ点を使う（カーブでも、道と柵が切れない）。
 func _build_paddock_ring() -> void:
 	var ring := Node3D.new()
 	ring.name = "PaddockRing"
 	add_child(ring)
-	var dirt := Parts.material(COLOR_PADDOCK_PATH)
-	var white := Parts.material(Parts.COLOR_WHITE)
 	var pieces := 48
+	var dirt_half := PADDOCK_PATH_WIDTH_M * 0.5
+	var fence_shift := dirt_half + PADDOCK_FENCE_GAP_M
+	var inner := PackedVector3Array()
+	var outer := PackedVector3Array()
+	var fence := PackedVector3Array()
 	for i in pieces:
-		var u0 := float(i) / pieces
-		var u1 := float(i + 1) / pieces
-		# 柵は外側だけ（内側の芝生は、カメラを置く所。柵が手前に写らないように）。
-		for layer in [[0.0, dirt, PADDOCK_PATH_WIDTH_M, 0.02], [PADDOCK_PATH_WIDTH_M * 0.5 + PADDOCK_FENCE_GAP_M, white, 0.08, 0.9]]:
-			var a := _oval_point(u0)
-			var b := _oval_point(u1)
-			var along := (b - a)
-			var out_dir := along.cross(Vector3.UP).normalized()
-			if out_dir.dot(a - _paddock_center) < 0.0:
-				out_dir = -out_dir
-			var shift: float = layer[0]
-			a += out_dir * shift
-			b += out_dir * shift
-			var mid := (a + b) * 0.5
-			var length := a.distance_to(b) + 0.15
-			var yaw := rad_to_deg(atan2(along.x, along.z))
-			if layer[1] == dirt:
-				Parts.box(ring, Vector3(float(layer[2]), float(layer[3]), length), mid + Vector3.UP * 0.01, dirt, Vector3(0.0, yaw, 0.0))
-			else:
-				# 柵：横木を2本と、継ぎ目に柱。
-				for height in [0.45, 0.85]:
-					Parts.box(ring, Vector3(0.06, 0.08, length), mid + Vector3.UP * height, white, Vector3(0.0, yaw, 0.0))
-				Parts.box(ring, Vector3(0.1, 1.0, 0.1), a + Vector3.UP * 0.5, white)
+		var point := _oval_point(float(i) / pieces)
+		var out_dir := _oval_out_dir(float(i) / pieces)
+		inner.append(point - out_dir * dirt_half)
+		outer.append(point + out_dir * dirt_half)
+		fence.append(point + out_dir * fence_shift)
+	# 土の道：内と外の縁を結んだ、1枚のつながった輪（上の面）。
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	for i in pieces:
+		var j := (i + 1) % pieces
+		for corner: Vector3 in [inner[i], outer[i], outer[j], inner[i], outer[j], inner[j]]:
+			vertices.append(corner + Vector3.UP * 0.02)
+			normals.append(Vector3.UP)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	var shape := ArrayMesh.new()
+	shape.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var dirt := Parts.material(COLOR_PADDOCK_PATH)
+	dirt.cull_mode = BaseMaterial3D.CULL_DISABLED
+	Parts.mesh(ring, shape, dirt, Vector3.ZERO)
+	# 柵は外側だけ（内側の芝生は、カメラを置く所。柵が手前に写らないように）。横木を2本と、継ぎ目に柱。
+	var white := Parts.material(Parts.COLOR_WHITE)
+	for i in pieces:
+		var a := fence[i]
+		var b := fence[(i + 1) % pieces]
+		var along := b - a
+		var yaw := rad_to_deg(atan2(along.x, along.z))
+		# 横木の太さの分だけ長くして、継ぎ目の角を埋める。
+		var length := along.length() + 0.08
+		for height in [0.45, 0.85]:
+			Parts.box(ring, Vector3(0.06, 0.08, length), (a + b) * 0.5 + Vector3.UP * height, white, Vector3(0.0, yaw, 0.0))
+		Parts.box(ring, Vector3(0.1, 1.0, 0.1), a + Vector3.UP * 0.5, white)
+
+
+## 楕円の、その点での外向き（地面に平行、長さ1）。前後の点を結ぶ向きに直角で、真ん中から離れる側。
+func _oval_out_dir(u: float) -> Vector3:
+	var step := 0.001
+	var along := _oval_point(u + step) - _oval_point(u - step)
+	var out_dir := along.cross(Vector3.UP)
+	out_dir.y = 0.0
+	out_dir = out_dir.normalized()
+	if out_dir.dot(_oval_point(u) - _paddock_center) < 0.0:
+		out_dir = -out_dir
+	return out_dir
 
 
 ## 走者の体の写しを作って、パドックの楕円に、枠番の順に間をあけて並べる。

@@ -1,7 +1,7 @@
 extends Control
-## スタート前のカウントダウン（3・2・1・START!）と、スタートのノッチを選ぶ案内。
+## スタート前のカウントダウン（3・2・1・START!）。
 ## 数字は、出た瞬間に大きく弾んで、まわりの輪が1秒かけて減っていく。START! は金色で弾けて消える。
-## ノッチの案内は、カウントダウンの間だけ、画面の下に出す（今のノッチを、段の並びで見せる）。
+## スタートのノッチを選ぶ案内は、start_notch_hint.gd が出す（カウントダウンの前まで）。
 
 const MenuStyle := preload("res://scripts/menu/menu_style.gd")
 
@@ -18,22 +18,12 @@ const COLOR_NUMBER := Color(1.0, 1.0, 1.0, 1.0)
 ## 数字ごとの輪の色（3・2・1）。
 const RING_COLORS := {3: Color(0.35, 0.86, 1.0), 2: Color(1.0, 0.82, 0.3), 1: Color(1.0, 0.45, 0.3)}
 const COLOR_START := Color(1.0, 0.84, 0.2)
-const NOTCH_PANEL_SIZE := Vector2(460.0, 92.0)
-const NOTCH_PANEL_BOTTOM := 96.0
-const COLOR_PANEL := Color(0.06, 0.1, 0.18, 0.86)
-const COLOR_PANEL_BORDER := Color(0.35, 0.86, 1.0, 0.9)
-const COLOR_SEGMENT_ON := Color(0.35, 0.86, 1.0)
-const COLOR_SEGMENT_OFF := Color(1.0, 1.0, 1.0, 0.16)
 
 var _count := 0
 ## 今の数字が出てからの秒数（輪の減り方と、弾み方に使う）。
 var _count_time := 0.0
 var _count_seconds := 1.0
 var _start_time := -1.0
-var _notch_shown := false
-var _notch := 0
-var _notch_min := 1
-var _notch_max := 1
 
 
 func _ready() -> void:
@@ -57,7 +47,6 @@ func show_count(seconds_left: float) -> void:
 func show_start() -> void:
 	_count = 0
 	_start_time = 0.0
-	_notch_shown = false
 	visible = true
 	queue_redraw()
 
@@ -65,23 +54,11 @@ func show_start() -> void:
 func hide_all() -> void:
 	_count = 0
 	_start_time = -1.0
-	_notch_shown = false
 	queue_redraw()
 
 
 func is_counting() -> bool:
 	return _count > 0
-
-
-## ノッチの案内を出す・隠す。level は今のノッチ。
-func set_notch(shown: bool, level: int, level_min: int, level_max: int) -> void:
-	if shown == _notch_shown and level == _notch and level_min == _notch_min and level_max == _notch_max:
-		return
-	_notch_shown = shown
-	_notch = level
-	_notch_min = level_min
-	_notch_max = level_max
-	queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -99,8 +76,6 @@ func _draw() -> void:
 		_draw_number(font, center)
 	elif _start_time >= 0.0:
 		_draw_start(font, center)
-	if _notch_shown:
-		_draw_notch_panel(font)
 
 
 func _draw_number(font: Font, center: Vector2) -> void:
@@ -135,38 +110,6 @@ func _draw_start(font: Font, center: Vector2) -> void:
 	draw_set_transform(center, 0.0, Vector2.ONE * scale_now)
 	_draw_centered(font, "START!", Vector2(0.0, START_SIZE * 0.36), START_SIZE, Color(COLOR_START, alpha), 18, Color(0.45, 0.2, 0.0, alpha))
 	draw_set_transform(Vector2.ZERO)
-
-
-## 下の案内：左に「スタートのノッチ」と上下のマーク、右に今のノッチと、段の並び。
-func _draw_notch_panel(font: Font) -> void:
-	var rect := Rect2(Vector2((size.x - NOTCH_PANEL_SIZE.x) * 0.5, size.y - NOTCH_PANEL_BOTTOM - NOTCH_PANEL_SIZE.y), NOTCH_PANEL_SIZE)
-	var box := StyleBoxFlat.new()
-	box.bg_color = COLOR_PANEL
-	box.border_color = COLOR_PANEL_BORDER
-	box.set_border_width_all(2)
-	box.set_corner_radius_all(16)
-	draw_style_box(box, rect)
-	var left := rect.position + Vector2(22.0, 34.0)
-	draw_string_outline(font, left, "スタートのノッチ", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, 6, COLOR_OUTLINE)
-	draw_string(font, left, "スタートのノッチ", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color.WHITE)
-	# 上下の矢印（十字キー・↑↓）と、その説明。
-	var arrow_center := rect.position + Vector2(36.0, 64.0)
-	draw_colored_polygon(PackedVector2Array([arrow_center + Vector2(0, -12), arrow_center + Vector2(-9, -3), arrow_center + Vector2(9, -3)]), COLOR_SEGMENT_ON)
-	draw_colored_polygon(PackedVector2Array([arrow_center + Vector2(0, 12), arrow_center + Vector2(-9, 3), arrow_center + Vector2(9, 3)]), COLOR_SEGMENT_ON)
-	draw_string(font, rect.position + Vector2(54.0, 71.0), "十字キー・↑↓ で選ぶ", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(1, 1, 1, 0.75))
-	# 今のノッチ（大きな数字）と、段の並び（今の段まで光る）。
-	var value_x := rect.position.x + 250.0
-	draw_string_outline(font, Vector2(value_x, rect.position.y + 66.0), str(_notch), HORIZONTAL_ALIGNMENT_CENTER, 50, 48, 10, COLOR_OUTLINE)
-	draw_string(font, Vector2(value_x, rect.position.y + 66.0), str(_notch), HORIZONTAL_ALIGNMENT_CENTER, 50, 48, COLOR_SEGMENT_ON)
-	var count := maxi(_notch_max - _notch_min + 1, 1)
-	var bars_left := value_x + 66.0
-	var bars_width := rect.end.x - 20.0 - bars_left
-	var step := bars_width / float(count)
-	for index in count:
-		var level := _notch_min + index
-		var height := lerpf(16.0, 52.0, float(index) / maxf(float(count - 1), 1.0))
-		var bar := Rect2(Vector2(bars_left + step * index + 2.0, rect.position.y + 74.0 - height), Vector2(step - 4.0, height))
-		draw_rect(bar, COLOR_SEGMENT_ON if level <= _notch else COLOR_SEGMENT_OFF)
 
 
 func _draw_centered(font: Font, text: String, baseline_center: Vector2, font_size: int, color: Color, outline: int, outline_color: Color = COLOR_OUTLINE) -> void:

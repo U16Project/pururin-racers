@@ -91,7 +91,7 @@
       "control_kind": "cpu",
       "attribute": "earth",
       "running_style": "pace",
-      "allocation": {"top_speed": 6, "acceleration": 4, "stamina": 6, "cardio": 7, "aero": 5, "pack": 3, "contact_resistance": 7, "handling": 2}
+      "allocation": {"top_speed": 5, "acceleration": 4, "stamina": 8, "cardio": 7, "aero": 5, "pack": 2, "contact_resistance": 8, "handling": 1}
     },
     {
       "id": "cpu-12",
@@ -118,7 +118,7 @@
       "control_kind": "cpu",
       "attribute": "earth",
       "running_style": "stalk",
-      "allocation": {"top_speed": 6, "acceleration": 5, "stamina": 5, "cardio": 7, "aero": 2, "pack": 9, "contact_resistance": 3, "handling": 3}
+      "allocation": {"top_speed": 6, "acceleration": 7, "stamina": 4, "cardio": 5, "aero": 2, "pack": 9, "contact_resistance": 3, "handling": 4}
     },
     {
       "id": "cpu-15",
